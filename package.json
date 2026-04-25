@@ -1,0 +1,37 @@
+{
+  "name": "readtheplan",
+  "version": "0.0.1",
+  "description": "Terraform plan risk explainer — reads `terraform plan` and classifies each change as safe/review/dangerous/irreversible. Pre-MVP namespace placeholder.",
+  "keywords": [
+    "terraform",
+    "iac",
+    "devops",
+    "devsecops",
+    "compliance",
+    "infrastructure-as-code",
+    "plan",
+    "review",
+    "risk"
+  ],
+  "homepage": "https://github.com/readtheplan/readtheplan",
+  "bugs": {
+    "url": "https://github.com/readtheplan/readtheplan/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/readtheplan/readtheplan.git"
+  },
+  "license": "MIT",
+  "author": "texasich",
+  "main": "index.js",
+  "files": [
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "echo \"placeholder release; no functional code yet\" && exit 0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
