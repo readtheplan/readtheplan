@@ -18,6 +18,14 @@ class ResourceChange:
     actions: tuple[str, ...]
     risk: str
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "address": self.address,
+            "type": self.resource_type,
+            "actions": list(self.actions),
+            "risk": self.risk,
+        }
+
 
 @dataclass(frozen=True)
 class PlanSummary:
@@ -36,6 +44,16 @@ class PlanSummary:
     @property
     def risk_counts(self) -> Counter[str]:
         return Counter(change.risk for change in self.resource_changes)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "path": str(self.path),
+            "terraform_version": self.terraform_version,
+            "resource_change_count": len(self.resource_changes),
+            "actions": dict(sorted(self.action_counts.items())),
+            "risks": dict(sorted(self.risk_counts.items())),
+            "changes": [change.to_dict() for change in self.resource_changes],
+        }
 
 
 def load_plan(path: str | Path) -> dict[str, Any]:

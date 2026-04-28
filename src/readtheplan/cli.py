@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from typing import Sequence, TextIO
 
@@ -24,6 +25,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "analyze",
         help="Analyze a Terraform plan JSON file.",
     )
+    analyze.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format. Defaults to text.",
+    )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
 
@@ -37,7 +44,11 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    _print_summary(summary, sys.stdout)
+    if args.format == "json":
+        json.dump(summary.to_dict(), sys.stdout, indent=2)
+        print()
+    else:
+        _print_summary(summary, sys.stdout)
     return 0
 
 
