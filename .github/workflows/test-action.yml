@@ -1,0 +1,100 @@
+name: Test GitHub Action
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - action.yml
+      - .github/workflows/test-action.yml
+      - pyproject.toml
+      - src/**
+      - tests/fixtures/**
+  pull_request:
+    paths:
+      - action.yml
+      - .github/workflows/test-action.yml
+      - pyproject.toml
+      - src/**
+      - tests/fixtures/**
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run action on valid plan
+        id: valid
+        uses: ./
+        with:
+          plan-file: tests/fixtures/valid_plan.json
+          fail-on-changes: "false"
+
+      - name: Assert valid action outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.valid.outputs['summary-json'] }}
+          RESOURCE_CHANGE_COUNT: ${{ steps.valid.outputs['resource-change-count'] }}
+          ACTION_COUNTS: ${{ steps.valid.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.valid.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$RESOURCE_CHANGE_COUNT" = "3"
+          test "$ACTION_COUNTS" = '{"create":1,"delete/create":1,"update":1}'
+          test "$RISK_COUNTS" = '{"dangerous":1,"review":1,"safe":1}'
+
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 3
+          assert payload["actions"]["delete/create"] == 1
+          assert payload["risks"]["dangerous"] == 1
+          assert payload["changes"][0]["address"] == "aws_s3_bucket.logs"
+          PY
+
+      - name: Fail on invalid plan JSON
+        id: invalid
+        uses: ./
+        continue-on-error: true
+        with:
+          plan-file: tests/fixtures/invalid_plan.json
+
+      - name: Assert invalid plan failed
+        if: ${{ steps.invalid.outcome != 'failure' }}
+        shell: bash
+        run: |
+          echo "Expected invalid plan analysis to fail"
+          exit 1
+
+      - name: Fail on missing plan file
+        id: missing
+        uses: ./
+        continue-on-error: true
+        with:
+          plan-file: tests/fixtures/does-not-exist.json
+
+      - name: Assert missing plan failed
+        if: ${{ steps.missing.outcome != 'failure' }}
+        shell: bash
+        run: |
+          echo "Expected missing plan file to fail"
+          exit 1
+
+      - name: Fail when changes are present and fail-on-changes is true
+        id: fail_on_changes
+        uses: ./
+        continue-on-error: true
+        with:
+          plan-file: tests/fixtures/valid_plan.json
+          fail-on-changes: "true"
+
+      - name: Assert fail-on-changes failed
+        if: ${{ steps.fail_on_changes.outcome != 'failure' }}
+        shell: bash
+        run: |
+          echo "Expected fail-on-changes to fail for a plan with changes"
+          exit 1

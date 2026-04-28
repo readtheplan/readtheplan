@@ -40,6 +40,50 @@ Anchored in this field note: **[terraform-apply-is-roulette](https://github.com/
 
 MIT — see [LICENSE](./LICENSE).
 
+## CLI JSON output
+
+MVP-1 exposes a stable machine-readable contract for automation:
+
+```bash
+readtheplan analyze --format json plan.json
+```
+
+The JSON object includes:
+
+- `resource_change_count`: total Terraform `resource_changes` entries.
+- `actions`: counts keyed by Terraform action set, such as `create` or `delete/create`.
+- `risks`: counts keyed by readtheplan risk tier.
+- `changes`: one object per resource change with `address`, `type`, `actions`, and `risk`.
+
+Invalid input is reported on stderr and exits non-zero.
+
+## GitHub Action
+
+This repository includes a composite GitHub Action at the repo root. It installs the
+local Python package from the action checkout by default, runs the JSON CLI contract,
+and exposes the parsed values as outputs.
+
+```yaml
+- name: Analyze Terraform plan
+  id: readtheplan
+  uses: readtheplan/readtheplan@v1
+  with:
+    plan-file: plan.json
+    fail-on-changes: "false"
+
+- name: Use readtheplan output
+  run: |
+    echo "${{ steps.readtheplan.outputs['summary-json'] }}"
+    echo "${{ steps.readtheplan.outputs['resource-change-count'] }}"
+```
+
+Action outputs:
+
+- `summary-json`: full JSON emitted by `readtheplan analyze --format json`.
+- `resource-change-count`: total resource changes.
+- `action-counts`: compact JSON object of action counts.
+- `risk-counts`: compact JSON object of risk counts.
+
 ## contact
 
 OSS contributions welcome once the v0.1 lands. Until then, this is a namespace placeholder. Author: [@texasich](https://github.com/texasich).

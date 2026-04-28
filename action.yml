@@ -1,0 +1,186 @@
+name: readtheplan Terraform Plan Analysis
+description: Analyze Terraform JSON plans with readtheplan and expose machine-readable outputs.
+author: readtheplan maintainers
+
+inputs:
+  plan-file:
+    description: Path to a Terraform JSON plan file, usually from terraform show -json.
+    required: true
+  fail-on-changes:
+    description: Fail the workflow when readtheplan reports one or more resource changes.
+    required: false
+    default: "false"
+  python-version:
+    description: Python version used to run the readtheplan CLI.
+    required: false
+    default: "3.11"
+  install-source:
+    description: Pip install source for the CLI. Defaults to this action checkout.
+    required: false
+    default: ""
+
+outputs:
+  summary-json:
+    description: Full JSON emitted by readtheplan analyze --format json.
+    value: ${{ steps.analyze.outputs['summary-json'] }}
+  resource-change-count:
+    description: Number of Terraform resource changes reported by readtheplan.
+    value: ${{ steps.analyze.outputs['resource-change-count'] }}
+  action-counts:
+    description: Compact JSON object of action counts.
+    value: ${{ steps.analyze.outputs['action-counts'] }}
+  risk-counts:
+    description: Compact JSON object of risk counts.
+    value: ${{ steps.analyze.outputs['risk-counts'] }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        PLAN_FILE: ${{ inputs.plan-file }}
+        FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
+      run: |
+        set -euo pipefail
+
+        case "${FAIL_ON_CHANGES,,}" in
+          true|false)
+            ;;
+          *)
+            echo "::error::fail-on-changes must be true or false, got: $FAIL_ON_CHANGES"
+            exit 1
+            ;;
+        esac
+
+        if [ ! -f "$PLAN_FILE" ]; then
+          echo "::error::Plan file not found: $PLAN_FILE"
+          exit 1
+        fi
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install readtheplan
+      shell: bash
+      env:
+        INSTALL_SOURCE: ${{ inputs.install-source }}
+      run: |
+        set -euo pipefail
+
+        if [ -n "$INSTALL_SOURCE" ]; then
+          source="$INSTALL_SOURCE"
+        else
+          source="$GITHUB_ACTION_PATH"
+        fi
+
+        python -m pip install --upgrade pip
+        python -m pip install "$source"
+
+    - name: Analyze plan
+      id: analyze
+      shell: bash
+      env:
+        PLAN_FILE: ${{ inputs.plan-file }}
+        FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
+      run: |
+        set -euo pipefail
+
+        output_file="$(mktemp)"
+        error_file="$(mktemp)"
+        count_file="$(mktemp)"
+
+        set +e
+        readtheplan analyze --format json "$PLAN_FILE" >"$output_file" 2>"$error_file"
+        cli_status=$?
+        set -e
+
+        if [ "$cli_status" -ne 0 ]; then
+          echo "::error::readtheplan failed with exit code $cli_status"
+          if [ -s "$error_file" ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < "$error_file"
+          fi
+          exit "$cli_status"
+        fi
+
+        python - "$output_file" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" "$count_file" <<'PY'
+        from __future__ import annotations
+
+        import json
+        import sys
+        from pathlib import Path
+
+        output_path = Path(sys.argv[1])
+        github_output = Path(sys.argv[2])
+        step_summary = Path(sys.argv[3])
+        count_path = Path(sys.argv[4])
+
+        raw = output_path.read_text(encoding="utf-8")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            print(f"::error::readtheplan emitted invalid JSON: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        if not isinstance(payload, dict):
+            print("::error::readtheplan JSON output must be an object", file=sys.stderr)
+            raise SystemExit(1)
+
+        expected_types = {
+            "resource_change_count": int,
+            "actions": dict,
+            "risks": dict,
+            "changes": list,
+        }
+        for key, expected_type in expected_types.items():
+            value = payload.get(key)
+            if not isinstance(value, expected_type):
+                actual = type(value).__name__
+                print(
+                    f"::error::readtheplan JSON field {key!r} must be "
+                    f"{expected_type.__name__}, got {actual}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+
+        resource_change_count = payload["resource_change_count"]
+        action_counts = json.dumps(payload["actions"], sort_keys=True, separators=(",", ":"))
+        risk_counts = json.dumps(payload["risks"], sort_keys=True, separators=(",", ":"))
+        summary_json = json.dumps(payload, indent=2, sort_keys=True)
+
+        with github_output.open("a", encoding="utf-8") as output:
+            output.write("summary-json<<READTHEPLAN_JSON\n")
+            output.write(summary_json)
+            output.write("\nREADTHEPLAN_JSON\n")
+            output.write(f"resource-change-count={resource_change_count}\n")
+            output.write(f"action-counts={action_counts}\n")
+            output.write(f"risk-counts={risk_counts}\n")
+
+        with step_summary.open("a", encoding="utf-8") as summary:
+            summary.write("## readtheplan\n\n")
+            summary.write(f"- Resource changes: {resource_change_count}\n")
+            summary.write(f"- Actions: `{action_counts}`\n")
+            summary.write(f"- Risks: `{risk_counts}`\n")
+
+        print(f"::notice::readtheplan analyzed {resource_change_count} resource changes")
+        for risk in ("dangerous", "irreversible"):
+            count = int(payload["risks"].get(risk, 0))
+            if count:
+                print(f"::warning::readtheplan found {count} {risk} changes")
+
+        count_path.write_text(str(resource_change_count), encoding="utf-8")
+        PY
+
+        resource_change_count="$(cat "$count_file")"
+        if [ "${FAIL_ON_CHANGES,,}" = "true" ] && [ "$resource_change_count" -gt 0 ]; then
+          echo "::error::Plan contains $resource_change_count resource changes and fail-on-changes is true"
+          exit 1
+        fi
+
+branding:
+  icon: file-text
+  color: blue
