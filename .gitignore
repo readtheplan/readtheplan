@@ -16,6 +16,11 @@ dist/
 venv/
 .env
 .python-version
+.codex-temp/
+.pip-temp/
+.pytest-temp/
+pytest-cache-files-*/
+.pytest_cache/
 
 # editor / OS
 .DS_Store

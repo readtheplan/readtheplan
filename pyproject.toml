@@ -27,3 +27,15 @@ classifiers = [
 Homepage = "https://github.com/readtheplan/readtheplan"
 Repository = "https://github.com/readtheplan/readtheplan"
 Issues = "https://github.com/readtheplan/readtheplan/issues"
+
+[project.scripts]
+readtheplan = "readtheplan.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
