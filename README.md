@@ -6,7 +6,7 @@
 
 ## status
 
-🚧 **Pre-MVP.** This namespace is locked but no functional release exists yet. Watch / star to follow.
+🧪 **Alpha — v0.0.2.** First working release on PyPI. The MVP-1 CLI ships an action-based risk classifier (per [ADR 0003](docs/adr/0003-risk-classification-taxonomy.md)) and the MVP-4 composite GitHub Action wraps it. Resource-aware rule library (MVP-2) is next.
 
 ## why this exists
 
@@ -86,4 +86,4 @@ Action outputs:
 
 ## contact
 
-OSS contributions welcome once the v0.1 lands. Until then, this is a namespace placeholder. Author: [@texasich](https://github.com/texasich).
+OSS contributions welcome. Author: [@texasich](https://github.com/texasich).

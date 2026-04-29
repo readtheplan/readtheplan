@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "readtheplan"
-version = "0.0.1"
-description = "Terraform plan risk explainer — reads `terraform plan` and classifies each change as safe/review/dangerous/irreversible. Pre-MVP namespace placeholder."
+version = "0.0.2"
+description = "Terraform plan risk explainer — reads `terraform plan` JSON and classifies each change as safe/review/dangerous/irreversible."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["terraform", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
-  "Development Status :: 1 - Planning",
+  "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
   "License :: OSI Approved :: MIT License",
