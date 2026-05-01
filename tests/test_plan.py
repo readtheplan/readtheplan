@@ -21,6 +21,7 @@ def test_analyze_valid_plan_counts_actions_and_risk() -> None:
     assert summary.risk_counts["safe"] == 1
     assert summary.risk_counts["dangerous"] == 1
     assert summary.risk_counts["review"] == 1
+    assert summary.risk_level == "dangerous"
 
 
 def test_missing_file_is_descriptive(tmp_path: Path) -> None:
@@ -69,6 +70,7 @@ def test_valid_json_without_resource_changes_is_allowed(tmp_path: Path) -> None:
     summary = analyze_plan_file(plan)
 
     assert summary.resource_changes == ()
+    assert summary.risk_level == "safe"
 
 
 def test_empty_action_list_requires_review(tmp_path: Path) -> None:

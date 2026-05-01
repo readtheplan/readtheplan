@@ -12,6 +12,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+site/dist/
 .venv/
 venv/
 .env
@@ -19,6 +20,7 @@ venv/
 .codex-temp/
 .pip-temp/
 .pytest-temp/
+.pytest-run/
 pytest-cache-files-*/
 .pytest_cache/
 

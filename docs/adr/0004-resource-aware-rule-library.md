@@ -26,7 +26,10 @@ The rule layer:
 - may escalate risk severity;
 - must not silently downgrade `dangerous` or `irreversible`;
 - emits a plain-English `changes[].explanation` string;
+- emits the selected `changes[].rule_id`;
 - can be disabled with `readtheplan analyze --no-rules` for action-only output.
+- can be extended with JSON/YAML organization overrides through
+  `readtheplan analyze --rules-file <path>`.
 
 Tier A covers the first high-blast-radius AWS resources:
 
@@ -39,11 +42,24 @@ Tier A covers the first high-blast-radius AWS resources:
 | `aws_route53_zone` | Explain hosted-zone replacement/deletion and DNS delegation risk. |
 | `aws_eks_node_group` | Explain replacement/deletion as pod eviction, capacity churn, and cluster disruption risk. |
 
+Tier B broadens coverage for the first `0.1.0` candidate with deterministic
+blast-radius templates for network access controls, EBS volumes, Lambda, ECS,
+load balancers, CloudFront, ACM certificates, Secrets Manager, SSM parameters,
+VPC/subnet/NAT infrastructure, Cognito, DynamoDB, ElastiCache, RDS parameter
+groups, Step Functions, EventBridge, SNS, SQS, API Gateway, Kinesis, OpenSearch,
+IAM users, and IAM access keys.
+
+Organization overrides are intentionally small. Each rule has a stable `id`,
+optional fixed `risk` or `bump`, optional `explanation`, and a `match` block that
+can use account IDs, tags, resource types, or address regexes. Overrides are
+escalate-only when combined with the built-in classifier.
+
 ## JSON Compatibility
 
 The existing stable fields from ADR 0003 remain unchanged:
 
 - `resource_change_count`
+- `risk_level`
 - `actions`
 - `risks`
 - `changes[].address`
@@ -51,12 +67,14 @@ The existing stable fields from ADR 0003 remain unchanged:
 - `changes[].actions`
 - `changes[].risk`
 
-This ADR adds one field:
+This ADR adds two per-change fields:
 
 - `changes[].explanation`: plain-English reason for the selected risk.
+- `changes[].rule_id`: stable identifier for the action, built-in resource, or
+  organization override rule that selected the emitted explanation.
 
-The new field is additive. Consumers that only read the MVP-1 fields can ignore
-it.
+The new fields are additive. Consumers that only read the MVP-1 fields can
+ignore them.
 
 ## Consequences
 
@@ -66,21 +84,20 @@ it.
   the first high-blast-radius AWS resources.
 - Keeps behavior deterministic and auditable.
 - Gives users a comparison path through `--no-rules`.
-- Establishes the shape needed for later YAML overrides without committing to a
-  config-file schema yet.
+- Gives teams lightweight JSON/YAML overrides without becoming a general
+  policy-as-code engine.
 
 ### Negative
 
-- Rules are code-backed for now, not loaded from a user-editable YAML file.
-- Tier A coverage is still incomplete relative to the README's full top-30 rule
-  ambition.
+- Tier B coverage is still coarse for several resource families and needs
+  fixtures from real plans.
+- YAML override support adds a small runtime dependency on PyYAML.
 - Some direct deletes remain over-classified as `irreversible` because the CLI
   has no verified backup or restore evidence.
 
 ### Neutral
 
-- Plan-level risk is still derived from `changes[].risk`; it is not emitted as a
-  separate field.
+- Plan-level risk is derived from `changes[].risk` and emitted as `risk_level`.
 - LLM-generated explanations remain out of scope for v0.1.
 
 ## Acceptance Criteria
@@ -89,3 +106,4 @@ it.
 - `--no-rules` returns the action-only classifier result.
 - Existing action counts and risk counts remain stable for the original fixture.
 - GitHub Action output remains compatible with the JSON CLI contract.
+- Rule overrides have tests for tag matching and explanation rendering.

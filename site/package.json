@@ -1,0 +1,13 @@
+{
+  "name": "readtheplan-site",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Static onboarding app for readtheplan.dev.",
+  "scripts": {
+    "test": "node scripts/validate.js",
+    "build": "node scripts/build.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

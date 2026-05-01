@@ -21,6 +21,7 @@ Current JSON output shape:
   "path": "tests\\fixtures\\valid_plan.json",
   "terraform_version": "1.6.6",
   "resource_change_count": 3,
+  "risk_level": "dangerous",
   "actions": {
     "create": 1,
     "delete/create": 1,
@@ -37,6 +38,7 @@ Current JSON output shape:
       "type": "aws_s3_bucket",
       "actions": ["create"],
       "risk": "safe",
+      "rule_id": "resource-rule",
       "explanation": "Terraform will create S3 bucket infrastructure..."
     },
     {
@@ -44,6 +46,7 @@ Current JSON output shape:
       "type": "aws_db_instance",
       "actions": ["delete", "create"],
       "risk": "dangerous",
+      "rule_id": "resource-rule",
       "explanation": "Terraform will replace this RDS instance..."
     },
     {
@@ -51,6 +54,7 @@ Current JSON output shape:
       "type": "aws_iam_role",
       "actions": ["update"],
       "risk": "review",
+      "rule_id": "resource-rule",
       "explanation": "Terraform will update IAM authorization..."
     }
   ]
@@ -69,9 +73,10 @@ additive rule layer is documented in
 `readtheplan analyze --no-rules` to inspect the action-only baseline described
 here.
 
-The CLI does not currently emit a plan-level `risk_level`, `risk_factors`,
-`risk_justification`, or `irreversible_operations` field. Those may be added in a
-future schema revision, but they are not part of the current contract.
+The CLI now emits a plan-level `risk_level` derived from the highest
+`changes[].risk` severity. Structured `risk_factors`, `risk_justification`, and
+`irreversible_operations` fields may be added in a future schema revision, but
+they are not part of the current contract.
 
 ## Decision
 
@@ -89,9 +94,7 @@ safe < review < dangerous < irreversible
 ```
 
 For MVP-1, risk is assigned per resource change from the Terraform action list.
-For consumers that need a plan-level risk, the derived plan risk is the highest
-severity present in `changes[].risk`. The CLI does not yet emit that derived
-field directly.
+The plan-level `risk_level` is the highest severity present in `changes[].risk`.
 
 ## Current Action Classifier
 
@@ -171,10 +174,8 @@ evidence exists, but that requires auditable supporting data.
 
 ## Aggregation
 
-The current JSON contract exposes aggregate counts in `risks`, not a single
-plan-level risk field.
-
-Consumers that need an overall plan risk should derive it by max severity:
+The current JSON contract exposes aggregate counts in `risks` and the derived
+plan-level `risk_level`. The value is computed by max severity:
 
 | Plan composition | Derived plan risk |
 | --- | --- |
@@ -196,6 +197,7 @@ noisy false positives.
 Current stable fields:
 
 - `resource_change_count`: integer count of resource changes.
+- `risk_level`: highest severity present in `changes[].risk`.
 - `actions`: object mapping normalized action-set strings to integer counts.
 - `risks`: object mapping risk tier strings to integer counts.
 - `changes`: array of per-resource objects.
@@ -203,11 +205,11 @@ Current stable fields:
 - `changes[].type`: Terraform resource type string, or `"<unknown>"`.
 - `changes[].actions`: array of action strings.
 - `changes[].risk`: one of `safe`, `review`, `dangerous`, `irreversible`.
+- `changes[].rule_id`: rule identifier that selected the emitted explanation.
 - `changes[].explanation`: plain-English reason for the selected risk.
 
 The following fields are intentionally not part of the current contract:
 
-- `risk_level`
 - `risk_factors`
 - `risk_justification`
 - `irreversible_operations`
@@ -237,7 +239,8 @@ new ADR.
 
 ### Neutral
 
-- Plan-level risk is derivable but not emitted directly yet.
+- Plan-level risk is still derived from `changes[].risk`; the CLI emits the
+  derived value as `risk_level`.
 - Resource-aware explanations are emitted per change; structured risk factors are
   still deferred.
 

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">readtheplan</title>
+  <rect width="64" height="64" rx="12" fill="#111827" />
+  <path d="M17 18h30v6H25v8h18v6H25v8h22v6H17z" fill="#e7eef9" />
+  <path d="M13 12h38v40H13z" fill="none" stroke="#8fb8ff" stroke-width="3" />
+</svg>

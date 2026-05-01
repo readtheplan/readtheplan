@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from readtheplan.rules import RuleResult, action_explanation, apply_resource_rules
+from readtheplan.rules import (
+    RISK_ORDER,
+    RuleOverride,
+    RuleResult,
+    action_explanation,
+    apply_resource_rules,
+)
 
 
 class PlanError(ValueError):
@@ -20,6 +26,7 @@ class ResourceChange:
     actions: tuple[str, ...]
     risk: str
     explanation: str
+    rule_id: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -28,6 +35,7 @@ class ResourceChange:
             "actions": list(self.actions),
             "risk": self.risk,
             "explanation": self.explanation,
+            "rule_id": self.rule_id,
         }
 
 
@@ -49,11 +57,20 @@ class PlanSummary:
     def risk_counts(self) -> Counter[str]:
         return Counter(change.risk for change in self.resource_changes)
 
+    @property
+    def risk_level(self) -> str:
+        risk = "safe"
+        for change in self.resource_changes:
+            if RISK_ORDER.get(change.risk, RISK_ORDER["review"]) > RISK_ORDER[risk]:
+                risk = change.risk
+        return risk
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "path": str(self.path),
             "terraform_version": self.terraform_version,
             "resource_change_count": len(self.resource_changes),
+            "risk_level": self.risk_level,
             "actions": dict(sorted(self.action_counts.items())),
             "risks": dict(sorted(self.risk_counts.items())),
             "changes": [change.to_dict() for change in self.resource_changes],
@@ -88,7 +105,12 @@ def load_plan(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def analyze_plan_file(path: str | Path, *, use_rules: bool = True) -> PlanSummary:
+def analyze_plan_file(
+    path: str | Path,
+    *,
+    use_rules: bool = True,
+    rule_overrides: tuple[RuleOverride, ...] = (),
+) -> PlanSummary:
     plan_path = Path(path)
     data = load_plan(plan_path)
     resource_changes = data.get("resource_changes", [])
@@ -98,7 +120,8 @@ def analyze_plan_file(path: str | Path, *, use_rules: bool = True) -> PlanSummar
         raise PlanError("Terraform plan field 'resource_changes' must be a list")
 
     changes = tuple(
-        _resource_change(item, use_rules=use_rules) for item in resource_changes
+        _resource_change(item, use_rules=use_rules, rule_overrides=rule_overrides)
+        for item in resource_changes
     )
     terraform_version = data.get("terraform_version")
     if terraform_version is not None and not isinstance(terraform_version, str):
@@ -111,7 +134,12 @@ def analyze_plan_file(path: str | Path, *, use_rules: bool = True) -> PlanSummar
     )
 
 
-def _resource_change(item: Any, *, use_rules: bool = True) -> ResourceChange:
+def _resource_change(
+    item: Any,
+    *,
+    use_rules: bool = True,
+    rule_overrides: tuple[RuleOverride, ...] = (),
+) -> ResourceChange:
     if not isinstance(item, dict):
         return ResourceChange(
             address="<unknown>",
@@ -121,6 +149,7 @@ def _resource_change(item: Any, *, use_rules: bool = True) -> ResourceChange:
             explanation=(
                 "Terraform resource change metadata is malformed; human review is required."
             ),
+            rule_id="malformed-resource-change",
         )
 
     address = _string(item.get("address"), "<unknown>")
@@ -134,13 +163,16 @@ def _resource_change(item: Any, *, use_rules: bool = True) -> ResourceChange:
     baseline = RuleResult(
         risk=_risk_for_actions(action_tuple),
         explanation=action_explanation(action_tuple),
+        rule_id="action-baseline",
     )
     result = (
         apply_resource_rules(
+            address=address,
             resource_type=resource_type,
             actions=action_tuple,
             change=change,
             baseline=baseline,
+            overrides=rule_overrides,
         )
         if use_rules
         else baseline
@@ -151,6 +183,7 @@ def _resource_change(item: Any, *, use_rules: bool = True) -> ResourceChange:
         actions=action_tuple,
         risk=result.risk,
         explanation=result.explanation,
+        rule_id=result.rule_id,
     )
 
 

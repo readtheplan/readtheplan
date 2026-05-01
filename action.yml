@@ -18,6 +18,14 @@ inputs:
     description: Pip install source for the CLI. Defaults to this action checkout.
     required: false
     default: ""
+  rules-file:
+    description: Optional JSON/YAML organization rule override file.
+    required: false
+    default: ""
+  agent-id:
+    description: Optional agent identifier used to emit a plan-read attestation header.
+    required: false
+    default: ""
 
 outputs:
   summary-json:
@@ -32,6 +40,12 @@ outputs:
   risk-counts:
     description: Compact JSON object of risk counts.
     value: ${{ steps.analyze.outputs['risk-counts'] }}
+  risk-level:
+    description: Highest risk tier found in the plan.
+    value: ${{ steps.analyze.outputs['risk-level'] }}
+  attestation-header:
+    description: x-readtheplan-agent-read header when agent-id is provided.
+    value: ${{ steps.analyze.outputs['attestation-header'] }}
 
 runs:
   using: composite
@@ -41,6 +55,7 @@ runs:
       env:
         PLAN_FILE: ${{ inputs.plan-file }}
         FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
+        RULES_FILE: ${{ inputs.rules-file }}
       run: |
         set -euo pipefail
 
@@ -55,6 +70,11 @@ runs:
 
         if [ ! -f "$PLAN_FILE" ]; then
           echo "::error::Plan file not found: $PLAN_FILE"
+          exit 1
+        fi
+
+        if [ -n "$RULES_FILE" ] && [ ! -f "$RULES_FILE" ]; then
+          echo "::error::Rule override file not found: $RULES_FILE"
           exit 1
         fi
 
@@ -85,15 +105,21 @@ runs:
       env:
         PLAN_FILE: ${{ inputs.plan-file }}
         FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
+        RULES_FILE: ${{ inputs.rules-file }}
+        AGENT_ID: ${{ inputs.agent-id }}
       run: |
         set -euo pipefail
 
         output_file="$(mktemp)"
         error_file="$(mktemp)"
         count_file="$(mktemp)"
+        rules_args=()
+        if [ -n "$RULES_FILE" ]; then
+          rules_args=(--rules-file "$RULES_FILE")
+        fi
 
         set +e
-        readtheplan analyze --format json "$PLAN_FILE" >"$output_file" 2>"$error_file"
+        readtheplan analyze --format json "${rules_args[@]}" "$PLAN_FILE" >"$output_file" 2>"$error_file"
         cli_status=$?
         set -e
 
@@ -132,6 +158,7 @@ runs:
 
         expected_types = {
             "resource_change_count": int,
+            "risk_level": str,
             "actions": dict,
             "risks": dict,
             "changes": list,
@@ -148,6 +175,7 @@ runs:
                 raise SystemExit(1)
 
         resource_change_count = payload["resource_change_count"]
+        risk_level = payload["risk_level"]
         action_counts = json.dumps(payload["actions"], sort_keys=True, separators=(",", ":"))
         risk_counts = json.dumps(payload["risks"], sort_keys=True, separators=(",", ":"))
         summary_json = json.dumps(payload, indent=2, sort_keys=True)
@@ -161,18 +189,20 @@ runs:
             output.write(summary_json)
             output.write("\nREADTHEPLAN_JSON\n")
             output.write(f"resource-change-count={resource_change_count}\n")
+            output.write(f"risk-level={risk_level}\n")
             output.write(f"action-counts={action_counts}\n")
             output.write(f"risk-counts={risk_counts}\n")
 
         with step_summary.open("a", encoding="utf-8") as summary:
             summary.write("## readtheplan\n\n")
             summary.write(f"- Resource changes: {resource_change_count}\n")
+            summary.write(f"- Plan risk: `{risk_level}`\n")
             summary.write(f"- Actions: `{action_counts}`\n")
             summary.write(f"- Risks: `{risk_counts}`\n")
             if payload["changes"]:
                 summary.write("\n### Changes\n\n")
-                summary.write("| Risk | Actions | Resource | Type | Explanation |\n")
-                summary.write("| --- | --- | --- | --- | --- |\n")
+                summary.write("| Risk | Rule | Actions | Resource | Type | Explanation |\n")
+                summary.write("| --- | --- | --- | --- | --- | --- |\n")
                 for change in payload["changes"][:20]:
                     actions = "/".join(str(action) for action in change.get("actions", []))
                     summary.write(
@@ -180,6 +210,7 @@ runs:
                         + " | ".join(
                             [
                                 _markdown_cell(change.get("risk", "")),
+                                _markdown_cell(change.get("rule_id", "")),
                                 _markdown_cell(actions),
                                 _markdown_cell(change.get("address", "")),
                                 _markdown_cell(change.get("type", "")),
@@ -202,6 +233,14 @@ runs:
         PY
 
         resource_change_count="$(cat "$count_file")"
+        if [ -n "$AGENT_ID" ]; then
+          {
+            echo "attestation-header<<READTHEPLAN_ATTESTATION"
+            readtheplan attest --agent-id "$AGENT_ID" "$PLAN_FILE"
+            echo "READTHEPLAN_ATTESTATION"
+          } >> "$GITHUB_OUTPUT"
+        fi
+
         if [ "${FAIL_ON_CHANGES,,}" = "true" ] && [ "$resource_change_count" -gt 0 ]; then
           echo "::error::Plan contains $resource_change_count resource changes and fail-on-changes is true"
           exit 1
