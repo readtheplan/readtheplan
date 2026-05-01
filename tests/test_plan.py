@@ -69,3 +69,17 @@ def test_valid_json_without_resource_changes_is_allowed(tmp_path: Path) -> None:
     summary = analyze_plan_file(plan)
 
     assert summary.resource_changes == ()
+
+
+def test_empty_action_list_requires_review(tmp_path: Path) -> None:
+    plan = tmp_path / "empty_actions.json"
+    plan.write_text(
+        '{"resource_changes": [{"address": "aws_s3_bucket.logs", '
+        '"type": "aws_s3_bucket", "change": {"actions": []}}]}',
+        encoding="utf-8",
+    )
+
+    summary = analyze_plan_file(plan)
+
+    assert summary.resource_changes[0].risk == "review"
+    assert "missing or unknown" in summary.resource_changes[0].explanation

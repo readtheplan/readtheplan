@@ -31,6 +31,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default="text",
         help="Output format. Defaults to text.",
     )
+    analyze.add_argument(
+        "--no-rules",
+        action="store_true",
+        help="Disable resource-aware rules and use the action-only classifier.",
+    )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
 
@@ -39,7 +44,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _analyze(args: argparse.Namespace) -> int:
     try:
-        summary = analyze_plan_file(args.plan_file)
+        summary = analyze_plan_file(args.plan_file, use_rules=not args.no_rules)
     except PlanError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -74,12 +79,15 @@ def _print_summary(summary: PlanSummary, stream: TextIO) -> None:
 
     print("", file=stream)
     print("## Changes", file=stream)
-    print("| Risk | Actions | Resource | Type |", file=stream)
-    print("| --- | --- | --- | --- |", file=stream)
+    print("| Risk | Actions | Resource | Type | Explanation |", file=stream)
+    print("| --- | --- | --- | --- | --- |", file=stream)
     for change in summary.resource_changes:
         actions = "/".join(change.actions)
         print(
-            f"| {change.risk} | {actions} | {change.address} | {change.resource_type} |",
+            (
+                f"| {change.risk} | {actions} | {change.address} | "
+                f"{change.resource_type} | {change.explanation} |"
+            ),
             file=stream,
         )
 

@@ -36,29 +36,38 @@ Current JSON output shape:
       "address": "aws_s3_bucket.logs",
       "type": "aws_s3_bucket",
       "actions": ["create"],
-      "risk": "safe"
+      "risk": "safe",
+      "explanation": "Terraform will create S3 bucket infrastructure..."
     },
     {
       "address": "aws_db_instance.main",
       "type": "aws_db_instance",
       "actions": ["delete", "create"],
-      "risk": "dangerous"
+      "risk": "dangerous",
+      "explanation": "Terraform will replace this RDS instance..."
     },
     {
       "address": "aws_iam_role.app",
       "type": "aws_iam_role",
       "actions": ["update"],
-      "risk": "review"
+      "risk": "review",
+      "explanation": "Terraform will update IAM authorization..."
     }
   ]
 }
 ```
 
-Ground truth today lives in `src/readtheplan/plan.py`:
+Ground truth for the action baseline lives in `src/readtheplan/plan.py`:
 
 - `ResourceChange.risk` is emitted as `changes[].risk`.
 - `PlanSummary.risk_counts` is emitted as the aggregate `risks` object.
 - `_risk_for_actions()` is the current classifier.
+
+The default CLI now layers resource-aware rules on top of this baseline. That
+additive rule layer is documented in
+[`ADR 0004`](0004-resource-aware-rule-library.md). Use
+`readtheplan analyze --no-rules` to inspect the action-only baseline described
+here.
 
 The CLI does not currently emit a plan-level `risk_level`, `risk_factors`,
 `risk_justification`, or `irreversible_operations` field. Those may be added in a
@@ -98,9 +107,9 @@ Current behavior is intentionally action-based and deterministic:
 | `["delete"]` | `irreversible` | Deletion may remove stateful or externally relied-on infrastructure. |
 | missing, malformed, or unknown actions | `review` | Unknown input should require human judgment rather than being treated as safe. |
 
-The current code does not inspect resource type, account, environment, backup
-state, blast radius, IAM semantics, or compliance context. MVP-2 is expected to
-add resource-aware rules on top of this baseline.
+The action baseline does not inspect account, environment, backup state, blast
+radius, IAM semantics, or compliance context. Resource-specific context is added
+only by the ADR 0004 rule layer.
 
 ## Tier Boundaries
 
@@ -194,6 +203,7 @@ Current stable fields:
 - `changes[].type`: Terraform resource type string, or `"<unknown>"`.
 - `changes[].actions`: array of action strings.
 - `changes[].risk`: one of `safe`, `review`, `dangerous`, `irreversible`.
+- `changes[].explanation`: plain-English reason for the selected risk.
 
 The following fields are intentionally not part of the current contract:
 
@@ -228,8 +238,8 @@ new ADR.
 ### Neutral
 
 - Plan-level risk is derivable but not emitted directly yet.
-- Risk factors and explanations are deferred until the rule library can produce
-  evidence-backed reasons.
+- Resource-aware explanations are emitted per change; structured risk factors are
+  still deferred.
 
 ## Acceptance Criteria
 
