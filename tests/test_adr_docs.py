@@ -6,6 +6,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_explainer_engine_adr_documents_rules_first_decision() -> None:
+    adr = (ROOT / "docs" / "adr" / "0001-explainer-engine.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "deterministic rules and templates" in adr
+    assert "LLM-generated explanations are deferred" in adr
+    assert "explicit opt-in" in adr
+
+
+def test_plan_input_adr_documents_json_only_contract() -> None:
+    adr = (ROOT / "docs" / "adr" / "0002-plan-input-format.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Accept Terraform plan JSON only" in adr
+    assert "terraform show -json" in adr
+    assert "text-only" in adr
+
+
 def test_risk_taxonomy_adr_matches_current_json_contract() -> None:
     adr = (
         ROOT / "docs" / "adr" / "0003-risk-classification-taxonomy.md"
