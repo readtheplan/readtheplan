@@ -152,6 +152,10 @@ runs:
         risk_counts = json.dumps(payload["risks"], sort_keys=True, separators=(",", ":"))
         summary_json = json.dumps(payload, indent=2, sort_keys=True)
 
+        def _markdown_cell(value):
+            text = str(value).replace("\n", " ").replace("|", "\\|")
+            return text if len(text) <= 240 else text[:237] + "..."
+
         with github_output.open("a", encoding="utf-8") as output:
             output.write("summary-json<<READTHEPLAN_JSON\n")
             output.write(summary_json)
@@ -165,6 +169,28 @@ runs:
             summary.write(f"- Resource changes: {resource_change_count}\n")
             summary.write(f"- Actions: `{action_counts}`\n")
             summary.write(f"- Risks: `{risk_counts}`\n")
+            if payload["changes"]:
+                summary.write("\n### Changes\n\n")
+                summary.write("| Risk | Actions | Resource | Type | Explanation |\n")
+                summary.write("| --- | --- | --- | --- | --- |\n")
+                for change in payload["changes"][:20]:
+                    actions = "/".join(str(action) for action in change.get("actions", []))
+                    summary.write(
+                        "| "
+                        + " | ".join(
+                            [
+                                _markdown_cell(change.get("risk", "")),
+                                _markdown_cell(actions),
+                                _markdown_cell(change.get("address", "")),
+                                _markdown_cell(change.get("type", "")),
+                                _markdown_cell(change.get("explanation", "")),
+                            ]
+                        )
+                        + " |\n"
+                    )
+                remaining = len(payload["changes"]) - 20
+                if remaining > 0:
+                    summary.write(f"\n_{remaining} additional changes omitted from summary._\n")
 
         print(f"::notice::readtheplan analyzed {resource_change_count} resource changes")
         for risk in ("dangerous", "irreversible"):

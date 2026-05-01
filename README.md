@@ -91,6 +91,9 @@ Action outputs:
 - `action-counts`: compact JSON object of action counts.
 - `risk-counts`: compact JSON object of risk counts.
 
+The Action also writes a GitHub Step Summary with aggregate counts and a compact
+change table using the same `explanation` text as the CLI.
+
 ## contact
 
 OSS contributions welcome. Author: [@texasich](https://github.com/texasich).
