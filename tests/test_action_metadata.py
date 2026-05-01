@@ -12,6 +12,10 @@ def test_action_uses_json_cli_contract() -> None:
     assert "readtheplan analyze --format json" in action
     assert "resource_change_count" in action
     assert "summary-json" in action
+    assert "risk-level" in action
+    assert "attestation-header" in action
+    assert "--rules-file" in action
+    assert "readtheplan attest --agent-id" in action
     assert "$GITHUB_ACTION_PATH" in action
     assert "install-source" in action
     assert "### Changes" in action

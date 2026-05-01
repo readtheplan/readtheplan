@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from readtheplan.plan import analyze_plan_file
+from readtheplan.rules import load_rule_overrides
 
 
 def _write_plan(tmp_path: Path, resource_change: dict[str, Any]) -> Path:
@@ -157,3 +158,53 @@ def test_resource_rules_can_be_disabled(tmp_path: Path) -> None:
 
     assert summary.resource_changes[0].risk == "review"
     assert "update this resource in place" in summary.resource_changes[0].explanation
+
+
+def test_generic_resource_rules_cover_more_aws_blast_radius(tmp_path: Path) -> None:
+    cases = [
+        (_change("aws_dynamodb_table", ["delete"]), "irreversible", "point-in-time recovery"),
+        (_change("aws_lb_listener", ["update"]), "dangerous", "load-balancing"),
+        (_change("aws_api_gateway_stage", ["update"]), "dangerous", "API Gateway"),
+        (_change("aws_security_group_rule", ["update"]), "review", "network access"),
+    ]
+
+    for resource_change, expected_risk, expected_text in cases:
+        summary = analyze_plan_file(_write_plan(tmp_path, resource_change))
+        change = summary.resource_changes[0]
+
+        assert change.risk == expected_risk
+        assert expected_text in change.explanation
+        assert change.rule_id != "action-baseline"
+
+
+def test_rule_overrides_match_tags_and_render_explanation(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "aws_lambda_function",
+            ["update"],
+            after={"tags": {"compliance": "pci"}},
+        ),
+    )
+    overrides_path = tmp_path / "rules.json"
+    overrides_path.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "id": "pci-scope",
+                        "risk": "dangerous",
+                        "match": {"tags": {"compliance": "pci"}},
+                        "explanation": "$address is in PCI scope.",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = analyze_plan_file(plan, rule_overrides=load_rule_overrides(overrides_path))
+
+    assert summary.risk_level == "dangerous"
+    assert summary.resource_changes[0].rule_id == "pci-scope"
+    assert summary.resource_changes[0].explanation == "aws_lambda_function.example is in PCI scope."

@@ -3,7 +3,17 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist");
-const files = ["index.html", "styles.css", "app.js"];
+const files = [
+  "index.html",
+  "styles.css",
+  "app.js",
+  "404.html",
+  "favicon.svg",
+  "og-image.png",
+  "robots.txt",
+  "sitemap.xml",
+  "_redirects",
+];
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
@@ -16,9 +26,16 @@ fs.writeFileSync(
   path.join(dist, "_headers"),
   [
     "/*",
+    "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+    "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
+    "  Access-Control-Allow-Origin: https://readtheplan.dev",
+    "  Cross-Origin-Opener-Policy: same-origin",
+    "  Cross-Origin-Resource-Policy: same-origin",
     "  X-Content-Type-Options: nosniff",
+    "  X-DNS-Prefetch-Control: off",
+    "  X-Frame-Options: DENY",
     "  Referrer-Policy: strict-origin-when-cross-origin",
-    "  Permissions-Policy: camera=(), microphone=(), geolocation=()",
+    "  Permissions-Policy: accelerometer=(), autoplay=(), browsing-topics=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
     "",
   ].join("\n"),
   "utf8",

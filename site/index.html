@@ -8,6 +8,25 @@
       content="readtheplan turns Terraform plan JSON into audit-friendly risk summaries for CI, release review, and AI-assisted infrastructure work."
     />
     <title>readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#142033" />
+    <meta name="color-scheme" content="light" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan" />
+    <meta
+      property="og:description"
+      content="Turn Terraform JSON plans into stable risk tiers and short explanations."
+    />
+    <meta property="og:url" content="https://readtheplan.dev/" />
+    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan" />
+    <meta
+      name="twitter:description"
+      content="Turn Terraform JSON plans into stable risk tiers and short explanations."
+    />
+    <meta name="twitter:image" content="https://readtheplan.dev/og-image.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -125,45 +144,33 @@
               <p class="eyebrow">Plan signal</p>
               <h2 id="preview-title">Review summary</h2>
             </div>
-            <span class="status-pill">sample</span>
+            <span class="status-pill" id="statusPill">sample</span>
           </div>
+
+          <p class="recommendation" id="recommendation"></p>
 
           <div class="risk-meter" aria-label="Risk counts">
             <div>
-              <span class="count safe">1</span>
+              <span class="count safe" id="safeCount">1</span>
               <span>safe</span>
             </div>
             <div>
-              <span class="count review">2</span>
+              <span class="count review" id="reviewCount">2</span>
               <span>review</span>
             </div>
             <div>
-              <span class="count dangerous">1</span>
+              <span class="count dangerous" id="dangerousCount">1</span>
               <span>dangerous</span>
             </div>
           </div>
 
-          <div class="plan-table" role="table" aria-label="Sample risk table">
+          <div class="plan-table" role="table" aria-label="Sample risk table" aria-live="polite">
             <div role="row" class="table-head">
               <span role="columnheader">Risk</span>
               <span role="columnheader">Resource</span>
               <span role="columnheader">Explanation</span>
             </div>
-            <div role="row">
-              <span class="risk-tag dangerous">dangerous</span>
-              <span>aws_db_instance.primary</span>
-              <span>Replacement can change endpoints and recovery path.</span>
-            </div>
-            <div role="row">
-              <span class="risk-tag review">review</span>
-              <span>aws_iam_role.deploy</span>
-              <span>Trust policy changes can widen access.</span>
-            </div>
-            <div role="row">
-              <span class="risk-tag safe">safe</span>
-              <span>aws_cloudwatch_log_group.app</span>
-              <span>New stateless resource creation.</span>
-            </div>
+            <div class="plan-table-body" id="planRows"></div>
           </div>
         </section>
       </section>
@@ -173,7 +180,7 @@
           <div class="panel-heading row-heading">
             <div>
               <p class="eyebrow">Generated</p>
-              <h2>GitHub Action</h2>
+              <h2 id="actionTitle">GitHub Action</h2>
             </div>
             <button class="icon-button" type="button" data-copy="actionOutput">Copy</button>
           </div>

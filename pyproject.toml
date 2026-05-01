@@ -8,6 +8,9 @@ version = "0.0.2"
 description = "Terraform plan risk explainer — reads `terraform plan` JSON and classifies each change as safe/review/dangerous/irreversible."
 readme = "README.md"
 requires-python = ">=3.9"
+dependencies = [
+  "PyYAML>=6.0",
+]
 license = { text = "MIT" }
 authors = [
   { name = "texasich" }

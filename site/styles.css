@@ -111,6 +111,16 @@ a:hover {
   padding: 38px 0 56px;
 }
 
+.not-found {
+  width: min(760px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 18vh 0 56px;
+}
+
+.not-found .primary-link {
+  margin-top: 18px;
+}
+
 .intro {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -204,6 +214,18 @@ h2 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.recommendation {
+  min-height: 54px;
+  margin: -2px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--blue-soft);
+  color: #24466f;
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .control-group {
@@ -358,6 +380,10 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.plan-table-body {
+  display: contents;
 }
 
 .plan-table [role="row"] {

@@ -3,6 +3,13 @@ const actionOutput = document.querySelector("#actionOutput");
 const cliOutput = document.querySelector("#cliOutput");
 const checklist = document.querySelector("#checklist");
 const pilotLink = document.querySelector("#pilotLink");
+const actionTitle = document.querySelector("#actionTitle");
+const statusPill = document.querySelector("#statusPill");
+const recommendation = document.querySelector("#recommendation");
+const safeCount = document.querySelector("#safeCount");
+const reviewCount = document.querySelector("#reviewCount");
+const dangerousCount = document.querySelector("#dangerousCount");
+const planRows = document.querySelector("#planRows");
 
 const teamLabels = {
   maintainer: "solo maintainer",
@@ -23,6 +30,94 @@ const terraformLabels = {
   mixed: "mixed Terraform repositories",
 };
 
+const teamProfiles = {
+  maintainer: {
+    status: "maintainer",
+    recommendation:
+      "Keep the first pass light: summarize plan risk in PRs, then only gate when the team trusts the signal.",
+    rulesFile: "",
+    agentId: "",
+    cliFlags: "",
+    row: {
+      risk: "safe",
+      resource: "aws_cloudwatch_log_group.app",
+      explanation: "New stateless observability resource.",
+    },
+  },
+  platform: {
+    status: "platform",
+    recommendation:
+      "Standardize the rule file across repos so every team sees the same network, IAM, and data-store gates.",
+    rulesFile: ".readtheplan/rules.yml",
+    agentId: "platform-ci",
+    cliFlags: "--rules-file .readtheplan/rules.yml",
+    row: {
+      risk: "review",
+      resource: "aws_security_group_rule.platform_ingress",
+      explanation: "Shared ingress changes should be reviewed before they fan out.",
+    },
+  },
+  regulated: {
+    status: "audit",
+    recommendation:
+      "Emit JSON output and an agent-read attestation so the review trail can be attached to release evidence.",
+    rulesFile: ".readtheplan/regulated.yml",
+    agentId: "release-review",
+    cliFlags: "--format json --rules-file .readtheplan/regulated.yml",
+    row: {
+      risk: "dangerous",
+      resource: "aws_kms_key.customer_data",
+      explanation: "Key policy and deletion-window changes need auditable approval.",
+    },
+  },
+  consultant: {
+    status: "client",
+    recommendation:
+      "Start with a client-specific override file, then leave them with a repeatable CI gate instead of a one-off report.",
+    rulesFile: ".readtheplan/client.yml",
+    agentId: "client-review",
+    cliFlags: "--rules-file .readtheplan/client.yml",
+    row: {
+      risk: "review",
+      resource: "aws_organizations_account.client",
+      explanation: "Account-level ownership and billing changes need client signoff.",
+    },
+  },
+};
+
+const riskRows = {
+  rds: {
+    risk: "dangerous",
+    resource: "aws_db_instance.primary",
+    explanation: "Replacement can change endpoints and recovery path.",
+  },
+  s3: {
+    risk: "review",
+    resource: "aws_s3_bucket_policy.assets",
+    explanation: "Bucket policies can expose artifacts or state-adjacent data.",
+  },
+  iam: {
+    risk: "review",
+    resource: "aws_iam_role.deploy",
+    explanation: "Trust policy changes can widen deploy access.",
+  },
+  kms: {
+    risk: "dangerous",
+    resource: "aws_kms_key.root",
+    explanation: "Key policy or deletion changes can break recovery guarantees.",
+  },
+  dns: {
+    risk: "dangerous",
+    resource: "aws_route53_record.api",
+    explanation: "DNS cutovers can move production traffic immediately.",
+  },
+  eks: {
+    risk: "review",
+    resource: "aws_eks_cluster.main",
+    explanation: "Cluster endpoint and control-plane changes affect every workload.",
+  },
+};
+
 function getFormState() {
   const data = new FormData(form);
   return {
@@ -41,6 +136,93 @@ function policyLabel(policy) {
   return "false";
 }
 
+function buildRows(state) {
+  const rows = [teamProfiles[state.team].row];
+  for (const risk of state.risks) {
+    rows.push(riskRows[risk]);
+  }
+
+  if (state.terraform === "cloud") {
+    rows.push({
+      risk: "review",
+      resource: "tfe_workspace.production",
+      explanation: "Remote runs need workspace and variable review before apply.",
+    });
+  } else if (state.terraform === "mixed") {
+    rows.push({
+      risk: "review",
+      resource: "module.shared_network",
+      explanation: "Mixed repos need consistent rule overrides across ownership boundaries.",
+    });
+  }
+
+  const seen = new Set();
+  return rows.filter((row) => {
+    if (!row || seen.has(row.resource)) {
+      return false;
+    }
+    seen.add(row.resource);
+    return true;
+  });
+}
+
+function renderRows(rows) {
+  planRows.replaceChildren(
+    ...rows.map((row) => {
+      const resource = document.createElement("span");
+      resource.textContent = row.resource;
+
+      const explanation = document.createElement("span");
+      explanation.textContent = row.explanation;
+
+      const risk = document.createElement("span");
+      risk.className = `risk-tag ${row.risk}`;
+      risk.textContent = row.risk;
+
+      const item = document.createElement("div");
+      item.setAttribute("role", "row");
+      item.replaceChildren(risk, resource, explanation);
+      return item;
+    }),
+  );
+}
+
+function renderRiskCounts(rows) {
+  const counts = rows.reduce(
+    (acc, row) => {
+      acc[row.risk] += 1;
+      return acc;
+    },
+    { safe: 0, review: 0, dangerous: 0 },
+  );
+  safeCount.textContent = String(counts.safe);
+  reviewCount.textContent = String(counts.review);
+  dangerousCount.textContent = String(counts.dangerous);
+}
+
+function riskOverrideSnippet(state) {
+  const profile = teamProfiles[state.team];
+  if (!profile.rulesFile) {
+    return [];
+  }
+  return [
+    `          rules-file: ${profile.rulesFile}`,
+    `          agent-id: ${profile.agentId}`,
+  ];
+}
+
+function dangerousGateSnippet(state) {
+  if (state.policy !== "dangerous") {
+    return [];
+  }
+  return [
+    "",
+    "      - name: Gate dangerous plans",
+    "        if: ${{ steps.readtheplan.outputs.risk-level == 'dangerous' || steps.readtheplan.outputs.risk-level == 'irreversible' }}",
+    "        run: exit 1",
+  ];
+}
+
 function generateAction(state) {
   if (state.ci !== "github") {
     return [
@@ -48,46 +230,57 @@ function generateAction(state) {
       "# Then run the CLI command shown in the next panel.",
       "",
       "python -m pip install readtheplan",
-      "readtheplan analyze --format json plan.json",
+      `readtheplan analyze ${teamProfiles[state.team].cliFlags} plan.json`.replace("  ", " "),
     ].join("\n");
   }
 
   return [
     "name: Terraform plan risk",
     "",
+    "# Analyze an already-created plan JSON artifact.",
+    "# Keep Terraform init/plan in a separate trusted workflow.",
+    "# Do not expose cloud credentials to forked pull_request jobs.",
+    "",
     "on:",
-    "  pull_request:",
-    "    paths:",
-    "      - '**/*.tf'",
-    "      - '**/*.tfvars'",
+    "  workflow_run:",
+    "    workflows: ['Terraform plan']",
+    "    types: [completed]",
+    "",
+    "permissions:",
+    "  contents: read",
+    "  actions: read",
     "",
     "jobs:",
     "  readtheplan:",
+    "    if: ${{ github.event.workflow_run.conclusion == 'success' }}",
     "    runs-on: ubuntu-latest",
     "    steps:",
-    "      - uses: actions/checkout@v4",
-    "",
-    "      - name: Create Terraform plan JSON",
-    "        run: |",
-    "          terraform init -input=false",
-    "          terraform plan -out=tfplan -input=false",
-    "          terraform show -json tfplan > plan.json",
+    "      - name: Download plan JSON artifact",
+    "        uses: actions/download-artifact@v4",
+    "        with:",
+    "          name: terraform-plan-json",
+    "          run-id: ${{ github.event.workflow_run.id }}",
+    "          github-token: ${{ secrets.GITHUB_TOKEN }}",
     "",
     "      - name: Analyze Terraform plan",
+    "        id: readtheplan",
     "        uses: readtheplan/readtheplan@v1",
     "        with:",
     "          plan-file: plan.json",
     `          fail-on-changes: "${policyLabel(state.policy)}"`,
+    ...riskOverrideSnippet(state),
+    ...dangerousGateSnippet(state),
   ].join("\n");
 }
 
 function generateCli(state) {
-  const format = state.team === "regulated" ? "--format json" : "";
+  const profile = teamProfiles[state.team];
+  const args = profile.cliFlags || (state.team === "regulated" ? "--format json" : "");
   return [
     "python -m pip install readtheplan",
     "terraform plan -out=tfplan -input=false",
     "terraform show -json tfplan > plan.json",
-    `readtheplan analyze ${format} plan.json`.replace("  ", " "),
+    `readtheplan analyze ${args} plan.json`.replace("  ", " "),
     "",
     "# Compare deterministic rules with the action-only baseline:",
     "readtheplan analyze --no-rules --format json plan.json",
@@ -132,6 +325,14 @@ function updatePilotLink(state) {
 
 function render() {
   const state = getFormState();
+  const rows = buildRows(state);
+  const profile = teamProfiles[state.team];
+  statusPill.textContent = profile.status;
+  recommendation.textContent = profile.recommendation;
+  actionTitle.textContent =
+    state.ci === "github" ? "GitHub Action" : state.ci === "local" ? "Local command" : "CI command";
+  renderRiskCounts(rows);
+  renderRows(rows);
   actionOutput.textContent = generateAction(state);
   cliOutput.textContent = generateCli(state);
   checklist.replaceChildren(
