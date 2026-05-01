@@ -388,12 +388,17 @@ select {
 
 .plan-table [role="row"] {
   display: grid;
-  grid-template-columns: 110px minmax(150px, 0.75fr) minmax(180px, 1fr);
+  grid-template-columns: 110px minmax(0, 0.75fr) minmax(0, 1fr);
   gap: 14px;
   align-items: center;
   min-height: 54px;
   padding: 12px 14px;
   border-top: 1px solid var(--line);
+}
+
+.plan-table [role="row"] > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .plan-table [role="row"]:first-child {
