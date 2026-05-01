@@ -43,7 +43,41 @@ def test_analyze_valid_plan_can_print_json(capsys) -> None:
         "type": "aws_s3_bucket",
         "actions": ["create"],
         "risk": "safe",
+        "explanation": (
+            "Terraform will create S3 bucket infrastructure. Confirm public access "
+            "blocks and data classification before storing sensitive data."
+        ),
     }
+
+
+def test_analyze_can_disable_resource_rules(tmp_path: Path, capsys) -> None:
+    plan = tmp_path / "rds_major_update.json"
+    plan.write_text(
+        json.dumps(
+            {
+                "resource_changes": [
+                    {
+                        "address": "aws_rds_cluster.main",
+                        "type": "aws_rds_cluster",
+                        "change": {
+                            "actions": ["update"],
+                            "before": {"engine_version": "13.8"},
+                            "after": {"engine_version": "14.1"},
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["analyze", "--format", "json", "--no-rules", str(plan)])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["risks"] == {"review": 1}
+    assert payload["changes"][0]["risk"] == "review"
 
 
 def test_analyze_invalid_plan_prints_stderr(capsys) -> None:

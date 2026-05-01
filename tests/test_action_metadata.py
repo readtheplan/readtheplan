@@ -14,6 +14,9 @@ def test_action_uses_json_cli_contract() -> None:
     assert "summary-json" in action
     assert "$GITHUB_ACTION_PATH" in action
     assert "install-source" in action
+    assert "### Changes" in action
+    assert "_markdown_cell" in action
+    assert "payload[\"changes\"][:20]" in action
     assert "grep" not in action
     assert "pip install readtheplan" not in action
 

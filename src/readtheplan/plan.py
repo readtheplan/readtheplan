@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from readtheplan.rules import RuleResult, action_explanation, apply_resource_rules
+
 
 class PlanError(ValueError):
     """Raised when a Terraform plan JSON file cannot be analyzed."""
@@ -17,6 +19,7 @@ class ResourceChange:
     resource_type: str
     actions: tuple[str, ...]
     risk: str
+    explanation: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -24,6 +27,7 @@ class ResourceChange:
             "type": self.resource_type,
             "actions": list(self.actions),
             "risk": self.risk,
+            "explanation": self.explanation,
         }
 
 
@@ -84,7 +88,7 @@ def load_plan(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def analyze_plan_file(path: str | Path) -> PlanSummary:
+def analyze_plan_file(path: str | Path, *, use_rules: bool = True) -> PlanSummary:
     plan_path = Path(path)
     data = load_plan(plan_path)
     resource_changes = data.get("resource_changes", [])
@@ -93,7 +97,9 @@ def analyze_plan_file(path: str | Path) -> PlanSummary:
     if not isinstance(resource_changes, list):
         raise PlanError("Terraform plan field 'resource_changes' must be a list")
 
-    changes = tuple(_resource_change(item) for item in resource_changes)
+    changes = tuple(
+        _resource_change(item, use_rules=use_rules) for item in resource_changes
+    )
     terraform_version = data.get("terraform_version")
     if terraform_version is not None and not isinstance(terraform_version, str):
         terraform_version = str(terraform_version)
@@ -105,13 +111,16 @@ def analyze_plan_file(path: str | Path) -> PlanSummary:
     )
 
 
-def _resource_change(item: Any) -> ResourceChange:
+def _resource_change(item: Any, *, use_rules: bool = True) -> ResourceChange:
     if not isinstance(item, dict):
         return ResourceChange(
             address="<unknown>",
             resource_type="<unknown>",
             actions=("unknown",),
             risk="review",
+            explanation=(
+                "Terraform resource change metadata is malformed; human review is required."
+            ),
         )
 
     address = _string(item.get("address"), "<unknown>")
@@ -122,15 +131,32 @@ def _resource_change(item: Any) -> ResourceChange:
         actions = ["unknown"]
 
     action_tuple = tuple(_string(action, "unknown") for action in actions)
+    baseline = RuleResult(
+        risk=_risk_for_actions(action_tuple),
+        explanation=action_explanation(action_tuple),
+    )
+    result = (
+        apply_resource_rules(
+            resource_type=resource_type,
+            actions=action_tuple,
+            change=change,
+            baseline=baseline,
+        )
+        if use_rules
+        else baseline
+    )
     return ResourceChange(
         address=address,
         resource_type=resource_type,
         actions=action_tuple,
-        risk=_risk_for_actions(action_tuple),
+        risk=result.risk,
+        explanation=result.explanation,
     )
 
 
 def _risk_for_actions(actions: tuple[str, ...]) -> str:
+    if not actions:
+        return "review"
     action_set = set(actions)
     if "delete" in action_set and "create" in action_set:
         return "dangerous"

@@ -6,7 +6,7 @@
 
 ## status
 
-🧪 **Alpha — v0.0.2.** First working release on PyPI. The MVP-1 CLI ships an action-based risk classifier (per [ADR 0003](docs/adr/0003-risk-classification-taxonomy.md)) and the MVP-4 composite GitHub Action wraps it. Resource-aware rule library (MVP-2) is next.
+🧪 **Alpha — v0.0.2 released.** The PyPI alpha ships the MVP-1 CLI and MVP-4 composite GitHub Action. Current `main` adds the first MVP-2 resource-aware AWS rules for RDS, S3, KMS, IAM, Route53, and EKS node groups on top of the action taxonomy in [ADR 0003](docs/adr/0003-risk-classification-taxonomy.md).
 
 ## why this exists
 
@@ -24,9 +24,9 @@ Anchored in this field note: **[terraform-apply-is-roulette](https://github.com/
 ## planned MVP scope
 
 1. CLI: `readtheplan analyze plan.json` → markdown table of changes with risk levels
-2. plain-english explainer per resource type (top ~30 high-risk patterns covered out of the box: KMS, IAM, RDS replacements, S3 bucket destroys, EKS node-group replacements, route53 zone deletes, network ACL strips)
+2. plain-english explainer per resource type (top ~30 high-risk patterns covered out of the box: KMS, IAM, RDS replacements, S3 bucket destroys, EKS node-group replacements, route53 zone deletes, network ACL strips) — Tier A shipped in `main`
 3. AI-agent attestation header — flag whether an agent claims to have read the plan
-4. GitHub Action wrapper: install as `uses: readtheplan/action@v1`, posts a markdown PR comment
+4. GitHub Action wrapper: install as `uses: readtheplan/readtheplan@v1`, exposes summary outputs for workflows
 5. YAML rule customization: define org-specific rules ("anything in account 1234 is `review`")
 
 ## what's *not* in scope (and won't be)
@@ -48,12 +48,19 @@ MVP-1 exposes a stable machine-readable contract for automation:
 readtheplan analyze --format json plan.json
 ```
 
+Resource-aware rules are enabled by default. To inspect the action-only baseline
+from ADR 0003:
+
+```bash
+readtheplan analyze --no-rules --format json plan.json
+```
+
 The JSON object includes:
 
 - `resource_change_count`: total Terraform `resource_changes` entries.
 - `actions`: counts keyed by Terraform action set, such as `create` or `delete/create`.
 - `risks`: counts keyed by readtheplan risk tier.
-- `changes`: one object per resource change with `address`, `type`, `actions`, and `risk`.
+- `changes`: one object per resource change with `address`, `type`, `actions`, `risk`, and `explanation`.
 
 Invalid input is reported on stderr and exits non-zero.
 
@@ -83,6 +90,9 @@ Action outputs:
 - `resource-change-count`: total resource changes.
 - `action-counts`: compact JSON object of action counts.
 - `risk-counts`: compact JSON object of risk counts.
+
+The Action also writes a GitHub Step Summary with aggregate counts and a compact
+change table using the same `explanation` text as the CLI.
 
 ## contact
 
