@@ -5,6 +5,13 @@ import json
 import sys
 from typing import Sequence, TextIO
 
+from readtheplan.controls import (
+    CatalogSchemaError,
+    ControlCatalog,
+    ControlEntry,
+    FrameworkNotFoundError,
+    load_catalog,
+)
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
 
 
@@ -36,6 +43,13 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable resource-aware rules and use the action-only classifier.",
     )
+    analyze.add_argument(
+        "--framework",
+        help=(
+            "Annotate each change with control IDs from the named framework "
+            "catalog. Currently available: soc2."
+        ),
+    )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
 
@@ -43,6 +57,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _analyze(args: argparse.Namespace) -> int:
+    catalog: ControlCatalog | None = None
+    if args.framework:
+        try:
+            catalog = load_catalog(args.framework)
+        except (CatalogSchemaError, FrameworkNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
     try:
         summary = analyze_plan_file(args.plan_file, use_rules=not args.no_rules)
     except PlanError as exc:
@@ -50,14 +72,51 @@ def _analyze(args: argparse.Namespace) -> int:
         return 1
 
     if args.format == "json":
-        json.dump(summary.to_dict(), sys.stdout, indent=2)
+        json.dump(_summary_to_dict(summary, catalog), sys.stdout, indent=2)
         print()
     else:
-        _print_summary(summary, sys.stdout)
+        _print_summary(summary, sys.stdout, catalog=catalog)
     return 0
 
 
-def _print_summary(summary: PlanSummary, stream: TextIO) -> None:
+def _summary_to_dict(
+    summary: PlanSummary,
+    catalog: ControlCatalog | None,
+) -> dict[str, object]:
+    payload = summary.to_dict()
+    if catalog is None:
+        return payload
+
+    payload["framework"] = {
+        "name": catalog.framework,
+        "version": catalog.framework_version,
+        "schema_version": catalog.schema_version,
+    }
+    for change, change_payload in zip(summary.resource_changes, payload["changes"]):
+        change_payload["controls"] = [
+            _control_to_dict(control)
+            for control in catalog.controls_for(
+                resource_type=change.resource_type,
+                actions=change.actions,
+            )
+        ]
+    return payload
+
+
+def _control_to_dict(control: ControlEntry) -> dict[str, str]:
+    return {
+        "id": control.id,
+        "title": control.title,
+        "rationale": control.rationale,
+    }
+
+
+def _print_summary(
+    summary: PlanSummary,
+    stream: TextIO,
+    *,
+    catalog: ControlCatalog | None = None,
+) -> None:
     print(f"# readtheplan summary: {summary.path}", file=stream)
     if summary.terraform_version:
         print(f"Terraform version: {summary.terraform_version}", file=stream)
@@ -79,17 +138,27 @@ def _print_summary(summary: PlanSummary, stream: TextIO) -> None:
 
     print("", file=stream)
     print("## Changes", file=stream)
-    print("| Risk | Actions | Resource | Type | Explanation |", file=stream)
-    print("| --- | --- | --- | --- | --- |", file=stream)
+    if catalog is None:
+        print("| Risk | Actions | Resource | Type | Explanation |", file=stream)
+        print("| --- | --- | --- | --- | --- |", file=stream)
+    else:
+        print(
+            "| Risk | Actions | Resource | Type | Explanation | Controls |", file=stream
+        )
+        print("| --- | --- | --- | --- | --- | --- |", file=stream)
     for change in summary.resource_changes:
         actions = "/".join(change.actions)
-        print(
-            (
-                f"| {change.risk} | {actions} | {change.address} | "
-                f"{change.resource_type} | {change.explanation} |"
-            ),
-            file=stream,
+        row = (
+            f"| {change.risk} | {actions} | {change.address} | "
+            f"{change.resource_type} | {change.explanation}"
         )
+        if catalog is not None:
+            controls = catalog.controls_for(
+                resource_type=change.resource_type,
+                actions=change.actions,
+            )
+            row = f"{row} | {', '.join(control.id for control in controls)}"
+        print(f"{row} |", file=stream)
 
 
 if __name__ == "__main__":

@@ -64,6 +64,14 @@ The JSON object includes:
 
 Invalid input is reported on stderr and exits non-zero.
 
+### Compliance control IDs (preview)
+
+`readtheplan analyze --framework soc2 plan.json` annotates each change with
+SOC 2 (TSC 2017) control IDs touched by that change. The mapping ships as
+data in `src/readtheplan/data/controls/soc2.yaml`. ISO 27001 and HIPAA
+catalogs are planned in subsequent releases. See
+`docs/adr/0005-compliance-control-mapping.md` for the schema and intent.
+
 ## GitHub Action
 
 This repository includes a composite GitHub Action at the repo root. It installs the
