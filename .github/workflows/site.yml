@@ -1,0 +1,24 @@
+name: Test site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Validate site source
+        run: npm --prefix site test
+
+      - name: Build static site
+        run: npm --prefix site run build
