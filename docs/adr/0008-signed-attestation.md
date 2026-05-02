@@ -63,7 +63,17 @@ Implementation outline:
 Use the **`sigstore` Python package** (PyPI: `sigstore`, maintained by
 the Sigstore project). It's the upstream-blessed Python implementation
 with parity for the keyless flow that `cosign sign-blob`/`verify-blob`
-offers. Pin to `sigstore>=3.0,<4`.
+offers. **Pin to `sigstore>=4.0,<5`** — current major release on PyPI
+is 4.x as of this ADR. (The earlier 3.x pin was a typo from my draft;
+Codex caught it before implementation. Documented here so the next
+ADR review knows why this number exists.)
+
+The v4 public API uses `SigningContext` + `Signer.sign_artifact()` for
+signing and `Verifier.verify_artifact(input_, bundle, policy)` for
+verification, with a `Bundle` object carrying signature + cert + Rekor
+entry. This ADR's pseudocode is intentionally light on import paths —
+follow the upstream package's actual public API documented at
+[sigstore-python](https://sigstore.github.io/sigstore-python/api/sign/).
 
 This is the **first new runtime dependency** since PyYAML in PR #3.
 PyYAML was justified by readable catalog data; sigstore is justified by
@@ -178,17 +188,4 @@ it never reaches out to anything except Sigstore's public infrastructure
 - The signing payload definition (envelope with `signature` and `cert`
   nulled, sorted-keys compact JSON) is part of the v1 schema contract.
   Changing how the payload is canonicalized is a v2 schema bump.
-- `sigstore` package version pin (`>=3.0,<4`) is reviewed at every
-  major-version bump. Breaking changes upstream surface as an explicit
-  ADR review.
-- The `verify` subcommand's one-line output format is contractually
-  stable for CI consumers. Adding fields to the line is allowed; removing
-  fields requires a v2 of the verify protocol.
-
-## Anchor
-
-Same arc — the compliance pivot articulated in `texasich/sre-field-notes`
-→ `notes/terraform-apply-is-roulette.md`. Signed attestation is the
-piece that turns "evidence shaped" into "evidence trusted." Auditors
-walking away with a `rtp-evidence-v1` envelope they verified with one
-command is the product narrative this ADR closes.
+- `sigstore` package version pin (`>=4.0,<5`) is review

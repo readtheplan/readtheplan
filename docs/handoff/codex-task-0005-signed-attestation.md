@@ -143,18 +143,63 @@ Verifying does the same construction and compares. **This is part of
 the v1 schema contract** — changing canonicalization is a v2 schema
 bump.
 
-### Imports
+### Sigstore v4 API (verified against upstream docs)
+
+The `sigstore` package on PyPI is at major version 4 as of this brief
+(Codex's earlier blocker on this task confirmed the version drift).
+Use the v4 public API surface:
+
+**Signing path:**
 
 ```python
-from sigstore.sign import Signer
-from sigstore.verify import Verifier, VerificationMaterials
-# (use whichever entry points sigstore>=3.0 exposes; the ADR pins
-# the major version, so import paths must be valid for sigstore 3.x)
+from sigstore.oidc import Issuer
+from sigstore.sign import SigningContext
+
+issuer = Issuer.production()                    # public Sigstore OIDC
+identity_token = issuer.identity_token()        # browser/CI flow
+context = SigningContext.production()           # Fulcio + Rekor public
+
+with context.signer(identity_token) as signer:
+    bundle = signer.sign_artifact(payload_bytes)
+
+# bundle is a sigstore.models.Bundle carrying the signature, cert chain,
+# and Rekor inclusion proof.
 ```
 
-If the `sigstore` package's import path differs from the above sketch,
-follow the package's actual public API. Document any departure in the
-PR description.
+**Verification path:**
+
+```python
+from sigstore.verify import Verifier, policy
+from sigstore.models import Bundle
+
+verifier = Verifier.production()
+identity_policy = policy.UnsafeNoOp()          # or Identity()/AnyOf() if
+                                               # an expected identity is
+                                               # known; keep open in v1.
+bundle = Bundle.from_json(bundle_json_bytes)
+verifier.verify_artifact(payload_bytes, bundle, identity_policy)
+# Raises VerificationError on failure; returns None on success.
+```
+
+The Bundle is what gets persisted in `agent_attestation.cert` and
+`agent_attestation.signature`. Strategy options:
+
+- **Embed the full bundle JSON** in `agent_attestation.cert` (or a new
+  `agent_attestation.bundle` field) and leave `signature` as a base64
+  copy of the bundle's signature payload for callers that only want
+  that bit. The bundle already contains the cert chain + Rekor entry,
+  so a separate `cert` field would duplicate.
+- **Or store the bundle JSON in `signature`** and drop the separate
+  `cert` field from the schema impact described in the ADR.
+
+Pick the option that's most idiomatic for the v4 `Bundle` API and
+document the choice in the PR description. Cowork will accept whichever
+is cleaner; the ADR's schema-impact section was written before the
+v4-Bundle-as-single-artifact pattern was confirmed.
+
+If the upstream API differs from this sketch, follow the actual public
+API per the docs at <https://sigstore.github.io/sigstore-python/> and
+document any departure in the PR.
 
 ---
 
@@ -209,13 +254,13 @@ Wire the subcommand under the existing `subparsers` dispatch (next to
 
 ## `pyproject.toml` changes
 
-Add `sigstore>=3.0,<4` to `[project.dependencies]`. Keep the existing
+Add `sigstore>=4.0,<5` to `[project.dependencies]`. Keep the existing
 `PyYAML>=6.0` dep.
 
 The full `dependencies` line should look something like:
 
 ```toml
-dependencies = ["PyYAML>=6.0", "sigstore>=3.0,<4"]
+dependencies = ["PyYAML>=6.0", "sigstore>=4.0,<5"]
 ```
 
 If the actual published `sigstore` major version on PyPI today is not
@@ -397,7 +442,7 @@ a TODO in the PR description and continue without it.
 - [ ] `readtheplan --help` shows the new `verify` subcommand.
 - [ ] `readtheplan verify --help` shows `--rekor-url` and the positional
       file argument.
-- [ ] PyPI install of the package picks up `sigstore>=3.0,<4` (verify in
+- [ ] PyPI install of the package picks up `sigstore>=4.0,<5` (verify in
       a fresh venv).
 - [ ] PR description maps each substantive decision back to ADR 0008
       sections and lists anything skipped vs. the brief.
@@ -416,44 +461,4 @@ specific checks:
 1. **Layering**: `evidence.py`, `attestation.py`, `controls.py`,
    `plan.py`, `rules.py` all untouched. (ADR 0008 §"Decision" — signing
    wraps the envelope, doesn't modify it.)
-2. **Backwards compatibility**: an unsigned envelope produced by
-   `build_evidence` (no `--sign`) is byte-identical to PR #6's output.
-   `signature` stays `null`, `cert` field absent.
-3. **Canonicalization fidelity**: signing payload is `signature`-and-
-   `cert`-nulled, sorted-keys, compact JSON, UTF-8. Test 6 and 7
-   exercise this.
-4. **Verify exit codes**: 0 on OK, 1 on any failure mode (unsigned,
-   tampered, schema wrong, malformed, missing file). No tracebacks
-   reach stderr.
-5. **Dependency hygiene**: only `sigstore>=3.0,<4` added; no other new
-   runtime deps; pin lower and upper bounds.
-
-Cowork will request changes inline; expected total review turnaround
-is under one full pass.
-
----
-
-## Risk callouts (read this before starting)
-
-- **Sigstore upstream API may differ.** The brief sketches imports as
-  `from sigstore.sign import Signer`; the actual public API in
-  `sigstore>=3.0` may use different entry points. Follow the upstream
-  package's actual API, document the mapping in the PR.
-
-- **Network in tests.** Sigstore keyless requires Fulcio + Rekor
-  reachability. CI may or may not have egress. Strategy:
-  - Tests that exercise canonicalization, schema, and CLI plumbing
-    must be hermetic (no network).
-  - Tests that exercise actual sign+verify round-trip can be marked
-    `@pytest.mark.skipif(no_network)`.
-  - Pre-signed fixtures are the bridge — they let verify-side tests
-    run offline without skipping.
-
-- **OIDC identity in tests.** Avoid requiring real OIDC. Use sigstore's
-  test/staging mode or mock the signer. Document the choice.
-
-- **Fixture generation.** The `signed_envelope.json` fixture must be
-  produced reproducibly by something other than a one-off "I ran
-  cosign once and committed the output." Either deterministic local
-  signing or mocked signature bytes. Document the choice in the PR;
-  reviewers want to see the fixture is regenerable.
+2. **Backwards compatibili

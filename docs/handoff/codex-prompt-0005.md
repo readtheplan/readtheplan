@@ -46,9 +46,10 @@ Then execute:
 - Add `--sign`, `--oidc-issuer`, `--rekor-url` flags to `analyze`.
   Behavior per the brief.
 - Add the `verify` subcommand to `cli.py`'s subparser dispatch.
-- Add `sigstore>=3.0,<4` to `pyproject.toml` `[project.dependencies]`.
-  If the actual current major version on PyPI is not 3.x, adjust the
-  pin and call out the change in the PR description.
+- Add `sigstore>=4.0,<5` to `pyproject.toml` `[project.dependencies]`.
+  Pin verified against PyPI's current 4.x major during the brief
+  revision. Keep this pin unless there's been another major bump
+  between now and your implementation.
 - Generate the three test fixtures (`signed_envelope.json`,
   `unsigned_envelope.json`, `tampered_envelope.json`) reproducibly.
   Document fixture generation in the PR.
@@ -65,15 +66,21 @@ Quality gates (all must pass before opening the PR):
 - ruff/black/mypy --strict clean for new + modified Python files.
 - `readtheplan analyze --help` shows the new flags.
 - `readtheplan --help` shows the new `verify` subcommand.
-- A fresh-venv install picks up `sigstore>=3.0,<4`.
+- A fresh-venv install picks up `sigstore>=4.0,<5`.
 - Each commit ends with the trailer: `AI-Assisted: Codex`.
 
 If anything in the brief looks wrong, contradicts the ADR, the
-upstream sigstore API differs from the brief's import sketch, or any
-risk-callout situation arises that needs a design call — stop, do
-not work around it. Reply with a short PR-style write-up of the
-issue and wait. The risk callouts at the bottom of the brief are
-specifically asking you to flag deviations rather than guess.
+upstream sigstore API differs from the brief's revised v4 sketch
+(SigningContext + Signer.sign_artifact, Verifier.verify_artifact
+with Bundle), or any risk-callout situation arises that needs a
+design call — stop, do not work around it. Reply with a short
+PR-style write-up of the issue and wait. The risk callouts at the
+bottom of the brief are specifically asking you to flag deviations
+rather than guess.
+
+This is the second iteration of this brief; the first was blocked
+on a pin/API drift that has now been corrected. Thanks for catching
+it. The same handshake applies if anything else surfaces.
 
 Open the PR against `main` from
 `codex/readtheplan-signed-attestation`. PR description must:
@@ -94,12 +101,4 @@ Out of scope for this PR — do not bundle even if convenient:
 - DSSE / in-toto bundle format
 - Multi-signer (agent + reviewer co-sign)
 - Custom transparency log wiring beyond `--rekor-url`
-- Offline verification
-- Signature rotation / re-signing
-- Hardware-backed identities (TPM, HSM)
-- PR-comment rendering
-- Modifying evidence.py, attestation.py, controls.py, plan.py, rules.py
-- Any new runtime dependency beyond sigstore
-
-Anything that "obviously also needs to land" goes in the PR
-description as a TODO for a follow-on task.
+- Offline verificati
