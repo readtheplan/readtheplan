@@ -1,0 +1,434 @@
+# HIPAA Security Rule (45 CFR Part 164, Subpart C) — change-time
+# control mapping.
+#
+# This catalog maps Terraform resource changes to the HIPAA Security
+# Rule citations most likely to be touched by infrastructure work.
+# It is read-only relative to ADR 0003 and ADR 0004: it does NOT
+# change risk tier or rule_id; it only annotates each change with the
+# control IDs an auditor or compliance reviewer cares about.
+#
+# Mapping principles (mirroring SOC 2 / ISO 27001 catalog conventions):
+#   - Include 164.308(a)(1) (Security Management Process) on every
+#     entry — every IaC change is part of the security management
+#     process from a HIPAA perspective.
+#   - 164.308(a)(4) (Information Access Management) on IAM lifecycle.
+#   - 164.308(a)(7) (Contingency Plan) on data-store / availability
+#     resources where recovery posture is affected.
+#   - 164.310(d) (Device and Media Controls) on irreversible deletions
+#     of cloud storage / encryption keys.
+#   - 164.312(a)(1) (Access Control) on access-boundary changes.
+#   - 164.312(a)(2)(iv) (Encryption and Decryption) on KMS lifecycle.
+#   - 164.312(b) (Audit Controls) on audit-trail changes.
+#   - 164.312(c)(1) (Integrity) on data-tampering protections.
+#   - 164.312(d) (Person or Entity Authentication) on IAM trust
+#     policies and federation.
+#   - 164.312(e)(1) (Transmission Security) on network and DNS changes.
+
+framework: hipaa
+framework_version: 2013-omnibus
+schema_version: 1
+
+mappings:
+  # ── KMS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_kms_key
+    actions: [create]
+    controls:
+      - id: 164.312(a)(2)(iv)
+        title: Encryption and Decryption
+        rationale: >
+          New customer-managed key establishes the cryptographic boundary
+          for ePHI at rest.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: New cryptographic configuration item.
+
+  - resource_type: aws_kms_key
+    actions: [update]
+    controls:
+      - id: 164.312(a)(2)(iv)
+        title: Encryption and Decryption
+        rationale: >
+          Key policy or spec updates change who can encrypt and decrypt
+          ePHI.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: >
+          Key policy is a primary authorization surface for access to
+          ePHI ciphertext.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Cryptographic configuration update.
+
+  - resource_type: aws_kms_key
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(2)(iv)
+        title: Encryption and Decryption
+        rationale: >
+          Key destruction breaks decryption for any ePHI ciphertext that
+          depended on the key — irreversible.
+      - id: 164.310(d)
+        title: Device and Media Controls
+        rationale: >
+          Key destruction is final disposition of the means to read ePHI;
+          treated as media disposal under the Security Rule.
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: >
+          Loss of a key without backed-up plaintext breaks recovery for
+          ePHI encrypted under it.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Key replacement requires change-management review.
+
+  - resource_type: aws_kms_alias
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(2)(iv)
+        title: Encryption and Decryption
+        rationale: Alias changes can redirect encryption to a different key.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Alias change.
+
+  # ── RDS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_db_instance
+    actions: [create]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: New database instance.
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: New stateful component requires backup / recovery design.
+
+  - resource_type: aws_db_instance
+    actions: [update]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: >
+          Database parameter, master-user, or network changes affect the
+          access boundary on ePHI.
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: >
+          Network and TLS-related parameter changes affect ePHI in
+          transit.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Database configuration update.
+
+  - resource_type: aws_db_instance
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: 164.310(d)
+        title: Device and Media Controls
+        rationale: >
+          Replacement creates a new endpoint and discards the prior
+          instance and its data unless explicitly snapshotted.
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: >
+          Endpoint changes affect application connectivity and recovery
+          procedures for ePHI workloads.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Database replacement.
+
+  - resource_type: aws_rds_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: Cluster topology change affects ePHI recovery posture.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Cluster lifecycle and configuration change.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Database cluster change.
+
+  # ── S3 ──────────────────────────────────────────────────────────────────
+  - resource_type: aws_s3_bucket
+    actions: [create]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: New cloud storage container.
+
+  - resource_type: aws_s3_bucket
+    actions: [update]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Bucket configuration changes affect ePHI access boundary.
+      - id: 164.312(a)(2)(iv)
+        title: Encryption and Decryption
+        rationale: >
+          Encryption-at-rest, KMS-key-id, or default-encryption changes
+          affect ePHI cryptographic posture.
+      - id: 164.312(c)(1)
+        title: Integrity
+        rationale: >
+          Versioning and object-lock changes affect ePHI tamper-resistance.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Bucket configuration update.
+
+  - resource_type: aws_s3_bucket
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: 164.310(d)
+        title: Device and Media Controls
+        rationale: >
+          Bucket destruction removes its objects — equivalent to media
+          disposal under the Security Rule.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Bucket replacement.
+
+  - resource_type: aws_s3_bucket_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Bucket policy is a primary access-control surface for ePHI in S3.
+      - id: 164.312(d)
+        title: Person or Entity Authentication
+        rationale: >
+          Public or cross-account principals in a bucket policy expand
+          who can authenticate against ePHI storage.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Bucket policy change.
+
+  - resource_type: aws_s3_bucket_public_access_block
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: >
+          Public-access-block toggles the strictest S3 access guardrail
+          on ePHI storage.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Public-access-block change.
+
+  # ── IAM ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_iam_role
+    actions: [create]
+    controls:
+      - id: 164.308(a)(4)
+        title: Information Access Management
+        rationale: >
+          New IAM role establishes a new authorization context for
+          access to ePHI workloads.
+      - id: 164.312(d)
+        title: Person or Entity Authentication
+        rationale: New role lifecycle event.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: New role.
+
+  - resource_type: aws_iam_role
+    actions: [update]
+    controls:
+      - id: 164.308(a)(4)
+        title: Information Access Management
+        rationale: >
+          Trust policy or attached-policy changes can broaden who can
+          assume the role and access ePHI.
+      - id: 164.312(d)
+        title: Person or Entity Authentication
+        rationale: >
+          Trust policy changes who can authenticate as the role.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Role configuration change.
+
+  - resource_type: aws_iam_role
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(4)
+        title: Information Access Management
+        rationale: Role lifecycle change affects ePHI access paths.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Role replacement.
+
+  - resource_type: aws_iam_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(4)
+        title: Information Access Management
+        rationale: Policy changes alter what attached principals can do with ePHI.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Policies are the access-control carrier for AWS resources.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Policy change.
+
+  - resource_type: aws_iam_role_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(4)
+        title: Information Access Management
+        rationale: Inline role policy directly affects role permissions.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Inline policy is an access-control statement.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Inline role policy change.
+
+  - resource_type: aws_iam_user
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(4)
+        title: Information Access Management
+        rationale: IAM user lifecycle is a primary information-access event.
+      - id: 164.312(d)
+        title: Person or Entity Authentication
+        rationale: User lifecycle changes who can authenticate.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: IAM user change.
+
+  # ── Networking ──────────────────────────────────────────────────────────
+  - resource_type: aws_security_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: >
+          Security groups are the primary network-boundary control on
+          AWS — directly affect ePHI in transit.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: SG changes adjust who can reach ePHI workloads.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Security group change.
+
+  - resource_type: aws_security_group_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Ingress/egress rules adjust the ePHI transmission boundary.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Rule changes affect who can access ePHI workloads.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Security group rule change.
+
+  - resource_type: aws_vpc_security_group_ingress_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Ingress rules adjust who can reach ePHI workloads.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Ingress changes affect access boundaries.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Ingress rule change.
+
+  - resource_type: aws_route53_zone
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: >
+          Zone changes can move where ePHI-bearing traffic resolves.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: DNS zone change.
+
+  - resource_type: aws_route53_record
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: DNS record changes can redirect ePHI traffic.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: DNS record change.
+
+  # ── EKS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_eks_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: >
+          Cluster-endpoint and authentication changes affect access to
+          ePHI workloads.
+      - id: 164.312(d)
+        title: Person or Entity Authentication
+        rationale: Cluster authentication mode changes who can authenticate.
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: Cluster changes affect every ePHI workload running on it.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: EKS cluster change.
+
+  - resource_type: aws_eks_node_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: >
+          Node group changes affect cluster capacity and recovery for
+          ePHI workloads.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Node group lifecycle change.
+
+  # ── Logging / Monitoring ────────────────────────────────────────────────
+  - resource_type: aws_cloudtrail
+    actions: [create]
+    controls:
+      - id: 164.312(b)
+        title: Audit Controls
+        rationale: >
+          CloudTrail establishes the audit trail for configuration changes
+          on the ePHI environment — directly supports Audit Controls
+          obligations.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: New audit trail.
+
+  - resource_type: aws_cloudtrail
+    actions: [update]
+    controls:
+      - id: 164.312(b)
+        title: Audit Controls
+        rationale: >
+          CloudTrail configuration changes affect the audit-trail
+          coverage required by §164.312(b).
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Audit trail configuration change.
+
+  - resource_type: aws_cloudtrail
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: 164.312(b)
+        title: Audit Controls
+        rationale: >
+          Removing or replacing the audit trail interrupts the
+          change-detection surface required by §164.312(b).
+      - id: 164.312(c)(1)
+        title: Integrity
+        rationale: >
+          Audit-trail discontinuity affects integrity monitoring of ePHI
+          environment configuration.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Audit trail replacement.
