@@ -22,7 +22,7 @@ classifiers = [
   "Topic :: Software Development :: Build Tools",
   "Topic :: System :: Systems Administration",
 ]
-dependencies = ["PyYAML>=6.0"]
+dependencies = ["PyYAML>=6.0", "sigstore>=4.0,<5"]
 
 [project.urls]
 Homepage = "https://github.com/readtheplan/readtheplan"

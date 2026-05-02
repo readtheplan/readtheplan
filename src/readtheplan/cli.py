@@ -17,6 +17,12 @@ from readtheplan.controls import (
 )
 from readtheplan.evidence import EvidenceError, Reviewer, build_evidence
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
+from readtheplan.signing import (
+    SigningError,
+    VerificationError,
+    sign_envelope,
+    verify_envelope,
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -79,8 +85,32 @@ def _build_parser() -> argparse.ArgumentParser:
         "--run-id",
         help="Optional CI run identifier for evidence attestation.",
     )
+    analyze.add_argument(
+        "--sign",
+        action="store_true",
+        help="Sign the evidence envelope using sigstore keyless signing.",
+    )
+    analyze.add_argument(
+        "--oidc-issuer",
+        help="OIDC issuer for sigstore signing. Defaults to sigstore public.",
+    )
+    analyze.add_argument(
+        "--rekor-url",
+        help="Rekor transparency log URL. Defaults to sigstore public.",
+    )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
+
+    verify = subparsers.add_parser(
+        "verify",
+        help="Verify a signed rtp-evidence-v1 envelope.",
+    )
+    verify.add_argument(
+        "--rekor-url",
+        help="Rekor transparency log URL. Defaults to sigstore public.",
+    )
+    verify.add_argument("envelope", help="Path to evidence envelope JSON.")
+    verify.set_defaults(func=_verify)
 
     return parser
 
@@ -101,6 +131,9 @@ def _default_agent_id() -> str:
 
 
 def _analyze(args: argparse.Namespace) -> int:
+    if args.sign and not args.evidence:
+        print("Error: --sign requires --evidence", file=sys.stderr)
+        return 1
     if args.evidence and not args.framework:
         print("Error: --evidence requires --framework", file=sys.stderr)
         return 1
@@ -134,18 +167,30 @@ def _analyze(args: argparse.Namespace) -> int:
                 ),
                 run_id=args.run_id,
             )
+            evidence_payload = (
+                sign_envelope(
+                    evidence,
+                    oidc_issuer=args.oidc_issuer,
+                    rekor_url=args.rekor_url,
+                )
+                if args.sign
+                else evidence.to_dict()
+            )
+        except SigningError as exc:
+            print(f"Error: sign failed: {exc}", file=sys.stderr)
+            return 1
         except (EvidenceError, OSError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
         if args.evidence == "-":
-            json.dump(evidence.to_dict(), sys.stdout, indent=2)
+            json.dump(evidence_payload, sys.stdout, indent=2)
             print()
             return 0
 
         try:
             Path(args.evidence).write_text(
-                json.dumps(evidence.to_dict(), indent=2) + "\n",
+                json.dumps(evidence_payload, indent=2) + "\n",
                 encoding="utf-8",
             )
         except OSError as exc:
@@ -161,6 +206,34 @@ def _analyze(args: argparse.Namespace) -> int:
     else:
         _print_summary(summary, sys.stdout, catalog=catalog)
     return 0
+
+
+def _verify(args: argparse.Namespace) -> int:
+    try:
+        envelope_bytes = Path(args.envelope).read_bytes()
+    except OSError as exc:
+        print(
+            f"Error: cannot read envelope file {args.envelope}: {exc}", file=sys.stderr
+        )
+        return 1
+
+    try:
+        result = verify_envelope(envelope_bytes, rekor_url=args.rekor_url)
+    except VerificationError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if result.ok:
+        print(
+            "OK "
+            f"identity={result.identity} "
+            f"issuer={result.oidc_issuer} "
+            f"rekor_uuid={result.rekor_uuid}"
+        )
+        return 0
+
+    print(f"FAIL {result.reason}", file=sys.stderr)
+    return 1
 
 
 def _summary_to_dict(

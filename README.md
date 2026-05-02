@@ -99,6 +99,32 @@ readtheplan analyze \
 Schema is documented in `docs/adr/0007-evidence-envelope.md`. Signed
 envelopes (sigstore-backed) are planned in a subsequent ADR.
 
+### Signed attestation (preview)
+
+Add `--sign` to write a sigstore-signed evidence envelope:
+
+```bash
+readtheplan analyze --framework soc2 \
+                    --evidence evidence.json \
+                    --sign \
+                    plan.json
+```
+
+In CI, the workflow's OIDC identity is used automatically. Locally,
+`sigstore` opens a browser for one-time OAuth.
+
+Verify a signed envelope:
+
+```bash
+readtheplan verify evidence.json
+# OK identity=alice@example.com issuer=https://accounts.google.com rekor_uuid=...
+```
+
+`verify` exits 0 on success, 1 on any failure (unsigned, tampered,
+schema wrong, signature mismatch, Rekor entry missing). See
+`docs/adr/0008-signed-attestation.md` for the full schema and
+verification semantics.
+
 ## GitHub Action
 
 This repository includes a composite GitHub Action at the repo root. It installs the
