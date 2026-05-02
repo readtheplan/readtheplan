@@ -1,0 +1,379 @@
+# SOC 2 Trust Services Criteria (TSC) — change-time control mapping.
+#
+# This catalog maps Terraform resource changes to the AICPA TSC 2017 Common
+# Criteria sections most likely to be touched by infrastructure work.
+# It is read-only relative to ADR 0003 and ADR 0004: it does NOT change
+# risk tier or rule_id; it only annotates each change with the control IDs
+# an auditor or compliance reviewer cares about.
+#
+# Mapping principles:
+#   - Include CC8.1 (Change Management) on every entry: any planned change is
+#     evidence material for change-management review.
+#   - Include CC6.x on access-boundary or encryption-key changes.
+#   - Include CC7.1/CC7.2 on monitoring/logging changes.
+#   - Include A1.2 on availability-affecting irreversible changes.
+#   - Include C1.1 on confidentiality-tagged or encryption-key changes.
+
+framework: soc2
+framework_version: 2017-tsc
+schema_version: 1
+
+mappings:
+  # ── KMS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_kms_key
+    actions: [create]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: >
+          Creating a customer-managed key establishes a new access boundary
+          on the data it will protect.
+      - id: CC8.1
+        title: Change Management
+        rationale: New key material is a change-management event.
+
+  - resource_type: aws_kms_key
+    actions: [update]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: >
+          Key policy or key spec updates change who can use the key and how.
+      - id: CC8.1
+        title: Change Management
+        rationale: Key configuration update.
+
+  - resource_type: aws_kms_key
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: >
+          Replacing or destroying a key changes the access boundary on every
+          ciphertext that depended on it.
+      - id: CC6.7
+        title: Restriction of Information Asset Movements
+        rationale: >
+          Key destruction is irreversible for any data encrypted under it.
+      - id: CC8.1
+        title: Change Management
+        rationale: Key replacement requires change-management review.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: >
+          Loss of a key without backed-up plaintext breaks recovery for
+          encrypted data.
+      - id: C1.1
+        title: Confidentiality — Identification and Maintenance
+        rationale: Encryption key lifecycle change.
+
+  - resource_type: aws_kms_alias
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Alias changes can redirect traffic to a different key.
+      - id: CC8.1
+        title: Change Management
+        rationale: Alias change.
+
+  # ── RDS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_db_instance
+    actions: [create]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: New database instance.
+
+  - resource_type: aws_db_instance
+    actions: [update]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: >
+          Database parameter, master-user, or network changes affect the
+          access boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: Database configuration update.
+
+  - resource_type: aws_db_instance
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: CC6.7
+        title: Restriction of Information Asset Movements
+        rationale: >
+          Replacement creates a new endpoint and discards the prior instance.
+      - id: CC8.1
+        title: Change Management
+        rationale: Database replacement.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: >
+          Endpoint changes affect application connectivity and recovery
+          procedures.
+
+  - resource_type: aws_rds_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Database cluster lifecycle and configuration change.
+      - id: CC8.1
+        title: Change Management
+        rationale: Database cluster change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Cluster topology change affects recovery posture.
+
+  # ── S3 ──────────────────────────────────────────────────────────────────
+  - resource_type: aws_s3_bucket
+    actions: [create]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: New bucket.
+
+  - resource_type: aws_s3_bucket
+    actions: [update]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Bucket configuration changes affect access boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: Bucket configuration update.
+      - id: C1.1
+        title: Confidentiality — Identification and Maintenance
+        rationale: >
+          Encryption, versioning, or logging changes affect confidentiality
+          posture.
+
+  - resource_type: aws_s3_bucket
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: CC6.7
+        title: Restriction of Information Asset Movements
+        rationale: Bucket destruction removes its objects.
+      - id: CC8.1
+        title: Change Management
+        rationale: Bucket replacement.
+
+  - resource_type: aws_s3_bucket_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Bucket policy is a primary access-control surface for S3.
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: >
+          Public or cross-account principals in a bucket policy expand the
+          system boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: Bucket policy change.
+
+  - resource_type: aws_s3_bucket_public_access_block
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Public-access-block toggles the strictest S3 access guardrail.
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Removing the block can expose objects publicly.
+      - id: CC8.1
+        title: Change Management
+        rationale: Public-access-block change.
+
+  # ── IAM ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_iam_role
+    actions: [create]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: New IAM role establishes a new identity boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: New role.
+
+  - resource_type: aws_iam_role
+    actions: [update]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: >
+          Trust policy or attached-policy changes can broaden who can assume
+          the role.
+      - id: CC8.1
+        title: Change Management
+        rationale: Role configuration change.
+
+  - resource_type: aws_iam_role
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Role lifecycle change affects access paths.
+      - id: CC8.1
+        title: Change Management
+        rationale: Role replacement.
+
+  - resource_type: aws_iam_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Policy changes alter what attached principals can do.
+      - id: CC8.1
+        title: Change Management
+        rationale: Policy change.
+
+  - resource_type: aws_iam_role_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Inline role policy directly affects role permissions.
+      - id: CC8.1
+        title: Change Management
+        rationale: Inline role policy change.
+
+  - resource_type: aws_iam_user
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: IAM user lifecycle is a primary access-control event.
+      - id: CC8.1
+        title: Change Management
+        rationale: IAM user change.
+
+  # ── Networking ──────────────────────────────────────────────────────────
+  - resource_type: aws_security_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: >
+          Security groups are a primary network-boundary control on AWS.
+      - id: CC8.1
+        title: Change Management
+        rationale: Security group change.
+
+  - resource_type: aws_security_group_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Ingress/egress rules adjust the network boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: Security group rule change.
+
+  - resource_type: aws_vpc_security_group_ingress_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Ingress rules adjust who can reach the resource.
+      - id: CC8.1
+        title: Change Management
+        rationale: Ingress rule change.
+
+  - resource_type: aws_route53_zone
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: >
+          Zone changes can move where production traffic resolves.
+      - id: CC8.1
+        title: Change Management
+        rationale: DNS zone change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: DNS cutovers affect availability immediately.
+
+  - resource_type: aws_route53_record
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: DNS record changes can redirect production traffic.
+      - id: CC8.1
+        title: Change Management
+        rationale: DNS record change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Record changes affect availability immediately.
+
+  # ── EKS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_eks_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Cluster-endpoint and authentication changes affect access.
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Cluster network and endpoint changes adjust the boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: EKS cluster change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Cluster changes affect every workload running on it.
+
+  - resource_type: aws_eks_node_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: Node group lifecycle change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Node group changes affect cluster capacity.
+
+  # ── Logging / Monitoring ────────────────────────────────────────────────
+  - resource_type: aws_cloudtrail
+    actions: [create]
+    controls:
+      - id: CC7.1
+        title: System Operations — Detection of Configuration Changes
+        rationale: CloudTrail establishes the audit trail for configuration changes.
+      - id: CC7.2
+        title: System Monitoring
+        rationale: CloudTrail is the foundation for security-event monitoring.
+      - id: CC8.1
+        title: Change Management
+        rationale: New audit trail.
+
+  - resource_type: aws_cloudtrail
+    actions: [update]
+    controls:
+      - id: CC7.1
+        title: System Operations — Detection of Configuration Changes
+        rationale: CloudTrail configuration changes affect detection coverage.
+      - id: CC7.2
+        title: System Monitoring
+        rationale: Monitoring posture change.
+      - id: CC8.1
+        title: Change Management
+        rationale: Audit trail configuration change.
+
+  - resource_type: aws_cloudtrail
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: CC7.1
+        title: System Operations — Detection of Configuration Changes
+        rationale: >
+          Removing or replacing the audit trail interrupts the change-detection
+          surface auditors rely on.
+      - id: CC7.2
+        title: System Monitoring
+        rationale: Monitoring posture is interrupted by replacement.
+      - id: CC8.1
+        title: Change Management
+        rationale: Audit trail replacement.
