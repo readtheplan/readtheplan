@@ -312,6 +312,118 @@ mappings: []
     assert "framework" in str(exc.value)
 
 
+def test_load_hipaa_catalog_smoke() -> None:
+    cat = controls.load_catalog("hipaa")
+
+    assert cat.framework == "hipaa"
+    assert cat.framework_version == "2013-omnibus"
+    assert cat.schema_version == 1
+
+
+def test_available_frameworks_includes_hipaa() -> None:
+    frameworks = controls.available_frameworks()
+
+    assert "hipaa" in frameworks
+    assert "iso27001" in frameworks
+    assert "soc2" in frameworks
+    assert list(frameworks) == sorted(frameworks)
+
+
+def test_hipaa_controls_for_kms_create() -> None:
+    cat = controls.load_catalog("hipaa")
+    out = cat.controls_for(resource_type="aws_kms_key", actions=["create"])
+    ids = [control.id for control in out]
+
+    assert ids == ["164.312(a)(2)(iv)", "164.308(a)(1)"]
+
+
+def test_hipaa_controls_for_kms_replace() -> None:
+    cat = controls.load_catalog("hipaa")
+    out = cat.controls_for(resource_type="aws_kms_key", actions=["delete", "create"])
+    ids = {control.id for control in out}
+
+    assert ids == {
+        "164.312(a)(2)(iv)",
+        "164.310(d)",
+        "164.308(a)(7)",
+        "164.308(a)(1)",
+    }
+
+
+def test_hipaa_replace_order_invariant() -> None:
+    cat = controls.load_catalog("hipaa")
+    forward = cat.controls_for(
+        resource_type="aws_kms_key", actions=["delete", "create"]
+    )
+    reverse = cat.controls_for(
+        resource_type="aws_kms_key", actions=["create", "delete"]
+    )
+
+    assert {control.id for control in forward} == {control.id for control in reverse}
+    assert len(forward) > 0
+
+
+def test_cli_hipaa_markdown_includes_controls(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(
+        ["analyze", "--framework", "hipaa", str(FIXTURES / "hipaa_plan.json")]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert (
+        "| Risk | Actions | Resource | Type | Explanation | Controls |" in captured.out
+    )
+    assert "164.308(a)(1)" in captured.out
+
+
+def test_cli_hipaa_json_framework_metadata(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(
+        [
+            "analyze",
+            "--framework",
+            "hipaa",
+            "--format",
+            "json",
+            str(FIXTURES / "hipaa_plan.json"),
+        ]
+    )
+
+    payload = _loads_json(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["framework"] == {
+        "name": "hipaa",
+        "version": "2013-omnibus",
+        "schema_version": 1,
+    }
+
+
+def test_cli_unknown_framework_lists_all_three(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(
+        [
+            "analyze",
+            "--framework",
+            "soc3",
+            str(FIXTURES / "soc2_plan.json"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert captured.err != ""
+    assert "soc3" in captured.err
+    assert "hipaa" in captured.err
+    assert "iso27001" in captured.err
+    assert "soc2" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def _loads_json(text: str) -> dict[str, Any]:
     payload = json.loads(text)
     if not isinstance(payload, dict):
