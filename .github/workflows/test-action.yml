@@ -3,19 +3,7 @@ name: Test GitHub Action
 on:
   push:
     branches: [main]
-    paths:
-      - action.yml
-      - .github/workflows/test-action.yml
-      - pyproject.toml
-      - src/**
-      - tests/fixtures/**
   pull_request:
-    paths:
-      - action.yml
-      - .github/workflows/test-action.yml
-      - pyproject.toml
-      - src/**
-      - tests/fixtures/**
 
 jobs:
   test-action:
