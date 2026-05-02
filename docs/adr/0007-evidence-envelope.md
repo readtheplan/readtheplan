@@ -84,7 +84,7 @@ existing surface.
   "changes": [
     {
       "address": "aws_kms_key.customer_data",
-      "resource_type": "aws_kms_key",
+      "type": "aws_kms_key",
       "actions": ["delete", "create"],
       "risk": "dangerous",
       "explanation": "...",
