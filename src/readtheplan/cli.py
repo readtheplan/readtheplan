@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Callable, Sequence, TextIO, cast
 
 from readtheplan.controls import (
@@ -13,6 +15,7 @@ from readtheplan.controls import (
     available_frameworks,
     load_catalog,
 )
+from readtheplan.evidence import EvidenceError, Reviewer, build_evidence
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
 
 
@@ -52,6 +55,30 @@ def _build_parser() -> argparse.ArgumentParser:
             f"catalog. Currently available: {_framework_help_list()}."
         ),
     )
+    analyze.add_argument(
+        "--evidence",
+        metavar="PATH",
+        help="Write rtp-evidence-v1 JSON envelope to PATH. Use - for stdout.",
+    )
+    analyze.add_argument(
+        "--agent-id",
+        default=_default_agent_id(),
+        help="Agent ID for evidence attestation.",
+    )
+    analyze.add_argument(
+        "--reviewer-id",
+        help="Optional reviewer identifier for evidence output.",
+    )
+    analyze.add_argument(
+        "--reviewer-kind",
+        choices=("human", "agent"),
+        default="human",
+        help="Reviewer kind for evidence output. Defaults to human.",
+    )
+    analyze.add_argument(
+        "--run-id",
+        help="Optional CI run identifier for evidence attestation.",
+    )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
 
@@ -65,7 +92,19 @@ def _framework_help_list() -> str:
     return ", ".join(frameworks)
 
 
+def _default_agent_id() -> str:
+    try:
+        package_version = version("readtheplan")
+    except PackageNotFoundError:
+        return "readtheplan@unknown"
+    return f"readtheplan@{package_version}"
+
+
 def _analyze(args: argparse.Namespace) -> int:
+    if args.evidence and not args.framework:
+        print("Error: --evidence requires --framework", file=sys.stderr)
+        return 1
+
     catalog: ControlCatalog | None = None
     if args.framework:
         try:
@@ -79,6 +118,42 @@ def _analyze(args: argparse.Namespace) -> int:
     except PlanError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+    if args.evidence:
+        assert catalog is not None
+        try:
+            evidence = build_evidence(
+                plan_summary=summary,
+                plan_json=Path(args.plan_file).read_bytes(),
+                catalog=catalog,
+                agent_id=args.agent_id,
+                reviewer=(
+                    Reviewer(id=args.reviewer_id, kind=args.reviewer_kind)
+                    if args.reviewer_id
+                    else None
+                ),
+                run_id=args.run_id,
+            )
+        except (EvidenceError, OSError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+        if args.evidence == "-":
+            json.dump(evidence.to_dict(), sys.stdout, indent=2)
+            print()
+            return 0
+
+        try:
+            Path(args.evidence).write_text(
+                json.dumps(evidence.to_dict(), indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(
+                f"Error: cannot write evidence file {args.evidence}: {exc}",
+                file=sys.stderr,
+            )
+            return 1
 
     if args.format == "json":
         json.dump(_summary_to_dict(summary, catalog), sys.stdout, indent=2)
