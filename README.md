@@ -73,11 +73,12 @@ Available frameworks:
 
 - `soc2` — SOC 2 Trust Services Criteria 2017 (see ADR 0005)
 - `iso27001` — ISO/IEC 27001:2022 Annex A (see ADR 0006)
+- `hipaa` — HIPAA Security Rule, 45 CFR Part 164 Subpart C (see ADR 0009)
 
-Catalogs ship as data under `src/readtheplan/data/controls/`. HIPAA,
-PCI-DSS, NIST 800-53, and CIS AWS catalogs are planned in subsequent
-ADRs. The output is intended as one input to a human's evidence package,
-not a stand-alone audit artifact.
+Catalogs ship as data under `src/readtheplan/data/controls/`. PCI-DSS,
+NIST 800-53, and CIS AWS catalogs are planned in subsequent ADRs. The
+output is intended as one input to a human's evidence package, not a
+stand-alone audit artifact.
 
 ### Evidence envelope (preview)
 

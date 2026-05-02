@@ -1,0 +1,54 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.6.6",
+  "resource_changes": [
+    {
+      "address": "aws_kms_key.customer_data",
+      "type": "aws_kms_key",
+      "name": "customer_data",
+      "change": {
+        "actions": ["delete", "create"]
+      }
+    },
+    {
+      "address": "aws_kms_key.new_key",
+      "type": "aws_kms_key",
+      "name": "new_key",
+      "change": {
+        "actions": ["create"]
+      }
+    },
+    {
+      "address": "aws_s3_bucket_policy.assets",
+      "type": "aws_s3_bucket_policy",
+      "name": "assets",
+      "change": {
+        "actions": ["update"]
+      }
+    },
+    {
+      "address": "aws_security_group_rule.web_ingress",
+      "type": "aws_security_group_rule",
+      "name": "web_ingress",
+      "change": {
+        "actions": ["create"]
+      }
+    },
+    {
+      "address": "aws_cloudtrail.org",
+      "type": "aws_cloudtrail",
+      "name": "org",
+      "change": {
+        "actions": ["delete"]
+      }
+    },
+    {
+      "address": "aws_lambda_function.handler",
+      "type": "aws_lambda_function",
+      "name": "handler",
+      "change": {
+        "actions": ["update"]
+      }
+    }
+  ]
+}
