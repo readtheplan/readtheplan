@@ -1,0 +1,407 @@
+# ISO/IEC 27001:2022 Annex A — change-time control mapping.
+#
+# This catalog maps Terraform resource changes to the ISO/IEC 27001:2022
+# Annex A controls most likely to be touched by infrastructure work.
+# It is read-only relative to ADR 0003 and ADR 0004: it does NOT change
+# risk tier or rule_id; it only annotates each change with the control IDs
+# an auditor or compliance reviewer cares about.
+#
+# Mapping principles (mirroring SOC 2 catalog conventions):
+#   - Include A.8.32 (Change management) on every entry — every IaC change
+#     is change-management evidence material.
+#   - A.8.9 (Configuration management) on configuration changes.
+#   - A.8.20 / A.8.22 (Network security / Segregation) on network changes.
+#   - A.8.24 (Use of cryptography) on encryption-key lifecycle.
+#   - A.8.10 (Information deletion) on irreversible destructions.
+#   - A.8.16 (Monitoring activities) and A.8.34 (Protection during audit
+#     testing) on audit-trail changes.
+#   - A.8.5 (Secure authentication) on IAM trust policy changes.
+#   - A.8.18 (Use of privileged utility programs) on broad IAM grants.
+#   - A.5.23 (Cloud services) on cloud-resource lifecycle.
+
+framework: iso27001
+framework_version: "2022"
+schema_version: 1
+
+mappings:
+  # ── KMS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_kms_key
+    actions: [create]
+    controls:
+      - id: A.8.24
+        title: Use of cryptography
+        rationale: New customer-managed key establishes cryptographic boundary.
+      - id: A.8.32
+        title: Change management
+        rationale: New key material is a change-management event.
+      - id: A.8.9
+        title: Configuration management
+        rationale: New configuration item under cryptographic control.
+
+  - resource_type: aws_kms_key
+    actions: [update]
+    controls:
+      - id: A.8.24
+        title: Use of cryptography
+        rationale: >
+          Key policy or spec updates change who can use the key and how it
+          can be used.
+      - id: A.8.5
+        title: Secure authentication
+        rationale: >
+          Key policy is a primary authentication boundary for access to
+          encrypted data.
+      - id: A.8.32
+        title: Change management
+        rationale: Key configuration update.
+
+  - resource_type: aws_kms_key
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: A.8.24
+        title: Use of cryptography
+        rationale: >
+          Replacing or destroying a key changes the cryptographic boundary
+          on every ciphertext that depended on it.
+      - id: A.8.10
+        title: Information deletion
+        rationale: >
+          Key destruction is irreversible deletion of the means to read any
+          data encrypted under it.
+      - id: A.8.32
+        title: Change management
+        rationale: Key replacement requires change-management review.
+
+  - resource_type: aws_kms_alias
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.24
+        title: Use of cryptography
+        rationale: Alias changes can redirect traffic to a different key.
+      - id: A.8.32
+        title: Change management
+        rationale: Alias change.
+
+  # ── RDS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_db_instance
+    actions: [create]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: New cloud database instance.
+      - id: A.8.9
+        title: Configuration management
+        rationale: New stateful configuration item.
+      - id: A.8.32
+        title: Change management
+        rationale: New database instance.
+
+  - resource_type: aws_db_instance
+    actions: [update]
+    controls:
+      - id: A.8.9
+        title: Configuration management
+        rationale: Database parameter and configuration changes.
+      - id: A.8.20
+        title: Network security
+        rationale: >
+          Database parameter, master-user, or network changes affect the
+          network access boundary.
+      - id: A.8.32
+        title: Change management
+        rationale: Database configuration update.
+
+  - resource_type: aws_db_instance
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: A.8.10
+        title: Information deletion
+        rationale: >
+          Replacement creates a new endpoint and discards the prior
+          instance and its data unless explicitly snapshotted.
+      - id: A.8.32
+        title: Change management
+        rationale: Database replacement.
+
+  - resource_type: aws_rds_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: Cloud database cluster lifecycle.
+      - id: A.8.9
+        title: Configuration management
+        rationale: Database cluster configuration change.
+      - id: A.8.32
+        title: Change management
+        rationale: Database cluster change.
+
+  # ── S3 ──────────────────────────────────────────────────────────────────
+  - resource_type: aws_s3_bucket
+    actions: [create]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: New cloud storage container.
+      - id: A.8.32
+        title: Change management
+        rationale: New bucket.
+
+  - resource_type: aws_s3_bucket
+    actions: [update]
+    controls:
+      - id: A.8.9
+        title: Configuration management
+        rationale: Bucket configuration changes.
+      - id: A.8.24
+        title: Use of cryptography
+        rationale: >
+          Encryption-at-rest, KMS-key-id, or versioning changes affect
+          cryptographic posture.
+      - id: A.8.32
+        title: Change management
+        rationale: Bucket configuration update.
+
+  - resource_type: aws_s3_bucket
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: A.8.10
+        title: Information deletion
+        rationale: Bucket destruction removes its objects.
+      - id: A.8.32
+        title: Change management
+        rationale: Bucket replacement.
+
+  - resource_type: aws_s3_bucket_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: Bucket policy is a primary authn/authz surface for S3 access.
+      - id: A.8.20
+        title: Network security
+        rationale: >
+          Public or cross-account principals in a bucket policy expand the
+          system boundary at the storage layer.
+      - id: A.8.32
+        title: Change management
+        rationale: Bucket policy change.
+
+  - resource_type: aws_s3_bucket_public_access_block
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: Public-access-block governs the strictest S3 access guardrail.
+      - id: A.8.20
+        title: Network security
+        rationale: Removing the block can expose objects to the public internet.
+      - id: A.8.32
+        title: Change management
+        rationale: Public-access-block change.
+
+  # ── IAM ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_iam_role
+    actions: [create]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: New IAM role establishes a new identity / authentication boundary.
+      - id: A.8.18
+        title: Use of privileged utility programs
+        rationale: New role may grant privileged access pathways.
+      - id: A.8.32
+        title: Change management
+        rationale: New role.
+
+  - resource_type: aws_iam_role
+    actions: [update]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: >
+          Trust policy or attached-policy changes can broaden who can
+          assume the role.
+      - id: A.8.18
+        title: Use of privileged utility programs
+        rationale: Permission changes affect privileged-utility reach.
+      - id: A.8.32
+        title: Change management
+        rationale: Role configuration change.
+
+  - resource_type: aws_iam_role
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: Role lifecycle change affects authentication paths.
+      - id: A.8.32
+        title: Change management
+        rationale: Role replacement.
+
+  - resource_type: aws_iam_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: Policy changes alter what attached principals can do.
+      - id: A.8.18
+        title: Use of privileged utility programs
+        rationale: Policies are the carrier for privileged-utility grants.
+      - id: A.8.32
+        title: Change management
+        rationale: Policy change.
+
+  - resource_type: aws_iam_role_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: Inline role policy directly affects role permissions.
+      - id: A.8.18
+        title: Use of privileged utility programs
+        rationale: Inline policy can grant privileged access.
+      - id: A.8.32
+        title: Change management
+        rationale: Inline role policy change.
+
+  - resource_type: aws_iam_user
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: IAM user lifecycle is a primary authentication-boundary event.
+      - id: A.8.32
+        title: Change management
+        rationale: IAM user change.
+
+  # ── Networking ──────────────────────────────────────────────────────────
+  - resource_type: aws_security_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Security groups are a primary network-boundary control on AWS.
+      - id: A.8.22
+        title: Segregation of networks
+        rationale: SGs implement segregation between workload tiers.
+      - id: A.8.32
+        title: Change management
+        rationale: Security group change.
+
+  - resource_type: aws_security_group_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Ingress/egress rules adjust the network boundary.
+      - id: A.8.22
+        title: Segregation of networks
+        rationale: Rule changes affect cross-zone or cross-tier traffic.
+      - id: A.8.32
+        title: Change management
+        rationale: Security group rule change.
+
+  - resource_type: aws_vpc_security_group_ingress_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Ingress rules adjust who can reach the resource.
+      - id: A.8.22
+        title: Segregation of networks
+        rationale: Ingress changes affect cross-tier traffic boundaries.
+      - id: A.8.32
+        title: Change management
+        rationale: Ingress rule change.
+
+  - resource_type: aws_route53_zone
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Zone changes can move where production traffic resolves.
+      - id: A.8.32
+        title: Change management
+        rationale: DNS zone change.
+
+  - resource_type: aws_route53_record
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: DNS record changes can redirect production traffic.
+      - id: A.8.32
+        title: Change management
+        rationale: DNS record change.
+
+  # ── EKS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_eks_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: Managed-Kubernetes lifecycle is a cloud-services concern.
+      - id: A.8.5
+        title: Secure authentication
+        rationale: Cluster-endpoint and authn changes affect access.
+      - id: A.8.20
+        title: Network security
+        rationale: Cluster network and endpoint changes adjust the boundary.
+      - id: A.8.22
+        title: Segregation of networks
+        rationale: Cluster networking affects workload segregation.
+      - id: A.8.32
+        title: Change management
+        rationale: EKS cluster change.
+
+  - resource_type: aws_eks_node_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: Node-group capacity is a cloud-services configuration item.
+      - id: A.8.9
+        title: Configuration management
+        rationale: Node group configuration change.
+      - id: A.8.32
+        title: Change management
+        rationale: Node group lifecycle change.
+
+  # ── Logging / Monitoring ────────────────────────────────────────────────
+  - resource_type: aws_cloudtrail
+    actions: [create]
+    controls:
+      - id: A.8.16
+        title: Monitoring activities
+        rationale: CloudTrail establishes the audit trail for configuration changes.
+      - id: A.8.32
+        title: Change management
+        rationale: New audit trail.
+
+  - resource_type: aws_cloudtrail
+    actions: [update]
+    controls:
+      - id: A.8.16
+        title: Monitoring activities
+        rationale: CloudTrail configuration changes affect monitoring coverage.
+      - id: A.8.32
+        title: Change management
+        rationale: Audit trail configuration change.
+
+  - resource_type: aws_cloudtrail
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: A.8.16
+        title: Monitoring activities
+        rationale: >
+          Removing or replacing the audit trail interrupts the
+          change-detection surface auditors rely on.
+      - id: A.8.34
+        title: Protection of information systems during audit testing
+        rationale: >
+          Audit trail discontinuity directly affects the integrity of any
+          audit testing relying on it.
+      - id: A.8.32
+        title: Change management
+        rationale: Audit trail replacement.
