@@ -1,0 +1,38 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.6.6",
+  "resource_changes": [
+    {
+      "address": "aws_kms_key.customer_data",
+      "type": "aws_kms_key",
+      "name": "customer_data",
+      "change": {
+        "actions": ["delete", "create"]
+      }
+    },
+    {
+      "address": "aws_iam_role.deploy",
+      "type": "aws_iam_role",
+      "name": "deploy",
+      "change": {
+        "actions": ["update"]
+      }
+    },
+    {
+      "address": "aws_security_group.web",
+      "type": "aws_security_group",
+      "name": "web",
+      "change": {
+        "actions": ["create"]
+      }
+    },
+    {
+      "address": "aws_lambda_function.handler",
+      "type": "aws_lambda_function",
+      "name": "handler",
+      "change": {
+        "actions": ["update"]
+      }
+    }
+  ]
+}

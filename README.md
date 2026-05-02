@@ -79,6 +79,26 @@ PCI-DSS, NIST 800-53, and CIS AWS catalogs are planned in subsequent
 ADRs. The output is intended as one input to a human's evidence package,
 not a stand-alone audit artifact.
 
+### Evidence envelope (preview)
+
+`readtheplan analyze --framework soc2 --evidence evidence.json plan.json`
+writes a `rtp-evidence-v1` JSON document containing the plan hash, the
+framework view, controls touched, the change list, and the agent's
+read-attestation. Auditors and GRC platforms consume this envelope as
+the single artifact per change.
+
+```bash
+readtheplan analyze \
+    --framework soc2 \
+    --evidence evidence.json \
+    --reviewer-id alice@example.com \
+    --run-id "github-actions/${GITHUB_RUN_ID}" \
+    plan.json
+```
+
+Schema is documented in `docs/adr/0007-evidence-envelope.md`. Signed
+envelopes (sigstore-backed) are planned in a subsequent ADR.
+
 ## GitHub Action
 
 This repository includes a composite GitHub Action at the repo root. It installs the
