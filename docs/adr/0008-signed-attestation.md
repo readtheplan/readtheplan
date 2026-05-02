@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -182,6 +182,25 @@ it never reaches out to anything except Sigstore's public infrastructure
   the sole signature authority yet. Mitigation: design accepts custom
   OIDC issuers / private Rekor for organizations that need them.
 - One more CLI surface (`verify`) to maintain.
+
+
+### Post-implementation note (PR #7)
+
+PR #7's `signing.py` reaches into `sigstore._internal.rekor.client` to honor
+the `--rekor-url` override (private-instance Rekor). The default
+public-Sigstore path never touches `_internal`, but minor `sigstore`
+upgrades can break the override path without warning. Three mitigation
+paths are tracked as a follow-up:
+
+1. Watch sigstore-python for a public Rekor-override mechanism in 4.x
+   patch releases; switch when one lands.
+2. Tighten the upper bound to a minor version (`sigstore>=4.0,<4.3`) so
+   `_internal` drift forces an explicit ADR review at the next bump.
+3. Add a runtime-only mypy ignore around the private import so any API
+   drift surfaces as a CI failure rather than a runtime crash.
+
+None are required for v1 — flagged here so future maintenance reviews
+have the context.
 
 ### Maintenance contract
 
