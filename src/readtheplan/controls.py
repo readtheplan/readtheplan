@@ -42,7 +42,7 @@ class ControlCatalog:
     def controls_for(
         self, *, resource_type: str, actions: Sequence[str]
     ) -> tuple[ControlEntry, ...]:
-        action = "/".join(actions) if actions else "unknown"
+        action = _canonical_action(actions)
         seen: set[str] = set()
         out: list[ControlEntry] = []
         for mapping in self._mappings.get(resource_type, ()):
@@ -54,6 +54,17 @@ class ControlCatalog:
                 seen.add(control.id)
                 out.append(control)
         return tuple(out)
+
+
+def _canonical_action(actions: Sequence[str]) -> str:
+    action_set = set(actions)
+    if not action_set:
+        return "unknown"
+    if "delete" in action_set and "create" in action_set:
+        return "delete/create"
+    if len(action_set) == 1:
+        return next(iter(action_set))
+    return "/".join(sorted(action_set))
 
 
 def available_frameworks() -> tuple[str, ...]:

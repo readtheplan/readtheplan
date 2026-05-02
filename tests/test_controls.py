@@ -46,6 +46,19 @@ def test_controls_for_kms_replace_returns_full_set() -> None:
     assert ids == {"CC6.1", "CC6.7", "CC8.1", "A1.2", "C1.1"}
 
 
+def test_controls_for_replace_order_invariant() -> None:
+    cat = controls.load_catalog("soc2")
+    forward = cat.controls_for(
+        resource_type="aws_kms_key", actions=["delete", "create"]
+    )
+    reverse = cat.controls_for(
+        resource_type="aws_kms_key", actions=["create", "delete"]
+    )
+
+    assert {control.id for control in forward} == {control.id for control in reverse}
+    assert len(forward) > 0
+
+
 def test_controls_for_unmapped_resource_returns_empty() -> None:
     cat = controls.load_catalog("soc2")
     out = cat.controls_for(
