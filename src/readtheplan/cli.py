@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Sequence, TextIO
+from typing import Callable, Sequence, TextIO, cast
 
 from readtheplan.controls import (
     CatalogSchemaError,
     ControlCatalog,
     ControlEntry,
     FrameworkNotFoundError,
+    available_frameworks,
     load_catalog,
 )
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
@@ -18,7 +19,8 @@ from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    func = cast("Callable[[argparse.Namespace], int]", args.func)
+    return func(args)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -47,13 +49,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "--framework",
         help=(
             "Annotate each change with control IDs from the named framework "
-            "catalog. Currently available: soc2."
+            f"catalog. Currently available: {_framework_help_list()}."
         ),
     )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
 
     return parser
+
+
+def _framework_help_list() -> str:
+    frameworks = available_frameworks()
+    if not frameworks:
+        return "none packaged"
+    return ", ".join(frameworks)
 
 
 def _analyze(args: argparse.Namespace) -> int:

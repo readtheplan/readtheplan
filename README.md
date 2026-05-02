@@ -66,11 +66,18 @@ Invalid input is reported on stderr and exits non-zero.
 
 ### Compliance control IDs (preview)
 
-`readtheplan analyze --framework soc2 plan.json` annotates each change with
-SOC 2 (TSC 2017) control IDs touched by that change. The mapping ships as
-data in `src/readtheplan/data/controls/soc2.yaml`. ISO 27001 and HIPAA
-catalogs are planned in subsequent releases. See
-`docs/adr/0005-compliance-control-mapping.md` for the schema and intent.
+`readtheplan analyze --framework <name> plan.json` annotates each change
+with control IDs from a packaged compliance framework catalog.
+
+Available frameworks:
+
+- `soc2` — SOC 2 Trust Services Criteria 2017 (see ADR 0005)
+- `iso27001` — ISO/IEC 27001:2022 Annex A (see ADR 0006)
+
+Catalogs ship as data under `src/readtheplan/data/controls/`. HIPAA,
+PCI-DSS, NIST 800-53, and CIS AWS catalogs are planned in subsequent
+ADRs. The output is intended as one input to a human's evidence package,
+not a stand-alone audit artifact.
 
 ## GitHub Action
 
