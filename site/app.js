@@ -30,6 +30,21 @@ const terraformLabels = {
   mixed: "mixed Terraform repositories",
 };
 
+const frameworkLabels = {
+  none: "no compliance framework",
+  soc2: "SOC 2",
+  iso27001: "ISO 27001",
+  hipaa: "HIPAA",
+};
+
+const frameworkAdrs = {
+  soc2: "ADR 0005",
+  iso27001: "ADR 0006",
+  hipaa: "ADR 0009",
+};
+
+const evidenceCliFlags = "--evidence evidence.json";
+
 const teamProfiles = {
   maintainer: {
     status: "maintainer",
@@ -125,6 +140,8 @@ function getFormState() {
     ci: data.get("ci"),
     terraform: data.get("terraform"),
     policy: data.get("policy"),
+    framework: data.get("framework"),
+    signEvidence: data.get("signEvidence") === "on",
     risks: data.getAll("risk"),
   };
 }
@@ -223,6 +240,71 @@ function dangerousGateSnippet(state) {
   ];
 }
 
+function analyzeArgs(state) {
+  const profile = teamProfiles[state.team];
+  const args = [];
+  if (profile.cliFlags) {
+    args.push(...profile.cliFlags.split(" "));
+  } else if (state.team === "regulated") {
+    args.push("--format", "json");
+  }
+
+  if (state.framework !== "none") {
+    args.push("--framework", state.framework, ...evidenceCliFlags.split(" "));
+    if (state.signEvidence) {
+      args.push("--sign");
+    }
+  }
+
+  return args;
+}
+
+function actionAnalyzeArgs(state) {
+  const args = analyzeArgs(state);
+  if (state.framework !== "none") {
+    args.push(
+      "--reviewer-id",
+      "${{ github.actor }}",
+      "--run-id",
+      '"github-actions/${{ github.run_id }}"',
+    );
+  }
+  return args;
+}
+
+function analyzeCommand(state, args = analyzeArgs(state)) {
+  return ["readtheplan", "analyze", ...args, "plan.json"].join(" ");
+}
+
+function evidenceActionSnippet(state) {
+  if (state.framework === "none") {
+    return [];
+  }
+
+  return [
+    "      - name: Set up Python",
+    "        uses: actions/setup-python@v5",
+    "        with:",
+    "          python-version: '3.13'",
+    "",
+    "      - name: Install readtheplan",
+    "        run: |",
+    "          python -m pip install --upgrade pip",
+    "          python -m pip install readtheplan",
+    "",
+    "      - name: Analyze Terraform plan",
+    "        id: readtheplan",
+    "        run: " + analyzeCommand(state, actionAnalyzeArgs(state)),
+    "",
+    "      - name: Upload evidence envelope",
+    "        uses: actions/upload-artifact@v4",
+    "        with:",
+    "          name: readtheplan-evidence",
+    "          path: evidence.json",
+    ...dangerousGateSnippet(state),
+  ];
+}
+
 function generateAction(state) {
   if (state.ci !== "github") {
     return [
@@ -230,7 +312,41 @@ function generateAction(state) {
       "# Then run the CLI command shown in the next panel.",
       "",
       "python -m pip install readtheplan",
-      `readtheplan analyze ${teamProfiles[state.team].cliFlags} plan.json`.replace("  ", " "),
+      analyzeCommand(state),
+    ].join("\n");
+  }
+
+  if (state.framework !== "none") {
+    return [
+      "name: Terraform plan risk",
+      "",
+      "# Analyze an already-created plan JSON artifact.",
+      "# Keep Terraform init/plan in a separate trusted workflow.",
+      "# Do not expose cloud credentials to forked pull_request jobs.",
+      "",
+      "on:",
+      "  workflow_run:",
+      "    workflows: ['Terraform plan']",
+      "    types: [completed]",
+      "",
+      "permissions:",
+      "  contents: read",
+      "  actions: read",
+      ...(state.signEvidence ? ["  id-token: write"] : []),
+      "",
+      "jobs:",
+      "  readtheplan:",
+      "    if: ${{ github.event.workflow_run.conclusion == 'success' }}",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      "      - name: Download plan JSON artifact",
+      "        uses: actions/download-artifact@v4",
+      "        with:",
+      "          name: terraform-plan-json",
+      "          run-id: ${{ github.event.workflow_run.id }}",
+      "          github-token: ${{ secrets.GITHUB_TOKEN }}",
+      "",
+      ...evidenceActionSnippet(state),
     ].join("\n");
   }
 
@@ -274,13 +390,11 @@ function generateAction(state) {
 }
 
 function generateCli(state) {
-  const profile = teamProfiles[state.team];
-  const args = profile.cliFlags || (state.team === "regulated" ? "--format json" : "");
   return [
     "python -m pip install readtheplan",
     "terraform plan -out=tfplan -input=false",
     "terraform show -json tfplan > plan.json",
-    `readtheplan analyze ${args} plan.json`.replace("  ", " "),
+    analyzeCommand(state),
     "",
     "# Compare deterministic rules with the action-only baseline:",
     "readtheplan analyze --no-rules --format json plan.json",
@@ -303,6 +417,16 @@ function generateChecklist(state) {
     `Plan source: ${terraformLabels[state.terraform]}.`,
     riskText,
     policyText,
+    ...(state.framework !== "none"
+      ? [
+          `Map changes to ${frameworkLabels[state.framework]} controls using ${frameworkAdrs[state.framework]}.`,
+        ]
+      : []),
+    ...(state.signEvidence && state.framework !== "none"
+      ? [
+          "Signed evidence is identity-bound with no long-lived signing keys; verify with `readtheplan verify evidence.json`.",
+        ]
+      : []),
     "Keep raw plan files out of public artifacts and issue comments.",
   ];
 }
@@ -315,6 +439,7 @@ function updatePilotLink(state) {
       `- ${teamLabels[state.team]}`,
       `- CI: ${ciLabels[state.ci]}`,
       `- Terraform flow: ${terraformLabels[state.terraform]}`,
+      `- Compliance framework: ${frameworkLabels[state.framework]}`,
       `- Priority resources: ${state.risks.join(", ") || "default Tier A"}`,
       "",
       "No raw Terraform plan is attached.",
