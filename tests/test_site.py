@@ -13,6 +13,7 @@ def test_site_has_client_onboarding_surface() -> None:
 
     assert "readtheplan" in html
     assert "No plan upload" in html
+    assert "SOC 2 / ISO 27001 / HIPAA" in html
     assert "id=\"onboardingForm\"" in html
     assert "id=\"actionOutput\"" in html
     assert "id=\"cliOutput\"" in html
@@ -20,8 +21,19 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "id=\"planRows\"" in html
     assert "rel=\"canonical\"" in html
     assert "og:image" in html
+    assert 'name="framework"' in html
+    assert 'value="soc2"' in html
+    assert 'value="iso27001"' in html
+    assert 'value="hipaa"' in html
+    assert 'name="signEvidence"' in html
     assert "readtheplan/readtheplan@v1" in app
     assert "terraform show -json tfplan > plan.json" in app
+    assert "--framework" in app
+    assert "--evidence evidence.json" in app
+    assert "--sign" in app
+    assert "id-token: write" in app
+    assert "actions/upload-artifact@v4" in app
+    assert "verify evidence.json" in app
     assert "No raw Terraform plan is attached." in app
     assert "teamProfiles" in app
     assert "renderRiskCounts(rows)" in app

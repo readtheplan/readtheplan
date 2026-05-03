@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="readtheplan turns Terraform plan JSON into audit-friendly risk summaries for CI, release review, and AI-assisted infrastructure work."
+      content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA."
     />
     <title>readtheplan</title>
     <link rel="canonical" href="https://readtheplan.dev/" />
@@ -16,7 +16,7 @@
     <meta property="og:title" content="readtheplan" />
     <meta
       property="og:description"
-      content="Turn Terraform JSON plans into stable risk tiers and short explanations."
+      content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA."
     />
     <meta property="og:url" content="https://readtheplan.dev/" />
     <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
@@ -24,7 +24,7 @@
     <meta name="twitter:title" content="readtheplan" />
     <meta
       name="twitter:description"
-      content="Turn Terraform JSON plans into stable risk tiers and short explanations."
+      content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA."
     />
     <meta name="twitter:image" content="https://readtheplan.dev/og-image.png" />
     <link rel="stylesheet" href="./styles.css" />
@@ -56,6 +56,8 @@
           <span>CLI first</span>
           <span>GitHub Action</span>
           <span>No plan upload</span>
+          <span>SOC 2 / ISO 27001 / HIPAA</span>
+          <span>Signed evidence</span>
         </div>
       </section>
 
@@ -133,6 +135,42 @@
               <label>
                 <input type="radio" name="policy" value="any" />
                 <span>Fail on any plan change</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="control-group">
+            <legend>Compliance framework</legend>
+            <div
+              class="segmented framework-picker"
+              role="radiogroup"
+              aria-label="Compliance framework"
+            >
+              <label>
+                <input type="radio" name="framework" value="none" checked />
+                <span>None</span>
+              </label>
+              <label>
+                <input type="radio" name="framework" value="soc2" />
+                <span>SOC 2</span>
+              </label>
+              <label>
+                <input type="radio" name="framework" value="iso27001" />
+                <span>ISO 27001</span>
+              </label>
+              <label>
+                <input type="radio" name="framework" value="hipaa" />
+                <span>HIPAA</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="control-group">
+            <legend>Evidence</legend>
+            <div class="stacked-options">
+              <label>
+                <input type="checkbox" name="signEvidence" />
+                <span>Sign evidence envelope (sigstore keyless)</span>
               </label>
             </div>
           </fieldset>
