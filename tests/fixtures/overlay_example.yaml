@@ -1,0 +1,27 @@
+schema: rtp-overlay-v1
+name: acme-prod-overlay
+description: Acme Corp production environment overrides
+
+risk_overrides:
+  - match:
+      resource_type: aws_lambda_function
+    risk: review
+    explanation: Lambda handlers touch customer workflow data; app owner review required.
+  - match:
+      address_prefix: aws_kms_key.customer
+    risk: irreversible
+    explanation: Production KMS keys require CISO sign-off before replacement.
+  - match:
+      account_id: "1234567890"
+    risk: review
+    explanation: Sandbox account; all changes get human review.
+
+control_additions:
+  framework: soc2
+  mappings:
+    - resource_type: aws_lambda_function
+      actions: [update]
+      controls:
+        - id: CC6.1
+          title: Logical and Physical Access Controls
+          rationale: Lambda handlers access customer workflow data in Acme's pipeline.

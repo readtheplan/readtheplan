@@ -16,7 +16,14 @@ from readtheplan.controls import (
     load_catalog,
 )
 from readtheplan.evidence import EvidenceError, Reviewer, build_evidence
-from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
+from readtheplan.overlays import (
+    Overlay,
+    OverlayError,
+    apply_overlay_to_catalog,
+    apply_overlay_to_change,
+    load_overlay,
+)
+from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file, load_plan
 from readtheplan.signing import (
     SigningError,
     VerificationError,
@@ -53,6 +60,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-rules",
         action="store_true",
         help="Disable resource-aware rules and use the action-only classifier.",
+    )
+    analyze.add_argument(
+        "--rules-file",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Apply overlay YAML on top of built-in rules. Repeatable.",
     )
     analyze.add_argument(
         "--framework",
@@ -138,16 +152,30 @@ def _analyze(args: argparse.Namespace) -> int:
         print("Error: --evidence requires --framework", file=sys.stderr)
         return 1
 
+    try:
+        overlay_items = tuple(load_overlay(path) for path in args.rules_file)
+    except OverlayError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
     catalog: ControlCatalog | None = None
     if args.framework:
         try:
             catalog = load_catalog(args.framework)
+            for overlay in overlay_items:
+                catalog = apply_overlay_to_catalog(catalog, overlay)
         except (CatalogSchemaError, FrameworkNotFoundError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
     try:
         summary = analyze_plan_file(args.plan_file, use_rules=not args.no_rules)
+        if overlay_items:
+            summary = _apply_overlays_to_summary(
+                summary,
+                overlay_items,
+                plan_account_id=_plan_account_id(args.plan_file),
+            )
     except PlanError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -234,6 +262,46 @@ def _verify(args: argparse.Namespace) -> int:
 
     print(f"FAIL {result.reason}", file=sys.stderr)
     return 1
+
+
+def _apply_overlays_to_summary(
+    summary: PlanSummary,
+    overlays: Sequence[Overlay],
+    *,
+    plan_account_id: str | None,
+) -> PlanSummary:
+    changes = []
+    for change in summary.resource_changes:
+        out = change
+        for overlay in overlays:
+            out = apply_overlay_to_change(
+                out,
+                overlay,
+                plan_account_id=plan_account_id,
+            )
+        changes.append(out)
+
+    return PlanSummary(
+        path=summary.path,
+        terraform_version=summary.terraform_version,
+        resource_changes=tuple(changes),
+    )
+
+
+def _plan_account_id(plan_file: str | Path) -> str | None:
+    data = load_plan(plan_file)
+    for key in ("account_id", "aws_account_id"):
+        value = data.get(key)
+        if value is not None:
+            return str(value)
+
+    variables = data.get("variables")
+    if isinstance(variables, dict):
+        for key in ("account_id", "aws_account_id"):
+            raw = variables.get(key)
+            if isinstance(raw, dict) and raw.get("value") is not None:
+                return str(raw["value"])
+    return None
 
 
 def _summary_to_dict(
