@@ -10,8 +10,8 @@
     <title>readtheplan</title>
     <link rel="canonical" href="https://readtheplan.dev/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#142033" />
-    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="readtheplan" />
     <meta
@@ -30,29 +30,35 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="topbar" aria-label="Primary">
-      <a class="brand" href="#workspace" aria-label="readtheplan home">
+    <div class="noise" aria-hidden="true"></div>
+
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="#workspace" aria-label="readtheplan home">
         <span class="brand-mark" aria-hidden="true">rtp</span>
         <span>readtheplan</span>
       </a>
-      <nav class="navlinks" aria-label="Project links">
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
         <a href="#setup">Setup</a>
         <a href="#pilot">Pilot</a>
-        <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
       </nav>
+      <div class="version-cell gc">v0.0.2</div>
     </header>
 
     <main id="workspace" class="workspace">
-      <section class="intro" aria-labelledby="product-title">
-        <div>
-          <p class="eyebrow">Terraform plan review before apply</p>
+      <section class="hero g" aria-labelledby="product-title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow">Open Source / MIT License</p>
           <h1 id="product-title">Read every infrastructure change like a release note.</h1>
           <p class="intro-copy">
             Turn Terraform JSON plans into stable risk tiers and short explanations
             for humans, auditors, and AI agents.
           </p>
         </div>
-        <div class="trust-strip" aria-label="Product boundaries">
+        <div class="gc trust-strip" aria-label="Product boundaries">
           <span>CLI first</span>
           <span>GitHub Action</span>
           <span>No plan upload</span>
@@ -61,50 +67,67 @@
         </div>
       </section>
 
-      <section id="demo" class="panel demo-panel" aria-labelledby="demo-title">
-        <div class="panel-heading">
+      <section id="demo" class="g demo-section" aria-labelledby="demo-title">
+        <div class="gc demo-copy">
           <p class="eyebrow">See it in action</p>
           <h2 id="demo-title">What an analysis looks like</h2>
+          <p class="demo-intro">
+            This is
+            <a
+              href="https://github.com/readtheplan/readtheplan/tree/main/examples/02-dangerous-replacement"
+            >
+              example 02
+            </a>
+            from the repo: a customer-data KMS key replacement and an RDS replacement.
+            Try it locally with
+            <code>readtheplan analyze examples/02-dangerous-replacement/plan.json</code>.
+          </p>
         </div>
-        <p class="demo-intro">
-          This is
-          <a
-            href="https://github.com/readtheplan/readtheplan/tree/main/examples/02-dangerous-replacement"
-          >
-            example 02
-          </a>
-          from the repo: a customer-data KMS key replacement and an RDS replacement.
-          Try it locally with
-          <code>readtheplan analyze examples/02-dangerous-replacement/plan.json</code>.
-        </p>
-        <div class="risk-meter demo-risk-meter" aria-label="Demo risk counts">
-          <div>
-            <span class="count safe" id="demoSafeCount">-</span>
-            <span>safe</span>
-          </div>
-          <div>
-            <span class="count review" id="demoReviewCount">-</span>
-            <span>review</span>
-          </div>
-          <div>
-            <span class="count dangerous" id="demoDangerousCount">-</span>
-            <span>dangerous</span>
+        <div class="gc demo-terminal-cell">
+          <div class="terminal-frame">
+            <div class="terminal-bar">
+              <span class="dot dot-red" aria-hidden="true"></span>
+              <span class="dot dot-yellow" aria-hidden="true"></span>
+              <span class="dot dot-green" aria-hidden="true"></span>
+              <span class="terminal-title">readtheplan</span>
+            </div>
+            <div class="terminal-body">
+              <div class="risk-meter demo-risk-meter" aria-label="Demo risk counts">
+                <div>
+                  <span class="count safe" id="demoSafeCount">-</span>
+                  <span>safe</span>
+                </div>
+                <div>
+                  <span class="count review" id="demoReviewCount">-</span>
+                  <span>review</span>
+                </div>
+                <div>
+                  <span class="count dangerous" id="demoDangerousCount">-</span>
+                  <span>dangerous</span>
+                </div>
+              </div>
+              <div
+                class="plan-table demo-table"
+                role="table"
+                aria-label="Demo analysis"
+                aria-live="polite"
+              >
+                <div role="row" class="table-head">
+                  <span role="columnheader">Risk</span>
+                  <span role="columnheader">Resource</span>
+                  <span role="columnheader">Explanation</span>
+                  <span role="columnheader">Controls</span>
+                </div>
+                <div class="plan-table-body" id="demoRows"></div>
+              </div>
+              <p class="demo-evidence" id="demoEvidenceNote"></p>
+            </div>
           </div>
         </div>
-        <div class="plan-table demo-table" role="table" aria-label="Demo analysis" aria-live="polite">
-          <div role="row" class="table-head">
-            <span role="columnheader">Risk</span>
-            <span role="columnheader">Resource</span>
-            <span role="columnheader">Explanation</span>
-            <span role="columnheader">Controls</span>
-          </div>
-          <div class="plan-table-body" id="demoRows"></div>
-        </div>
-        <p class="demo-evidence" id="demoEvidenceNote"></p>
       </section>
 
-      <section class="app-grid" aria-label="Onboarding workspace">
-        <form class="panel intake" id="onboardingForm">
+      <section class="app-grid g" aria-label="Onboarding workspace">
+        <form class="panel intake gc" id="onboardingForm">
           <div class="panel-heading">
             <p class="eyebrow">Client profile</p>
             <h2>Setup path</h2>
@@ -218,7 +241,7 @@
           </fieldset>
         </form>
 
-        <section class="panel preview-panel" aria-labelledby="preview-title">
+        <section class="panel preview-panel gc" aria-labelledby="preview-title">
           <div class="panel-heading row-heading">
             <div>
               <p class="eyebrow">Plan signal</p>
@@ -255,8 +278,8 @@
         </section>
       </section>
 
-      <section id="setup" class="output-grid" aria-label="Generated setup">
-        <section class="panel output-panel">
+      <section id="setup" class="output-grid g" aria-label="Generated setup">
+        <section class="panel output-panel gc">
           <div class="panel-heading row-heading">
             <div>
               <p class="eyebrow">Generated</p>
@@ -267,7 +290,7 @@
           <pre id="actionOutput" class="code-output" tabindex="0"></pre>
         </section>
 
-        <section class="panel output-panel">
+        <section class="panel output-panel gc">
           <div class="panel-heading row-heading">
             <div>
               <p class="eyebrow">Generated</p>
@@ -279,24 +302,31 @@
         </section>
       </section>
 
-      <section id="pilot" class="panel pilot-panel" aria-labelledby="pilot-title">
-        <div class="panel-heading">
+      <section id="pilot" class="g pilot-panel" aria-labelledby="pilot-title">
+        <div class="gc">
           <p class="eyebrow">Pilot handoff</p>
           <h2 id="pilot-title">Bring the workflow, not the secrets.</h2>
         </div>
-        <div class="pilot-grid">
-          <div>
-            <p>
-              The first web release does not accept Terraform plan uploads. A pilot
-              starts with workflow shape, repo count, CI provider, and review goals.
-            </p>
-            <a class="primary-link" id="pilotLink" href="mailto:rogma07k@gmail.com">
-              Request pilot setup
-            </a>
-          </div>
+        <div class="gc pilot-copy">
+          <p>
+            The first web release does not accept Terraform plan uploads. A pilot
+            starts with workflow shape, repo count, CI provider, and review goals.
+          </p>
+          <a class="primary-link" id="pilotLink" href="mailto:rogma07k@gmail.com">
+            Request pilot setup
+          </a>
+        </div>
+        <div class="gc pilot-checks">
           <ul class="checklist" id="checklist" aria-label="Recommended setup checklist"></ul>
         </div>
       </section>
+
+      <footer class="g footer-grid">
+        <div class="gc">MIT License</div>
+        <div class="gc">No plan upload</div>
+        <div class="gc">Terraform JSON in, review evidence out</div>
+        <div class="gc"><a href="https://github.com/readtheplan/readtheplan">GitHub -></a></div>
+      </footer>
     </main>
 
     <script src="./app.js" type="module"></script>

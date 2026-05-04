@@ -23,6 +23,10 @@ const requiredHtml = [
   "og:image",
   "twitter:card",
   "No plan upload",
+  "class=\"noise\"",
+  "class=\"terminal-frame\"",
+  "class=\"terminal-bar\"",
+  "What an analysis looks like",
 ];
 
 for (const token of requiredHtml) {
@@ -70,14 +74,30 @@ if (js.includes("terraform init -input=false")) {
   throw new Error("Generated GitHub Actions workflow must not run Terraform directly on PR events.");
 }
 
-if (!css.includes(".recommendation")) {
-  throw new Error("Preview recommendation styles are required.");
+for (const token of [
+  "\"Departure Mono\"",
+  "\"JetBrains Mono\"",
+  "url(\"./fonts/DepartureMono-Regular.woff2\")",
+  "url(\"./fonts/JetBrainsMono-Regular.woff2\")",
+  "--background: #041C1C;",
+  "--accent: #FFBD38;",
+  "background-image: url(\"./img/noise.svg\")",
+  ".g {",
+  ".gc {",
+  ".terminal-frame",
+  ".recommendation",
+]) {
+  if (!css.includes(token)) {
+    throw new Error(`Missing expected redesign CSS token: ${token}`);
+  }
 }
 
 const buildScript = read("scripts/build.js");
 
 for (const token of [
   "Content-Security-Policy",
+  "font-src 'self'",
+  "img-src 'self' data:",
   "Strict-Transport-Security",
   "Access-Control-Allow-Origin: https://readtheplan.dev",
   "Cross-Origin-Opener-Policy",
@@ -90,6 +110,12 @@ for (const token of [
 ]) {
   if (!buildScript.includes(token)) {
     throw new Error(`Missing expected security header: ${token}`);
+  }
+}
+
+for (const token of ["assetDirs", "\"fonts\"", "\"img\""]) {
+  if (!buildScript.includes(token)) {
+    throw new Error(`Build script must copy redesign asset directory: ${token}`);
   }
 }
 
@@ -106,6 +132,18 @@ for (const file of [
   }
   if (!buildScript.includes(file)) {
     throw new Error(`Build script must copy static site asset: ${file}`);
+  }
+}
+
+for (const file of [
+  "fonts/DepartureMono-Regular.woff2",
+  "fonts/JetBrainsMono-Regular.woff2",
+  "fonts/LICENSE-DepartureMono.txt",
+  "fonts/LICENSE-JetBrainsMono.txt",
+  "img/noise.svg",
+]) {
+  if (!fs.existsSync(path.join(root, file))) {
+    throw new Error(`Missing redesign asset: ${file}`);
   }
 }
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
 
@@ -14,19 +13,26 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "readtheplan" in html
     assert "No plan upload" in html
     assert "SOC 2 / ISO 27001 / HIPAA" in html
-    assert "id=\"onboardingForm\"" in html
-    assert "id=\"actionOutput\"" in html
-    assert "id=\"cliOutput\"" in html
-    assert "id=\"recommendation\"" in html
-    assert "id=\"planRows\"" in html
-    assert "id=\"demo\"" in html
-    assert "id=\"demoSafeCount\"" in html
-    assert "id=\"demoReviewCount\"" in html
-    assert "id=\"demoDangerousCount\"" in html
-    assert "id=\"demoRows\"" in html
+    assert 'id="onboardingForm"' in html
+    assert 'id="actionOutput"' in html
+    assert 'id="cliOutput"' in html
+    assert 'id="recommendation"' in html
+    assert 'id="planRows"' in html
+    assert 'id="demo"' in html
+    assert 'id="demoSafeCount"' in html
+    assert 'id="demoReviewCount"' in html
+    assert 'id="demoDangerousCount"' in html
+    assert 'id="demoRows"' in html
     assert "What an analysis looks like" in html
-    assert "rel=\"canonical\"" in html
+    assert 'class="terminal-frame"' in html
+    assert 'class="noise"' in html
+    assert 'rel="canonical"' in html
     assert "og:image" in html
+    assert 'name="team"' in html
+    assert 'name="ci"' in html
+    assert 'name="terraform"' in html
+    assert 'name="risk"' in html
+    assert 'name="policy"' in html
     assert 'name="framework"' in html
     assert 'value="soc2"' in html
     assert 'value="iso27001"' in html
@@ -55,14 +61,14 @@ def test_site_has_client_onboarding_surface() -> None:
 def test_site_build_contract_for_cloudflare_pages() -> None:
     package = (SITE / "package.json").read_text(encoding="utf-8")
     build_script = (SITE / "scripts" / "build.js").read_text(encoding="utf-8")
-    workflow = (ROOT / ".github" / "workflows" / "site.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (ROOT / ".github" / "workflows" / "site.yml").read_text(encoding="utf-8")
 
     assert '"build": "node scripts/build.js"' in package
     assert "site/dist" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "X-Content-Type-Options: nosniff" in build_script
     assert "Content-Security-Policy" in build_script
+    assert "font-src 'self'" in build_script
+    assert "img-src 'self' data:" in build_script
     assert "Strict-Transport-Security" in build_script
     assert "Access-Control-Allow-Origin: https://readtheplan.dev" in build_script
     assert "examples" in build_script
@@ -70,6 +76,9 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert "demo-evidence.json" in build_script
     assert "browsing-topics=()" in build_script
     assert "Cross-Origin-Opener-Policy" in build_script
+    assert "assetDirs" in build_script
+    assert '"fonts"' in build_script
+    assert '"img"' in build_script
     assert "npm --prefix site run build" in workflow
 
     for asset in [
@@ -82,3 +91,28 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     ]:
         assert (SITE / asset).exists()
         assert asset in build_script
+
+
+def test_site_redesign_visual_contract() -> None:
+    css = (SITE / "styles.css").read_text(encoding="utf-8")
+
+    assert '"Departure Mono"' in css
+    assert '"JetBrains Mono"' in css
+    assert 'url("./fonts/DepartureMono-Regular.woff2")' in css
+    assert 'url("./fonts/JetBrainsMono-Regular.woff2")' in css
+    assert "--background: #041C1C;" in css
+    assert "--accent: #FFBD38;" in css
+    assert 'background-image: url("./img/noise.svg")' in css
+    assert ".terminal-frame" in css
+    assert ".g {" in css
+    assert ".gc {" in css
+    assert "@media (max-width: 720px)" in css
+
+    for asset in [
+        "fonts/DepartureMono-Regular.woff2",
+        "fonts/JetBrainsMono-Regular.woff2",
+        "fonts/LICENSE-DepartureMono.txt",
+        "fonts/LICENSE-JetBrainsMono.txt",
+        "img/noise.svg",
+    ]:
+        assert (SITE / asset).exists()
