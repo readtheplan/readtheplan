@@ -10,6 +10,11 @@ const safeCount = document.querySelector("#safeCount");
 const reviewCount = document.querySelector("#reviewCount");
 const dangerousCount = document.querySelector("#dangerousCount");
 const planRows = document.querySelector("#planRows");
+const demoSafeCount = document.querySelector("#demoSafeCount");
+const demoReviewCount = document.querySelector("#demoReviewCount");
+const demoDangerousCount = document.querySelector("#demoDangerousCount");
+const demoRows = document.querySelector("#demoRows");
+const demoEvidenceNote = document.querySelector("#demoEvidenceNote");
 
 const teamLabels = {
   maintainer: "solo maintainer",
@@ -204,6 +209,32 @@ function renderRows(rows) {
   );
 }
 
+function renderDemoRows(changes) {
+  demoRows.replaceChildren(
+    ...changes.map((change) => {
+      const risk = document.createElement("span");
+      risk.className = `risk-tag ${change.risk}`;
+      risk.textContent = change.risk;
+
+      const resource = document.createElement("span");
+      resource.textContent = change.address || change.type;
+
+      const explanation = document.createElement("span");
+      explanation.textContent = change.explanation;
+
+      const controls = document.createElement("span");
+      controls.className = "control-list";
+      controls.textContent =
+        (change.controls || []).map((control) => control.id).join(", ") || "none";
+
+      const item = document.createElement("div");
+      item.setAttribute("role", "row");
+      item.replaceChildren(risk, resource, explanation, controls);
+      return item;
+    }),
+  );
+}
+
 function renderRiskCounts(rows) {
   const counts = rows.reduce(
     (acc, row) => {
@@ -215,6 +246,40 @@ function renderRiskCounts(rows) {
   safeCount.textContent = String(counts.safe);
   reviewCount.textContent = String(counts.review);
   dangerousCount.textContent = String(counts.dangerous);
+}
+
+function renderDemoSummary(summary) {
+  const risks = summary.risks || {};
+  demoSafeCount.textContent = String(risks.safe || 0);
+  demoReviewCount.textContent = String(risks.review || 0);
+  demoDangerousCount.textContent = String(risks.dangerous || 0);
+}
+
+function renderDemoEvidence(payload) {
+  const attestation = payload.agent_attestation || {};
+  const signed = Boolean(attestation.signature && attestation.cert);
+  const framework = payload.framework?.name ? payload.framework.name.toUpperCase() : "SOC2";
+  const controlCount = payload.summary?.controls_touched?.length || 0;
+  const planSha = payload.plan?.sha256 || "unknown";
+  demoEvidenceNote.textContent = signed
+    ? `Signed evidence fixture: ${framework}, ${controlCount} controls touched, plan ${planSha.slice(0, 12)}...`
+    : `Evidence fixture: ${framework}, ${controlCount} controls touched.`;
+}
+
+async function loadDemoData() {
+  try {
+    const response = await fetch("./demo-evidence.json");
+    if (!response.ok) {
+      throw new Error(`demo data returned ${response.status}`);
+    }
+    const payload = await response.json();
+    renderDemoSummary(payload.summary);
+    renderDemoRows(payload.changes || []);
+    renderDemoEvidence(payload);
+  } catch (error) {
+    demoEvidenceNote.textContent =
+      "Demo evidence could not be loaded. The onboarding workflow still works.";
+  }
 }
 
 function riskOverrideSnippet(state) {
@@ -493,3 +558,4 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
 });
 
 render();
+loadDemoData();

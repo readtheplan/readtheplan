@@ -2,7 +2,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(root, "..");
 const dist = path.join(root, "dist");
+const demoSource = path.join(
+  repoRoot,
+  "examples",
+  "02-dangerous-replacement",
+  "evidence.json",
+);
 const files = [
   "index.html",
   "styles.css",
@@ -21,6 +28,8 @@ fs.mkdirSync(dist, { recursive: true });
 for (const file of files) {
   fs.copyFileSync(path.join(root, file), path.join(dist, file));
 }
+
+fs.copyFileSync(demoSource, path.join(dist, "demo-evidence.json"));
 
 fs.writeFileSync(
   path.join(dist, "_headers"),
@@ -41,4 +50,4 @@ fs.writeFileSync(
   "utf8",
 );
 
-console.log(`Built ${files.length} files into ${path.relative(process.cwd(), dist)}`);
+console.log(`Built ${files.length + 1} files into ${path.relative(process.cwd(), dist)}`);

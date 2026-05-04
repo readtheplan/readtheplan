@@ -19,6 +19,12 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "id=\"cliOutput\"" in html
     assert "id=\"recommendation\"" in html
     assert "id=\"planRows\"" in html
+    assert "id=\"demo\"" in html
+    assert "id=\"demoSafeCount\"" in html
+    assert "id=\"demoReviewCount\"" in html
+    assert "id=\"demoDangerousCount\"" in html
+    assert "id=\"demoRows\"" in html
+    assert "What an analysis looks like" in html
     assert "rel=\"canonical\"" in html
     assert "og:image" in html
     assert 'name="framework"' in html
@@ -37,6 +43,8 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "No raw Terraform plan is attached." in app
     assert "teamProfiles" in app
     assert "renderRiskCounts(rows)" in app
+    assert "loadDemoData" in app
+    assert "./demo-evidence.json" in app
     assert "workflow_run:" in app
     assert "actions: read" in app
     assert "actions/download-artifact@v4" in app
@@ -57,6 +65,9 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert "Content-Security-Policy" in build_script
     assert "Strict-Transport-Security" in build_script
     assert "Access-Control-Allow-Origin: https://readtheplan.dev" in build_script
+    assert "examples" in build_script
+    assert "02-dangerous-replacement" in build_script
+    assert "demo-evidence.json" in build_script
     assert "browsing-topics=()" in build_script
     assert "Cross-Origin-Opener-Policy" in build_script
     assert "npm --prefix site run build" in workflow
