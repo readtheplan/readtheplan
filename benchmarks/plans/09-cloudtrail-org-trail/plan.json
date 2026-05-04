@@ -1,0 +1,186 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_cloudtrail.org",
+      "mode": "managed",
+      "type": "aws_cloudtrail",
+      "name": "org",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_cloudtrail-org"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudtrail.member",
+      "mode": "managed",
+      "type": "aws_cloudtrail",
+      "name": "member",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_cloudtrail-member",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_cloudtrail-member",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.cloudtrail",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "cloudtrail",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_s3_bucket-cloudtrail"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_policy.cloudtrail",
+      "mode": "managed",
+      "type": "aws_s3_bucket_policy",
+      "name": "cloudtrail",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_s3_bucket_policy-cloudtrail",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_s3_bucket_policy-cloudtrail",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.cloudtrail",
+      "mode": "managed",
+      "type": "aws_s3_bucket_public_access_block",
+      "name": "cloudtrail",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_s3_bucket_public_access_block-cloudtrail",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_s3_bucket_public_access_block-cloudtrail",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.cloudtrail",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "cloudtrail",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_kms_key-cloudtrail"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.cloudtrail",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "cloudtrail",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_role-cloudtrail",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_role-cloudtrail",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_log_group.cloudtrail",
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "cloudtrail",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_cloudwatch_log_group-cloudtrail"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_metric_alarm.root_login",
+      "mode": "managed",
+      "type": "aws_cloudwatch_metric_alarm",
+      "name": "root_login",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_cloudwatch_metric_alarm-root_login"
+        }
+      }
+    },
+    {
+      "address": "aws_sns_topic.security_alerts",
+      "mode": "managed",
+      "type": "aws_sns_topic",
+      "name": "security_alerts",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_sns_topic-security_alerts",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_sns_topic-security_alerts",
+          "version": "new"
+        }
+      }
+    }
+  ]
+}

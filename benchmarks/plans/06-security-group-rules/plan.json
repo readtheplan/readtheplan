@@ -1,0 +1,299 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_security_group.web",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "web",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_security_group-web"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.app",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_security_group-app",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_security_group-app",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.database",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "database",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_security_group-database",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_security_group-database",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.web_https",
+      "mode": "managed",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "name": "web_https",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_vpc_security_group_ingress_rule-web_https"
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.app_http",
+      "mode": "managed",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "name": "app_http",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_vpc_security_group_ingress_rule-app_http"
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.db",
+      "mode": "managed",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "name": "db",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_vpc_security_group_ingress_rule-db",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_vpc_security_group_ingress_rule-db",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group_rule.legacy_ssh",
+      "mode": "managed",
+      "type": "aws_security_group_rule",
+      "name": "legacy_ssh",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "aws_security_group_rule-legacy_ssh"
+        },
+        "after": null
+      }
+    },
+    {
+      "address": "aws_security_group_rule.egress_all",
+      "mode": "managed",
+      "type": "aws_security_group_rule",
+      "name": "egress_all",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_security_group_rule-egress_all"
+        }
+      }
+    },
+    {
+      "address": "aws_network_acl.private",
+      "mode": "managed",
+      "type": "aws_network_acl",
+      "name": "private",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_network_acl-private",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_network_acl-private",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_network_acl_rule.private_ephemeral",
+      "mode": "managed",
+      "type": "aws_network_acl_rule",
+      "name": "private_ephemeral",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_network_acl_rule-private_ephemeral",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_network_acl_rule-private_ephemeral",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.bastion",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "bastion",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "name": "aws_security_group-bastion",
+          "generation": "blue"
+        },
+        "after": {
+          "name": "aws_security_group-bastion",
+          "generation": "green"
+        }
+      }
+    },
+    {
+      "address": "aws_route53_record.internal_app",
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "internal_app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_route53_record-internal_app",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_route53_record-internal_app",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.network_admin",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "network_admin",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_role-network_admin",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_role-network_admin",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_log_group.vpc_flow",
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "vpc_flow",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_cloudwatch_log_group-vpc_flow"
+        }
+      }
+    },
+    {
+      "address": "aws_flow_log.vpc",
+      "mode": "managed",
+      "type": "aws_flow_log",
+      "name": "vpc",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_flow_log-vpc"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.flow_logs",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "flow_logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_s3_bucket-flow_logs",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_s3_bucket-flow_logs",
+          "version": "new"
+        }
+      }
+    }
+  ]
+}

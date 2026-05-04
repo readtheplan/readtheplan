@@ -1,0 +1,131 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_kms_key.primary",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_kms_key-primary"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_alias.primary",
+      "mode": "managed",
+      "type": "aws_kms_alias",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_kms_alias-primary"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.shared_services",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "shared_services",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_kms_key-shared_services",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_kms_key-shared_services",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.customer_data",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "customer_data",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "key_spec": "SYMMETRIC_DEFAULT",
+          "deletion_window_in_days": 7
+        },
+        "after": {
+          "key_spec": "HMAC_256",
+          "deletion_window_in_days": 30
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.legacy",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "legacy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "deletion_window_in_days": 7
+        },
+        "after": null
+      }
+    },
+    {
+      "address": "aws_kms_replica_key.eu",
+      "mode": "managed",
+      "type": "aws_kms_replica_key",
+      "name": "eu",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_kms_replica_key-eu"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_policy.kms_access",
+      "mode": "managed",
+      "type": "aws_iam_policy",
+      "name": "kms_access",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_policy-kms_access",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_policy-kms_access",
+          "version": "new"
+        }
+      }
+    }
+  ]
+}

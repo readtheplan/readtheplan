@@ -1,0 +1,224 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_s3_bucket.logs",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_s3_bucket-logs"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.audit",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "audit",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "versioning": {
+            "enabled": false
+          }
+        },
+        "after": {
+          "versioning": {
+            "enabled": true
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_policy.audit",
+      "mode": "managed",
+      "type": "aws_s3_bucket_policy",
+      "name": "audit",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_s3_bucket_policy-audit",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_s3_bucket_policy-audit",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.audit",
+      "mode": "managed",
+      "type": "aws_s3_bucket_public_access_block",
+      "name": "audit",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_s3_bucket_public_access_block-audit",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_s3_bucket_public_access_block-audit",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_lifecycle_configuration.audit",
+      "mode": "managed",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "name": "audit",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_s3_bucket_lifecycle_configuration-audit"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_server_side_encryption_configuration.audit",
+      "mode": "managed",
+      "type": "aws_s3_bucket_server_side_encryption_configuration",
+      "name": "audit",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_s3_bucket_server_side_encryption_configuration-audit"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudtrail.org",
+      "mode": "managed",
+      "type": "aws_cloudtrail",
+      "name": "org",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_cloudtrail-org",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_cloudtrail-org",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.logs",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_kms_key-logs"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_policy.log_delivery",
+      "mode": "managed",
+      "type": "aws_iam_policy",
+      "name": "log_delivery",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_policy-log_delivery",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_policy-log_delivery",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_log_group.cloudtrail",
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "cloudtrail",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_cloudwatch_log_group-cloudtrail"
+        }
+      }
+    },
+    {
+      "address": "aws_sns_topic.alerts",
+      "mode": "managed",
+      "type": "aws_sns_topic",
+      "name": "alerts",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_sns_topic-alerts"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_notification.audit",
+      "mode": "managed",
+      "type": "aws_s3_bucket_notification",
+      "name": "audit",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_s3_bucket_notification-audit",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_s3_bucket_notification-audit",
+          "version": "new"
+        }
+      }
+    }
+  ]
+}
