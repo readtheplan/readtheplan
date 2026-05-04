@@ -1,0 +1,206 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_iam_role.app",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_iam_role-app"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.deploy",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "deploy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_role-deploy",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_role-deploy",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_policy.deploy",
+      "mode": "managed",
+      "type": "aws_iam_policy",
+      "name": "deploy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_policy-deploy",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_policy-deploy",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role_policy.inline",
+      "mode": "managed",
+      "type": "aws_iam_role_policy",
+      "name": "inline",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_role_policy-inline",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_role_policy-inline",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_user.legacy_bot",
+      "mode": "managed",
+      "type": "aws_iam_user",
+      "name": "legacy_bot",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "aws_iam_user-legacy_bot"
+        },
+        "after": null
+      }
+    },
+    {
+      "address": "aws_iam_policy.permissions_boundary",
+      "mode": "managed",
+      "type": "aws_iam_policy",
+      "name": "permissions_boundary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_iam_policy-permissions_boundary"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_instance_profile.worker",
+      "mode": "managed",
+      "type": "aws_iam_instance_profile",
+      "name": "worker",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_instance_profile-worker",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_instance_profile-worker",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.identity_exports",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "identity_exports",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_kms_key-identity_exports"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_policy.identity_exports",
+      "mode": "managed",
+      "type": "aws_s3_bucket_policy",
+      "name": "identity_exports",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_s3_bucket_policy-identity_exports",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_s3_bucket_policy-identity_exports",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudtrail.identity",
+      "mode": "managed",
+      "type": "aws_cloudtrail",
+      "name": "identity",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_cloudtrail-identity"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.admin_vpn",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "admin_vpn",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_security_group-admin_vpn",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_security_group-admin_vpn",
+          "version": "new"
+        }
+      }
+    }
+  ]
+}

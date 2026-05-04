@@ -1,0 +1,175 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_db_instance.primary",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "engine_version": "14.10",
+          "instance_class": "db.r6g.large"
+        },
+        "after": {
+          "engine_version": "15.4",
+          "instance_class": "db.r6g.large"
+        }
+      }
+    },
+    {
+      "address": "aws_db_instance.replica",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "replica",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_db_instance-replica",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_db_instance-replica",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_db_parameter_group.primary",
+      "mode": "managed",
+      "type": "aws_db_parameter_group",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "name": "aws_db_parameter_group-primary",
+          "generation": "blue"
+        },
+        "after": {
+          "name": "aws_db_parameter_group-primary",
+          "generation": "green"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.database",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "database",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_security_group-database",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_security_group-database",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group_rule.app_to_db",
+      "mode": "managed",
+      "type": "aws_security_group_rule",
+      "name": "app_to_db",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_security_group_rule-app_to_db"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.database",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "database",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_kms_key-database",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_kms_key-database",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_metric_alarm.cpu",
+      "mode": "managed",
+      "type": "aws_cloudwatch_metric_alarm",
+      "name": "cpu",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_cloudwatch_metric_alarm-cpu"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.enhanced_monitoring",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "enhanced_monitoring",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_role-enhanced_monitoring",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_role-enhanced_monitoring",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_db_snapshot.old_manual",
+      "mode": "managed",
+      "type": "aws_db_snapshot",
+      "name": "old_manual",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "aws_db_snapshot-old_manual"
+        },
+        "after": null
+      }
+    }
+  ]
+}

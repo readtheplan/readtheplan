@@ -1,0 +1,235 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_eks_cluster.this",
+      "mode": "managed",
+      "type": "aws_eks_cluster",
+      "name": "this",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "version": "1.28",
+          "endpoint_public_access": false
+        },
+        "after": {
+          "version": "1.29",
+          "endpoint_public_access": false
+        }
+      }
+    },
+    {
+      "address": "aws_eks_node_group.blue",
+      "mode": "managed",
+      "type": "aws_eks_node_group",
+      "name": "blue",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "node_group_name": "blue",
+          "instance_types": [
+            "m6i.large"
+          ]
+        },
+        "after": {
+          "node_group_name": "green",
+          "instance_types": [
+            "m7i.large"
+          ]
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.cluster",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "cluster",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_role-cluster",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_role-cluster",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_policy.cluster",
+      "mode": "managed",
+      "type": "aws_iam_policy",
+      "name": "cluster",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_policy-cluster",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_policy-cluster",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.cluster",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "cluster",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_security_group-cluster"
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.api",
+      "mode": "managed",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "name": "api",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_vpc_security_group_ingress_rule-api"
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.kubelet",
+      "mode": "managed",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "name": "kubelet",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_vpc_security_group_ingress_rule-kubelet"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group_rule.node_egress",
+      "mode": "managed",
+      "type": "aws_security_group_rule",
+      "name": "node_egress",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_security_group_rule-node_egress",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_security_group_rule-node_egress",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_log_group.cluster",
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "cluster",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_cloudwatch_log_group-cluster",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_cloudwatch_log_group-cluster",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_key.eks",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "eks",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_kms_key-eks"
+        }
+      }
+    },
+    {
+      "address": "aws_kms_alias.eks",
+      "mode": "managed",
+      "type": "aws_kms_alias",
+      "name": "eks",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_kms_alias-eks",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_kms_alias-eks",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_autoscaling_group.workers",
+      "mode": "managed",
+      "type": "aws_autoscaling_group",
+      "name": "workers",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_autoscaling_group-workers",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_autoscaling_group-workers",
+          "version": "new"
+        }
+      }
+    }
+  ]
+}

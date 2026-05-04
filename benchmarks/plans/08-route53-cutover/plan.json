@@ -1,0 +1,159 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_route53_record.api",
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "api",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_route53_record-api",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_route53_record-api",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_route53_record.app",
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_route53_record-app",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_route53_record-app",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_route53_record.blue_green",
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "blue_green",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "name": "aws_route53_record-blue_green",
+          "generation": "blue"
+        },
+        "after": {
+          "name": "aws_route53_record-blue_green",
+          "generation": "green"
+        }
+      }
+    },
+    {
+      "address": "aws_route53_zone.legacy",
+      "mode": "managed",
+      "type": "aws_route53_zone",
+      "name": "legacy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "name": "aws_route53_zone-legacy"
+        },
+        "after": null
+      }
+    },
+    {
+      "address": "aws_route53_record.health_check",
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "health_check",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "aws_route53_record-health_check"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_metric_alarm.dns_health",
+      "mode": "managed",
+      "type": "aws_cloudwatch_metric_alarm",
+      "name": "dns_health",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_cloudwatch_metric_alarm-dns_health",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_cloudwatch_metric_alarm-dns_health",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.edge",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "edge",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_security_group-edge",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_security_group-edge",
+          "version": "new"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.dns_deploy",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "dns_deploy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "aws_iam_role-dns_deploy",
+          "version": "old"
+        },
+        "after": {
+          "name": "aws_iam_role-dns_deploy",
+          "version": "new"
+        }
+      }
+    }
+  ]
+}
