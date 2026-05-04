@@ -1,0 +1,64 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_kms_key.app_config",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "app_config",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "description": "app config encryption key",
+          "deletion_window_in_days": 30,
+          "enable_key_rotation": true
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.deploy",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "deploy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-deploy",
+          "description": "Deployment role",
+          "max_session_duration": 3600
+        },
+        "after": {
+          "name": "readtheplan-deploy",
+          "description": "Deployment role for CI releases",
+          "max_session_duration": 3600
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_log_group.api",
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "api",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "/aws/lambda/readtheplan-api",
+          "retention_in_days": 30,
+          "kms_key_id": "aws_kms_key.app_config.arn"
+        }
+      }
+    }
+  ]
+}

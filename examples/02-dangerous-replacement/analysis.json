@@ -1,0 +1,152 @@
+{
+  "path": "examples/02-dangerous-replacement/plan.json",
+  "terraform_version": "1.8.5",
+  "resource_change_count": 5,
+  "actions": {
+    "delete/create": 2,
+    "update": 3
+  },
+  "risks": {
+    "dangerous": 2,
+    "review": 3
+  },
+  "changes": [
+    {
+      "address": "aws_kms_key.customer_data",
+      "type": "aws_kms_key",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "risk": "dangerous",
+      "explanation": "Terraform will replace a KMS key. Key identity changes can break decrypt access for data and services that depend on the old key.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Replacing or destroying a key changes the access boundary on every ciphertext that depended on it.\n"
+        },
+        {
+          "id": "CC6.7",
+          "title": "Restriction of Information Asset Movements",
+          "rationale": "Key destruction is irreversible for any data encrypted under it.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Key replacement requires change-management review."
+        },
+        {
+          "id": "A1.2",
+          "title": "Availability \u2014 Recovery",
+          "rationale": "Loss of a key without backed-up plaintext breaks recovery for encrypted data.\n"
+        },
+        {
+          "id": "C1.1",
+          "title": "Confidentiality \u2014 Identification and Maintenance",
+          "rationale": "Encryption key lifecycle change."
+        }
+      ]
+    },
+    {
+      "address": "aws_db_instance.primary",
+      "type": "aws_db_instance",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "risk": "dangerous",
+      "explanation": "Terraform will replace this RDS instance. Confirm snapshots, restore path, endpoint changes, and maintenance-window impact.",
+      "controls": [
+        {
+          "id": "CC6.7",
+          "title": "Restriction of Information Asset Movements",
+          "rationale": "Replacement creates a new endpoint and discards the prior instance.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Database replacement."
+        },
+        {
+          "id": "A1.2",
+          "title": "Availability \u2014 Recovery",
+          "rationale": "Endpoint changes affect application connectivity and recovery procedures.\n"
+        }
+      ]
+    },
+    {
+      "address": "aws_iam_role.app",
+      "type": "aws_iam_role",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update IAM authorization. Review trust policies, permission boundaries, and deny statements for lockout or escalation risk.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Trust policy or attached-policy changes can broaden who can assume the role.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Role configuration change."
+        }
+      ]
+    },
+    {
+      "address": "aws_security_group.app",
+      "type": "aws_security_group",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "controls": [
+        {
+          "id": "CC6.6",
+          "title": "Boundary Protection",
+          "rationale": "Security groups are a primary network-boundary control on AWS.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Security group change."
+        }
+      ]
+    },
+    {
+      "address": "aws_cloudtrail.org",
+      "type": "aws_cloudtrail",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "controls": [
+        {
+          "id": "CC7.1",
+          "title": "System Operations \u2014 Detection of Configuration Changes",
+          "rationale": "CloudTrail configuration changes affect detection coverage."
+        },
+        {
+          "id": "CC7.2",
+          "title": "System Monitoring",
+          "rationale": "Monitoring posture change."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Audit trail configuration change."
+        }
+      ]
+    }
+  ],
+  "framework": {
+    "name": "soc2",
+    "version": "2017-tsc",
+    "schema_version": 1
+  }
+}

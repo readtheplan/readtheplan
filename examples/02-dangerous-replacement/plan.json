@@ -1,0 +1,154 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_kms_key.customer_data",
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "customer_data",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "description": "customer data primary key",
+          "deletion_window_in_days": 7,
+          "enable_key_rotation": true,
+          "key_spec": "SYMMETRIC_DEFAULT"
+        },
+        "after": {
+          "description": "customer data primary key",
+          "deletion_window_in_days": 30,
+          "enable_key_rotation": true,
+          "key_spec": "HMAC_256"
+        }
+      }
+    },
+    {
+      "address": "aws_db_instance.primary",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "identifier": "readtheplan-prod-primary",
+          "engine": "postgres",
+          "engine_version": "14.10",
+          "instance_class": "db.t3.medium",
+          "multi_az": true,
+          "skip_final_snapshot": false
+        },
+        "after": {
+          "identifier": "readtheplan-prod-primary",
+          "engine": "postgres",
+          "engine_version": "14.10",
+          "instance_class": "db.m7g.large",
+          "multi_az": true,
+          "skip_final_snapshot": false
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.app",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-app",
+          "description": "Application runtime role",
+          "max_session_duration": 3600
+        },
+        "after": {
+          "name": "readtheplan-app",
+          "description": "Application runtime role with evidence export",
+          "max_session_duration": 3600
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.app",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-app",
+          "description": "Allow app traffic",
+          "ingress": [
+            {
+              "from_port": 443,
+              "to_port": 443,
+              "protocol": "tcp",
+              "cidr_blocks": [
+                "10.0.0.0/16"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "name": "readtheplan-app",
+          "description": "Allow app and health-check traffic",
+          "ingress": [
+            {
+              "from_port": 443,
+              "to_port": 443,
+              "protocol": "tcp",
+              "cidr_blocks": [
+                "10.0.0.0/16"
+              ]
+            },
+            {
+              "from_port": 8080,
+              "to_port": 8080,
+              "protocol": "tcp",
+              "cidr_blocks": [
+                "10.0.8.0/21"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "address": "aws_cloudtrail.org",
+      "mode": "managed",
+      "type": "aws_cloudtrail",
+      "name": "org",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-org",
+          "include_global_service_events": true,
+          "enable_log_file_validation": true,
+          "s3_key_prefix": "cloudtrail"
+        },
+        "after": {
+          "name": "readtheplan-org",
+          "include_global_service_events": true,
+          "enable_log_file_validation": true,
+          "s3_key_prefix": "cloudtrail/prod"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,281 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.8.5",
+  "resource_changes": [
+    {
+      "address": "aws_eks_cluster.platform",
+      "mode": "managed",
+      "type": "aws_eks_cluster",
+      "name": "platform",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-platform",
+          "version": "1.28",
+          "endpoint_private_access": true,
+          "endpoint_public_access": false
+        },
+        "after": {
+          "name": "readtheplan-platform",
+          "version": "1.29",
+          "endpoint_private_access": true,
+          "endpoint_public_access": false
+        }
+      }
+    },
+    {
+      "address": "aws_eks_node_group.workers",
+      "mode": "managed",
+      "type": "aws_eks_node_group",
+      "name": "workers",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "node_group_name": "workers-blue",
+          "instance_types": [
+            "m6i.large"
+          ],
+          "desired_size": 6
+        },
+        "after": {
+          "node_group_name": "workers-green",
+          "instance_types": [
+            "m7i.large"
+          ],
+          "desired_size": 6
+        }
+      }
+    },
+    {
+      "address": "aws_db_instance.analytics",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "analytics",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "identifier": "readtheplan-analytics",
+          "engine": "postgres",
+          "engine_version": "14.9",
+          "instance_class": "db.r6g.large"
+        },
+        "after": {
+          "identifier": "readtheplan-analytics",
+          "engine": "postgres",
+          "engine_version": "15.4",
+          "instance_class": "db.r6g.large"
+        }
+      }
+    },
+    {
+      "address": "aws_rds_cluster.reporting",
+      "mode": "managed",
+      "type": "aws_rds_cluster",
+      "name": "reporting",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "cluster_identifier": "readtheplan-reporting",
+          "backup_retention_period": 7,
+          "deletion_protection": true
+        },
+        "after": {
+          "cluster_identifier": "readtheplan-reporting",
+          "backup_retention_period": 14,
+          "deletion_protection": true
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.audit_logs",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "audit_logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "bucket": "readtheplan-audit-logs",
+          "force_destroy": false,
+          "versioning": {
+            "enabled": false
+          }
+        },
+        "after": {
+          "bucket": "readtheplan-audit-logs",
+          "force_destroy": false,
+          "versioning": {
+            "enabled": true
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.audit_logs",
+      "mode": "managed",
+      "type": "aws_s3_bucket_public_access_block",
+      "name": "audit_logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "bucket": "readtheplan-audit-logs",
+          "block_public_acls": true,
+          "block_public_policy": true,
+          "ignore_public_acls": true,
+          "restrict_public_buckets": true
+        },
+        "after": {
+          "bucket": "readtheplan-audit-logs",
+          "block_public_acls": true,
+          "block_public_policy": true,
+          "ignore_public_acls": true,
+          "restrict_public_buckets": true
+        }
+      }
+    },
+    {
+      "address": "aws_iam_policy.readonly",
+      "mode": "managed",
+      "type": "aws_iam_policy",
+      "name": "readonly",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-readonly",
+          "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\"],\"Resource\":\"*\"}]}"
+        },
+        "after": {
+          "name": "readtheplan-readonly",
+          "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:ListBucket\"],\"Resource\":\"*\"}]}"
+        }
+      }
+    },
+    {
+      "address": "aws_iam_role.worker",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "worker",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "readtheplan-worker",
+          "description": "Background worker role",
+          "max_session_duration": 3600
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.cluster",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "cluster",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-cluster",
+          "description": "Cluster internal traffic"
+        },
+        "after": {
+          "name": "readtheplan-cluster",
+          "description": "Cluster internal and metrics traffic"
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.api",
+      "mode": "managed",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "name": "api",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "security_group_id": "sg-0123456789abcdef0",
+          "from_port": 8443,
+          "to_port": 8443,
+          "ip_protocol": "tcp",
+          "referenced_security_group_id": "sg-0fedcba9876543210"
+        }
+      }
+    },
+    {
+      "address": "aws_cloudtrail.org",
+      "mode": "managed",
+      "type": "aws_cloudtrail",
+      "name": "org",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "name": "readtheplan-org",
+          "include_global_service_events": true,
+          "enable_log_file_validation": true,
+          "is_multi_region_trail": true
+        },
+        "after": {
+          "name": "readtheplan-org",
+          "include_global_service_events": true,
+          "enable_log_file_validation": true,
+          "is_multi_region_trail": true
+        }
+      }
+    },
+    {
+      "address": "aws_route53_record.app",
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "zone_id": "Z123READTHEPLAN",
+          "name": "app.readtheplan.dev",
+          "type": "A",
+          "ttl": 60
+        },
+        "after": {
+          "zone_id": "Z123READTHEPLAN",
+          "name": "app.readtheplan.dev",
+          "type": "A",
+          "ttl": 30
+        }
+      }
+    }
+  ]
+}

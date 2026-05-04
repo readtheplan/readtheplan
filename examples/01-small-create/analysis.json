@@ -1,0 +1,72 @@
+{
+  "path": "examples/01-small-create/plan.json",
+  "terraform_version": "1.8.5",
+  "resource_change_count": 3,
+  "actions": {
+    "create": 2,
+    "update": 1
+  },
+  "risks": {
+    "review": 1,
+    "safe": 2
+  },
+  "changes": [
+    {
+      "address": "aws_kms_key.app_config",
+      "type": "aws_kms_key",
+      "actions": [
+        "create"
+      ],
+      "risk": "safe",
+      "explanation": "Terraform will create a new resource without changing existing state.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Creating a customer-managed key establishes a new access boundary on the data it will protect.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "New key material is a change-management event."
+        }
+      ]
+    },
+    {
+      "address": "aws_iam_role.deploy",
+      "type": "aws_iam_role",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update IAM authorization. Review trust policies, permission boundaries, and deny statements for lockout or escalation risk.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Trust policy or attached-policy changes can broaden who can assume the role.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Role configuration change."
+        }
+      ]
+    },
+    {
+      "address": "aws_cloudwatch_log_group.api",
+      "type": "aws_cloudwatch_log_group",
+      "actions": [
+        "create"
+      ],
+      "risk": "safe",
+      "explanation": "Terraform will create a new resource without changing existing state.",
+      "controls": []
+    }
+  ],
+  "framework": {
+    "name": "soc2",
+    "version": "2017-tsc",
+    "schema_version": 1
+  }
+}

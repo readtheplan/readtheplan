@@ -1,0 +1,310 @@
+{
+  "path": "examples/03-multi-resource/plan.json",
+  "terraform_version": "1.8.5",
+  "resource_change_count": 12,
+  "actions": {
+    "create": 2,
+    "delete/create": 1,
+    "update": 9
+  },
+  "risks": {
+    "dangerous": 2,
+    "review": 8,
+    "safe": 2
+  },
+  "changes": [
+    {
+      "address": "aws_eks_cluster.platform",
+      "type": "aws_eks_cluster",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Cluster-endpoint and authentication changes affect access."
+        },
+        {
+          "id": "CC6.6",
+          "title": "Boundary Protection",
+          "rationale": "Cluster network and endpoint changes adjust the boundary."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "EKS cluster change."
+        },
+        {
+          "id": "A1.2",
+          "title": "Availability \u2014 Recovery",
+          "rationale": "Cluster changes affect every workload running on it."
+        }
+      ]
+    },
+    {
+      "address": "aws_eks_node_group.workers",
+      "type": "aws_eks_node_group",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "risk": "dangerous",
+      "explanation": "Terraform will replace an EKS node group. Expect pod evictions, capacity churn, and possible cluster disruption during rollout.",
+      "controls": [
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Node group lifecycle change."
+        },
+        {
+          "id": "A1.2",
+          "title": "Availability \u2014 Recovery",
+          "rationale": "Node group changes affect cluster capacity."
+        }
+      ]
+    },
+    {
+      "address": "aws_db_instance.analytics",
+      "type": "aws_db_instance",
+      "actions": [
+        "update"
+      ],
+      "risk": "dangerous",
+      "explanation": "The RDS instance engine_version appears to cross a major version. Major database upgrades can be irreversible or require downtime.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Database parameter, master-user, or network changes affect the access boundary.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Database configuration update."
+        }
+      ]
+    },
+    {
+      "address": "aws_rds_cluster.reporting",
+      "type": "aws_rds_cluster",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this RDS cluster. Check backup state, maintenance windows, and whether the provider will force replacement.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Database cluster lifecycle and configuration change."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Database cluster change."
+        },
+        {
+          "id": "A1.2",
+          "title": "Availability \u2014 Recovery",
+          "rationale": "Cluster topology change affects recovery posture."
+        }
+      ]
+    },
+    {
+      "address": "aws_s3_bucket.audit_logs",
+      "type": "aws_s3_bucket",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update S3 bucket controls. Review public access, retention, encryption, and data exposure settings.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Bucket configuration changes affect access boundary."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Bucket configuration update."
+        },
+        {
+          "id": "C1.1",
+          "title": "Confidentiality \u2014 Identification and Maintenance",
+          "rationale": "Encryption, versioning, or logging changes affect confidentiality posture.\n"
+        }
+      ]
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.audit_logs",
+      "type": "aws_s3_bucket_public_access_block",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Public-access-block toggles the strictest S3 access guardrail."
+        },
+        {
+          "id": "CC6.6",
+          "title": "Boundary Protection",
+          "rationale": "Removing the block can expose objects publicly."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Public-access-block change."
+        }
+      ]
+    },
+    {
+      "address": "aws_iam_policy.readonly",
+      "type": "aws_iam_policy",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update IAM authorization. Review trust policies, permission boundaries, and deny statements for lockout or escalation risk.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "Policy changes alter what attached principals can do."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Policy change."
+        }
+      ]
+    },
+    {
+      "address": "aws_iam_role.worker",
+      "type": "aws_iam_role",
+      "actions": [
+        "create"
+      ],
+      "risk": "safe",
+      "explanation": "Terraform will create a new resource without changing existing state.",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical and Physical Access Controls",
+          "rationale": "New IAM role establishes a new identity boundary."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "New role."
+        }
+      ]
+    },
+    {
+      "address": "aws_security_group.cluster",
+      "type": "aws_security_group",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "controls": [
+        {
+          "id": "CC6.6",
+          "title": "Boundary Protection",
+          "rationale": "Security groups are a primary network-boundary control on AWS.\n"
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Security group change."
+        }
+      ]
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.api",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "actions": [
+        "create"
+      ],
+      "risk": "safe",
+      "explanation": "Terraform will create a new resource without changing existing state.",
+      "controls": [
+        {
+          "id": "CC6.6",
+          "title": "Boundary Protection",
+          "rationale": "Ingress rules adjust who can reach the resource."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Ingress rule change."
+        }
+      ]
+    },
+    {
+      "address": "aws_cloudtrail.org",
+      "type": "aws_cloudtrail",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "controls": [
+        {
+          "id": "CC7.1",
+          "title": "System Operations \u2014 Detection of Configuration Changes",
+          "rationale": "CloudTrail configuration changes affect detection coverage."
+        },
+        {
+          "id": "CC7.2",
+          "title": "System Monitoring",
+          "rationale": "Monitoring posture change."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "Audit trail configuration change."
+        }
+      ]
+    },
+    {
+      "address": "aws_route53_record.app",
+      "type": "aws_route53_record",
+      "actions": [
+        "update"
+      ],
+      "risk": "review",
+      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "controls": [
+        {
+          "id": "CC6.6",
+          "title": "Boundary Protection",
+          "rationale": "DNS record changes can redirect production traffic."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "DNS record change."
+        },
+        {
+          "id": "A1.2",
+          "title": "Availability \u2014 Recovery",
+          "rationale": "Record changes affect availability immediately."
+        }
+      ]
+    }
+  ],
+  "framework": {
+    "name": "soc2",
+    "version": "2017-tsc",
+    "schema_version": 1
+  }
+}

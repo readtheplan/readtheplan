@@ -2,6 +2,10 @@
 
 > Read the plan. Every time. For real.
 
+## See it in action
+
+[`examples/`](examples/) has three sample Terraform plans with rendered output and one signed evidence envelope. Start with [examples/02-dangerous-replacement/](examples/02-dangerous-replacement/) for the most interesting case.
+
 `readtheplan` is a Terraform plan risk explainer. It reads `terraform plan` output, classifies each change as **safe / review / dangerous / irreversible** based on the action × resource type × what compliance context it touches, and posts a markdown summary your release manager (or auditor, or AI agent) can read in 30 seconds.
 
 ## status
