@@ -139,7 +139,7 @@ pre,
 .version-cell {
   display: flex;
   align-items: center;
-  min-height: 62px;
+  min-height: 48px;
   color: var(--foreground);
   font-size: 13px;
   letter-spacing: 0.1em;
@@ -186,6 +186,7 @@ pre,
 .hero-content {
   grid-column: span 2;
   display: grid;
+  min-width: 0;
   align-content: center;
   justify-items: center;
   text-align: center;
@@ -196,6 +197,7 @@ pre,
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 
 .trust-strip span,
@@ -230,9 +232,10 @@ h2 {
 }
 
 h1 {
-  max-width: 900px;
-  font-size: clamp(42px, 8vw, 118px);
+  max-width: 100%;
+  font-size: clamp(38px, 4.8vw, 68px);
   line-height: 0.86;
+  overflow-wrap: anywhere;
 }
 
 h2 {
@@ -251,11 +254,11 @@ h2 {
 }
 
 .demo-copy {
-  grid-column: span 1;
+  grid-column: 1 / -1;
 }
 
 .demo-terminal-cell {
-  grid-column: span 3;
+  grid-column: 1 / -1;
 }
 
 .demo-intro {
@@ -265,6 +268,7 @@ h2 {
 .demo-intro code {
   color: var(--accent);
   font-size: 0.9em;
+  overflow-wrap: anywhere;
 }
 
 .terminal-frame {
@@ -334,6 +338,20 @@ h2 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.preview-panel .row-heading {
+  align-items: flex-end;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.preview-panel .status-pill {
+  margin-bottom: 3px;
+}
+
+section[id] {
+  scroll-margin-top: 100px;
 }
 
 .recommendation {
