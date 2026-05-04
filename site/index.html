@@ -61,6 +61,48 @@
         </div>
       </section>
 
+      <section id="demo" class="panel demo-panel" aria-labelledby="demo-title">
+        <div class="panel-heading">
+          <p class="eyebrow">See it in action</p>
+          <h2 id="demo-title">What an analysis looks like</h2>
+        </div>
+        <p class="demo-intro">
+          This is
+          <a
+            href="https://github.com/readtheplan/readtheplan/tree/main/examples/02-dangerous-replacement"
+          >
+            example 02
+          </a>
+          from the repo: a customer-data KMS key replacement and an RDS replacement.
+          Try it locally with
+          <code>readtheplan analyze examples/02-dangerous-replacement/plan.json</code>.
+        </p>
+        <div class="risk-meter demo-risk-meter" aria-label="Demo risk counts">
+          <div>
+            <span class="count safe" id="demoSafeCount">-</span>
+            <span>safe</span>
+          </div>
+          <div>
+            <span class="count review" id="demoReviewCount">-</span>
+            <span>review</span>
+          </div>
+          <div>
+            <span class="count dangerous" id="demoDangerousCount">-</span>
+            <span>dangerous</span>
+          </div>
+        </div>
+        <div class="plan-table demo-table" role="table" aria-label="Demo analysis" aria-live="polite">
+          <div role="row" class="table-head">
+            <span role="columnheader">Risk</span>
+            <span role="columnheader">Resource</span>
+            <span role="columnheader">Explanation</span>
+            <span role="columnheader">Controls</span>
+          </div>
+          <div class="plan-table-body" id="demoRows"></div>
+        </div>
+        <p class="demo-evidence" id="demoEvidenceNote"></p>
+      </section>
+
       <section class="app-grid" aria-label="Onboarding workspace">
         <form class="panel intake" id="onboardingForm">
           <div class="panel-heading">
