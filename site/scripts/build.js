@@ -21,6 +21,7 @@ const files = [
   "sitemap.xml",
   "_redirects",
 ];
+const assetDirs = ["fonts", "img"];
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
@@ -29,13 +30,17 @@ for (const file of files) {
   fs.copyFileSync(path.join(root, file), path.join(dist, file));
 }
 
+for (const dir of assetDirs) {
+  fs.cpSync(path.join(root, dir), path.join(dist, dir), { recursive: true });
+}
+
 fs.copyFileSync(demoSource, path.join(dist, "demo-evidence.json"));
 
 fs.writeFileSync(
   path.join(dist, "_headers"),
   [
     "/*",
-    "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+    "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
     "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
     "  Access-Control-Allow-Origin: https://readtheplan.dev",
     "  Cross-Origin-Opener-Policy: same-origin",
@@ -50,4 +55,4 @@ fs.writeFileSync(
   "utf8",
 );
 
-console.log(`Built ${files.length + 1} files into ${path.relative(process.cwd(), dist)}`);
+console.log(`Built site into ${path.relative(process.cwd(), dist)}`);
