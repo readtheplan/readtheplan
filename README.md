@@ -62,6 +62,19 @@ The JSON object includes:
 - `risks`: counts keyed by readtheplan risk tier.
 - `changes`: one object per resource change with `address`, `type`, `actions`, `risk`, and `explanation`.
 
+### Customer rule overlays (preview)
+
+`--rules-file` applies a local `rtp-overlay-v1` YAML file on top of the
+built-in classifier and optional framework catalog:
+
+```bash
+readtheplan analyze --framework soc2 --rules-file .readtheplan/rules.yaml plan.json
+```
+
+Overlay files can add framework control mappings and escalate risk for
+matching resource types, address prefixes, or account IDs. Overlays are
+applied in CLI order and never downgrade built-in risk.
+
 Invalid input is reported on stderr and exits non-zero.
 
 ### Compliance control IDs (preview)
