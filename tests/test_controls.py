@@ -108,7 +108,7 @@ def test_iso27001_replace_order_invariant() -> None:
 def test_controls_for_unmapped_resource_returns_empty() -> None:
     cat = controls.load_catalog("soc2")
     out = cat.controls_for(
-        resource_type="aws_lambda_function",
+        resource_type="aws_synthetics_canary",
         actions=["update"],
     )
 

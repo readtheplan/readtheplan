@@ -368,6 +368,108 @@ mappings:
         title: Change management
         rationale: Node group lifecycle change.
 
+  # ── ALB / Load Balancer ───────────────────────────────────────────────
+  - resource_type: aws_lb
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: >
+          Load balancer scheme and listener configuration define the network
+          boundary for fronted services.
+      - id: A.8.32
+        title: Change management
+        rationale: Load balancer change.
+
+  - resource_type: aws_lb_listener
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: >
+          Listeners define which ports and protocols are exposed at the
+          network boundary.
+      - id: A.8.32
+        title: Change management
+        rationale: Listener change.
+
+  - resource_type: aws_lb_listener_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Listener rule changes affect routing precedence.
+      - id: A.8.32
+        title: Change management
+        rationale: Listener rule change.
+
+  - resource_type: aws_lb_target_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: >
+          Health check and target type changes can mass-fail healthy targets
+          or disrupt traffic routing.
+      - id: A.8.32
+        title: Change management
+        rationale: Target group change.
+
+  - resource_type: aws_lb_target_group_attachment
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Target attachment changes the pool of backends receiving traffic.
+      - id: A.8.32
+        title: Change management
+        rationale: Target group attachment change.
+
+  # ── Lambda ───────────────────────────────────────────────────────────
+  - resource_type: aws_lambda_function
+    actions: [create]
+    controls:
+      - id: A.8.32
+        title: Change management
+        rationale: New Lambda function.
+
+  - resource_type: aws_lambda_function
+    actions: [update]
+    controls:
+      - id: A.8.32
+        title: Change management
+        rationale: Lambda function configuration or code update.
+      - id: A.8.5
+        title: Secure authentication
+        rationale: >
+          Role or code signing changes affect the function's identity and
+          access boundary.
+
+  - resource_type: aws_lambda_function
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: A.8.32
+        title: Change management
+        rationale: Lambda function replacement or deletion.
+      - id: A.8.5
+        title: Secure authentication
+        rationale: >
+          Destroying a function removes its identity and role binding.
+
+  - resource_type: aws_lambda_alias
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.32
+        title: Change management
+        rationale: Lambda alias change.
+
+  - resource_type: aws_lambda_event_source_mapping
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.32
+        title: Change management
+        rationale: Event source mapping change.
+
   # ── Logging / Monitoring ────────────────────────────────────────────────
   - resource_type: aws_cloudtrail
     actions: [create]

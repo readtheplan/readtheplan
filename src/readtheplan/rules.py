@@ -78,6 +78,20 @@ def _rule_candidates(
         return _route53_candidates(action_set)
     if resource_type == "aws_eks_node_group":
         return _eks_node_group_candidates(action_set)
+    if resource_type in {
+        "aws_lb",
+        "aws_lb_listener",
+        "aws_lb_listener_rule",
+        "aws_lb_target_group",
+        "aws_lb_target_group_attachment",
+    }:
+        return _lb_candidates(resource_type, action_set, change)
+    if resource_type in {
+        "aws_lambda_function",
+        "aws_lambda_alias",
+        "aws_lambda_event_source_mapping",
+    }:
+        return _lambda_candidates(resource_type, action_set, change)
     return []
 
 
@@ -353,6 +367,268 @@ def _eks_node_group_candidates(action_set: set[str]) -> list[RuleResult]:
             )
         ]
     return []
+
+
+def _lb_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if resource_type == "aws_lb":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace this load balancer. Expect DNS rebinding, "
+                        "connection draining, and possible downtime for all fronted services."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "Terraform will delete this load balancer. All listeners, target "
+                        "groups, and DNS aliases are affected immediately."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update this load balancer. Review attribute changes "
+                        "for availability impact."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "internal"):
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "The load balancer scheme is changing between internal and "
+                        "internet-facing. DNS and address rebinding is required; "
+                        "this is effectively irreversible without downtime."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_lb_listener":
+        if "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will delete a load balancer listener. "
+                        "Production traffic on this port will be dropped."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "port") or _attribute_changed(change, "protocol"):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Load balancer listener port or protocol is changing. "
+                        "Clients may not reconnect to the new endpoint."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "default_action"):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Load balancer listener default_action is changing. "
+                        "This fronts production traffic; a misroute is immediately visible."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_lb_listener_rule":
+        if _attribute_changed(change, "priority"):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Listener rule priority is changing. Routing precedence is "
+                        "sensitive and concurrent priority changes can race."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update a listener rule. Review condition and "
+                        "action changes for routing impact."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_lb_target_group":
+        if "create" in action_set and "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace this target group. Target registrations "
+                        "are lost and must re-register, causing a traffic gap."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "Terraform will delete this target group. Confirm no listeners "
+                        "still reference it and no traffic depends on it."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "target_type"):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Target group target_type is changing. This forces replacement "
+                        "and disrupts all registered targets."
+                    ),
+                )
+            )
+        if _health_check_changed(change):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Target group health check settings are changing. Aggressive "
+                        "thresholds can mass-fail healthy targets."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_lb_target_group_attachment":
+        if "delete" in action_set and "create" not in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will detach a target from a target group. "
+                        "Traffic will no longer route to this target."
+                    ),
+                )
+            )
+
+    return candidates
+
+
+def _lambda_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if resource_type != "aws_lambda_function":
+        return candidates
+
+    if "update" not in action_set:
+        return candidates
+
+    if _attribute_changed(change, "package_type"):
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "Lambda package_type is changing (e.g. zip to image). "
+                    "This switch is not always cleanly reversible and may "
+                    "require infrastructure changes."
+                ),
+            )
+        )
+    if _attribute_changed(change, "code_signing_config_arn"):
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "Lambda code_signing_config_arn is changing. Review that the "
+                    "new signing profile is trusted and deployment pipeline aligned."
+                ),
+            )
+        )
+    if _attribute_changed(change, "vpc_config"):
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "Lambda vpc_config is changing. Network attachment changes "
+                    "affect downstream connectivity and cold-start latency."
+                ),
+            )
+        )
+    if _runtime_major_changed(change):
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "Lambda runtime major version is changing. Review compatibility "
+                    "of dependencies and runtime behavior."
+                ),
+            )
+        )
+    if _attribute_changed(change, "role"):
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "Lambda execution role is changing. The permission boundary "
+                    "may shift, affecting what the function can access."
+                ),
+            )
+        )
+
+    return candidates
+
+
+def _health_check_changed(change: dict[str, Any]) -> bool:
+    before = change.get("before")
+    after = change.get("after")
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return False
+    before_hc = before.get("health_check")
+    after_hc = after.get("health_check")
+    return before_hc != after_hc and before_hc is not None and after_hc is not None
+
+
+def _runtime_major_changed(change: dict[str, Any]) -> bool:
+    if not _attribute_changed(change, "runtime"):
+        return False
+    before_rt = _before_value(change, "runtime")
+    after_rt = _after_value(change, "runtime")
+    if not isinstance(before_rt, str) or not isinstance(after_rt, str):
+        return False
+    before_major = _extract_runtime_major(before_rt)
+    after_major = _extract_runtime_major(after_rt)
+    return (
+        before_major is not None
+        and after_major is not None
+        and before_major != after_major
+    )
+
+
+def _extract_runtime_major(runtime: str) -> str | None:
+    match = re.match(r"^([a-zA-Z]+)(\d+)", runtime)
+    if match is None:
+        return None
+    return f"{match.group(1)}{match.group(2)}"
 
 
 def _max_result(current: RuleResult, candidate: RuleResult) -> RuleResult:
