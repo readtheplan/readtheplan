@@ -336,6 +336,122 @@ mappings:
         title: Availability — Recovery
         rationale: Node group changes affect cluster capacity.
 
+  # ── ALB / Load Balancer ───────────────────────────────────────────────
+  - resource_type: aws_lb
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: >
+          Load balancer lifecycle changes directly affect service availability.
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: >
+          Load balancer scheme and listener configuration define the network
+          boundary for fronted services.
+      - id: CC8.1
+        title: Change Management
+        rationale: Load balancer change.
+
+  - resource_type: aws_lb_listener
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: >
+          Listener port/protocol and default action changes affect traffic
+          routing and service availability.
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: >
+          Listeners define which ports and protocols are exposed at the
+          network boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: Listener change.
+
+  - resource_type: aws_lb_listener_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: >
+          Listener rule priority and condition changes affect routing
+          precedence and availability.
+      - id: CC8.1
+        title: Change Management
+        rationale: Listener rule change.
+
+  - resource_type: aws_lb_target_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: >
+          Health check and target type changes can mass-fail healthy targets
+          or disrupt traffic routing.
+      - id: CC8.1
+        title: Change Management
+        rationale: Target group change.
+
+  - resource_type: aws_lb_target_group_attachment
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: >
+          Attaching or detaching targets changes the pool of backends
+          receiving production traffic.
+      - id: CC8.1
+        title: Change Management
+        rationale: Target group attachment change.
+
+  # ── Lambda ───────────────────────────────────────────────────────────
+  - resource_type: aws_lambda_function
+    actions: [create]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: New Lambda function.
+
+  - resource_type: aws_lambda_function
+    actions: [update]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: Lambda function configuration or code update.
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: >
+          Role, VPC, or code signing changes affect the function's access
+          boundary and permissions.
+
+  - resource_type: aws_lambda_function
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: Lambda function replacement or deletion.
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: >
+          Destroying a function removes its identity, role binding, and
+          event-source mappings.
+
+  - resource_type: aws_lambda_alias
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: Lambda alias change.
+
+  - resource_type: aws_lambda_event_source_mapping
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: Event source mapping change.
+
   # ── Logging / Monitoring ────────────────────────────────────────────────
   - resource_type: aws_cloudtrail
     actions: [create]

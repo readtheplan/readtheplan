@@ -126,26 +126,28 @@ def test_risk_override_does_not_downgrade() -> None:
     assert out == change
 
 
-def test_control_addition_appends_to_catalog() -> None:
+def test_control_addition_deduplicates_existing_catalog_mapping() -> None:
     overlay = overlays.load_overlay(FIXTURES / "overlay_example.yaml")
     catalog = controls.load_catalog("soc2")
 
     out = overlays.apply_overlay_to_catalog(catalog, overlay)
 
-    assert (
-        catalog.controls_for(
+    original_ids = [
+        control.id
+        for control in catalog.controls_for(
             resource_type="aws_lambda_function",
             actions=["update"],
         )
-        == ()
-    )
+    ]
+
+    assert "CC6.1" in original_ids
     assert [
         control.id
         for control in out.controls_for(
             resource_type="aws_lambda_function",
             actions=["update"],
         )
-    ] == ["CC6.1"]
+    ] == original_ids
 
 
 def test_multiple_overlays_apply_in_order(

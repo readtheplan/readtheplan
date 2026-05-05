@@ -390,6 +390,119 @@ mappings:
         title: Security Management Process
         rationale: Node group lifecycle change.
 
+  # ── ALB / Load Balancer ───────────────────────────────────────────────
+  - resource_type: aws_lb
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: >
+          Load balancer lifecycle changes directly affect availability and
+          recovery posture for ePHI workloads.
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: >
+          Load balancer scheme defines the network boundary for ePHI traffic.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Load balancer change.
+
+  - resource_type: aws_lb_listener
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: >
+          Listener changes affect traffic routing and availability for ePHI
+          workloads.
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: >
+          Listeners define which ports and protocols are exposed for ePHI
+          traffic.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Listener change.
+
+  - resource_type: aws_lb_listener_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Listener rule changes affect ePHI routing precedence.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Listener rule change.
+
+  - resource_type: aws_lb_target_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: >
+          Health check and target type changes can mass-fail healthy ePHI
+          backends or disrupt traffic routing.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Target group change.
+
+  - resource_type: aws_lb_target_group_attachment
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: >
+          Target attachment changes the pool of backends receiving ePHI
+          traffic.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Target group attachment change.
+
+  # ── Lambda ───────────────────────────────────────────────────────────
+  - resource_type: aws_lambda_function
+    actions: [create]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: New Lambda function.
+
+  - resource_type: aws_lambda_function
+    actions: [update]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Lambda function configuration or code update.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: >
+          Role or VPC changes affect the function's access boundary on
+          ePHI resources.
+
+  - resource_type: aws_lambda_function
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Lambda function replacement or deletion.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: >
+          Destroying a function removes its identity and ePHI access paths.
+
+  - resource_type: aws_lambda_alias
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Lambda alias change.
+
+  - resource_type: aws_lambda_event_source_mapping
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Event source mapping change.
+
   # ── Logging / Monitoring ────────────────────────────────────────────────
   - resource_type: aws_cloudtrail
     actions: [create]
