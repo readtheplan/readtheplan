@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Map common AWS and Terraform resource categories to SOC 2 control families for cloud change review and audit evidence planning."
+    />
+    <title>SOC 2 Cloud Control Mapper | readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/tools/soc2-cloud-control-mapper/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SOC 2 Cloud Control Mapper | readtheplan" />
+    <meta
+      property="og:description"
+      content="Static SOC 2 mapping for common AWS resource categories changed by Terraform."
+    />
+    <meta property="og:url" content="https://readtheplan.dev/tools/soc2-cloud-control-mapper/" />
+    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/#workspace" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/tools/terraform-risk-calculator/">Risk calculator</a>
+        <a href="/#pilot">Pilot</a>
+      </nav>
+      <div class="version-cell gc">static mapper</div>
+    </header>
+
+    <main id="workspace" class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="mapper-title">
+        <div class="gc hero-content">
+          <p class="eyebrow">SOC 2 cloud control mapper</p>
+          <h1 id="mapper-title">Map Terraform change categories to SOC 2 evidence.</h1>
+          <p class="intro-copy">
+            Use this static mapper to plan review notes for common AWS resource changes.
+            It is high-level by design: raw Terraform plans stay local, and readtheplan
+            can generate control-mapped evidence from your CI or workstation.
+          </p>
+        </div>
+        <div class="gc trust-strip" aria-label="Privacy boundaries">
+          <span>Static reference</span>
+          <span>No plan upload</span>
+          <span>No accounts</span>
+          <span>No billing</span>
+        </div>
+        <div class="gc utility-copy">
+          <p>
+            The mapping below is useful for triage and auditor conversations. Treat it
+            as a starting point, then verify exact control IDs against your control
+            matrix and the generated readtheplan evidence envelope.
+          </p>
+        </div>
+        <div class="gc">
+          <a class="primary-link" href="mailto:pilot-contact@example.com?subject=readtheplan%20SOC%202%20pilot%20setup">
+            Request pilot setup
+          </a>
+          <p class="handoff-note">
+            Placeholder inbox: pilot-contact@example.com. Replace the configured pilot
+            handoff address before production use.
+          </p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="map-title">
+        <div class="gc utility-panel-wide">
+          <p class="eyebrow">AWS / Terraform categories</p>
+          <h2 id="map-title">SOC 2 control family map</h2>
+          <div class="control-map" role="table" aria-label="SOC 2 cloud control map">
+            <div class="control-map-row table-head" role="row">
+              <span role="columnheader">Resource category</span>
+              <span role="columnheader">Typical Terraform signal</span>
+              <span role="columnheader">SOC 2 evidence angle</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>AWS IAM policies, roles, and trust</span>
+              <span>Policy document update, trust relationship change, permission boundary removal</span>
+              <span>CC6 logical access, CC8 change management, least privilege review</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>S3 buckets and data stores</span>
+              <span>Public access block, encryption, versioning, lifecycle, delete action</span>
+              <span>CC6 access controls, C1 confidentiality, A1 availability and recovery</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>Security groups, routes, load balancers</span>
+              <span>Ingress broadened to 0.0.0.0/0, listener exposure, route change</span>
+              <span>CC6.6 boundary protection, CC7 monitoring, CC8 change review</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>CloudWatch logs, alarms, and trails</span>
+              <span>Retention decrease, alarm removal, delivery destination change</span>
+              <span>CC7 system monitoring, CC8 change management, audit evidence completeness</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>KMS keys and encrypted services</span>
+              <span>Key replacement, deletion window change, alias movement</span>
+              <span>CC6 access boundary, CC6.7 asset movement, C1 confidentiality</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="mapper-faq-title" itemscope itemtype="https://schema.org/FAQPage">
+        <div class="gc utility-panel faq-list">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="mapper-faq-title">Mapper questions</h2>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary itemprop="name">Can this replace a SOC 2 control matrix?</summary>
+            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <p itemprop="text">
+                No. It gives a useful high-level map for cloud changes. Your auditor,
+                control owner, and internal control matrix remain authoritative.
+              </p>
+            </div>
+          </details>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary itemprop="name">How does readtheplan help with evidence?</summary>
+            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <p itemprop="text">
+                readtheplan runs locally or in CI against Terraform JSON and can produce
+                risk tiers, reviewer context, control IDs, and signed evidence.
+              </p>
+            </div>
+          </details>
+        </div>
+        <div class="gc utility-panel">
+          <p class="eyebrow">Next step</p>
+          <h2>Wire it into one repo.</h2>
+          <p class="utility-copy">
+            Start with one private production repo, confirm the plan JSON artifact path,
+            and route SOC 2 review notes to the pilot setup flow.
+          </p>
+          <a class="primary-link" href="/#pilot">Open setup generator</a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

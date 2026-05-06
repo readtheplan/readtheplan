@@ -41,6 +41,7 @@
         <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
       </nav>
       <nav class="navlinks gc" aria-label="Page links">
+        <a href="#resources">Tools</a>
         <a href="#setup">Setup</a>
         <a href="#pilot">Pilot</a>
       </nav>
@@ -417,6 +418,29 @@
         </div>
         <div class="gc pilot-checks">
           <ul class="checklist" id="checklist" aria-label="Recommended setup checklist"></ul>
+        </div>
+      </section>
+
+      <section id="resources" class="g resource-band" aria-labelledby="resources-title">
+        <div class="gc">
+          <p class="eyebrow">Tools and resources</p>
+          <h2 id="resources-title">Estimate Terraform risk without sharing a plan.</h2>
+        </div>
+        <div class="gc resource-list">
+          <a href="/tools/terraform-risk-calculator/">Terraform risk calculator</a>
+          <a href="/tools/soc2-cloud-control-mapper/">SOC 2 cloud control mapper</a>
+          <a href="/resources/terraform-s3-bucket-risk/">Terraform S3 bucket risk</a>
+        </div>
+        <div class="gc resource-list">
+          <a href="/resources/terraform-iam-policy-risk/">Terraform IAM policy risk</a>
+          <a href="/resources/terraform-security-group-0-0-0-0-risk/">Security group 0.0.0.0/0 risk</a>
+          <a href="/resources/terraform-cloudwatch-log-retention-risk/">CloudWatch log retention risk</a>
+        </div>
+        <div class="gc">
+          <p class="resource-note">
+            These static pages use manual counts and high-level mappings only. Raw
+            Terraform plans stay local in your workstation or CI.
+          </p>
         </div>
       </section>
 

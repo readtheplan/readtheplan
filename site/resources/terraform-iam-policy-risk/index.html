@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Review Terraform IAM policy risk signals for privilege expansion, deny statement removal, trust changes, and SOC 2 evidence." />
+    <title>Terraform IAM Policy Risk | readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/resources/terraform-iam-policy-risk/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Terraform IAM Policy Risk | readtheplan" />
+    <meta property="og:description" content="High-intent Terraform IAM risk review guide for cloud changes." />
+    <meta property="og:url" content="https://readtheplan.dev/resources/terraform-iam-policy-risk/" />
+    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/#workspace" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span></a>
+      <nav class="navlinks gc" aria-label="Project links"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></nav>
+      <nav class="navlinks gc" aria-label="Page links"><a href="/tools/terraform-risk-calculator/">Risk calculator</a><a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a></nav>
+      <div class="version-cell gc">resource</div>
+    </header>
+    <main id="workspace" class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="resource-title">
+        <div class="gc hero-content">
+          <p class="eyebrow">Terraform IAM policy risk</p>
+          <h1 id="resource-title">Find privilege changes before apply.</h1>
+          <p class="intro-copy">IAM changes can create escalation paths or outages. This page uses static guidance only; raw Terraform plans stay local in your workstation or CI.</p>
+        </div>
+        <div class="gc trust-strip" aria-label="Privacy boundaries"><span>No plan upload</span><span>Manual review guide</span><span>SOC 2 evidence</span></div>
+        <div class="gc utility-copy"><p>High-risk signals include wildcard actions, broader resources, trust relationship changes, permission boundary removal, managed policy swaps, and deny statement removal.</p></div>
+        <div class="gc"><a class="primary-link" href="/#pilot">Request pilot setup</a></div>
+      </section>
+      <section class="g" aria-labelledby="checks-title">
+        <div class="gc utility-panel">
+          <p class="eyebrow">Review checklist</p>
+          <h2 id="checks-title">IAM signals</h2>
+          <ul class="checklist">
+            <li>Policy statements add wildcard actions, resources, or principals.</li>
+            <li>Deny statements, conditions, or permission boundaries are removed.</li>
+            <li>Assume-role trust policy changes broaden who can assume a role.</li>
+            <li>Service-linked, deployment, break-glass, or production admin roles change.</li>
+          </ul>
+        </div>
+        <div class="gc utility-panel">
+          <p class="eyebrow">SOC 2 angle</p>
+          <h2>Evidence to keep</h2>
+          <p class="utility-copy">Map IAM changes to CC6 logical access, CC6.2 authorization, CC6.3 access modification, and CC8 change management. Use readtheplan locally or in CI for exact plan evidence.</p>
+          <a class="primary-link" href="mailto:pilot-contact@example.com?subject=readtheplan%20IAM%20risk%20pilot">Request pilot setup</a>
+          <p class="handoff-note">Placeholder inbox: pilot-contact@example.com.</p>
+        </div>
+      </section>
+      <section class="g" aria-labelledby="faq-title" itemscope itemtype="https://schema.org/FAQPage">
+        <div class="gc utility-panel-wide faq-list">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="faq-title">IAM risk questions</h2>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Why does Terraform IAM policy risk need human review?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Small JSON policy edits can materially change authorization. A reviewer should check principals, actions, resources, and conditions.</p></div></details>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Can readtheplan review IAM without sharing a plan?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes. Run readtheplan where the Terraform JSON plan already exists, such as your workstation or CI job.</p></div></details>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

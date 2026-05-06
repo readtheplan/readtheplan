@@ -26,6 +26,12 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="demoDangerousCount"' in html
     assert 'id="demoRows"' in html
     assert "What an analysis looks like" in html
+    assert "/tools/terraform-risk-calculator/" in html
+    assert "/tools/soc2-cloud-control-mapper/" in html
+    assert "/resources/terraform-s3-bucket-risk/" in html
+    assert "/resources/terraform-iam-policy-risk/" in html
+    assert "/resources/terraform-security-group-0-0-0-0-risk/" in html
+    assert "/resources/terraform-cloudwatch-log-retention-risk/" in html
     assert 'class="terminal-frame"' in html
     assert 'class="noise"' in html
     assert 'rel="canonical"' in html
@@ -104,6 +110,8 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert "assetDirs" in build_script
     assert '"fonts"' in build_script
     assert '"img"' in build_script
+    assert '"tools"' in build_script
+    assert '"resources"' in build_script
     assert "npm --prefix site run build" in workflow
 
     for asset in [
@@ -116,6 +124,55 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     ]:
         assert (SITE / asset).exists()
         assert asset in build_script
+
+
+def test_static_seo_tools_preserve_local_first_privacy() -> None:
+    routes = [
+        "tools/terraform-risk-calculator/index.html",
+        "tools/soc2-cloud-control-mapper/index.html",
+        "resources/terraform-s3-bucket-risk/index.html",
+        "resources/terraform-iam-policy-risk/index.html",
+        "resources/terraform-security-group-0-0-0-0-risk/index.html",
+        "resources/terraform-cloudwatch-log-retention-risk/index.html",
+    ]
+    pages = [(SITE / route).read_text(encoding="utf-8") for route in routes]
+    combined = "\n".join(pages)
+    sitemap = (SITE / "sitemap.xml").read_text(encoding="utf-8")
+    tools_js = (SITE / "tools" / "tools.js").read_text(encoding="utf-8")
+
+    for route in routes:
+        assert (SITE / route).exists()
+        url_path = "/" + route.removesuffix("index.html")
+        assert url_path in sitemap
+
+    assert "Terraform Risk Calculator" in combined
+    assert "SOC 2 Cloud Control Mapper" in combined
+    assert "raw Terraform plans stay local" in combined
+    assert 'id="riskCalculator"' in combined
+    assert 'type="number"' in combined
+    assert "Calculate risk" in combined
+    assert "SOC 2 control family map" in combined
+    assert "Terraform S3 Bucket Risk" in combined
+    assert "Terraform IAM Policy Risk" in combined
+    assert "Terraform Security Group 0.0.0.0/0 Risk" in combined
+    assert "Terraform CloudWatch Log Retention Risk" in combined
+    assert "Request pilot setup" in combined
+    assert "pilot-contact@example.com" in combined
+    assert 'itemscope itemtype="https://schema.org/FAQPage"' in combined
+    assert "new FormData(calculator)" in tools_js
+
+    assert "Upload a plan" not in combined
+    assert 'type="file"' not in combined
+    assert "<form" in combined
+    assert "action=" not in combined
+    for prohibited in [
+        "hosted analyzer",
+        "hosted plan analysis",
+        "API endpoint",
+        "store uploaded",
+        "stored plan",
+    ]:
+        assert prohibited.lower() not in combined.lower()
 
 
 def test_site_redesign_visual_contract() -> None:

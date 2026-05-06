@@ -14,6 +14,10 @@ placeholder; replace it before production use. The intake form has no backend
 action, and client context stays in the browser until the visitor chooses to open
 the generated email draft.
 
+The `tools/` and `resources/` routes are static SEO lead-gen pages. They use
+manual counts and high-level Terraform/AWS control examples only; they do not
+accept raw plan files or send form submissions.
+
 ## Commands
 
 ```bash
