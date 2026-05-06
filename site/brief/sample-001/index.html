@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Sample weekly Terraform/SOC 2 change intelligence brief for platform teams. Demo issue only; no current external news claims."
+    />
+    <title>Sample Weekly Brief 001 | readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/brief/sample-001/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Sample Weekly Brief 001 | readtheplan" />
+    <meta
+      property="og:description"
+      content="A demo issue showing the weekly Terraform/SOC 2 change intelligence format."
+    />
+    <meta property="og:url" content="https://readtheplan.dev/brief/sample-001/" />
+    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/#workspace" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/brief/">Brief</a>
+        <a href="#checklist">Checklist</a>
+        <a href="#pilot">Pilot</a>
+      </nav>
+      <div class="version-cell gc">sample 001</div>
+    </header>
+
+    <main id="workspace" class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="sample-title">
+        <div class="gc hero-content">
+          <p class="eyebrow">Demo issue only</p>
+          <h1 id="sample-title">Sample Weekly Terraform/SOC 2 Change Brief 001.</h1>
+          <p class="intro-copy">
+            This sample shows the weekly paid-output format. Items are evergreen demo
+            examples, not assertions about current external news. No raw Terraform plan
+            upload, hosted analyzer, account, billing flow, backend, or storage is used.
+          </p>
+        </div>
+        <div class="gc trust-strip" aria-label="Sample boundaries">
+          <span>Top 5 changes</span>
+          <span>Why they matter</span>
+          <span>Terraform/SOC2 risk angle</span>
+          <span>Action checklist</span>
+        </div>
+        <div class="gc utility-copy">
+          <p>
+            Audience: platform/SRE teams, DevOps consultancies, SOC 2 consultants,
+            and seed-stage infra/devtool startups that need a repeatable review artifact.
+          </p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="top-five-title">
+        <div class="gc utility-panel-wide">
+          <p class="eyebrow">Top 5 infra/compliance changes</p>
+          <h2 id="top-five-title">Demo signals to review this week.</h2>
+          <div class="control-map" role="table" aria-label="Sample weekly brief items">
+            <div class="control-map-row table-head" role="row">
+              <span role="columnheader">Item</span>
+              <span role="columnheader">Why it matters</span>
+              <span role="columnheader">Terraform/SOC2 risk angle</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>Terraform/OpenTofu provider constraint drift</span>
+              <span>Demo issue: a provider version range can silently alter plan output after a lockfile or mirror change.</span>
+              <span>Require reviewed lockfile updates; preserve change-management evidence and plan reproducibility.</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>AWS logging retention decrease</span>
+              <span>Demo issue: shorter CloudWatch log retention can reduce incident investigation and audit lookback.</span>
+              <span>Flag retention decreases as review-tier or dangerous for security monitoring and availability evidence.</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>AWS IAM trust policy broadening</span>
+              <span>Demo issue: wildcard principals or looser conditions can expand who may assume a role.</span>
+              <span>Map to logical access, least privilege, and privileged-change approval controls.</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>Security group ingress opened for operations</span>
+              <span>Demo issue: emergency access rules can linger after a release window.</span>
+              <span>Require owner, expiration, ticket reference, and post-apply verification evidence.</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>GitHub Actions permission expansion</span>
+              <span>Demo issue: adding write scopes to CI can turn build jobs into deployment or token-risk paths.</span>
+              <span>Review workflow permissions, fork behavior, artifact trust, and release approval boundaries.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="evidence-title">
+        <div class="gc utility-panel">
+          <p class="eyebrow">SOC 2 evidence</p>
+          <h2 id="evidence-title">Evidence notes for control owners.</h2>
+          <ul class="checklist">
+            <li>Capture the approved Terraform plan summary, reviewer, ticket, and production impact.</li>
+            <li>Keep raw Terraform plan JSON in CI artifacts or local workstations, not in the brief.</li>
+            <li>Group evidence by access control, change management, monitoring, confidentiality, and availability.</li>
+            <li>Record compensating controls when a risky change is approved for a time-limited release window.</li>
+          </ul>
+        </div>
+        <div class="gc utility-panel">
+          <p class="eyebrow">readtheplan progress</p>
+          <h2>Product signal to include.</h2>
+          <p class="utility-copy">
+            This issue can point teams back to the local setup generator, Terraform risk
+            calculator, SOC 2 cloud control mapper, and local MCP preview. The CTA stays
+            local-first and does not ask readers to submit raw plan files.
+          </p>
+          <a class="primary-link" href="/#workspace">Open setup generator</a>
+        </div>
+      </section>
+
+      <section id="checklist" class="g" aria-labelledby="checklist-title">
+        <div class="gc utility-panel-wide">
+          <p class="eyebrow">Action checklist</p>
+          <h2 id="checklist-title">What to do before the next apply window.</h2>
+          <ul class="checklist">
+            <li>Confirm provider lockfile changes are reviewed with the same rigor as Terraform resource changes.</li>
+            <li>Add a reviewer note for any logging retention decrease, IAM trust broadening, or public ingress expansion.</li>
+            <li>Verify GitHub Actions jobs use least-privilege permissions and trusted artifact boundaries.</li>
+            <li>Ask control owners which changes need SOC 2 evidence before the release is approved.</li>
+            <li>Run readtheplan locally or in CI against the real plan JSON; do not send raw plan data to this brief workflow.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="pilot" class="g pilot-panel" aria-labelledby="pilot-title">
+        <div class="gc">
+          <p class="eyebrow">Private pilot</p>
+          <h2 id="pilot-title">Want the first private weekly brief?</h2>
+        </div>
+        <div class="gc pilot-copy">
+          <p>
+            Request first brief / private pilot to define source categories, control
+            themes, and delivery format. The private pilot can be customized without
+            raw Terraform plan upload, file submission, backend storage, accounts, or billing.
+          </p>
+          <a class="primary-link" href="mailto:pilot-contact@example.com?subject=readtheplan%20sample%20001%20private%20pilot">
+            Request first brief / private pilot
+          </a>
+          <p class="handoff-note">Placeholder inbox: pilot-contact@example.com.</p>
+        </div>
+        <div class="gc pilot-checks">
+          <ul class="checklist" aria-label="Sample brief boundaries">
+            <li>This sample is not a current-news report.</li>
+            <li>No cron or delivery automation runs in this static slice.</li>
+            <li>No hosted analyzer, hosted MCP service, API endpoint, account, billing, backend, or storage.</li>
+          </ul>
+        </div>
+      </section>
+
+      <footer class="g footer-grid">
+        <div class="gc">Sample issue</div>
+        <div class="gc">No plan upload</div>
+        <div class="gc"><a href="/brief/">Brief landing</a></div>
+        <div class="gc"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></div>
+      </footer>
+    </main>
+  </body>
+</html>

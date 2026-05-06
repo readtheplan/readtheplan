@@ -11,6 +11,9 @@ const html = read("index.html");
 const css = read("styles.css");
 const js = read("app.js");
 const mcpHtml = read("mcp/index.html");
+const briefHtml = read("brief/index.html");
+const sampleBriefHtml = read("brief/sample-001/index.html");
+const briefCombined = `${briefHtml}\n${sampleBriefHtml}`;
 
 const requiredHtml = [
   "id=\"onboardingForm\"",
@@ -153,9 +156,16 @@ const seoRoutes = [
   "resources/terraform-cloudwatch-log-retention-risk/index.html",
 ];
 const mcpRoute = "mcp/index.html";
+const briefRoutes = ["brief/index.html", "brief/sample-001/index.html"];
 
 if (!fs.existsSync(path.join(root, mcpRoute))) {
   throw new Error(`Missing MCP route: ${mcpRoute}`);
+}
+
+for (const route of briefRoutes) {
+  if (!fs.existsSync(path.join(root, route))) {
+    throw new Error(`Missing brief route: ${route}`);
+  }
 }
 
 for (const route of seoRoutes) {
@@ -170,6 +180,7 @@ for (const token of [
   "/tools/terraform-risk-calculator/",
   "/tools/soc2-cloud-control-mapper/",
   "/mcp/",
+  "/brief/",
   "/resources/terraform-s3-bucket-risk/",
   "/resources/terraform-iam-policy-risk/",
   "/resources/terraform-security-group-0-0-0-0-risk/",
@@ -178,6 +189,70 @@ for (const token of [
   if (!html.includes(token) || !read("sitemap.xml").includes(token)) {
     throw new Error(`Missing linked and sitemap-listed SEO route: ${token}`);
   }
+}
+
+if (!briefHtml.includes("/brief/sample-001/") || !read("sitemap.xml").includes("/brief/sample-001/")) {
+  throw new Error("Missing linked and sitemap-listed sample brief route: /brief/sample-001/");
+}
+
+for (const token of [
+  "Weekly Terraform/SOC 2 change intelligence for platform teams",
+  "repeated paid output loop",
+  "monitor, filter, analyze, package, deliver",
+  "platform/SRE teams",
+  "DevOps consultancies",
+  "SOC 2 consultants",
+  "seed-stage infra/devtool startups",
+  "Top 5 infra/compliance changes",
+  "Why they matter",
+  "Terraform/SOC2 risk angle",
+  "Action checklist",
+  "readtheplan CTA",
+  "First sample/free",
+  "Private weekly brief",
+  "Custom company-specific monitoring",
+  "MCP/custom integration upsell",
+  "Request first brief / private pilot",
+  "pilot-contact@example.com",
+  "Terraform/OpenTofu",
+  "AWS logging",
+  "AWS IAM",
+  "Security group ingress",
+  "GitHub Actions permission expansion",
+  "SOC 2 evidence",
+  "readtheplan progress",
+  "Demo issue",
+]) {
+  if (!briefCombined.includes(token)) {
+    throw new Error(`Missing weekly brief token: ${token}`);
+  }
+}
+
+for (const token of [
+  "type=\"file\"",
+  "Upload a plan",
+  "submit your plan",
+  "Start hosted analyzer",
+  "hosted plan analyzer is available",
+  "Create account",
+  "Sign up",
+  "Stripe",
+  "Checkout",
+  "Subscribe now",
+  "storage bucket",
+  "store uploaded",
+  "stored plan",
+  "cron job is enabled",
+  "scheduled delivery is enabled",
+  "automatic scheduled delivery is enabled",
+]) {
+  if (briefCombined.toLowerCase().includes(token.toLowerCase())) {
+    throw new Error(`Brief pages must not imply upload/backend/billing/storage/automation: ${token}`);
+  }
+}
+
+if (/<form/i.test(briefCombined)) {
+  throw new Error("Brief pages must not include forms.");
 }
 
 for (const token of [
