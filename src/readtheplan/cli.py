@@ -10,7 +10,6 @@ from typing import Callable, Sequence, TextIO, cast
 from readtheplan.controls import (
     CatalogSchemaError,
     ControlCatalog,
-    ControlEntry,
     FrameworkNotFoundError,
     available_frameworks,
     load_catalog,
@@ -30,6 +29,7 @@ from readtheplan.signing import (
     sign_envelope,
     verify_envelope,
 )
+from readtheplan.summary import summary_to_dict
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -125,6 +125,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     verify.add_argument("envelope", help="Path to evidence envelope JSON.")
     verify.set_defaults(func=_verify)
+
+    mcp = subparsers.add_parser(
+        "mcp",
+        help="Start the experimental local MCP stdio server.",
+    )
+    mcp.set_defaults(func=_mcp)
 
     return parser
 
@@ -264,6 +270,17 @@ def _verify(args: argparse.Namespace) -> int:
     return 1
 
 
+def _mcp(args: argparse.Namespace) -> int:
+    try:
+        from readtheplan.mcp_server import MissingMCPDependencyError, main as mcp_main
+
+        mcp_main()
+    except MissingMCPDependencyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _apply_overlays_to_summary(
     summary: PlanSummary,
     overlays: Sequence[Overlay],
@@ -308,32 +325,7 @@ def _summary_to_dict(
     summary: PlanSummary,
     catalog: ControlCatalog | None,
 ) -> dict[str, object]:
-    payload = summary.to_dict()
-    if catalog is None:
-        return payload
-
-    payload["framework"] = {
-        "name": catalog.framework,
-        "version": catalog.framework_version,
-        "schema_version": catalog.schema_version,
-    }
-    for change, change_payload in zip(summary.resource_changes, payload["changes"]):
-        change_payload["controls"] = [
-            _control_to_dict(control)
-            for control in catalog.controls_for(
-                resource_type=change.resource_type,
-                actions=change.actions,
-            )
-        ]
-    return payload
-
-
-def _control_to_dict(control: ControlEntry) -> dict[str, str]:
-    return {
-        "id": control.id,
-        "title": control.title,
-        "rationale": control.rationale,
-    }
+    return summary_to_dict(summary, catalog)
 
 
 def _print_summary(

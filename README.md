@@ -38,15 +38,16 @@ Anchored in this field note: **[terraform-apply-is-roulette](https://github.com/
    attestation verification support audit-oriented review flows.
 4. GitHub Action wrapper: install as `uses: readtheplan/readtheplan@v1`, exposes
    summary outputs for workflows.
-5. YAML customer rule overlays define org-specific escalations and framework
+5. Local MCP preview: `readtheplan mcp` exposes one stdio tool,
+   `analyze_plan`, for local agent and IDE integrations.
+6. YAML customer rule overlays define org-specific escalations and framework
    mappings without changing the built-in catalog.
 
 The post-MVP backlog is focused on catalog breadth, rule quality, examples, and
-adoption docs. MCP integration is a future preview surface only: if built, it
-should be a thin adapter over the Python CLI JSON contract, not a separate
-server-first product or the primary way to use readtheplan. See
-[ADR 0012](docs/adr/0012-mcp-preview-adapter.md) for the preview adapter
-scope.
+adoption docs. MCP integration is a preview surface only: it is a thin adapter
+over the Python CLI JSON contract, not a separate server-first product or the
+primary way to use readtheplan. See
+[ADR 0012](docs/adr/0012-mcp-preview-adapter.md) for the preview adapter scope.
 
 ## what's *not* in scope (and won't be)
 
@@ -95,6 +96,31 @@ matching resource types, address prefixes, or account IDs. Overlays are
 applied in CLI order and never downgrade built-in risk.
 
 Invalid input is reported on stderr and exits non-zero.
+
+## MCP preview
+
+The experimental MCP v0 adapter runs locally over stdio and keeps Terraform
+plan JSON on your machine. It is optional and currently requires Python 3.10+
+because the upstream MCP SDK does. Install the extra only for MCP clients:
+
+```bash
+pip install "readtheplan[mcp]"
+readtheplan mcp
+```
+
+The preview exposes one tool:
+
+- `analyze_plan` with input `{"plan_path": "plan.json"}`.
+
+It returns the same JSON summary object as:
+
+```bash
+readtheplan analyze --format json plan.json
+```
+
+MCP v0 does not expose evidence generation, signature verification, signing,
+framework annotations, customer rule overlays, or `--no-rules`. Use the CLI for
+those workflows.
 
 ### Compliance control IDs
 
