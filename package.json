@@ -1,7 +1,7 @@
 {
   "name": "readtheplan",
   "version": "0.0.1",
-  "description": "Terraform plan risk explainer — reads `terraform plan` and classifies each change as safe/review/dangerous/irreversible. Pre-MVP namespace placeholder.",
+  "description": "Terraform plan risk explainer — reads `terraform plan` and classifies each change as safe/review/dangerous/irreversible.",
   "keywords": [
     "terraform",
     "iac",

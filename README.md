@@ -10,7 +10,11 @@
 
 ## status
 
-🧪 **Alpha — v0.0.2 released.** The PyPI alpha ships the MVP-1 CLI and MVP-4 composite GitHub Action. Current `main` adds the first MVP-2 resource-aware AWS rules for RDS, S3, KMS, IAM, Route53, and EKS node groups on top of the action taxonomy in [ADR 0003](docs/adr/0003-risk-classification-taxonomy.md).
+🧪 **Alpha — v0.0.2 released.** The PyPI alpha ships the Python CLI and
+composite GitHub Action. Current `main` has shipped the MVP surface:
+resource-aware AWS risk rules, compliance framework annotations, evidence
+envelopes, signed attestation verification, customer rule overlays, examples,
+benchmarks, and the static onboarding site.
 
 ## why this exists
 
@@ -25,13 +29,22 @@ Terraform's plan/apply separation exists so a human reviews changes before they 
 
 Anchored in this field note: **[terraform-apply-is-roulette](https://github.com/texasich/sre-field-notes/blob/main/notes/terraform-apply-is-roulette.md)**. If you've ever shipped a panic on `terraform validate` or watched a forward-fix cascade into a longer outage, this tool is built for you.
 
-## planned MVP scope
+## shipped MVP surface
 
-1. CLI: `readtheplan analyze plan.json` → markdown table of changes with risk levels
-2. plain-english explainer per resource type (top ~30 high-risk patterns covered out of the box: KMS, IAM, RDS replacements, S3 bucket destroys, EKS node-group replacements, route53 zone deletes, network ACL strips) — Tier A shipped in `main`
-3. AI-agent attestation header — flag whether an agent claims to have read the plan
-4. GitHub Action wrapper: install as `uses: readtheplan/readtheplan@v1`, exposes summary outputs for workflows
-5. YAML rule customization: define org-specific rules ("anything in account 1234 is `review`")
+1. CLI: `readtheplan analyze plan.json` emits markdown or JSON risk summaries.
+2. Resource-aware AWS rules cover the first high-risk catalog, including KMS,
+   IAM, RDS, S3, EKS, Route53, Lambda, load balancers, and networking patterns.
+3. Compliance annotations, evidence envelopes, and sigstore-backed signed
+   attestation verification support audit-oriented review flows.
+4. GitHub Action wrapper: install as `uses: readtheplan/readtheplan@v1`, exposes
+   summary outputs for workflows.
+5. YAML customer rule overlays define org-specific escalations and framework
+   mappings without changing the built-in catalog.
+
+The post-MVP backlog is focused on catalog breadth, rule quality, examples, and
+adoption docs. MCP integration is a future preview surface only: if built, it
+should be a thin adapter over the Python CLI JSON contract, not a separate
+server-first product or the primary way to use readtheplan.
 
 ## what's *not* in scope (and won't be)
 
@@ -46,7 +59,7 @@ MIT — see [LICENSE](./LICENSE).
 
 ## CLI JSON output
 
-MVP-1 exposes a stable machine-readable contract for automation:
+The CLI exposes a stable machine-readable contract for automation:
 
 ```bash
 readtheplan analyze --format json plan.json
@@ -66,7 +79,7 @@ The JSON object includes:
 - `risks`: counts keyed by readtheplan risk tier.
 - `changes`: one object per resource change with `address`, `type`, `actions`, `risk`, and `explanation`.
 
-### Customer rule overlays (preview)
+### Customer rule overlays
 
 `--rules-file` applies a local `rtp-overlay-v1` YAML file on top of the
 built-in classifier and optional framework catalog:
@@ -81,7 +94,7 @@ applied in CLI order and never downgrade built-in risk.
 
 Invalid input is reported on stderr and exits non-zero.
 
-### Compliance control IDs (preview)
+### Compliance control IDs
 
 `readtheplan analyze --framework <name> plan.json` annotates each change
 with control IDs from a packaged compliance framework catalog.
@@ -97,7 +110,7 @@ NIST 800-53, and CIS AWS catalogs are planned in subsequent ADRs. The
 output is intended as one input to a human's evidence package, not a
 stand-alone audit artifact.
 
-### Evidence envelope (preview)
+### Evidence envelope
 
 `readtheplan analyze --framework soc2 --evidence evidence.json plan.json`
 writes a `rtp-evidence-v1` JSON document containing the plan hash, the
@@ -114,10 +127,10 @@ readtheplan analyze \
     plan.json
 ```
 
-Schema is documented in `docs/adr/0007-evidence-envelope.md`. Signed
-envelopes (sigstore-backed) are planned in a subsequent ADR.
+Schema is documented in `docs/adr/0007-evidence-envelope.md`. Sigstore-backed
+signed envelopes are documented in `docs/adr/0008-signed-attestation.md`.
 
-### Signed attestation (preview)
+### Signed attestation
 
 Add `--sign` to write a sigstore-signed evidence envelope:
 
