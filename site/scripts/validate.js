@@ -143,6 +143,78 @@ for (const token of [
 }
 
 const buildScript = read("scripts/build.js");
+const seoRoutes = [
+  "tools/terraform-risk-calculator/index.html",
+  "tools/soc2-cloud-control-mapper/index.html",
+  "resources/terraform-s3-bucket-risk/index.html",
+  "resources/terraform-iam-policy-risk/index.html",
+  "resources/terraform-security-group-0-0-0-0-risk/index.html",
+  "resources/terraform-cloudwatch-log-retention-risk/index.html",
+];
+
+for (const route of seoRoutes) {
+  if (!fs.existsSync(path.join(root, route))) {
+    throw new Error(`Missing SEO route: ${route}`);
+  }
+}
+
+const seoHtml = seoRoutes.map((route) => read(route)).join("\n");
+
+for (const token of [
+  "/tools/terraform-risk-calculator/",
+  "/tools/soc2-cloud-control-mapper/",
+  "/resources/terraform-s3-bucket-risk/",
+  "/resources/terraform-iam-policy-risk/",
+  "/resources/terraform-security-group-0-0-0-0-risk/",
+  "/resources/terraform-cloudwatch-log-retention-risk/",
+]) {
+  if (!html.includes(token) || !read("sitemap.xml").includes(token)) {
+    throw new Error(`Missing linked and sitemap-listed SEO route: ${token}`);
+  }
+}
+
+for (const token of [
+  "Terraform Risk Calculator",
+  "raw Terraform plans stay local",
+  "id=\"riskCalculator\"",
+  "Calculate risk",
+  "type=\"number\"",
+  "Request pilot setup",
+  "SOC 2 Cloud Control Mapper",
+  "SOC 2 control family map",
+  "Terraform S3 Bucket Risk",
+  "Terraform IAM Policy Risk",
+  "Terraform Security Group 0.0.0.0/0 Risk",
+  "Terraform CloudWatch Log Retention Risk",
+  "itemscope itemtype=\"https://schema.org/FAQPage\"",
+  "pilot-contact@example.com",
+]) {
+  if (!seoHtml.includes(token)) {
+    throw new Error(`Missing SEO/tool copy token: ${token}`);
+  }
+}
+
+if (!read("tools/tools.js").includes("new FormData(calculator)")) {
+  throw new Error("Terraform risk calculator must compute from local form values.");
+}
+
+if (seoHtml.includes("Upload a plan")) {
+  throw new Error("SEO tools must not use upload-plan CTA copy.");
+}
+
+if (/<input[^>]+type=["']file["']/i.test(seoHtml)) {
+  throw new Error("SEO tools must not include file inputs.");
+}
+
+if (/<form[^>]+action=/i.test(seoHtml)) {
+  throw new Error("SEO tools must not submit forms to a backend.");
+}
+
+for (const token of ["hosted analyzer", "hosted plan analysis", "API endpoint", "store uploaded", "stored plan"]) {
+  if (seoHtml.toLowerCase().includes(token.toLowerCase())) {
+    throw new Error(`SEO tools must not claim backend/API/storage behavior: ${token}`);
+  }
+}
 
 for (const token of [
   "Content-Security-Policy",
@@ -166,6 +238,12 @@ for (const token of [
 for (const token of ["assetDirs", "\"fonts\"", "\"img\""]) {
   if (!buildScript.includes(token)) {
     throw new Error(`Build script must copy redesign asset directory: ${token}`);
+  }
+}
+
+for (const token of ["\"tools\"", "\"resources\""]) {
+  if (!buildScript.includes(token)) {
+    throw new Error(`Build script must copy SEO route directory: ${token}`);
   }
 }
 

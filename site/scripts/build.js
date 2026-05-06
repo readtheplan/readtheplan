@@ -21,7 +21,7 @@ const files = [
   "sitemap.xml",
   "_redirects",
 ];
-const assetDirs = ["fonts", "img"];
+const assetDirs = ["fonts", "img", "tools", "resources"];
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
@@ -31,7 +31,10 @@ for (const file of files) {
 }
 
 for (const dir of assetDirs) {
-  fs.cpSync(path.join(root, dir), path.join(dist, dir), { recursive: true });
+  const source = path.join(root, dir);
+  if (fs.existsSync(source)) {
+    fs.cpSync(source, path.join(dist, dir), { recursive: true });
+  }
 }
 
 fs.copyFileSync(demoSource, path.join(dist, "demo-evidence.json"));
