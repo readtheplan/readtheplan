@@ -338,6 +338,72 @@ mappings:
         title: Security Management Process
         rationale: Ingress rule change.
 
+  - resource_type: aws_subnet
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Subnets define network reachability for ePHI workloads.
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Subnet topology affects access boundaries.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Subnet topology change.
+
+  - resource_type: aws_route_table
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Route tables define private, public, and egress paths.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Route table change.
+
+  - resource_type: aws_route
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Routes determine which network boundary traffic crosses.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Route change.
+
+  - resource_type: aws_route_table_association
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Associations move subnets between routing policies.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Route table association change.
+
+  - resource_type: aws_nat_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: NAT gateways govern private subnet egress.
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: NAT gateway changes can interrupt ePHI workload egress.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: NAT gateway change.
+
+  - resource_type: aws_internet_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(e)(1)
+        title: Transmission Security
+        rationale: Internet gateways expose VPC routes to the public internet.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Internet gateway change.
+
   - resource_type: aws_route53_zone
     actions: [create, update, delete, "delete/create", replace]
     controls:
@@ -503,6 +569,102 @@ mappings:
         title: Security Management Process
         rationale: Event source mapping change.
 
+  # ── ECR / SQS / Glue ─────────────────────────────────────────────────
+  - resource_type: aws_ecr_repository
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Repository policy, encryption, and mutability affect image access.
+      - id: 164.312(c)(1)
+        title: Integrity
+        rationale: Image mutability and lifecycle changes affect artifact integrity.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: ECR repository lifecycle change.
+
+  - resource_type: aws_ecr_repository_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: ECR repository policy controls image push and pull access.
+      - id: 164.312(d)
+        title: Person or Entity Authentication
+        rationale: Public or cross-account principals expand who can access images.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: ECR repository policy change.
+
+  - resource_type: aws_ecr_lifecycle_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: Image retention changes affect rollback and recovery options.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: ECR lifecycle policy change.
+
+  - resource_type: aws_sqs_queue
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Queue encryption and policy affect message access.
+      - id: 164.308(a)(7)
+        title: Contingency Plan
+        rationale: Queue retention and redrive settings affect message recovery.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: SQS queue lifecycle change.
+
+  - resource_type: aws_sqs_queue_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: SQS policy controls producer and consumer access.
+      - id: 164.312(d)
+        title: Person or Entity Authentication
+        rationale: Public or cross-account principals expand queue authentication.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: SQS queue policy change.
+
+  - resource_type: aws_glue_catalog_database
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Glue catalog metadata can expose ePHI dataset locations.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Glue catalog database change.
+
+  - resource_type: aws_glue_catalog_table
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Table schema and locations can expose ePHI data assets.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Glue catalog table change.
+
+  - resource_type: aws_glue_job
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(a)(1)
+        title: Access Control
+        rationale: Glue job role changes affect access to ePHI datasets.
+      - id: 164.312(c)(1)
+        title: Integrity
+        rationale: ETL script and connection changes can affect data integrity.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Glue job lifecycle or configuration change.
+
   # ── Logging / Monitoring ────────────────────────────────────────────────
   - resource_type: aws_cloudtrail
     actions: [create]
@@ -545,3 +707,43 @@ mappings:
       - id: 164.308(a)(1)
         title: Security Management Process
         rationale: Audit trail replacement.
+
+  - resource_type: aws_cloudwatch_metric_alarm
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(b)
+        title: Audit Controls
+        rationale: CloudWatch alarms support detection and response evidence.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: CloudWatch alarm change.
+
+  - resource_type: aws_cloudwatch_event_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(b)
+        title: Audit Controls
+        rationale: EventBridge rules detect or schedule audit-relevant workflows.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: EventBridge rule change.
+
+  - resource_type: aws_cloudwatch_event_target
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(b)
+        title: Audit Controls
+        rationale: Event targets route audit events to responders or automation.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: EventBridge target change.
+
+  - resource_type: aws_cloudwatch_log_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: 164.312(b)
+        title: Audit Controls
+        rationale: Log groups retain audit and investigation evidence.
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: CloudWatch log group change.

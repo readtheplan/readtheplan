@@ -282,6 +282,75 @@ mappings:
         title: Change Management
         rationale: Ingress rule change.
 
+  - resource_type: aws_subnet
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Subnets define workload placement and network reachability.
+      - id: CC8.1
+        title: Change Management
+        rationale: Subnet topology change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Subnet lifecycle changes affect workload attachment and recovery.
+
+  - resource_type: aws_route_table
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Route tables define private, public, and egress boundaries.
+      - id: CC8.1
+        title: Change Management
+        rationale: Route table change.
+
+  - resource_type: aws_route
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Routes determine which network boundary traffic crosses.
+      - id: CC8.1
+        title: Change Management
+        rationale: Route change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Route changes can immediately affect connectivity.
+
+  - resource_type: aws_route_table_association
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Association changes move subnets between routing policies.
+      - id: CC8.1
+        title: Change Management
+        rationale: Route table association change.
+
+  - resource_type: aws_nat_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: NAT gateways govern private subnet egress.
+      - id: CC8.1
+        title: Change Management
+        rationale: NAT gateway change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: NAT gateway changes can interrupt private subnet egress.
+
+  - resource_type: aws_internet_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Internet gateways expose VPC routes to the public internet.
+      - id: CC8.1
+        title: Change Management
+        rationale: Internet gateway change.
+
   - resource_type: aws_route53_zone
     actions: [create, update, delete, "delete/create", replace]
     controls:
@@ -452,6 +521,99 @@ mappings:
         title: Change Management
         rationale: Event source mapping change.
 
+  # ── ECR / SQS / Glue ─────────────────────────────────────────────────
+  - resource_type: aws_ecr_repository
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Repository policy, encryption, and mutability affect image access.
+      - id: CC8.1
+        title: Change Management
+        rationale: ECR repository lifecycle change.
+      - id: C1.1
+        title: Confidentiality — Identification and Maintenance
+        rationale: Container images can contain confidential application artifacts.
+
+  - resource_type: aws_ecr_repository_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: ECR repository policy controls image push and pull access.
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Cross-account or public principals expand the repository boundary.
+      - id: CC8.1
+        title: Change Management
+        rationale: ECR repository policy change.
+
+  - resource_type: aws_ecr_lifecycle_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: ECR lifecycle policy change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Image retention changes affect rollback and recovery options.
+
+  - resource_type: aws_sqs_queue
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Queue encryption and redrive settings affect message protection.
+      - id: CC8.1
+        title: Change Management
+        rationale: SQS queue lifecycle change.
+      - id: A1.2
+        title: Availability — Recovery
+        rationale: Queue lifecycle and retention changes affect message recovery.
+
+  - resource_type: aws_sqs_queue_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: SQS queue policy controls producer and consumer access.
+      - id: CC6.6
+        title: Boundary Protection
+        rationale: Public or cross-account principals expand queue access.
+      - id: CC8.1
+        title: Change Management
+        rationale: SQS queue policy change.
+
+  - resource_type: aws_glue_catalog_database
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: Glue catalog database change.
+      - id: C1.1
+        title: Confidentiality — Identification and Maintenance
+        rationale: Catalog metadata can reveal confidential datasets and locations.
+
+  - resource_type: aws_glue_catalog_table
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC8.1
+        title: Change Management
+        rationale: Glue catalog table change.
+      - id: C1.1
+        title: Confidentiality — Identification and Maintenance
+        rationale: Table schema and locations describe confidential data assets.
+
+  - resource_type: aws_glue_job
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC6.1
+        title: Logical and Physical Access Controls
+        rationale: Glue job role changes affect data access permissions.
+      - id: CC8.1
+        title: Change Management
+        rationale: Glue job lifecycle or configuration change.
+
   # ── Logging / Monitoring ────────────────────────────────────────────────
   - resource_type: aws_cloudtrail
     actions: [create]
@@ -493,3 +655,52 @@ mappings:
       - id: CC8.1
         title: Change Management
         rationale: Audit trail replacement.
+
+  - resource_type: aws_cloudwatch_metric_alarm
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC7.1
+        title: System Operations — Detection of Configuration Changes
+        rationale: CloudWatch alarms support detection of operational events.
+      - id: CC7.2
+        title: System Monitoring
+        rationale: Alarm thresholds and actions define monitoring coverage.
+      - id: CC8.1
+        title: Change Management
+        rationale: CloudWatch alarm change.
+
+  - resource_type: aws_cloudwatch_event_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC7.1
+        title: System Operations — Detection of Configuration Changes
+        rationale: EventBridge rules detect or schedule operational workflows.
+      - id: CC7.2
+        title: System Monitoring
+        rationale: Event patterns and schedules determine monitoring coverage.
+      - id: CC8.1
+        title: Change Management
+        rationale: EventBridge rule change.
+
+  - resource_type: aws_cloudwatch_event_target
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC7.2
+        title: System Monitoring
+        rationale: Event targets route detections to responders or automation.
+      - id: CC8.1
+        title: Change Management
+        rationale: EventBridge target change.
+
+  - resource_type: aws_cloudwatch_log_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: CC7.1
+        title: System Operations — Detection of Configuration Changes
+        rationale: Log groups retain evidence used for operations review.
+      - id: CC7.2
+        title: System Monitoring
+        rationale: Retention, encryption, and subscriptions affect monitoring data.
+      - id: CC8.1
+        title: Change Management
+        rationale: CloudWatch log group change.
