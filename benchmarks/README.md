@@ -12,6 +12,12 @@ scripts/run-benchmarks.sh
 
 The script regenerates every `analysis.md` file and refreshes `benchmarks/results.md` from the committed `plan.json` files.
 
+## Real-scan feedback
+
+Use [docs/corpus/README.md](../docs/corpus/README.md) for the local
+real-plan feedback loop. Raw real Terraform plan JSON stays private by default;
+only synthetic, public-redacted, or minimized fixtures belong in this repo.
+
 ## Scope
 
 - AWS only, matching the current rule catalog.
