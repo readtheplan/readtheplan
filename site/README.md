@@ -1,10 +1,11 @@
 # readtheplan.dev
 
-Static onboarding app for readtheplan.
+Static setup generator for readtheplan.
 
-The first release is intentionally client-side only: it helps visitors choose a
-setup path, generate GitHub Action / CLI snippets, and request a pilot without
-uploading Terraform plan data.
+The first release is intentionally client-side only: it helps visitors choose CI,
+framework, plan artifact/path, blocking threshold, and evidence settings, then
+generates GitHub Actions YAML, CLI commands, privacy guidance, and an evidence
+checklist without uploading Terraform plan data.
 
 ## Commands
 
