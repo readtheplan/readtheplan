@@ -28,27 +28,29 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'class="noise"' in html
     assert 'rel="canonical"' in html
     assert "og:image" in html
-    assert 'name="team"' in html
     assert 'name="ci"' in html
-    assert 'name="terraform"' in html
-    assert 'name="risk"' in html
-    assert 'name="policy"' in html
     assert 'name="framework"' in html
+    assert 'name="artifactName"' in html
+    assert 'name="planPath"' in html
+    assert 'name="threshold"' in html
+    assert 'name="evidence"' in html
     assert 'value="soc2"' in html
     assert 'value="iso27001"' in html
     assert 'value="hipaa"' in html
-    assert 'name="signEvidence"' in html
-    assert "readtheplan/readtheplan@v1" in app
-    assert "terraform show -json tfplan > plan.json" in app
+    assert "Generate setup" in html
+    assert "Add to GitHub Actions" in html
+    assert "Upload a plan" not in html
+    assert "terraform show -json tfplan > " in app
     assert "--framework" in app
-    assert "--evidence evidence.json" in app
+    assert "--evidence" in app
+    assert "readtheplan-evidence.json" in app
     assert "--sign" in app
     assert "id-token: write" in app
     assert "actions/upload-artifact@v4" in app
-    assert "verify evidence.json" in app
     assert "No raw Terraform plan is attached." in app
-    assert "teamProfiles" in app
-    assert "renderRiskCounts(rows)" in app
+    assert "No raw plan submission is needed" in app
+    assert "gateScript" in app
+    assert "readtheplan-summary.json" in app
     assert "loadDemoData" in app
     assert "./demo-evidence.json" in app
     assert "workflow_run:" in app

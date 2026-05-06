@@ -18,11 +18,17 @@ const requiredHtml = [
   "id=\"pilotLink\"",
   "id=\"recommendation\"",
   "id=\"planRows\"",
+  "name=\"artifactName\"",
+  "name=\"planPath\"",
+  "name=\"threshold\"",
+  "name=\"evidence\"",
   "rel=\"canonical\"",
   "rel=\"icon\"",
   "og:image",
   "twitter:card",
   "No plan upload",
+  "Generate setup",
+  "Add to GitHub Actions",
   "class=\"noise\"",
   "class=\"terminal-frame\"",
   "class=\"terminal-bar\"",
@@ -35,24 +41,30 @@ for (const token of requiredHtml) {
   }
 }
 
-if (!js.includes("terraform show -json tfplan > plan.json")) {
+if (!js.includes("terraform show -json tfplan > ") || !html.includes('value="plan.json"')) {
   throw new Error("Generated setup must show Terraform JSON export.");
 }
 
-if (!js.includes("readtheplan/readtheplan@v1")) {
-  throw new Error("Generated setup must include the readtheplan GitHub Action.");
+for (const token of [
+  "artifactName",
+  "planPath",
+  "gateScript",
+  "evidenceLabels",
+  "Generate setup outputs from local form state only.",
+  "python -m pip install readtheplan",
+  "readtheplan-summary.json",
+]) {
+  if (!js.includes(token)) {
+    throw new Error(`Setup generator missing required behavior token: ${token}`);
+  }
 }
 
-if (!js.includes("teamProfiles")) {
-  throw new Error("Team type selections must drive visible setup profiles.");
-}
-
-if (!js.includes("renderRiskCounts(rows)")) {
-  throw new Error("Risk summary counts must respond to form state.");
+if (js.includes("Upload a plan") || html.includes("Upload a plan")) {
+  throw new Error("Setup generator must not use upload-plan CTA copy.");
 }
 
 if (!js.includes("No raw Terraform plan is attached.")) {
-  throw new Error("Pilot handoff must avoid raw plan collection.");
+  throw new Error("Handoff must avoid raw plan collection.");
 }
 
 if (!js.includes("permissions:")) {
@@ -75,6 +87,16 @@ if (js.includes("terraform init -input=false")) {
 }
 
 for (const token of [
+  "No raw plan submission is needed",
+  "Keep raw Terraform plan JSON out of issue comments",
+  "readtheplan-evidence.json",
+]) {
+  if (!js.includes(token)) {
+    throw new Error(`Generated guidance missing privacy/evidence token: ${token}`);
+  }
+}
+
+for (const token of [
   "\"Departure Mono\"",
   "\"JetBrains Mono\"",
   "url(\"./fonts/DepartureMono-Regular.woff2\")",
@@ -86,6 +108,7 @@ for (const token of [
   ".gc {",
   ".terminal-frame",
   ".recommendation",
+  ".primary-action",
 ]) {
   if (!css.includes(token)) {
     throw new Error(`Missing expected redesign CSS token: ${token}`);

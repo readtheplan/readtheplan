@@ -52,10 +52,10 @@
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
           <p class="eyebrow">Open Source / MIT License</p>
-          <h1 id="product-title">Read every infrastructure change like a release note.</h1>
+          <h1 id="product-title">Generate a safe readtheplan setup.</h1>
           <p class="intro-copy">
-            Turn Terraform JSON plans into stable risk tiers and short explanations
-            for humans, auditors, and AI agents.
+            Choose how your CI already exports Terraform plan JSON, then copy a static
+            GitHub Actions gate and local CLI command. No uploads, accounts, or backend.
           </p>
         </div>
         <div class="gc trust-strip" aria-label="Product boundaries">
@@ -126,80 +126,31 @@
         </div>
       </section>
 
-      <section class="app-grid g" aria-label="Onboarding workspace">
+      <section class="app-grid g" aria-label="Setup generator workspace">
         <form class="panel intake gc" id="onboardingForm">
           <div class="panel-heading">
-            <p class="eyebrow">Client profile</p>
-            <h2>Setup path</h2>
+            <p class="eyebrow">Setup generator</p>
+            <h2>First-run choices</h2>
           </div>
 
           <fieldset class="control-group">
-            <legend>Team type</legend>
-            <div class="segmented" role="radiogroup" aria-label="Team type">
+            <legend>CI system</legend>
+            <div class="segmented" role="radiogroup" aria-label="CI system">
               <label>
-                <input type="radio" name="team" value="maintainer" checked />
-                <span>Maintainer</span>
+                <input type="radio" name="ci" value="github" checked />
+                <span>GitHub Actions</span>
               </label>
               <label>
-                <input type="radio" name="team" value="platform" />
-                <span>Platform</span>
+                <input type="radio" name="ci" value="gitlab" />
+                <span>GitLab CI</span>
               </label>
               <label>
-                <input type="radio" name="team" value="regulated" />
-                <span>Regulated</span>
+                <input type="radio" name="ci" value="circle" />
+                <span>CircleCI</span>
               </label>
               <label>
-                <input type="radio" name="team" value="consultant" />
-                <span>Consultant</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="field-row">
-            <label>
-              CI provider
-              <select name="ci">
-                <option value="github">GitHub Actions</option>
-                <option value="other">Other CI</option>
-                <option value="local">Local review</option>
-              </select>
-            </label>
-            <label>
-              Terraform flow
-              <select name="terraform">
-                <option value="local">terraform plan artifact</option>
-                <option value="cloud">Terraform Cloud / remote</option>
-                <option value="mixed">Mixed repos</option>
-              </select>
-            </label>
-          </div>
-
-          <fieldset class="control-group">
-            <legend>AWS risk priorities</legend>
-            <div class="checks">
-              <label><input type="checkbox" name="risk" value="rds" checked /> RDS</label>
-              <label><input type="checkbox" name="risk" value="s3" checked /> S3</label>
-              <label><input type="checkbox" name="risk" value="iam" checked /> IAM</label>
-              <label><input type="checkbox" name="risk" value="kms" /> KMS</label>
-              <label><input type="checkbox" name="risk" value="dns" /> DNS</label>
-              <label><input type="checkbox" name="risk" value="eks" /> EKS</label>
-            </div>
-          </fieldset>
-
-          <fieldset class="control-group">
-            <legend>Workflow behavior</legend>
-            <div class="stacked-options">
-              <label>
-                <input type="radio" name="policy" value="warn" checked />
-                <span>Warn and summarize</span>
-              </label>
-              <label>
-                <input type="radio" name="policy" value="dangerous" />
-                <span>Fail on dangerous or irreversible</span>
-              </label>
-              <label>
-                <input type="radio" name="policy" value="any" />
-                <span>Fail on any plan change</span>
+                <input type="radio" name="ci" value="local" />
+                <span>Local only</span>
               </label>
             </div>
           </fieldset>
@@ -212,11 +163,7 @@
               aria-label="Compliance framework"
             >
               <label>
-                <input type="radio" name="framework" value="none" checked />
-                <span>None</span>
-              </label>
-              <label>
-                <input type="radio" name="framework" value="soc2" />
+                <input type="radio" name="framework" value="soc2" checked />
                 <span>SOC 2</span>
               </label>
               <label>
@@ -227,51 +174,98 @@
                 <input type="radio" name="framework" value="hipaa" />
                 <span>HIPAA</span>
               </label>
+              <label>
+                <input type="radio" name="framework" value="none" />
+                <span>None</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="field-row">
+            <label>
+              Plan JSON artifact
+              <input name="artifactName" value="terraform-plan-json" autocomplete="off" />
+            </label>
+            <label>
+              Plan JSON path
+              <input name="planPath" value="plan.json" autocomplete="off" />
+            </label>
+          </div>
+
+          <fieldset class="control-group">
+            <legend>Blocking threshold</legend>
+            <div class="segmented" role="radiogroup" aria-label="Blocking threshold">
+              <label>
+                <input type="radio" name="threshold" value="dangerous" checked />
+                <span>Dangerous</span>
+              </label>
+              <label>
+                <input type="radio" name="threshold" value="review" />
+                <span>Review</span>
+              </label>
+              <label>
+                <input type="radio" name="threshold" value="irreversible" />
+                <span>Irreversible</span>
+              </label>
+              <label>
+                <input type="radio" name="threshold" value="off" />
+                <span>Do not block</span>
+              </label>
             </div>
           </fieldset>
 
           <fieldset class="control-group">
-            <legend>Evidence</legend>
+            <legend>Evidence preference</legend>
             <div class="stacked-options">
               <label>
-                <input type="checkbox" name="signEvidence" />
-                <span>Sign evidence envelope (sigstore keyless)</span>
+                <input type="radio" name="evidence" value="unsigned" checked />
+                <span>Generate evidence checklist and JSON envelope</span>
+              </label>
+              <label>
+                <input type="radio" name="evidence" value="signed" />
+                <span>Generate and sign evidence with keyless OIDC</span>
+              </label>
+              <label>
+                <input type="radio" name="evidence" value="checklist" />
+                <span>Checklist only for the first run</span>
               </label>
             </div>
           </fieldset>
+
+          <button class="primary-action" type="submit">Generate setup</button>
         </form>
 
         <section class="panel preview-panel gc" aria-labelledby="preview-title">
           <div class="panel-heading row-heading">
             <div>
-              <p class="eyebrow">Plan signal</p>
-              <h2 id="preview-title">Review summary</h2>
+              <p class="eyebrow">Static output</p>
+              <h2 id="preview-title">Setup summary</h2>
             </div>
-            <span class="status-pill" id="statusPill">sample</span>
+            <span class="status-pill" id="statusPill">no upload</span>
           </div>
 
           <p class="recommendation" id="recommendation"></p>
 
           <div class="risk-meter" aria-label="Risk counts">
             <div>
-              <span class="count safe" id="safeCount">1</span>
-              <span>safe</span>
+              <span class="count safe" id="safeCount">4</span>
+              <span>choices</span>
             </div>
             <div>
-              <span class="count review" id="reviewCount">2</span>
-              <span>review</span>
+              <span class="count review" id="reviewCount">1</span>
+              <span>artifact</span>
             </div>
             <div>
-              <span class="count dangerous" id="dangerousCount">1</span>
-              <span>dangerous</span>
+              <span class="count dangerous" id="dangerousCount">0</span>
+              <span>uploads</span>
             </div>
           </div>
 
-          <div class="plan-table" role="table" aria-label="Sample risk table" aria-live="polite">
+          <div class="plan-table setup-table" role="table" aria-label="Generated setup summary" aria-live="polite">
             <div role="row" class="table-head">
-              <span role="columnheader">Risk</span>
-              <span role="columnheader">Resource</span>
-              <span role="columnheader">Explanation</span>
+              <span role="columnheader">Area</span>
+              <span role="columnheader">Selection</span>
+              <span role="columnheader">Generated behavior</span>
             </div>
             <div class="plan-table-body" id="planRows"></div>
           </div>
@@ -285,7 +279,7 @@
               <p class="eyebrow">Generated</p>
               <h2 id="actionTitle">GitHub Action</h2>
             </div>
-            <button class="icon-button" type="button" data-copy="actionOutput">Copy</button>
+            <button class="icon-button" type="button" data-copy="actionOutput">Add to GitHub Actions</button>
           </div>
           <pre id="actionOutput" class="code-output" tabindex="0"></pre>
         </section>
@@ -304,13 +298,13 @@
 
       <section id="pilot" class="g pilot-panel" aria-labelledby="pilot-title">
         <div class="gc">
-          <p class="eyebrow">Pilot handoff</p>
+          <p class="eyebrow">Local privacy</p>
           <h2 id="pilot-title">Bring the workflow, not the secrets.</h2>
         </div>
         <div class="gc pilot-copy">
           <p>
-            The first web release does not accept Terraform plan uploads. A pilot
-            starts with workflow shape, repo count, CI provider, and review goals.
+            The setup generator runs entirely in your browser. It does not accept raw
+            Terraform plans, send telemetry, create accounts, or store generated snippets.
           </p>
           <a class="primary-link" id="pilotLink" href="mailto:rogma07k@gmail.com">
             Request pilot setup
