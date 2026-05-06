@@ -15,6 +15,10 @@ const demoReviewCount = document.querySelector("#demoReviewCount");
 const demoDangerousCount = document.querySelector("#demoDangerousCount");
 const demoRows = document.querySelector("#demoRows");
 const demoEvidenceNote = document.querySelector("#demoEvidenceNote");
+const handoffNote = document.querySelector("#handoffNote");
+
+// Placeholder until a production pilot inbox is chosen. Keep configurable and visible.
+const PILOT_HANDOFF_EMAIL = "pilot-contact@example.com";
 
 const ciLabels = {
   github: "GitHub Actions",
@@ -49,9 +53,32 @@ const evidenceLabels = {
   checklist: "checklist only",
 };
 
+const repoProfileLabels = {
+  single: "1 production repo",
+  small: "2-5 Terraform repos",
+  portfolio: "6-20 client or platform repos",
+  enterprise: "20+ repos / regulated estate",
+};
+
+const maturityLabels = {
+  starting: "plans exist, review gates are new",
+  artifact: "plan JSON artifact already exists",
+  policy: "policy checks already run in CI",
+  audited: "audit evidence process is established",
+};
+
 function cleanToken(value, fallback) {
   const next = String(value || "").trim();
   return next || fallback;
+}
+
+function cleanFreeText(value, fallback = "not provided") {
+  const next = String(value || "").replace(/\s+/g, " ").trim();
+  return next || fallback;
+}
+
+function listOrFallback(values, fallback) {
+  return values.length ? values.join(", ") : fallback;
 }
 
 function shouldWriteEvidence(state) {
@@ -67,6 +94,14 @@ function getFormState() {
     planPath: cleanToken(data.get("planPath"), "plan.json"),
     threshold: data.get("threshold"),
     evidence: data.get("evidence"),
+    organization: cleanFreeText(data.get("organization"), "not provided"),
+    contactEmail: cleanFreeText(data.get("contactEmail"), "not provided"),
+    repoProfile: data.get("repoProfile"),
+    maturity: data.get("maturity"),
+    intakeFrameworks: data.getAll("intakeFrameworks").map((value) => String(value)),
+    evidenceNeeds: data.getAll("evidenceNeeds").map((value) => String(value)),
+    awsPriorities: data.getAll("awsPriorities").map((value) => String(value)),
+    adoptionBlocker: cleanFreeText(data.get("adoptionBlocker"), "not provided"),
   };
 }
 
@@ -286,9 +321,13 @@ function generateCli(state) {
 
 function generateChecklist(state) {
   const checks = [
+    `Pilot profile: ${state.organization}; ${repoProfileLabels[state.repoProfile]}; ${maturityLabels[state.maturity]}.`,
+    `Confirm ${state.contactEmail} is the right contact before using the optional email handoff.`,
     `Confirm ${ciLabels[state.ci]} already creates a Terraform JSON plan artifact named ${state.artifactName}.`,
     `Store the downloaded plan at ${state.planPath} inside the readtheplan job workspace.`,
     `Use ${thresholdLabels[state.threshold]} for the first blocking rule.`,
+    `Map onboarding evidence to ${listOrFallback(state.intakeFrameworks, "the selected compliance framework")} and ${listOrFallback(state.evidenceNeeds, "the team's review process")}.`,
+    `Prioritize first-run review examples around ${listOrFallback(state.awsPriorities, "the team's highest-risk AWS resources")}.`,
     "Keep raw Terraform plan JSON out of issue comments, public artifacts, support tickets, and email.",
     "Review the generated workflow locally before committing it to .github/workflows/readtheplan.yml.",
   ];
@@ -307,6 +346,12 @@ function generateChecklist(state) {
     checks.push("Start with the checklist, then enable evidence output once the gate is trusted.");
   }
 
+  if (state.adoptionBlocker !== "not provided") {
+    checks.push(`First pilot risk to resolve: ${state.adoptionBlocker}.`);
+  }
+
+  checks.push("Run the first pilot on one private repo, then repeat the same gate across the remaining repo profile.");
+  checks.push("Use the generated mailto handoff only if the team chooses to send this client context.");
   checks.push("No raw plan submission is needed; readtheplan runs in your CI or on your workstation.");
   return checks;
 }
@@ -339,6 +384,11 @@ function generateSummaryRows(state) {
           ? "Framework mapping is disabled; evidence output requires a framework."
           : `${frameworkLabels[state.framework]} evidence is generated from local analysis output.`,
     },
+    {
+      area: "Intake",
+      selection: repoProfileLabels[state.repoProfile],
+      behavior: `Checklist and pilot handoff stay browser-local for ${state.organization}.`,
+    },
   ];
 }
 
@@ -364,10 +414,22 @@ function renderRows(rows) {
 }
 
 function updatePilotLink(state) {
-  const subject = encodeURIComponent("readtheplan setup generator question");
+  const subject = encodeURIComponent(`readtheplan pilot handoff: ${state.organization}`);
   const body = encodeURIComponent(
     [
-      "Setup choices:",
+      "readtheplan pilot handoff",
+      "",
+      "Client context:",
+      `- Organization/team: ${state.organization}`,
+      `- Contact email: ${state.contactEmail}`,
+      `- Repo profile: ${repoProfileLabels[state.repoProfile]}`,
+      `- Terraform maturity: ${maturityLabels[state.maturity]}`,
+      `- Compliance pressure: ${listOrFallback(state.intakeFrameworks, "not selected")}`,
+      `- Evidence/signing needs: ${listOrFallback(state.evidenceNeeds, "not selected")}`,
+      `- AWS resource priorities: ${listOrFallback(state.awsPriorities, "not selected")}`,
+      `- Biggest adoption blocker: ${state.adoptionBlocker}`,
+      "",
+      "Generated setup choices:",
       `- CI: ${ciLabels[state.ci]}`,
       `- Framework: ${frameworkLabels[state.framework]}`,
       `- Plan artifact: ${state.artifactName}`,
@@ -376,9 +438,11 @@ function updatePilotLink(state) {
       `- Evidence: ${evidenceLabels[state.evidence]}`,
       "",
       "No raw Terraform plan is attached.",
+      "Client context stayed in the browser until this email was generated by the user.",
     ].join("\n"),
   );
-  pilotLink.href = `mailto:rogma07k@gmail.com?subject=${subject}&body=${body}`;
+  pilotLink.href = `mailto:${PILOT_HANDOFF_EMAIL}?subject=${subject}&body=${body}`;
+  handoffNote.textContent = `Pilot email opens a mailto draft to ${PILOT_HANDOFF_EMAIL}; replace PILOT_HANDOFF_EMAIL in site/app.js before production use.`;
 }
 
 function render() {

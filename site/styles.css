@@ -54,6 +54,7 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -333,6 +334,10 @@ h2 {
   margin-bottom: 22px;
 }
 
+.intake-heading {
+  margin-top: 34px;
+}
+
 .row-heading {
   display: flex;
   align-items: flex-start;
@@ -362,6 +367,15 @@ section[id] {
   background: var(--surface-hot);
   color: var(--foreground);
   font-size: 14px;
+}
+
+.privacy-note {
+  margin: 0 0 22px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(95, 169, 130, 0.10);
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .control-group {
@@ -455,7 +469,9 @@ select {
 }
 
 input[type="text"],
-input:not([type]) {
+input[type="email"],
+input:not([type]),
+textarea {
   width: 100%;
   min-height: 44px;
   padding: 8px 10px;
@@ -463,6 +479,15 @@ input:not([type]) {
   border-radius: 0;
   background: var(--background);
   color: var(--foreground);
+}
+
+textarea {
+  min-height: 94px;
+  resize: vertical;
+}
+
+.single-field {
+  grid-template-columns: 1fr;
 }
 
 .checks {
@@ -674,6 +699,11 @@ input:not([type]) {
 
 .pilot-copy p {
   margin: 0 0 18px;
+}
+
+.handoff-note {
+  color: var(--soft);
+  font-size: 12px;
 }
 
 .primary-link {

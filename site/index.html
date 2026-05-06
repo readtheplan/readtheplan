@@ -232,6 +232,109 @@
             </div>
           </fieldset>
 
+          <div class="panel-heading intake-heading">
+            <p class="eyebrow">Client intake</p>
+            <h2>Pilot context</h2>
+          </div>
+
+          <p class="privacy-note">
+            Client context stays in this browser until you choose to send an email.
+            No raw Terraform plan is attached or submitted.
+          </p>
+
+          <div class="field-row">
+            <label>
+              Organization / team
+              <input name="organization" value="Platform team" autocomplete="organization" />
+            </label>
+            <label>
+              Contact email
+              <input name="contactEmail" type="email" placeholder="name@example.com" autocomplete="email" />
+            </label>
+          </div>
+
+          <div class="field-row">
+            <label>
+              Repo profile
+              <select name="repoProfile">
+                <option value="single">1 production repo</option>
+                <option value="small" selected>2-5 Terraform repos</option>
+                <option value="portfolio">6-20 client or platform repos</option>
+                <option value="enterprise">20+ repos / regulated estate</option>
+              </select>
+            </label>
+            <label>
+              Terraform workflow maturity
+              <select name="maturity">
+                <option value="starting">Plans exist, review gates are new</option>
+                <option value="artifact" selected>Plan JSON artifact already exists</option>
+                <option value="policy">Policy checks already run in CI</option>
+                <option value="audited">Audit evidence process is established</option>
+              </select>
+            </label>
+          </div>
+
+          <fieldset class="control-group">
+            <legend>Compliance pressure</legend>
+            <div class="checks">
+              <label>
+                <input type="checkbox" name="intakeFrameworks" value="SOC 2" checked />
+                <span>SOC 2</span>
+              </label>
+              <label>
+                <input type="checkbox" name="intakeFrameworks" value="ISO 27001" />
+                <span>ISO 27001</span>
+              </label>
+              <label>
+                <input type="checkbox" name="intakeFrameworks" value="HIPAA" />
+                <span>HIPAA</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="control-group">
+            <legend>Evidence and signing needs</legend>
+            <div class="checks">
+              <label>
+                <input type="checkbox" name="evidenceNeeds" value="Auditor-ready evidence" checked />
+                <span>Audit evidence</span>
+              </label>
+              <label>
+                <input type="checkbox" name="evidenceNeeds" value="Signed attestations" />
+                <span>Signing</span>
+              </label>
+              <label>
+                <input type="checkbox" name="evidenceNeeds" value="Manual approval gates" checked />
+                <span>Review gates</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="control-group">
+            <legend>AWS resource priorities</legend>
+            <div class="checks">
+              <label>
+                <input type="checkbox" name="awsPriorities" value="IAM and permissions" checked />
+                <span>IAM</span>
+              </label>
+              <label>
+                <input type="checkbox" name="awsPriorities" value="Data stores and KMS" checked />
+                <span>Data / KMS</span>
+              </label>
+              <label>
+                <input type="checkbox" name="awsPriorities" value="Network and compute changes" />
+                <span>Network / compute</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="field-row single-field">
+            <label>
+              Biggest adoption blocker
+              <textarea name="adoptionBlocker" rows="3" placeholder="Example: proving the first gate will not leak plan data or block safe releases."></textarea>
+            </label>
+          </div>
+
           <button class="primary-action" type="submit">Generate setup</button>
         </form>
 
@@ -303,12 +406,14 @@
         </div>
         <div class="gc pilot-copy">
           <p>
-            The setup generator runs entirely in your browser. It does not accept raw
-            Terraform plans, send telemetry, create accounts, or store generated snippets.
+            The setup and intake wizard runs entirely in your browser. It does not accept
+            raw Terraform plans, send telemetry, create accounts, or store generated
+            snippets. Client context stays local unless you open the generated email.
           </p>
-          <a class="primary-link" id="pilotLink" href="mailto:rogma07k@gmail.com">
+          <a class="primary-link" id="pilotLink" href="mailto:pilot-contact@example.com">
             Request pilot setup
           </a>
+          <p class="handoff-note" id="handoffNote"></p>
         </div>
         <div class="gc pilot-checks">
           <ul class="checklist" id="checklist" aria-label="Recommended setup checklist"></ul>
