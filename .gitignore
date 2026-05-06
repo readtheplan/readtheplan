@@ -38,6 +38,8 @@ pytest-cache-files-*/
 .terraform.lock.hcl
 plan.json
 crash.log
+corpus-scans/
+.local/readtheplan-scans/
 
 # private handoff (briefs/prompts/reviews live in Notion)
 docs/handoff/

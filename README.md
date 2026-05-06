@@ -8,6 +8,18 @@
 
 `readtheplan` is a Terraform plan risk explainer. It reads `terraform plan` output, classifies each change as **safe / review / dangerous / irreversible** based on the action × resource type × what compliance context it touches, and posts a markdown summary your release manager (or auditor, or AI agent) can read in 30 seconds.
 
+For real-plan corpus work, use the local-only
+[corpus feedback loop](docs/corpus/README.md). It generates scan bundles and
+review templates without uploading plans or copying raw Terraform plan JSON by
+default:
+
+```bash
+python tools/scan_corpus.py --output-dir .local/readtheplan-scans --redact plan.json
+```
+
+Generated scan bundles are ignored by default, but still review redacted output
+before sharing it.
+
 ## status
 
 🧪 **Alpha — v0.0.2 released.** The PyPI alpha ships the Python CLI and
