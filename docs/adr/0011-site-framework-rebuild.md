@@ -106,11 +106,12 @@ Yes, materially.
 - Phase 3: visual polish to match what we have today.
 
 That's 4–6 weeks of Codex's time on something that does not move the
-core product. The core product gaps (cowork-task-0010 org overrides,
-the sole remaining MVP-5 item; PCI-DSS / NIST 800-53 catalogs; the
-PyPI 0.0.2 alpha; auditor outreach; asciinema demo) are all higher
-leverage. Every week spent on a site rebuild is a week not spent
-hardening the actual product.
+core product. As of the post-MVP reconciliation on 2026-05-05, customer
+rule overlays, examples, benchmarks, live demo work, site polish, ADR 0011,
+and the PR #18 rule additions have shipped. The remaining higher-leverage
+work is catalog breadth, rule quality, auditor outreach, and adoption docs.
+Every week spent on a site rebuild is a week not spent hardening the actual
+product.
 
 ### Counter-argument the rebuild has
 
