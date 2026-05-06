@@ -50,8 +50,8 @@ Anchored in this field note: **[terraform-apply-is-roulette](https://github.com/
    attestation verification support audit-oriented review flows.
 4. GitHub Action wrapper: install as `uses: readtheplan/readtheplan@v1`, exposes
    summary outputs for workflows.
-5. Local MCP preview: `readtheplan mcp` exposes one stdio tool,
-   `analyze_plan`, for local agent and IDE integrations.
+5. Local MCP preview: `readtheplan mcp` exposes stdio tools for local agent
+   and IDE integrations, including `analyze_plan` and `agent_gate`.
 6. YAML customer rule overlays define org-specific escalations and framework
    mappings without changing the built-in catalog.
 
@@ -109,6 +109,35 @@ applied in CLI order and never downgrade built-in risk.
 
 Invalid input is reported on stderr and exits non-zero.
 
+## Agent gate
+
+`readtheplan agent-gate plan.json` emits a deterministic local contract for
+coding agents that need a proceed/warn/block decision before they merge or apply
+Terraform changes:
+
+```bash
+readtheplan agent-gate plan.json
+```
+
+The output schema is `rtp-agent-gate-v1` and includes `decision`, maximum
+`risk`, `required_checks`, allowed and prohibited next actions, a PR comment,
+evidence checklist, auditor summary, and risk counts. Dangerous or irreversible
+changes block merge/apply/auto-approval until human, security, change-record,
+and evidence checks are complete. Review-tier changes warn and require reviewer
+and change evidence. Safe-only plans proceed while still prohibiting
+policy-free auto-apply.
+
+Framework control IDs can be added to the required checks:
+
+```bash
+readtheplan agent-gate --framework soc2 plan.json
+```
+
+The gate is Terraform-first in this slice. Future IaC adapters may normalize
+CloudFormation, Packer, Ansible, Kubernetes manifests, Pulumi, AWS CDK, and
+Azure/GCP/Oracle IaC into the same gate contract, but those parsers are not
+bundled today.
+
 ## MCP preview
 
 The experimental MCP v0 adapter runs locally over stdio and keeps Terraform
@@ -120,14 +149,21 @@ pip install "readtheplan[mcp]"
 readtheplan mcp
 ```
 
-The preview exposes one tool:
+The preview exposes two local Terraform tools:
 
 - `analyze_plan` with input `{"plan_path": "plan.json"}`.
+- `agent_gate` with input `{"plan_path": "plan.json"}`.
 
-It returns the same JSON summary object as:
+`analyze_plan` returns the same JSON summary object as:
 
 ```bash
 readtheplan analyze --format json plan.json
+```
+
+`agent_gate` returns the same proceed/warn/block object as:
+
+```bash
+readtheplan agent-gate plan.json
 ```
 
 MCP v0 does not expose evidence generation, signature verification, signing,

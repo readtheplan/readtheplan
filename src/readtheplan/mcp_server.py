@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from readtheplan.plan import PlanError, analyze_plan_file
+from readtheplan.agent_gate import agent_gate_to_dict
+from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
 from readtheplan.summary import summary_to_dict
 
 
@@ -25,6 +26,17 @@ class MCPToolInputError(ValueError):
 
 def analyze_plan(plan_path: str) -> dict[str, object]:
     """Analyze a local Terraform plan JSON file for the MCP tool."""
+    summary = _summary_for_tool(plan_path)
+    return summary_to_dict(summary)
+
+
+def agent_gate(plan_path: str) -> dict[str, object]:
+    """Return the local coding-agent gate decision for a Terraform plan JSON file."""
+    summary = _summary_for_tool(plan_path)
+    return agent_gate_to_dict(summary)
+
+
+def _summary_for_tool(plan_path: str) -> PlanSummary:
     if not isinstance(plan_path, str) or not plan_path.strip():
         raise MCPToolInputError(
             code="INVALID_INPUT",
@@ -36,7 +48,7 @@ def analyze_plan(plan_path: str) -> dict[str, object]:
     except PlanError as exc:
         raise MCPToolInputError(code="PLAN_ERROR", message=str(exc)) from exc
 
-    return summary_to_dict(summary)
+    return summary
 
 
 def create_server() -> Any:
@@ -44,11 +56,17 @@ def create_server() -> Any:
     mcp = FastMCP("readtheplan")
 
     analyze_plan_handler = analyze_plan
+    agent_gate_handler = agent_gate
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(plan_path: str) -> dict[str, object]:
         """Analyze a local Terraform plan JSON file and return the CLI JSON summary."""
         return analyze_plan_handler(plan_path)
+
+    @mcp.tool(name="agent_gate")
+    def _agent_gate_tool(plan_path: str) -> dict[str, object]:
+        """Return proceed, warn, or block instructions for a local Terraform plan."""
+        return agent_gate_handler(plan_path)
 
     return mcp
 
