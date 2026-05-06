@@ -24,6 +24,11 @@ the current `analyze_plan`-only tool surface, sample prompts, and custom pilot
 boundaries. It must stay local-first: no raw Terraform plan upload, no hosted
 MCP service, no hosted plan analysis, no backend, no accounts, and no billing.
 
+The `/brief/` route introduces the first paid-output loop: weekly Terraform/SOC 2
+change intelligence for platform teams. It is a static landing page, sample
+brief, and editorial runbook only. It must not add raw plan upload, hosted
+analysis, accounts, billing, storage, a backend, or automatic delivery.
+
 ## Commands
 
 ```bash

@@ -114,6 +114,7 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert '"tools"' in build_script
     assert '"resources"' in build_script
     assert '"mcp"' in build_script
+    assert '"brief"' in build_script
     assert "npm --prefix site run build" in workflow
 
     for asset in [
@@ -221,6 +222,80 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
 
     assert 'type="file"' not in mcp
     assert "<form" not in mcp
+
+
+def test_weekly_brief_paid_output_loop_slice() -> None:
+    brief_path = SITE / "brief" / "index.html"
+    sample_path = SITE / "brief" / "sample-001" / "index.html"
+    sitemap = (SITE / "sitemap.xml").read_text(encoding="utf-8")
+    homepage = (SITE / "index.html").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs" / "weekly-brief-runbook.md").read_text(encoding="utf-8")
+
+    assert brief_path.exists()
+    assert sample_path.exists()
+    assert "/brief/" in sitemap
+    assert "/brief/sample-001/" in sitemap
+    assert "/brief/" in homepage
+
+    combined = brief_path.read_text(encoding="utf-8") + "\n" + sample_path.read_text(encoding="utf-8")
+
+    for expected in [
+        "Weekly Terraform/SOC 2 change intelligence for platform teams",
+        "repeated paid output loop",
+        "monitor, filter, analyze, package, deliver",
+        "platform/SRE teams",
+        "DevOps consultancies",
+        "SOC 2 consultants",
+        "seed-stage infra/devtool startups",
+        "Top 5 infra/compliance changes",
+        "Why they matter",
+        "Terraform/SOC2 risk angle",
+        "Action checklist",
+        "readtheplan CTA",
+        "First sample/free",
+        "Private weekly brief",
+        "Custom company-specific monitoring",
+        "MCP/custom integration upsell",
+        "Request first brief / private pilot",
+        "pilot-contact@example.com",
+        "Terraform/OpenTofu",
+        "AWS logging",
+        "AWS IAM",
+        "Security group ingress",
+        "GitHub Actions permission expansion",
+        "SOC 2 evidence",
+        "readtheplan progress",
+        "Demo issue",
+    ]:
+        assert expected in combined
+
+    for prohibited in [
+        'type="file"',
+        "Upload a plan",
+        "submit your plan",
+        "Start hosted analyzer",
+        "hosted plan analyzer is available",
+        "Create account",
+        "Sign up",
+        "Stripe",
+        "Checkout",
+        "Subscribe now",
+        "storage bucket",
+        "store uploaded",
+        "stored plan",
+        "cron job is enabled",
+        "scheduled delivery is enabled",
+        "automatic scheduled delivery is enabled",
+    ]:
+        assert prohibited.lower() not in combined.lower()
+
+    assert "<form" not in combined
+    assert "Cron, scheduled delivery, and other recurring automation must not be enabled until" in runbook
+    assert "explicitly approved" in runbook
+    assert "Source Categories To Monitor" in runbook
+    assert "Quality Bar" in runbook
+    assert "Output Format" in runbook
+    assert "Approval And Delivery Steps" in runbook
 
 
 def test_site_redesign_visual_contract() -> None:
