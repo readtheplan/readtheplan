@@ -18,6 +18,12 @@ The `tools/` and `resources/` routes are static SEO lead-gen pages. They use
 manual counts and high-level Terraform/AWS control examples only; they do not
 accept raw plan files or send form submissions.
 
+The `/mcp/` route productizes the local MCP preview for secure AI-agent demo
+workflows. It documents `pip install "readtheplan[mcp]"`, `readtheplan mcp`,
+the current `analyze_plan`-only tool surface, sample prompts, and custom pilot
+boundaries. It must stay local-first: no raw Terraform plan upload, no hosted
+MCP service, no hosted plan analysis, no backend, no accounts, and no billing.
+
 ## Commands
 
 ```bash

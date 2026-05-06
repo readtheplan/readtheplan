@@ -28,6 +28,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "What an analysis looks like" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
+    assert "/mcp/" in html
     assert "/resources/terraform-s3-bucket-risk/" in html
     assert "/resources/terraform-iam-policy-risk/" in html
     assert "/resources/terraform-security-group-0-0-0-0-risk/" in html
@@ -112,6 +113,7 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert '"img"' in build_script
     assert '"tools"' in build_script
     assert '"resources"' in build_script
+    assert '"mcp"' in build_script
     assert "npm --prefix site run build" in workflow
 
     for asset in [
@@ -173,6 +175,52 @@ def test_static_seo_tools_preserve_local_first_privacy() -> None:
         "stored plan",
     ]:
         assert prohibited.lower() not in combined.lower()
+
+
+def test_mcp_landing_page_productizes_local_preview_only() -> None:
+    mcp = (SITE / "mcp" / "index.html").read_text(encoding="utf-8")
+    sitemap = (SITE / "sitemap.xml").read_text(encoding="utf-8")
+
+    assert (SITE / "mcp" / "index.html").exists()
+    assert "/mcp/" in sitemap
+
+    for expected in [
+        "Local MCP Terraform reviewer",
+        "Give your AI coding agent a Terraform/SOC 2 reviewer that runs locally",
+        "Local-first",
+        "No raw plan upload",
+        "No hosted MCP service",
+        "No hosted plan analysis",
+        'pip install "readtheplan[mcp]"',
+        "readtheplan mcp",
+        "analyze_plan",
+        "PR reviewer",
+        "SOC 2 evidence prep",
+        "Dangerous change triage",
+        "Auditor-friendly summary",
+        "Request pilot setup",
+        "pilot-contact@example.com",
+        "auth design",
+        "least privilege",
+        "audit logs",
+        "Custom engagement",
+    ]:
+        assert expected in mcp
+
+    for prohibited in [
+        "Upload a plan",
+        "hosted MCP endpoint",
+        "hosted MCP platform",
+        "hosted plan analyzer",
+        "API endpoint",
+        "submit your plan",
+        "store uploaded",
+        "stored plan",
+    ]:
+        assert prohibited.lower() not in mcp.lower()
+
+    assert 'type="file"' not in mcp
+    assert "<form" not in mcp
 
 
 def test_site_redesign_visual_contract() -> None:

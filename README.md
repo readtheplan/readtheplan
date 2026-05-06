@@ -134,6 +134,13 @@ MCP v0 does not expose evidence generation, signature verification, signing,
 framework annotations, customer rule overlays, or `--no-rules`. Use the CLI for
 those workflows.
 
+For sales/demo positioning of the local MCP preview, see
+[MCP Sales and Demo Notes](docs/mcp-sales-demo.md). Production custom-MCP
+engagements can cover auth, least privilege, audit logging, deployment guidance,
+and support, but those controls are not included in the OSS preview. The product
+boundary remains local-first: no hosted MCP service, no raw Terraform plan
+upload, no hosted plan analysis, no backend, no accounts, and no billing.
+
 ### Compliance control IDs
 
 `readtheplan analyze --framework <name> plan.json` annotates each change
