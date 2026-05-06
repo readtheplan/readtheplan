@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
-import tools.scan_corpus as scan_corpus
+_MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "scan_corpus.py"
+_SPEC = importlib.util.spec_from_file_location("scan_corpus", _MODULE_PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+scan_corpus = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(scan_corpus)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
