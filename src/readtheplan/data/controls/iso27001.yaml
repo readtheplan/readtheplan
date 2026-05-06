@@ -315,6 +315,72 @@ mappings:
         title: Change management
         rationale: Ingress rule change.
 
+  - resource_type: aws_subnet
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Subnets define workload placement and network reachability.
+      - id: A.8.22
+        title: Segregation of networks
+        rationale: Subnet topology separates public, private, and workload tiers.
+      - id: A.8.32
+        title: Change management
+        rationale: Subnet topology change.
+
+  - resource_type: aws_route_table
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Route tables define private, public, and egress boundaries.
+      - id: A.8.22
+        title: Segregation of networks
+        rationale: Route tables enforce traffic segregation between subnets.
+      - id: A.8.32
+        title: Change management
+        rationale: Route table change.
+
+  - resource_type: aws_route
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Routes determine which network boundary traffic crosses.
+      - id: A.8.32
+        title: Change management
+        rationale: Route change.
+
+  - resource_type: aws_route_table_association
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.22
+        title: Segregation of networks
+        rationale: Association changes move subnets between routing policies.
+      - id: A.8.32
+        title: Change management
+        rationale: Route table association change.
+
+  - resource_type: aws_nat_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: NAT gateways govern private subnet egress.
+      - id: A.8.32
+        title: Change management
+        rationale: NAT gateway change.
+
+  - resource_type: aws_internet_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.20
+        title: Network security
+        rationale: Internet gateways expose VPC routes to the public internet.
+      - id: A.8.32
+        title: Change management
+        rationale: Internet gateway change.
+
   - resource_type: aws_route53_zone
     actions: [create, update, delete, "delete/create", replace]
     controls:
@@ -470,6 +536,108 @@ mappings:
         title: Change management
         rationale: Event source mapping change.
 
+  # ── ECR / SQS / Glue ─────────────────────────────────────────────────
+  - resource_type: aws_ecr_repository
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: ECR repository lifecycle is cloud service configuration.
+      - id: A.8.9
+        title: Configuration management
+        rationale: Repository scanning, encryption, and mutability are configuration.
+      - id: A.8.32
+        title: Change management
+        rationale: ECR repository lifecycle change.
+
+  - resource_type: aws_ecr_repository_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: ECR policy controls image push and pull authorization.
+      - id: A.8.20
+        title: Network security
+        rationale: Public or cross-account access expands the repository boundary.
+      - id: A.8.32
+        title: Change management
+        rationale: ECR repository policy change.
+
+  - resource_type: aws_ecr_lifecycle_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.9
+        title: Configuration management
+        rationale: Image retention rules are managed configuration.
+      - id: A.8.32
+        title: Change management
+        rationale: ECR lifecycle policy change.
+
+  - resource_type: aws_sqs_queue
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: SQS queue lifecycle is cloud service configuration.
+      - id: A.8.9
+        title: Configuration management
+        rationale: Queue retention, encryption, and redrive policy are configuration.
+      - id: A.8.32
+        title: Change management
+        rationale: SQS queue lifecycle change.
+
+  - resource_type: aws_sqs_queue_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: SQS policy controls producer and consumer authorization.
+      - id: A.8.20
+        title: Network security
+        rationale: Public or cross-account access expands the queue boundary.
+      - id: A.8.32
+        title: Change management
+        rationale: SQS queue policy change.
+
+  - resource_type: aws_glue_catalog_database
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: Glue catalog metadata is managed cloud data infrastructure.
+      - id: A.8.9
+        title: Configuration management
+        rationale: Catalog database metadata is configuration.
+      - id: A.8.32
+        title: Change management
+        rationale: Glue catalog database change.
+
+  - resource_type: aws_glue_catalog_table
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.5.23
+        title: Information security for use of cloud services
+        rationale: Glue table metadata describes cloud data assets.
+      - id: A.8.9
+        title: Configuration management
+        rationale: Table schema and locations are configuration.
+      - id: A.8.32
+        title: Change management
+        rationale: Glue catalog table change.
+
+  - resource_type: aws_glue_job
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.5
+        title: Secure authentication
+        rationale: Glue job role changes affect data access authorization.
+      - id: A.8.9
+        title: Configuration management
+        rationale: Script, worker, and connection settings are configuration.
+      - id: A.8.32
+        title: Change management
+        rationale: Glue job lifecycle or configuration change.
+
   # ── Logging / Monitoring ────────────────────────────────────────────────
   - resource_type: aws_cloudtrail
     actions: [create]
@@ -507,3 +675,43 @@ mappings:
       - id: A.8.32
         title: Change management
         rationale: Audit trail replacement.
+
+  - resource_type: aws_cloudwatch_metric_alarm
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.16
+        title: Monitoring activities
+        rationale: CloudWatch alarms define operational monitoring coverage.
+      - id: A.8.32
+        title: Change management
+        rationale: CloudWatch alarm change.
+
+  - resource_type: aws_cloudwatch_event_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.16
+        title: Monitoring activities
+        rationale: EventBridge rules detect or schedule operational workflows.
+      - id: A.8.32
+        title: Change management
+        rationale: EventBridge rule change.
+
+  - resource_type: aws_cloudwatch_event_target
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.16
+        title: Monitoring activities
+        rationale: Event targets route monitoring events to responders or automation.
+      - id: A.8.32
+        title: Change management
+        rationale: EventBridge target change.
+
+  - resource_type: aws_cloudwatch_log_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: A.8.16
+        title: Monitoring activities
+        rationale: Log retention and subscriptions support monitoring activity.
+      - id: A.8.32
+        title: Change management
+        rationale: CloudWatch log group change.

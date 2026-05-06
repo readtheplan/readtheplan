@@ -115,6 +115,37 @@ def test_controls_for_unmapped_resource_returns_empty() -> None:
     assert out == ()
 
 
+def test_soc2_controls_for_platform_service_resource() -> None:
+    cat = controls.load_catalog("soc2")
+    out = cat.controls_for(resource_type="aws_sqs_queue", actions=["update"])
+    ids = {control.id for control in out}
+
+    assert ids == {"CC6.1", "CC8.1", "A1.2"}
+
+
+def test_soc2_controls_for_network_topology_resource() -> None:
+    cat = controls.load_catalog("soc2")
+    out = cat.controls_for(resource_type="aws_route", actions=["create"])
+    ids = {control.id for control in out}
+
+    assert ids == {"CC6.6", "CC8.1", "A1.2"}
+
+
+def test_soc2_controls_for_cloudwatch_events_map_to_cc7() -> None:
+    cat = controls.load_catalog("soc2")
+    alarm = cat.controls_for(
+        resource_type="aws_cloudwatch_metric_alarm",
+        actions=["update"],
+    )
+    event_rule = cat.controls_for(
+        resource_type="aws_cloudwatch_event_rule",
+        actions=["delete"],
+    )
+
+    assert {control.id for control in alarm} == {"CC7.1", "CC7.2", "CC8.1"}
+    assert {control.id for control in event_rule} == {"CC7.1", "CC7.2", "CC8.1"}
+
+
 def test_controls_for_dedup_first_seen_order(tmp_path: Path) -> None:
     catalog = tmp_path / "dedup.yaml"
     catalog.write_text(

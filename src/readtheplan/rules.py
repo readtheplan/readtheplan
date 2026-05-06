@@ -92,6 +92,33 @@ def _rule_candidates(
         "aws_lambda_event_source_mapping",
     }:
         return _lambda_candidates(resource_type, action_set, change)
+    if resource_type in {
+        "aws_ecr_repository",
+        "aws_ecr_repository_policy",
+        "aws_ecr_lifecycle_policy",
+        "aws_sqs_queue",
+        "aws_sqs_queue_policy",
+        "aws_glue_catalog_database",
+        "aws_glue_catalog_table",
+        "aws_glue_job",
+    }:
+        return _platform_service_candidates(resource_type, action_set, change)
+    if resource_type in {
+        "aws_subnet",
+        "aws_route_table",
+        "aws_route",
+        "aws_route_table_association",
+        "aws_nat_gateway",
+        "aws_internet_gateway",
+    }:
+        return _network_topology_candidates(resource_type, action_set, change)
+    if resource_type in {
+        "aws_cloudwatch_metric_alarm",
+        "aws_cloudwatch_event_rule",
+        "aws_cloudwatch_event_target",
+        "aws_cloudwatch_log_group",
+    }:
+        return _observability_candidates(resource_type, action_set, change)
     return []
 
 
@@ -598,6 +625,574 @@ def _lambda_candidates(
     return candidates
 
 
+def _platform_service_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if resource_type == "aws_ecr_repository":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace an ECR repository. Image URLs, "
+                        "repository policy, scanning, and pull paths may change."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "Terraform will delete an ECR repository. Container images "
+                        "and tags may be removed with the repository."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update an ECR repository. Review image "
+                        "scanning, mutability, encryption, and lifecycle posture."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_ecr_repository_policy":
+        candidates.extend(
+            _policy_resource_candidates(
+                action_set,
+                change,
+                "ECR repository policy",
+                "container images",
+            )
+        )
+
+    elif resource_type == "aws_ecr_lifecycle_policy":
+        if "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will delete an ECR lifecycle policy. Old images "
+                        "may accumulate or retention assumptions may change."
+                    ),
+                )
+            )
+        elif "update" in action_set or "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will change an ECR lifecycle policy. Confirm tag "
+                        "retention rules will not expire rollback images too early."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_sqs_queue":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace an SQS queue. Queue URL/ARN changes "
+                        "can break producers, consumers, and dead-letter routing."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "Terraform will delete an SQS queue. Undelivered messages "
+                        "and dead-letter history can be lost."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update an SQS queue. Review retention, "
+                        "visibility timeout, encryption, and redrive policy changes."
+                    ),
+                )
+            )
+        if any(
+            _attribute_changed(change, key)
+            for key in (
+                "redrive_policy",
+                "visibility_timeout_seconds",
+                "message_retention_seconds",
+            )
+        ):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "SQS delivery semantics are changing. Redrive, visibility, "
+                        "or retention changes can cause retries, loss, or backlog growth."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_sqs_queue_policy":
+        candidates.extend(
+            _policy_resource_candidates(
+                action_set,
+                change,
+                "SQS queue policy",
+                "queue producers and consumers",
+            )
+        )
+
+    elif resource_type in {"aws_glue_catalog_database", "aws_glue_catalog_table"}:
+        label = (
+            "Glue catalog database"
+            if resource_type == "aws_glue_catalog_database"
+            else "Glue catalog table"
+        )
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        f"Terraform will replace a {label}. Data catalog identity "
+                        "changes can break analytics jobs and lineage references."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        f"Terraform will delete a {label}. Queries and ETL jobs "
+                        "depending on the catalog entry may fail."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        f"Terraform will update a {label}. Review schema, location, "
+                        "classification, and consumer compatibility."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_glue_job":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace a Glue job. Schedule bindings, "
+                        "bookmarks, permissions, and ETL behavior may change."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "Terraform will delete a Glue job. Dependent data pipelines "
+                        "will stop running unless an equivalent job exists."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update a Glue job. Review script, role, "
+                        "worker, bookmark, and connection changes before rollout."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "role_arn"):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Glue job role_arn is changing. The ETL job's data access "
+                        "boundary may shift."
+                    ),
+                )
+            )
+
+    return candidates
+
+
+def _network_topology_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if resource_type == "aws_subnet":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace a subnet. ENIs, load balancers, "
+                        "NAT placement, and workload attachment may be disrupted."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will delete a subnet. Workloads and network "
+                        "interfaces in that subnet must move first."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update subnet configuration. Review CIDR, "
+                        "availability zone, public IP, and routing assumptions."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "map_public_ip_on_launch"):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Subnet map_public_ip_on_launch is changing. New instances "
+                        "may gain or lose public internet reachability."
+                    ),
+                )
+            )
+
+    elif resource_type in {"aws_route_table", "aws_route_table_association"}:
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace route table topology. Subnet "
+                        "egress, ingress, and private/public boundaries may shift."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will delete route table topology. Attached "
+                        "subnets may lose expected routing."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update route table topology. Review subnet "
+                        "associations and default route behavior."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_route":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace a route. Traffic may briefly blackhole "
+                        "or move to a different network boundary."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will delete a route. Dependent traffic may lose "
+                        "connectivity immediately."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update a route. Review destination CIDRs "
+                        "and next-hop targets for reachability impact."
+                    ),
+                )
+            )
+        if _route_opens_internet_path(change):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "This route appears to add a default route to an internet "
+                        "gateway. Confirm the attached subnet is intended to be public."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_nat_gateway":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace a NAT gateway. Private subnet egress "
+                        "may be interrupted until routes point at the new gateway."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will delete a NAT gateway. Private subnet egress "
+                        "for patching, pulls, and outbound calls may stop."
+                    ),
+                )
+            )
+        elif "create" in action_set or "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will change a NAT gateway. Review egress routing, "
+                        "AZ placement, and elastic IP dependencies."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_internet_gateway":
+        if "delete" in action_set and "create" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will replace an internet gateway. Public subnet "
+                        "ingress and egress may be interrupted."
+                    ),
+                )
+            )
+        elif "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will delete an internet gateway. Public subnet "
+                        "connectivity through that VPC will stop."
+                    ),
+                )
+            )
+        elif "create" in action_set or "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will change an internet gateway. Review which "
+                        "subnets and routes should become internet reachable."
+                    ),
+                )
+            )
+
+    return candidates
+
+
+def _observability_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if resource_type == "aws_cloudwatch_metric_alarm":
+        if "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Terraform will delete a CloudWatch alarm. Detection and "
+                        "incident response coverage may be reduced."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update a CloudWatch alarm. Review threshold, "
+                        "period, evaluation, and action changes for detection impact."
+                    ),
+                )
+            )
+        if any(
+            _attribute_changed(change, key)
+            for key in (
+                "alarm_actions",
+                "ok_actions",
+                "insufficient_data_actions",
+                "threshold",
+                "evaluation_periods",
+                "datapoints_to_alarm",
+            )
+        ):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "CloudWatch alarm sensitivity or notification actions are "
+                        "changing. Confirm alerts still reach the right responders."
+                    ),
+                )
+            )
+
+    elif resource_type in {"aws_cloudwatch_event_rule", "aws_cloudwatch_event_target"}:
+        label = (
+            "EventBridge rule"
+            if resource_type == "aws_cloudwatch_event_rule"
+            else "EventBridge target"
+        )
+        if "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        f"Terraform will delete an {label}. Automated detection, "
+                        "routing, or remediation may stop."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        f"Terraform will update an {label}. Review event pattern, "
+                        "schedule, target, and retry behavior."
+                    ),
+                )
+            )
+        if any(
+            _attribute_changed(change, key)
+            for key in ("event_pattern", "schedule_expression", "arn", "role_arn")
+        ):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        f"{label} routing criteria or destination is changing. "
+                        "Security events may stop reaching the expected workflow."
+                    ),
+                )
+            )
+
+    elif resource_type == "aws_cloudwatch_log_group":
+        if "delete" in action_set:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "Terraform will delete a CloudWatch log group. Log history "
+                        "used for investigations and audit evidence may be removed."
+                    ),
+                )
+            )
+        elif "update" in action_set:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update a CloudWatch log group. Review "
+                        "retention, encryption, and subscription changes."
+                    ),
+                )
+            )
+        if _retention_decreased(change, "retention_in_days"):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "CloudWatch log retention is decreasing. Investigation and "
+                        "audit lookback windows may shrink."
+                    ),
+                )
+            )
+
+    return candidates
+
+
+def _policy_resource_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+    label: str,
+    protected_subject: str,
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+    if "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    f"Terraform will delete a {label}. Access for {protected_subject} "
+                    "may become too broad or too restrictive depending on defaults."
+                ),
+            )
+        )
+    elif "update" in action_set or "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    f"Terraform will change a {label}. Review principals, actions, "
+                    "and cross-account access before applying."
+                ),
+            )
+        )
+
+    policy = _policy_document(_after_value(change, "policy"))
+    if policy is not None and _policy_allows_public(policy):
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    f"This {label} appears to allow public access. Public or "
+                    "anonymous access requires security review."
+                ),
+            )
+        )
+    return candidates
+
+
 def _health_check_changed(change: dict[str, Any]) -> bool:
     before = change.get("before")
     after = change.get("after")
@@ -676,6 +1271,27 @@ def _major_version(value: Any) -> int | None:
     if match is None:
         return None
     return int(match.group(1))
+
+
+def _route_opens_internet_path(change: dict[str, Any]) -> bool:
+    destination = _after_value(change, "destination_cidr_block")
+    ipv6_destination = _after_value(change, "destination_ipv6_cidr_block")
+    gateway_id = _after_value(change, "gateway_id")
+    return (
+        (destination == "0.0.0.0/0" or ipv6_destination == "::/0")
+        and isinstance(gateway_id, str)
+        and (gateway_id.startswith("igw-") or "internet_gateway" in gateway_id)
+    )
+
+
+def _retention_decreased(change: dict[str, Any], key: str) -> bool:
+    if not _attribute_changed(change, key):
+        return False
+    before = _before_value(change, key)
+    after = _after_value(change, key)
+    if not isinstance(before, int) or not isinstance(after, int):
+        return False
+    return after < before
 
 
 def _s3_public_exposure(resource_type: str, change: dict[str, Any]) -> bool:

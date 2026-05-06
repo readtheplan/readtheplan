@@ -359,6 +359,89 @@ def test_lambda_runtime_minor_change_not_flagged(tmp_path: Path) -> None:
     assert "runtime" not in summary.resource_changes[0].explanation
 
 
+def test_platform_service_rules_cover_ecr_sqs_and_glue(tmp_path: Path) -> None:
+    cases = [
+        (
+            _change("aws_ecr_repository", ["delete"]),
+            "irreversible",
+            "ECR repository",
+        ),
+        (
+            _change(
+                "aws_sqs_queue_policy",
+                ["update"],
+                before={"policy": _policy([])},
+                after={
+                    "policy": _policy(
+                        [
+                            {
+                                "Effect": "Allow",
+                                "Principal": "*",
+                                "Action": "sqs:SendMessage",
+                            }
+                        ]
+                    )
+                },
+            ),
+            "dangerous",
+            "public access",
+        ),
+        (
+            _change("aws_glue_job", ["delete"]),
+            "irreversible",
+            "Glue job",
+        ),
+    ]
+
+    for resource_change, expected_risk, expected_explanation in cases:
+        summary = analyze_plan_file(_write_plan(tmp_path, resource_change))
+        change = summary.resource_changes[0]
+
+        assert change.risk == expected_risk
+        assert expected_explanation in change.explanation
+
+
+def test_network_topology_route_to_internet_gateway_is_dangerous(
+    tmp_path: Path,
+) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "aws_route",
+            ["create"],
+            after={
+                "destination_cidr_block": "0.0.0.0/0",
+                "gateway_id": "igw-example",
+            },
+        ),
+    )
+
+    summary = analyze_plan_file(plan)
+
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert (
+        "default route to an internet gateway"
+        in summary.resource_changes[0].explanation
+    )
+
+
+def test_cloudwatch_log_group_retention_decrease_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "aws_cloudwatch_log_group",
+            ["update"],
+            before={"retention_in_days": 365},
+            after={"retention_in_days": 30},
+        ),
+    )
+
+    summary = analyze_plan_file(plan)
+
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "retention is decreasing" in summary.resource_changes[0].explanation
+
+
 def test_resource_rules_can_be_disabled(tmp_path: Path) -> None:
     plan = _write_plan(
         tmp_path,
