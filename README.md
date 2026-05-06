@@ -44,7 +44,9 @@ Anchored in this field note: **[terraform-apply-is-roulette](https://github.com/
 The post-MVP backlog is focused on catalog breadth, rule quality, examples, and
 adoption docs. MCP integration is a future preview surface only: if built, it
 should be a thin adapter over the Python CLI JSON contract, not a separate
-server-first product or the primary way to use readtheplan.
+server-first product or the primary way to use readtheplan. See
+[ADR 0012](docs/adr/0012-mcp-preview-adapter.md) for the preview adapter
+scope.
 
 ## what's *not* in scope (and won't be)
 
