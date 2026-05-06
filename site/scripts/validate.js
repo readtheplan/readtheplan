@@ -10,6 +10,7 @@ function read(file) {
 const html = read("index.html");
 const css = read("styles.css");
 const js = read("app.js");
+const mcpHtml = read("mcp/index.html");
 
 const requiredHtml = [
   "id=\"onboardingForm\"",
@@ -151,6 +152,11 @@ const seoRoutes = [
   "resources/terraform-security-group-0-0-0-0-risk/index.html",
   "resources/terraform-cloudwatch-log-retention-risk/index.html",
 ];
+const mcpRoute = "mcp/index.html";
+
+if (!fs.existsSync(path.join(root, mcpRoute))) {
+  throw new Error(`Missing MCP route: ${mcpRoute}`);
+}
 
 for (const route of seoRoutes) {
   if (!fs.existsSync(path.join(root, route))) {
@@ -163,6 +169,7 @@ const seoHtml = seoRoutes.map((route) => read(route)).join("\n");
 for (const token of [
   "/tools/terraform-risk-calculator/",
   "/tools/soc2-cloud-control-mapper/",
+  "/mcp/",
   "/resources/terraform-s3-bucket-risk/",
   "/resources/terraform-iam-policy-risk/",
   "/resources/terraform-security-group-0-0-0-0-risk/",
@@ -171,6 +178,55 @@ for (const token of [
   if (!html.includes(token) || !read("sitemap.xml").includes(token)) {
     throw new Error(`Missing linked and sitemap-listed SEO route: ${token}`);
   }
+}
+
+for (const token of [
+  "Local MCP Terraform reviewer",
+  "Give your AI coding agent a Terraform/SOC 2 reviewer that runs locally",
+  "Local-first",
+  "No raw plan upload",
+  "No hosted MCP service",
+  "No hosted plan analysis",
+  "pip install \"readtheplan[mcp]\"",
+  "readtheplan mcp",
+  "analyze_plan",
+  "PR reviewer",
+  "SOC 2 evidence prep",
+  "Dangerous change triage",
+  "Auditor-friendly summary",
+  "Request pilot setup",
+  "pilot-contact@example.com",
+  "auth design",
+  "least privilege",
+  "audit logs",
+  "Custom engagement",
+]) {
+  if (!mcpHtml.includes(token)) {
+    throw new Error(`Missing MCP landing page token: ${token}`);
+  }
+}
+
+for (const token of [
+  "Upload a plan",
+  "hosted MCP endpoint",
+  "hosted MCP platform",
+  "hosted plan analyzer",
+  "API endpoint",
+  "submit your plan",
+  "store uploaded",
+  "stored plan",
+]) {
+  if (mcpHtml.toLowerCase().includes(token.toLowerCase())) {
+    throw new Error(`MCP page must not imply upload/API/hosted analysis behavior: ${token}`);
+  }
+}
+
+if (/<input[^>]+type=["']file["']/i.test(mcpHtml)) {
+  throw new Error("MCP page must not include file inputs.");
+}
+
+if (/<form[^>]+action=/i.test(mcpHtml)) {
+  throw new Error("MCP page must not submit forms to a backend.");
 }
 
 for (const token of [
@@ -245,6 +301,10 @@ for (const token of ["\"tools\"", "\"resources\""]) {
   if (!buildScript.includes(token)) {
     throw new Error(`Build script must copy SEO route directory: ${token}`);
   }
+}
+
+if (!buildScript.includes("\"mcp\"")) {
+  throw new Error("Build script must copy MCP route directory.");
 }
 
 for (const file of [
