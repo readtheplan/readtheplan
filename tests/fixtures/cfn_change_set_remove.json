@@ -1,0 +1,16 @@
+{
+  "Changes": [
+    {
+      "Type": "Resource",
+      "ResourceChange": {
+        "Action": "Remove",
+        "LogicalResourceId": "MyDBInstance",
+        "PhysicalResourceId": "db-12345678",
+        "ResourceType": "AWS::RDS::DBInstance",
+        "Replacement": "False",
+        "Scope": [],
+        "Details": []
+      }
+    }
+  ]
+}

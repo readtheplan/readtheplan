@@ -1,0 +1,16 @@
+{
+  "Changes": [
+    {
+      "Type": "Resource",
+      "ResourceChange": {
+        "Action": "Modify",
+        "LogicalResourceId": "MyKMSKey",
+        "PhysicalResourceId": "arn:aws:kms:us-east-1:123456789012:key/123",
+        "ResourceType": "AWS::KMS::Key",
+        "Replacement": "True",
+        "Scope": ["Properties"],
+        "Details": []
+      }
+    }
+  ]
+}

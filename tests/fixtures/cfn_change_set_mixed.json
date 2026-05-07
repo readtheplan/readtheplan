@@ -1,0 +1,31 @@
+{
+  "Changes": [
+    {
+      "Type": "Resource",
+      "ResourceChange": {
+        "Action": "Add",
+        "LogicalResourceId": "MyBucket",
+        "ResourceType": "AWS::S3::Bucket",
+        "Replacement": "False"
+      }
+    },
+    {
+      "Type": "Resource",
+      "ResourceChange": {
+        "Action": "Modify",
+        "LogicalResourceId": "MyDBInstance",
+        "ResourceType": "AWS::RDS::DBInstance",
+        "Replacement": "False"
+      }
+    },
+    {
+      "Type": "Resource",
+      "ResourceChange": {
+        "Action": "Remove",
+        "LogicalResourceId": "MyKMSKey",
+        "ResourceType": "AWS::KMS::Key",
+        "Replacement": "False"
+      }
+    }
+  ]
+}
