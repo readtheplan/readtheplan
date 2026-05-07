@@ -1,0 +1,55 @@
+[
+  {
+    "file": "01-safe-add-s3-bucket.json",
+    "description": "Adding a new S3 bucket",
+    "resource": "aws_s3_bucket.logs",
+    "type": "aws_s3_bucket",
+    "actions": [
+      "create"
+    ],
+    "risk": "safe",
+    "expected": "safe",
+    "passed": true,
+    "explanation": "Terraform will create S3 bucket infrastructure. Confirm public access blocks and data classification before storing sensitive data."
+  },
+  {
+    "file": "02-review-update-s3-tags.json",
+    "description": "Updating S3 bucket tags in-place",
+    "resource": "aws_s3_bucket.logs",
+    "type": "aws_s3_bucket",
+    "actions": [
+      "update"
+    ],
+    "risk": "review",
+    "expected": "review",
+    "passed": true,
+    "explanation": "Terraform will update S3 bucket controls. Review public access, retention, encryption, and data exposure settings."
+  },
+  {
+    "file": "03-dangerous-replace-ec2.json",
+    "description": "Replacing EC2 instance (user_data change)",
+    "resource": "aws_instance.web",
+    "type": "aws_instance",
+    "actions": [
+      "delete",
+      "create"
+    ],
+    "risk": "dangerous",
+    "expected": "dangerous",
+    "passed": true,
+    "explanation": "Terraform will replace this resource. Review downtime, identity changes, and any state that must be migrated or restored."
+  },
+  {
+    "file": "04-irreversible-delete-rds.json",
+    "description": "Deleting a production RDS database",
+    "resource": "aws_db_instance.primary",
+    "type": "aws_db_instance",
+    "actions": [
+      "delete"
+    ],
+    "risk": "irreversible",
+    "expected": "irreversible",
+    "passed": true,
+    "explanation": "Terraform will delete this RDS instance. Without a verified final snapshot or restore plan, database data may be lost."
+  }
+]

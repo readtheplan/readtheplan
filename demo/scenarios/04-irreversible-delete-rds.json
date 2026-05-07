@@ -1,0 +1,44 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.10.5",
+  "resource_changes": [
+    {
+      "address": "aws_db_instance.primary",
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "engine": "postgres",
+          "engine_version": "16.2",
+          "instance_class": "db.r6g.xlarge",
+          "allocated_storage": 500,
+          "storage_encrypted": true,
+          "multi_az": true,
+          "backup_retention_period": 30,
+          "deletion_protection": true,
+          "identifier": "prod-primary-db"
+        },
+        "after": null,
+        "after_unknown": {}
+      }
+    }
+  ],
+  "configuration": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_db_instance.primary",
+          "mode": "managed",
+          "type": "aws_db_instance",
+          "name": "primary",
+          "provider_config_key": "aws"
+        }
+      ]
+    }
+  }
+}
