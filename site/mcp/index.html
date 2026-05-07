@@ -90,11 +90,14 @@ readtheplan mcp</pre>
         </div>
         <div class="gc utility-panel">
           <p class="eyebrow">Tool surface today</p>
-          <h2>Only analyze_plan.</h2>
+          <h2>Analyze and gate.</h2>
           <p class="utility-copy">
-            The preview exposes one MCP tool: <code>analyze_plan</code>. It accepts a
-            local <code>plan_path</code> and returns the same JSON summary as
-            <code>readtheplan analyze --format json plan.json</code>.
+            The preview exposes two MCP tools: <code>analyze_plan</code> and
+            <code>agent_gate</code>. Both accept a local <code>plan_path</code>.
+            <code>analyze_plan</code> returns the same JSON summary as
+            <code>readtheplan analyze --format json plan.json</code>, while
+            <code>agent_gate</code> returns the local proceed/warn/block contract
+            from <code>readtheplan agent-gate plan.json</code>.
           </p>
           <p class="utility-copy">
             Evidence generation, signature verification, signing, framework selection,
@@ -148,18 +151,18 @@ readtheplan mcp</pre>
           <ol class="utility-copy">
             <li>Generate plan JSON locally: <code>terraform plan -out=tfplan</code>, then <code>terraform show -json tfplan &gt; plan.json</code>.</li>
             <li>Start your MCP client with <code>readtheplan mcp</code> configured as a local stdio server.</li>
-            <li>Ask the agent to call <code>analyze_plan</code> for <code>plan.json</code>.</li>
-            <li>Review the risk and control summary before approving or requesting changes.</li>
+            <li>Ask the agent to call <code>agent_gate</code> for <code>plan.json</code>.</li>
+            <li>Use proceed, warn, or block before approving, requesting changes, merging, or applying.</li>
           </ol>
         </div>
         <div class="gc utility-panel">
-          <p class="eyebrow">Agent result</p>
-          <h2>Risk and control context.</h2>
+          <p class="eyebrow">Agent gate result</p>
+          <h2>Proceed, warn, or block.</h2>
           <p class="utility-copy">
-            The agent can explain dangerous changes, summarize likely SOC 2 evidence
-            angles, and prepare reviewer notes. The raw Terraform JSON remains local;
-            the MCP preview does not add a backend, storage layer, cloud relay, or hosted
-            plan analysis.
+            The agent can stop on dangerous or irreversible changes, require reviewer
+            evidence for warning-tier changes, and produce an auditor-friendly PR
+            comment. The raw Terraform JSON remains local; the MCP preview does not
+            add a backend, storage layer, cloud relay, or hosted plan analysis.
           </p>
         </div>
       </section>
@@ -177,7 +180,7 @@ readtheplan mcp</pre>
             <div class="control-map-row" role="row">
               <span>PR reviewer</span>
               <span>Terraform pull request review</span>
-              <span>Call <code>analyze_plan</code> on <code>plan.json</code>. Summarize dangerous and review-tier changes first, identify likely blast radius, and draft concise PR review comments for the Terraform author.</span>
+              <span>Call <code>agent_gate</code> on <code>plan.json</code>. Follow the allowed and prohibited next actions, then draft the PR comment for the Terraform author.</span>
             </div>
             <div class="control-map-row" role="row">
               <span>SOC 2 evidence prep</span>
@@ -208,6 +211,9 @@ readtheplan mcp</pre>
             Pilot setup can help an infra or compliance team connect a local MCP client
             to one Terraform repository, tune review prompts, and decide which workflows
             belong in CLI evidence rather than the preview MCP tool.
+            Future adapters can normalize CloudFormation, Packer, Ansible, Kubernetes,
+            Pulumi, AWS CDK, and Azure/GCP/Oracle IaC into the gate contract, but this
+            preview is Terraform-first today.
           </p>
           <a class="primary-link" href="mailto:pilot-contact@example.com?subject=readtheplan%20MCP%20pilot%20setup">
             Request pilot setup
@@ -226,7 +232,7 @@ readtheplan mcp</pre>
       <footer class="g footer-grid">
         <div class="gc">MIT License</div>
         <div class="gc">Local MCP over stdio</div>
-        <div class="gc">analyze_plan only</div>
+        <div class="gc">analyze_plan + agent_gate</div>
         <div class="gc"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></div>
       </footer>
     </main>

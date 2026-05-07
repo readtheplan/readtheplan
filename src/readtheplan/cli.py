@@ -7,6 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Callable, Sequence, TextIO, cast
 
+from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.controls import (
     CatalogSchemaError,
     ControlCatalog,
@@ -114,6 +115,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
+
+    agent_gate = subparsers.add_parser(
+        "agent-gate",
+        help="Emit the local coding-agent gate decision for a Terraform plan JSON file.",
+    )
+    agent_gate.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    agent_gate.add_argument("plan_file", help="Path to Terraform plan JSON.")
+    agent_gate.set_defaults(func=_agent_gate)
 
     verify = subparsers.add_parser(
         "verify",
@@ -239,6 +254,26 @@ def _analyze(args: argparse.Namespace) -> int:
         print()
     else:
         _print_summary(summary, sys.stdout, catalog=catalog)
+    return 0
+
+
+def _agent_gate(args: argparse.Namespace) -> int:
+    catalog: ControlCatalog | None = None
+    if args.framework:
+        try:
+            catalog = load_catalog(args.framework)
+        except (CatalogSchemaError, FrameworkNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    try:
+        summary = analyze_plan_file(args.plan_file, use_rules=True)
+    except PlanError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    json.dump(agent_gate_to_dict(summary, catalog), sys.stdout, indent=2)
+    print()
     return 0
 
 

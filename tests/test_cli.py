@@ -50,6 +50,41 @@ def test_analyze_valid_plan_can_print_json(capsys) -> None:
     }
 
 
+def test_agent_gate_prints_json_contract(capsys) -> None:
+    exit_code = main(["agent-gate", str(FIXTURES / "valid_plan.json")])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["schema"] == "rtp-agent-gate-v1"
+    assert payload["decision"] == "block"
+    assert payload["risk"] == "dangerous"
+    assert "rtp.check.human_approval" in payload["required_checks"]
+    assert "apply" in payload["prohibited_next_actions"]
+    assert payload["risk_counts"] == {
+        "safe": 1,
+        "review": 1,
+        "dangerous": 1,
+        "irreversible": 0,
+    }
+
+
+def test_agent_gate_can_include_framework_check_ids(capsys) -> None:
+    exit_code = main(
+        ["agent-gate", "--framework", "soc2", str(FIXTURES / "soc2_plan.json")]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert any(
+        check.startswith("rtp.control.soc2.")
+        for check in payload["required_checks"]
+    )
+
+
 def test_analyze_can_disable_resource_rules(tmp_path: Path, capsys) -> None:
     plan = tmp_path / "rds_major_update.json"
     plan.write_text(

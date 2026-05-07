@@ -10,6 +10,7 @@ from readtheplan.cli import _build_parser, main
 from readtheplan.mcp_server import (
     MCPToolInputError,
     MissingMCPDependencyError,
+    agent_gate,
     analyze_plan,
     create_server,
 )
@@ -25,6 +26,15 @@ def test_analyze_plan_matches_cli_json(capsys) -> None:
 
     assert exit_code == 0
     assert analyze_plan(str(plan)) == json.loads(captured.out)
+
+
+def test_agent_gate_matches_cli_json(capsys) -> None:
+    plan = FIXTURES / "valid_plan.json"
+    exit_code = main(["agent-gate", str(plan)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert agent_gate(str(plan)) == json.loads(captured.out)
 
 
 @pytest.mark.parametrize(
@@ -93,6 +103,7 @@ def test_create_server_registers_analyze_plan_tool(monkeypatch) -> None:
     assert isinstance(server, FakeFastMCP)
     assert server.name == "readtheplan"
     assert "analyze_plan" in registered
+    assert "agent_gate" in registered
 
 
 def test_cli_parser_has_mcp_subcommand() -> None:
