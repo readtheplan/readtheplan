@@ -96,8 +96,16 @@ readtheplan mcp</pre>
             <code>agent_gate</code>. Both accept a local <code>plan_path</code>.
             <code>analyze_plan</code> returns the same JSON summary as
             <code>readtheplan analyze --format json plan.json</code>, while
-            <code>agent_gate</code> returns the local proceed/warn/block contract
+            <code>agent_gate</code> returns the <code>rtp-agent-gate-v1</code> contract
             from <code>readtheplan agent-gate plan.json</code>.
+          </p>
+          <p class="utility-copy">
+            The <code>agent_gate</code> contract includes <code>decision</code>
+            (proceed/warn/block), <code>allowed_next_actions</code>,
+            <code>prohibited_next_actions</code>, and <code>pr_comment</code>
+            — a pre-formatted Markdown summary that avoids raw plan JSON. Review
+            it before posting to public PRs because resource addresses can still
+            reveal environment details.
           </p>
           <p class="utility-copy">
             Evidence generation, signature verification, signing, framework selection,

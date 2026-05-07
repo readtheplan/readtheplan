@@ -133,10 +133,19 @@ Framework control IDs can be added to the required checks:
 readtheplan agent-gate --framework soc2 plan.json
 ```
 
-The gate is Terraform-first in this slice. Future IaC adapters may normalize
-CloudFormation, Packer, Ansible, Kubernetes manifests, Pulumi, AWS CDK, and
-Azure/GCP/Oracle IaC into the same gate contract, but those parsers are not
-bundled today.
+### GitHub Actions usage
+
+Use the `agent-gate` command in CI to enforce safe deployment practices. The structured output allows you to fail builds on `block` while still producing a review summary that does not include raw Terraform plan JSON.
+
+```yaml
+- name: Run Agent Gate
+  run: |
+    readtheplan agent-gate plan.json > agent-gate.json
+    DECISION=$(jq -r '.decision' agent-gate.json)
+    if [ "$DECISION" = "block" ]; then exit 1; fi
+```
+
+See [examples/04-agent-gate-ci/](examples/04-agent-gate-ci/) for a complete workflow example that writes the gate summary to the GitHub Actions step summary and documents evidence checklists.
 
 ## MCP preview
 

@@ -1,0 +1,82 @@
+name: "readtheplan agent-gate CI"
+
+# This workflow reviews an already-created Terraform plan JSON artifact.
+# Keep terraform init/plan/apply in a separate trusted workflow and do not
+# expose cloud credentials to forked pull_request jobs.
+on:
+  workflow_run:
+    workflows: ["Terraform plan"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gate:
+    name: "Agent Gate"
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Download Terraform plan JSON artifact"
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: "Install readtheplan"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install readtheplan
+
+      - name: "Run readtheplan agent gate"
+        id: rtp
+        run: |
+          set -euo pipefail
+          PLAN_FILE="${PLAN_FILE:-plan.json}"
+
+          # Do not print the raw Terraform plan JSON. The gate output contains
+          # only the proceed/warn/block contract and safe summary text.
+          readtheplan agent-gate "$PLAN_FILE" > agent-gate.json
+
+          SCHEMA=$(jq -r '.schema' agent-gate.json)
+          DECISION=$(jq -r '.decision' agent-gate.json)
+          if [ "$SCHEMA" != "rtp-agent-gate-v1" ]; then
+            echo "::error::Unexpected readtheplan agent gate schema: $SCHEMA"
+            exit 1
+          fi
+          case "$DECISION" in
+            proceed|warn|block) ;;
+            *)
+              echo "::error::Unexpected readtheplan agent gate decision: $DECISION"
+              exit 1
+              ;;
+          esac
+
+          echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
+          jq -r '.pr_comment' agent-gate.json > pr-comment.md
+
+          {
+            echo "## readtheplan agent gate"
+            echo
+            cat pr-comment.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Enforce gate decision"
+        run: |
+          set -euo pipefail
+          DECISION="${{ steps.rtp.outputs.decision }}"
+          echo "readtheplan decision: $DECISION"
+
+          if [ "$DECISION" = "block" ]; then
+            echo "::error::Agent gate blocked this change. Complete the required checks before merge or apply."
+            exit 1
+          elif [ "$DECISION" = "warn" ]; then
+            echo "::warning::Agent gate issued a warning. Review the step summary for required evidence."
+          fi

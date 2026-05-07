@@ -1,0 +1,40 @@
+{
+  "schema": "rtp-agent-gate-v1",
+  "decision": "block",
+  "risk": "dangerous",
+  "required_checks": [
+    "rtp.check.change_record",
+    "rtp.check.evidence_packet",
+    "rtp.check.human_approval",
+    "rtp.check.security_review"
+  ],
+  "allowed_next_actions": [
+    "post_pr_comment",
+    "request_human_review",
+    "collect_evidence",
+    "open_change_record"
+  ],
+  "prohibited_next_actions": [
+    "merge",
+    "apply",
+    "auto_approve",
+    "auto_apply"
+  ],
+  "reason": "Block because 1 Terraform change(s) are dangerous or irreversible; human approval, change evidence, and security review are required before merge or apply.",
+  "pr_comment": "**readtheplan agent gate:** BLOCK\n\nBlock because 1 Terraform change(s) are dangerous or irreversible; human approval, change evidence, and security review are required before merge or apply.\n\n- Highest risk: `dangerous`\n- Resource changes: `3`\n- Required checks: `rtp.check.change_record, rtp.check.evidence_packet, rtp.check.human_approval, rtp.check.security_review`\n- Flagged resources:\n  - `aws_db_instance.main` `dangerous`: Terraform will replace this RDS instance. Confirm snapshots, restore path, endpoint changes, and maintenance-window impact.\n  - `aws_iam_role.app` `review`: Terraform will update IAM authorization. Review trust policies, permission boundaries, and deny statements for lockout or escalation risk.",
+  "evidence_checklist": [
+    "Record the local Terraform plan JSON path or CI artifact reference.",
+    "Attach the readtheplan JSON summary or PR comment to the change record.",
+    "Record reviewer identity, timestamp, and approval decision.",
+    "Document mitigation or rollback notes for review-tier changes.",
+    "Capture explicit human approval before merge, apply, or auto-approval.",
+    "Document recovery, backup, or restore evidence for dangerous or irreversible changes."
+  ],
+  "auditor_summary": "readtheplan evaluated 3 Terraform resource change(s). The agent gate decision is block with maximum risk dangerous. Risk counts: safe=1, review=1, dangerous=1, irreversible=0.",
+  "risk_counts": {
+    "safe": 1,
+    "review": 1,
+    "dangerous": 1,
+    "irreversible": 0
+  }
+}
