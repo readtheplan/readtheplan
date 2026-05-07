@@ -31,6 +31,15 @@ Shows `controls_touched` aggregation across many changes.
 - [Markdown output](03-multi-resource/analysis.md)
 - [JSON output (SOC 2)](03-multi-resource/analysis.json)
 
+## 04-agent-gate-ci
+
+Dogfood example of `readtheplan agent-gate` for coding agents and CI/CD pipelines.
+Demonstrates the structured JSON contract and a GitHub Actions workflow.
+
+- [Example README](04-agent-gate-ci/README.md)
+- [JSON output](04-agent-gate-ci/agent-gate.json)
+- [GitHub Actions workflow](04-agent-gate-ci/github-actions.yml)
+
 ## Regenerate
 
 If the CLI changes, regenerate outputs with:
