@@ -1,0 +1,47 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.10.5",
+  "resource_changes": [
+    {
+      "address": "aws_instance.web",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "web",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ],
+        "before": {
+          "ami": "ami-0c55b159cbfafe1f0",
+          "instance_type": "t3.medium",
+          "user_data": "#!/bin/bash\necho old"
+        },
+        "after": {
+          "ami": "ami-0c55b159cbfafe1f0",
+          "instance_type": "t3.medium",
+          "user_data": "#!/bin/bash\necho new deployment"
+        },
+        "after_unknown": {
+          "id": true,
+          "private_ip": true,
+          "public_ip": true
+        }
+      }
+    }
+  ],
+  "configuration": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_instance.web",
+          "mode": "managed",
+          "type": "aws_instance",
+          "name": "web",
+          "provider_config_key": "aws"
+        }
+      ]
+    }
+  }
+}

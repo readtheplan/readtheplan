@@ -1,0 +1,70 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.10.5",
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_s3_bucket.logs",
+          "mode": "managed",
+          "type": "aws_s3_bucket",
+          "name": "logs",
+          "provider_name": "registry.terraform.io/hashicorp/aws",
+          "schema_version": 0,
+          "values": {
+            "bucket": "app-logs-prod-2026",
+            "force_destroy": false,
+            "tags": {
+              "Environment": "production"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "resource_changes": [
+    {
+      "address": "aws_s3_bucket.logs",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket": "app-logs-prod-2026",
+          "force_destroy": false,
+          "tags": {
+            "Environment": "production"
+          }
+        },
+        "after_unknown": {
+          "arn": true,
+          "id": true,
+          "region": true
+        }
+      }
+    }
+  ],
+  "configuration": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_s3_bucket.logs",
+          "mode": "managed",
+          "type": "aws_s3_bucket",
+          "name": "logs",
+          "provider_config_key": "aws",
+          "expressions": {
+            "bucket": {
+              "constant_value": "app-logs-prod-2026"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

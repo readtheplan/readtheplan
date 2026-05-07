@@ -1,0 +1,44 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.10.5",
+  "resource_changes": [
+    {
+      "address": "aws_s3_bucket.logs",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "bucket": "app-logs-prod-2026",
+          "tags": {
+            "Environment": "staging"
+          }
+        },
+        "after": {
+          "bucket": "app-logs-prod-2026",
+          "tags": {
+            "Environment": "production"
+          }
+        },
+        "after_unknown": {}
+      }
+    }
+  ],
+  "configuration": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_s3_bucket.logs",
+          "mode": "managed",
+          "type": "aws_s3_bucket",
+          "name": "logs",
+          "provider_config_key": "aws"
+        }
+      ]
+    }
+  }
+}
