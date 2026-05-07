@@ -1,0 +1,25 @@
+{
+  "old_template": {
+    "Resources": {
+      "MyBucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": "old-bucket"
+        }
+      }
+    }
+  },
+  "new_template": {
+    "Resources": {
+      "MyBucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": "new-bucket"
+        }
+      },
+      "NewTopic": {
+        "Type": "AWS::SNS::Topic"
+      }
+    }
+  }
+}

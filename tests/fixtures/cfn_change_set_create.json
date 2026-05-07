@@ -1,0 +1,16 @@
+{
+  "Changes": [
+    {
+      "Type": "Resource",
+      "ResourceChange": {
+        "Action": "Add",
+        "LogicalResourceId": "MyBucket",
+        "PhysicalResourceId": null,
+        "ResourceType": "AWS::S3::Bucket",
+        "Replacement": "False",
+        "Scope": [],
+        "Details": []
+      }
+    }
+  ]
+}
