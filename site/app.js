@@ -498,5 +498,98 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
   });
 });
 
+// ── Live terminal animation ──────────────────────────────────
+(function initTerminal() {
+  const body = document.getElementById("terminalBody");
+  const typingLine = document.getElementById("typingLine");
+  const typingCmd = document.getElementById("typingCmd");
+  const cursor = document.getElementById("cursor");
+  if (!body || !typingLine || !typingCmd || !cursor) return;
+
+  const commands = [
+    {
+      cmd: "readtheplan analyze examples/02-dangerous-replacement/plan.json --framework soc2",
+      output: "→ risk tiers: 4 safe · 1 review · 2 dangerous · 1 irreversible",
+    },
+    {
+      cmd: "readtheplan analyze plan.json --framework iso27001 --evidence evidence.json",
+      output: "→ evidence envelope written. 7 controls touched.",
+    },
+    {
+      cmd: "cat readtheplan-summary.json | jq '.risks'",
+      output: "→ {\"safe\": 12, \"review\": 3, \"dangerous\": 1, \"irreversible\": 0}",
+    },
+    {
+      cmd: "readtheplan gate --threshold dangerous",
+      output: "→ gate passed. 1 dangerous finding(s) flagged for review.",
+    },
+  ];
+
+  let cmdIdx = 0;
+  let charIdx = 0;
+  let phase = "typing"; // "typing" | "output" | "pause"
+
+  function tick() {
+    if (cmdIdx >= commands.length) {
+      // Loop: reset after a long pause
+      setTimeout(() => {
+        while (body.children.length > 3) body.removeChild(body.lastChild);
+        cmdIdx = 0;
+        charIdx = 0;
+        phase = "typing";
+        typingCmd.textContent = "";
+        tick();
+      }, 4000);
+      return;
+    }
+
+    const cmd = commands[cmdIdx];
+
+    if (phase === "typing") {
+      if (charIdx < cmd.cmd.length) {
+        typingCmd.textContent = cmd.cmd.slice(0, charIdx + 1);
+        charIdx++;
+        setTimeout(tick, 40 + Math.random() * 30);
+      } else {
+        phase = "output";
+        setTimeout(tick, 350);
+      }
+      return;
+    }
+
+    if (phase === "output") {
+      // Create completed command line (no cursor)
+      const cmdLine = document.createElement("div");
+      cmdLine.className = "terminal-line";
+      cmdLine.innerHTML = `<span style="color:var(--accent)">λ</span> <span style="color:var(--foreground)">${cmd.cmd}</span>`;
+      body.insertBefore(cmdLine, typingLine);
+
+      // Create output line
+      const outLine = document.createElement("div");
+      outLine.className = "terminal-line";
+      outLine.style.color = "var(--muted)";
+      outLine.style.paddingLeft = "1.2em";
+      outLine.textContent = cmd.output;
+      body.insertBefore(outLine, typingLine);
+
+      // Reset typing line
+      typingCmd.textContent = "";
+      charIdx = 0;
+      cmdIdx++;
+      phase = "pause";
+      setTimeout(tick, 1800);
+      return;
+    }
+
+    if (phase === "pause") {
+      phase = "typing";
+      setTimeout(tick, 200);
+    }
+  }
+
+  // Start after a short delay
+  setTimeout(tick, 600);
+})();
+
 render();
 loadDemoData();

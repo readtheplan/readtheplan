@@ -318,6 +318,22 @@ h2 {
   padding: clamp(16px, 2vw, 24px);
 }
 
+.terminal-line {
+  min-height: 1.4em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.blink-cursor {
+  animation: blink 1s step-end infinite;
+  color: var(--accent);
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .app-grid .intake {
   grid-column: span 2;
 }
@@ -937,11 +953,6 @@ textarea {
   .topbar {
     position: static;
     margin-top: 10px;
-  }
-
-  .demo-video-wrapper {
-    max-width: 100% !important;
-    border-radius: 0;
   }
 
   .g {

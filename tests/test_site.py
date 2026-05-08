@@ -20,9 +20,9 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="handoffNote"' in html
     assert 'id="recommendation"' in html
     assert 'id="planRows"' in html
-    assert 'id="demo"' in html
-    assert 'class="demo-video"' in html
-    assert "readtheplan demo video" in html
+    assert 'id="demo" ' in html
+    assert 'class="terminal-frame"' in html
+    assert "readtheplan analyze — live preview" in html
     assert "What an analysis looks like" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html

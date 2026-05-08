@@ -20,7 +20,6 @@ const files = [
   "robots.txt",
   "sitemap.xml",
   "_redirects",
-  "demo-video.mp4",
 ];
 const assetDirs = ["fonts", "img", "tools", "resources", "mcp", "brief"];
 
