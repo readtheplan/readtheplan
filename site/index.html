@@ -86,17 +86,19 @@
           </p>
         </div>
         <div class="gc demo-terminal-cell">
-          <video
-            class="demo-video"
-            src="/demo-video.mp4"
-            poster="/og-image.png"
-            controls
-            preload="metadata"
-            aria-label="readtheplan demo video — terminal walkthrough"
-            style="width:100%; max-width:720px; border-radius:12px; box-shadow:0 0 40px rgba(34,211,238,0.15)"
-          >
-            <p>Your browser does not support the video. <a href="/demo-video.mp4">Download the demo</a>.</p>
-          </video>
+          <div style="position:relative; width:100%; max-width:720px; margin:0 auto; aspect-ratio:16/9; border-radius:12px; overflow:hidden; box-shadow:0 0 60px rgba(255,189,56,0.10)">
+            <video
+              class="demo-video"
+              src="/demo-video.mp4"
+              poster="/og-image.png"
+              controls
+              preload="metadata"
+              aria-label="readtheplan demo video — terminal walkthrough"
+              style="position:absolute; inset:0; width:100%; height:100%"
+            >
+              <p>Your browser does not support the video. <a href="/demo-video.mp4">Download the demo</a>.</p>
+            </video>
+          </div>
           <p class="demo-intro" style="margin-top:1rem; text-align:center">
             This is
             <a href="https://github.com/readtheplan/readtheplan/tree/main/examples/02-dangerous-replacement">example 02</a>
