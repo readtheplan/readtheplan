@@ -482,13 +482,15 @@ async function copyFrom(targetId, button) {
   }, 1200);
 }
 
-form.addEventListener("change", render);
-form.addEventListener("input", render);
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  render();
-  document.querySelector("#setup").scrollIntoView({ behavior: "smooth", block: "start" });
-});
+if (form) {
+  form.addEventListener("change", render);
+  form.addEventListener("input", render);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    render();
+    document.querySelector("#setup").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
 
 document.querySelectorAll("[data-copy]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -591,5 +593,9 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
   setTimeout(tick, 600);
 })();
 
-render();
+if (form) {
+  render();
+} else {
+  console.log("readtheplan — setup generator not on this page");
+}
 loadDemoData();
