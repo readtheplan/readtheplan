@@ -46,8 +46,8 @@ const requiredHtml = [
   "No raw Terraform plan is attached or submitted.",
   "pilot-contact@example.com",
   "class=\"noise\"",
-  "class=\"terminal-frame\"",
-  "class=\"terminal-bar\"",
+  "class=\"demo-video\"",
+  "readtheplan demo video",
   "What an analysis looks like",
 ];
 
@@ -137,7 +137,6 @@ for (const token of [
   "background-image: url(\"./img/noise.svg\")",
   ".g {",
   ".gc {",
-  ".terminal-frame",
   ".recommendation",
   ".primary-action",
 ]) {

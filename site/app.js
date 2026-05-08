@@ -106,6 +106,7 @@ function getFormState() {
 }
 
 function renderDemoRows(changes) {
+  if (!demoRows) return;
   demoRows.replaceChildren(
     ...changes.map((change) => {
       const risk = document.createElement("span");
@@ -133,12 +134,13 @@ function renderDemoRows(changes) {
 
 function renderDemoSummary(summary) {
   const risks = summary.risks || {};
-  demoSafeCount.textContent = String(risks.safe || 0);
-  demoReviewCount.textContent = String(risks.review || 0);
-  demoDangerousCount.textContent = String(risks.dangerous || 0);
+  if (demoSafeCount) demoSafeCount.textContent = String(risks.safe || 0);
+  if (demoReviewCount) demoReviewCount.textContent = String(risks.review || 0);
+  if (demoDangerousCount) demoDangerousCount.textContent = String(risks.dangerous || 0);
 }
 
 function renderDemoEvidence(payload) {
+  if (!demoEvidenceNote) return;
   const attestation = payload.agent_attestation || {};
   const signed = Boolean(attestation.signature && attestation.cert);
   const framework = payload.framework?.name ? payload.framework.name.toUpperCase() : "SOC2";
@@ -160,7 +162,7 @@ async function loadDemoData() {
     renderDemoRows(payload.changes || []);
     renderDemoEvidence(payload);
   } catch (error) {
-    demoEvidenceNote.textContent =
+    if (demoEvidenceNote) demoEvidenceNote.textContent =
       "Demo evidence could not be loaded. The setup generator still works.";
   }
 }

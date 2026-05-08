@@ -21,10 +21,8 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="recommendation"' in html
     assert 'id="planRows"' in html
     assert 'id="demo"' in html
-    assert 'id="demoSafeCount"' in html
-    assert 'id="demoReviewCount"' in html
-    assert 'id="demoDangerousCount"' in html
-    assert 'id="demoRows"' in html
+    assert 'class="demo-video"' in html
+    assert "readtheplan demo video" in html
     assert "What an analysis looks like" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
@@ -33,7 +31,6 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "/resources/terraform-iam-policy-risk/" in html
     assert "/resources/terraform-security-group-0-0-0-0-risk/" in html
     assert "/resources/terraform-cloudwatch-log-retention-risk/" in html
-    assert 'class="terminal-frame"' in html
     assert 'class="noise"' in html
     assert 'rel="canonical"' in html
     assert "og:image" in html
@@ -61,7 +58,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "pilot-contact@example.com" in html
     assert "Upload a plan" not in html
     assert "gmail.com" not in html
-    assert "<form class=\"panel intake gc\" id=\"onboardingForm\">" in html
+    assert '<form class="panel intake gc" id="onboardingForm">' in html
     assert "terraform show -json tfplan > " in app
     assert "--framework" in app
     assert "--evidence" in app
@@ -313,7 +310,6 @@ def test_site_redesign_visual_contract() -> None:
     assert "--background: #041C1C;" in css
     assert "--accent: #FFBD38;" in css
     assert 'background-image: url("./img/noise.svg")' in css
-    assert ".terminal-frame" in css
     assert ".g {" in css
     assert ".gc {" in css
     assert "@media (max-width: 720px)" in css
