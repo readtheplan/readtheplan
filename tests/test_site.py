@@ -23,7 +23,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="demo" ' in html
     assert 'class="terminal-frame"' in html
     assert "readtheplan analyze — live preview" in html
-    assert "What an analysis looks like" in html
+    assert "See it in action." in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
     assert "/mcp/" in html
@@ -71,7 +71,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "gateScript" in app
     assert "readtheplan-summary.json" in app
     assert "loadDemoData" in app
-    assert "./demo-evidence.json" in app
+    assert "/demo-evidence.json" in app
     assert "workflow_run:" in app
     assert "actions: read" in app
     assert "actions/download-artifact@v4" in app

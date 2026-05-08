@@ -153,7 +153,7 @@ function renderDemoEvidence(payload) {
 
 async function loadDemoData() {
   try {
-    const response = await fetch("./demo-evidence.json");
+    const response = await fetch("/demo-evidence.json");
     if (!response.ok) {
       throw new Error(`demo data returned ${response.status}`);
     }

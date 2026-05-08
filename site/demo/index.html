@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Live demo of readtheplan analyzing a Terraform plan — watch risk tiers, control mappings, and evidence output in real time."
+    />
+    <title>Demo — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/demo/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — live demo" />
+    <meta
+      property="og:description"
+      content="Watch readtheplan analyze a Terraform plan with live risk tiers and SOC 2 control mapping."
+    />
+    <meta property="og:url" content="https://readtheplan.dev/demo/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan — live demo" />
+    <meta
+      name="twitter:description"
+      content="Watch readtheplan analyze a Terraform plan with live risk tiers and SOC 2 control mapping."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/#resources">Tools</a>
+        <a href="/brief/">Brief</a>
+        <a href="/demo/">Demo</a>
+        <a href="/#setup">Setup</a>
+        <a href="/#pilot">Pilot</a>
+      </nav>
+      <div class="version-cell gc">v0.0.2</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="demo-title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow">Live demo</p>
+          <h1 id="demo-title">See what an analysis looks like.</h1>
+          <p class="intro-copy">
+            This is
+            <a href="https://github.com/readtheplan/readtheplan/tree/main/examples/02-dangerous-replacement">
+              example 02
+            </a>
+            from the repo: a customer-data KMS key replacement and an RDS replacement.
+            The terminal animation replays a typical CLI session, and the table shows
+            the actual risk analysis output.
+          </p>
+        </div>
+        <div class="gc trust-strip" aria-label="Demo boundaries">
+          <span>CLI first</span>
+          <span>Local only</span>
+          <span>No plan upload</span>
+        </div>
+      </section>
+
+      <section class="g demo-section" aria-labelledby="terminal-title">
+        <div class="gc demo-terminal-cell">
+          <div class="terminal-frame" id="demo-terminal" style="max-width:680px; margin:0 auto; border-radius:12px; overflow:hidden">
+            <div class="terminal-bar">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+              <span class="terminal-title" id="terminal-title">readtheplan analyze — live preview</span>
+            </div>
+            <div class="terminal-body" id="terminalBody" aria-live="polite" aria-label="Terminal animation showing readtheplan analysis output" style="min-height:280px; font-family:JetBrains Mono,ui-monospace,monospace; font-size:13px; line-height:1.7; overflow:hidden">
+              <div class="terminal-line" style="color:var(--muted)">booting readtheplan v0.0.2 — local only, no plan upload</div>
+              <div class="terminal-line" style="color:var(--soft)">[matrix] tracing terraform change graph · decoding blast radius</div>
+              <div class="terminal-line" id="typingLine" style="color:var(--accent)">λ <span id="typingCmd"></span><span class="blink-cursor" id="cursor">▊</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="analysis-title">
+        <div class="gc demo-copy">
+          <p class="eyebrow">Analysis results</p>
+          <h2 id="analysis-title">Example 02 risk breakdown</h2>
+          <p class="demo-intro" style="margin:12px 0 18px">
+            Static output from <code>readtheplan analyze examples/02-dangerous-replacement/plan.json --framework soc2</code>.
+            Try it locally with the same command.
+          </p>
+        </div>
+      </section>
+
+      <section class="g" aria-label="Risk summary">
+        <div class="gc utility-panel-wide">
+          <div class="risk-meter" aria-label="Risk counts">
+            <div>
+              <span class="count safe" id="demoSafeCount">—</span>
+              <span>Safe</span>
+            </div>
+            <div>
+              <span class="count review" id="demoReviewCount">—</span>
+              <span>Review</span>
+            </div>
+            <div>
+              <span class="count dangerous" id="demoDangerousCount">—</span>
+              <span>Dangerous</span>
+            </div>
+          </div>
+
+          <div class="plan-table demo-table" role="table" aria-label="Example 02 analysis" style="margin-top:0; border-top:0">
+            <div role="row" class="table-head">
+              <span role="columnheader">Risk</span>
+              <span role="columnheader">Resource</span>
+              <span role="columnheader">Explanation</span>
+              <span role="columnheader">SOC 2 Controls</span>
+            </div>
+            <div class="plan-table-body" id="demoRows"></div>
+          </div>
+
+          <p class="demo-evidence" id="demoEvidenceNote"></p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="try-title">
+        <div class="gc utility-panel-wide">
+          <p class="eyebrow">Try it yourself</p>
+          <h2 id="try-title">Run the same analysis locally.</h2>
+          <div class="utility-copy" style="margin-top:16px">
+            <pre class="code-output" style="min-height:auto; max-height:none">python -m pip install readtheplan
+git clone https://github.com/readtheplan/readtheplan.git
+readtheplan analyze readtheplan/examples/02-dangerous-replacement/plan.json --framework soc2</pre>
+            <p style="margin-top:14px">
+              No accounts, no uploads, no backend. The CLI runs entirely on your machine.
+              <a href="https://github.com/readtheplan/readtheplan">Star on GitHub →</a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="g footer-grid">
+        <div class="gc">MIT License</div>
+        <div class="gc">No plan upload</div>
+        <div class="gc">Terraform JSON in, review evidence out</div>
+        <div class="gc"><a href="https://github.com/readtheplan/readtheplan">GitHub -></a></div>
+      </footer>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
