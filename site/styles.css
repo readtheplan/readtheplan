@@ -939,6 +939,11 @@ textarea {
     margin-top: 10px;
   }
 
+  .demo-video-wrapper {
+    max-width: 100% !important;
+    border-radius: 0;
+  }
+
   .g {
     grid-template-columns: 1fr;
   }
