@@ -130,6 +130,22 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_gate.add_argument("plan_file", help="Path to Terraform plan JSON.")
     agent_gate.set_defaults(func=_agent_gate)
 
+    cloudformation = subparsers.add_parser(
+        "cloudformation",
+        help="Emit the agent-gate decision for a CloudFormation Change Set or template diff.",
+    )
+    cloudformation.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    cloudformation.add_argument(
+        "input_file", help="Path to CloudFormation Change Set JSON or template diff."
+    )
+    cloudformation.set_defaults(func=_cloudformation_gate)
+
     verify = subparsers.add_parser(
         "verify",
         help="Verify a signed rtp-evidence-v1 envelope.",
@@ -273,6 +289,34 @@ def _agent_gate(args: argparse.Namespace) -> int:
         return 1
 
     json.dump(agent_gate_to_dict(summary, catalog), sys.stdout, indent=2)
+    print()
+    return 0
+
+
+def _cloudformation_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a CloudFormation Change Set / template diff."""
+    from readtheplan.adapters.cloudformation import analyze_cloudformation
+
+    try:
+        data = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+
+    if not isinstance(data, dict):
+        print("Error: input must be a JSON object", file=sys.stderr)
+        return 1
+
+    catalog: ControlCatalog | None = None
+    if args.framework:
+        try:
+            catalog = load_catalog(args.framework)
+        except (CatalogSchemaError, FrameworkNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    gate = analyze_cloudformation(data, catalog=catalog)
+    json.dump(gate, sys.stdout, indent=2)
     print()
     return 0
 

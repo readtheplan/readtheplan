@@ -166,7 +166,11 @@ def _risk_for_actions(actions: tuple[str, ...]) -> str:
         return "review"
     if action_set <= {"no-op", "read"}:
         return "safe"
-    if "create" in action_set:
+    # Only allow "create" to produce "safe" when all actions are known.
+    # Unknown/malformed actions (e.g. ["create","bogus"]) must be "review"
+    # per ADR 0003 — don't classify garbage as safe.
+    KNOWN_ACTIONS = {"no-op", "read", "create", "update", "delete"}
+    if "create" in action_set and action_set <= KNOWN_ACTIONS:
         return "safe"
     return "review"
 

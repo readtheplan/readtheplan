@@ -46,9 +46,14 @@ const requiredHtml = [
   "No raw Terraform plan is attached or submitted.",
   "pilot-contact@example.com",
   "class=\"noise\"",
-  "class=\"demo-video\"",
-  "readtheplan demo video",
-  "What an analysis looks like",
+  "class=\"terminal-frame\"",
+  "terminal-body",
+  "typingLine",
+  "blink-cursor",
+  "booting readtheplan",
+  "Live demo",
+  "Open the full demo",
+  "See it in action.",
 ];
 
 for (const token of requiredHtml) {
