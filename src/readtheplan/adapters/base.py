@@ -39,17 +39,17 @@ class BaseAdapter(ABC):
         """Maps one adapter change dict to a ResourceChange dataclass instance."""
         pass
 
-    def analyze(self, input_data: dict[str, Any], *, use_rules: bool = True) -> list[ResourceChange]:
+    def analyze(self, input_data: dict[str, Any], *, use_rules: bool = True, tool_name: str = "Terraform") -> list[ResourceChange]:
         """Template method: extract -> normalize -> apply rules."""
         changes = []
         for raw in self.extract_changes(input_data):
             rc = self.normalize_change(raw)
             if use_rules:
-                rc = self._apply_resource_rules(rc, raw)
+                rc = self._apply_resource_rules(rc, raw, tool_name=tool_name)
             changes.append(rc)
         return changes
 
-    def _apply_resource_rules(self, rc: ResourceChange, raw: dict[str, Any]) -> ResourceChange:
+    def _apply_resource_rules(self, rc: ResourceChange, raw: dict[str, Any], *, tool_name: str = "Terraform") -> ResourceChange:
         """Hooks into the shared rules engine for resource-specific risk escalation."""
         # Baseline result from the adapter's normalization
         baseline = RuleResult(risk=rc.risk, explanation=rc.explanation)
@@ -64,6 +64,7 @@ class BaseAdapter(ABC):
             actions=rc.actions,
             change=change_metadata,
             baseline=baseline,
+            tool_name=tool_name,
         )
         
         return ResourceChange(

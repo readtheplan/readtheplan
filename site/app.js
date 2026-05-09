@@ -448,6 +448,15 @@ function updatePilotLink(state) {
 }
 
 function render() {
+  // Guard: bail if landing-page DOM isn't present. app.js is shared across
+  // every page and only the landing page carries the setup-generator elements.
+  // Must cover every element render() and its callees dereference (counts,
+  // output areas, links) — a partial DOM will crash on the missing ones.
+  if (
+    !form || !statusPill || !recommendation || !planRows ||
+    !actionOutput || !cliOutput || !checklist ||
+    !safeCount || !reviewCount || !dangerousCount || !actionTitle
+  ) return;
   const state = getFormState();
   statusPill.textContent = state.evidence === "signed" ? "oidc signing" : "no upload";
   recommendation.textContent =
@@ -488,7 +497,8 @@ if (form) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     render();
-    document.querySelector("#setup").scrollIntoView({ behavior: "smooth", block: "start" });
+    const setupEl = document.querySelector("#setup");
+    if (setupEl) setupEl.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
 
@@ -598,4 +608,8 @@ if (form) {
 } else {
   console.log("readtheplan — setup generator not on this page");
 }
-loadDemoData();
+// loadDemoData is safe to skip on pages without demo elements
+// (e.g. brief/mcp/seo pages that share app.js for copy-button behavior).
+if (demoRows) {
+  loadDemoData();
+}

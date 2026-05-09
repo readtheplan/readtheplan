@@ -84,9 +84,9 @@ def test_analyze_cloudformation_integration():
             }
         ]
     }
-    decision = analyze_cloudformation(data)
-    assert decision.decision == "block"
-    assert decision.risk == "irreversible"
+    gate = analyze_cloudformation(data)
+    assert gate["decision"] == "block"
+    assert gate["risk"] == "irreversible"
 
 def test_detect_adapter():
     data = {"Changes": [{"ResourceChange": {}}]}
@@ -108,10 +108,10 @@ def test_template_diff_extraction():
 def test_fixtures_mixed_gate_contract():
     fixture_path = Path("tests/fixtures/cfn_change_set_mixed.json")
     data = json.loads(fixture_path.read_text())
-    decision = analyze_cloudformation(data)
+    gate = analyze_cloudformation(data)
     # Mixed has a Remove KMS -> irreversible -> block
-    assert decision.decision == "block"
-    assert decision.risk == "irreversible"
+    assert gate["decision"] == "block"
+    assert gate["risk"] == "irreversible"
 
 def test_cfn_adapter_normalization_import():
     adapter = CloudFormationAdapter()
@@ -121,8 +121,9 @@ def test_cfn_adapter_normalization_import():
         "ResourceType": "AWS::S3::Bucket"
     }
     rc = adapter.normalize_change(raw)
-    assert rc.risk == "safe"
-    assert rc.actions == ("no-op",)
+    assert rc.risk == "review"
+    assert rc.actions == ("update",)
+    assert "ownership" in rc.explanation
 
 def test_cfn_adapter_normalization_dynamic():
     adapter = CloudFormationAdapter()
@@ -186,7 +187,7 @@ def test_rules_escalation_fires():
     assert "RDS" in rc.explanation
 
 def test_analyze_cloudformation_required_checks():
-    # For a block decision (Remove action), verify required_checks is non-empty list
+    # For a block decision (Remove action), verify full agent-gate contract
     data = {
         "Changes": [
             {
@@ -198,7 +199,20 @@ def test_analyze_cloudformation_required_checks():
             }
         ]
     }
-    decision = analyze_cloudformation(data)
-    assert decision.decision == "block"
-    assert len(decision.required_checks) > 0
-    assert "rtp.check.human_approval" in decision.required_checks
+    gate = analyze_cloudformation(data)
+    assert gate["schema"] == "rtp-agent-gate-v1"
+    assert gate["decision"] == "block"
+    assert gate["risk"] == "irreversible"
+    assert len(gate["required_checks"]) > 0
+    assert "rtp.check.human_approval" in gate["required_checks"]
+    assert "rtp.check.security_review" in gate["required_checks"]
+    # Verify the full contract fields are present
+    for key in (
+        "allowed_next_actions", "prohibited_next_actions", "reason",
+        "pr_comment", "evidence_checklist", "auditor_summary", "risk_counts",
+        "adapter", "total_changes",
+    ):
+        assert key in gate, f"Missing agent-gate field: {key}"
+    assert gate["adapter"] == "cloudformation"
+    assert gate["total_changes"] == 1
+    assert "rtp.check.human_approval" in gate["required_checks"]

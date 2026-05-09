@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from readtheplan.adapters.base import BaseAdapter, GateDecision
+from readtheplan.adapters.base import BaseAdapter
 from readtheplan.plan import ResourceChange
 
 
@@ -85,13 +85,18 @@ class CloudFormationAdapter(BaseAdapter):
                     "Replacement": "False"
                 })
             elif old_resources[logical_id] != resource:
-                # Modified resources
+                # Modified resources — pass actual before/after properties so the
+                # shared rules engine can evaluate IAM policy changes, S3 public
+                # access, RDS version bumps, LB scheme, retention, etc.
                 changes.append({
                     "Action": "Modify",
                     "LogicalResourceId": logical_id,
                     "ResourceType": resource.get("Type"),
-                    "Replacement": "Conditional", # Default for template diff
-                    "_metadata": {"details": "Template properties changed"}
+                    "Replacement": "Conditional",
+                    "_metadata": {
+                        "before": old_resources[logical_id].get("Properties", {}),
+                        "after": resource.get("Properties", {}),
+                    },
                 })
         
         # Removed resources
@@ -141,9 +146,12 @@ class CloudFormationAdapter(BaseAdapter):
             actions = ("delete",)
             explanation = "CloudFormation will delete this resource."
         elif action == "Import":
-            risk = "safe"
-            actions = ("no-op",)
-            explanation = "CloudFormation will import this existing resource into the stack."
+            risk = "review"
+            actions = ("update",)
+            explanation = (
+                "CloudFormation will import this existing resource into the stack. "
+                "Importing changes ownership and future deletion/update behavior — review required."
+            )
         elif action == "Dynamic":
             risk = "review"
             actions = ("unknown",)
@@ -170,38 +178,34 @@ class CloudFormationAdapter(BaseAdapter):
         return cfn_type.replace("::", "_").lower()
 
 
-def analyze_cloudformation(data: dict[str, Any]) -> GateDecision:
-    from readtheplan.agent_gate import _decision_for_risk
-    from readtheplan.rules import RISK_ORDER
-    
-    adapter = CloudFormationAdapter()
-    changes = adapter.analyze(data)
-    
-    if not changes:
-        max_risk = "safe"
-    else:
-        max_risk = max(
-            (c.risk for c in changes),
-            key=lambda r: RISK_ORDER.get(r, 1)
-        )
-    
-    decision = _decision_for_risk(max_risk)
-    reason = f"CloudFormation analysis completed with maximum risk: {max_risk}. Total changes: {len(changes)}"
-    
-    required_checks = []
-    if decision == "block":
-        required_checks = [
-            "rtp.check.human_approval",
-            "rtp.check.security_review",
-            "rtp.check.change_record",
-            "rtp.check.evidence_packet"
-        ]
-    elif decision == "warn":
-        required_checks = ["rtp.check.peer_review", "rtp.check.change_evidence"]
+def analyze_cloudformation(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    """Analyze a CloudFormation Change Set or template diff via the shared
+    rtp-agent-gate-v1 contract.
 
-    return GateDecision(
-        decision=decision,
-        risk=max_risk,
-        reason=reason,
-        required_checks=required_checks
+    Returns the full agent-gate dict (schema, decision, risk, required_checks,
+    allowed_next_actions, prohibited_next_actions, reason, pr_comment,
+    evidence_checklist, auditor_summary, risk_counts).
+    """
+    from pathlib import Path
+
+    from readtheplan.agent_gate import agent_gate_to_dict
+    from readtheplan.plan import PlanSummary
+
+    adapter = CloudFormationAdapter()
+    changes = adapter.analyze(data, tool_name="CloudFormation")
+
+    # Build a PlanSummary so the shared gate can operate on CFN changes the
+    # same way it operates on Terraform changes.  CloudFormation has no file
+    # path or terraform_version — use sentinels.
+    summary = PlanSummary(
+        path=Path("cloudformation://"),
+        terraform_version=None,
+        resource_changes=tuple(changes),
     )
+
+    gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="CloudFormation")
+
+    gate["adapter"] = "cloudformation"
+    gate["total_changes"] = len(changes)
+
+    return gate
