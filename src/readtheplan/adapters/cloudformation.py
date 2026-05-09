@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from readtheplan.adapters.base import BaseAdapter, GateDecision
+from readtheplan.adapters.base import BaseAdapter
 from readtheplan.plan import ResourceChange
 
 

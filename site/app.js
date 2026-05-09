@@ -450,7 +450,13 @@ function updatePilotLink(state) {
 function render() {
   // Guard: bail if landing-page DOM isn't present. app.js is shared across
   // every page and only the landing page carries the setup-generator elements.
-  if (!form || !statusPill || !recommendation || !planRows) return;
+  // Must cover every element render() and its callees dereference (counts,
+  // output areas, links) — a partial DOM will crash on the missing ones.
+  if (
+    !form || !statusPill || !recommendation || !planRows ||
+    !actionOutput || !cliOutput || !checklist ||
+    !safeCount || !reviewCount || !dangerousCount || !actionTitle
+  ) return;
   const state = getFormState();
   statusPill.textContent = state.evidence === "signed" ? "oidc signing" : "no upload";
   recommendation.textContent =
