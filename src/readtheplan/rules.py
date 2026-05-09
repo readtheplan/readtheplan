@@ -20,30 +20,30 @@ class RuleResult:
     explanation: str
 
 
-def action_explanation(actions: tuple[str, ...]) -> str:
+def action_explanation(actions: tuple[str, ...], *, tool_name: str = "Terraform") -> str:
     if not actions:
-        return "Terraform action metadata is missing or unknown; human review is required."
+        return f"{tool_name} action metadata is missing or unknown; human review is required."
     action_set = set(actions)
     if "delete" in action_set and "create" in action_set:
         return (
-            "Terraform will replace this resource. Review downtime, identity "
+            f"{tool_name} will replace this resource. Review downtime, identity "
             "changes, and any state that must be migrated or restored."
         )
     if "delete" in action_set:
         return (
-            "Terraform will delete this resource. Verify recovery, backups, and "
+            f"{tool_name} will delete this resource. Verify recovery, backups, and "
             "external dependencies before applying."
         )
     if "update" in action_set:
         return (
-            "Terraform will update this resource in place. Review the changed "
+            f"{tool_name} will update this resource in place. Review the changed "
             "attributes and rollout timing before applying."
         )
     if action_set <= {"no-op", "read"}:
-        return "Terraform is only reading or refreshing this resource."
+        return f"{tool_name} is only reading or refreshing this resource."
     if "create" in action_set:
-        return "Terraform will create a new resource without changing existing state."
-    return "Terraform action metadata is missing or unknown; human review is required."
+        return f"{tool_name} will create a new resource without changing existing state."
+    return f"{tool_name} action metadata is missing or unknown; human review is required."
 
 
 def apply_resource_rules(
@@ -52,10 +52,20 @@ def apply_resource_rules(
     actions: tuple[str, ...],
     change: dict[str, Any],
     baseline: RuleResult,
+    tool_name: str = "Terraform",
 ) -> RuleResult:
     result = baseline
     for candidate in _rule_candidates(resource_type, actions, change):
         result = _max_result(result, candidate)
+    # Post-process: if a rule escalated the explanation, ensure the tool name
+    # in it matches the caller (CloudFormation, Pulumi, etc.).  Rules are
+    # authored in Terraform language by default; non-Terraform adapters get
+    # their tool name substituted in.
+    if tool_name != "Terraform" and result is not baseline:
+        result = RuleResult(
+            risk=result.risk,
+            explanation=result.explanation.replace("Terraform", tool_name),
+        )
     return result
 
 

@@ -192,7 +192,7 @@ def analyze_cloudformation(data: dict[str, Any], *, catalog=None) -> dict[str, A
     from readtheplan.plan import PlanSummary
 
     adapter = CloudFormationAdapter()
-    changes = adapter.analyze(data)
+    changes = adapter.analyze(data, tool_name="CloudFormation")
 
     # Build a PlanSummary so the shared gate can operate on CFN changes the
     # same way it operates on Terraform changes.  CloudFormation has no file
@@ -203,14 +203,8 @@ def analyze_cloudformation(data: dict[str, Any], *, catalog=None) -> dict[str, A
         resource_changes=tuple(changes),
     )
 
-    gate = agent_gate_to_dict(summary, catalog=catalog)
+    gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="CloudFormation")
 
-    # Adapt Terraform-specific user-facing strings for CloudFormation
-    gate["reason"] = gate["reason"].replace("Terraform", "CloudFormation")
-    gate["pr_comment"] = gate["pr_comment"].replace("Terraform", "CloudFormation")
-    gate["auditor_summary"] = gate["auditor_summary"].replace(
-        "Terraform", "CloudFormation"
-    )
     gate["adapter"] = "cloudformation"
     gate["total_changes"] = len(changes)
 
