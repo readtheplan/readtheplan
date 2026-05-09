@@ -184,7 +184,7 @@ def analyze_cloudformation(data: dict[str, Any], *, catalog=None) -> dict[str, A
 
     Returns the full agent-gate dict (schema, decision, risk, required_checks,
     allowed_next_actions, prohibited_next_actions, reason, pr_comment,
-    evidence_checklist, auditor_summary, risk_counts) — not a thin GateDecision.
+    evidence_checklist, auditor_summary, risk_counts).
     """
     from pathlib import Path
 
