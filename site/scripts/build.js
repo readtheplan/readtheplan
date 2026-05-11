@@ -69,7 +69,7 @@ function collectHtml(dir) {
 }
 collectHtml(dist);
 
-const basePath = "/readtheplan";
+const basePath = "";  // custom domain (readtheplan.dev) — site at root
 for (const file of htmlFiles) {
   let content = fs.readFileSync(file, "utf8");
   // Fix href and src that start with / but not // or http
