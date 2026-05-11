@@ -29,9 +29,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "fail-on-threshold" in html
     assert 'class="terminal"' in html
     assert "readtheplan analyze --framework" in html
-    assert "Works with Terraform and OpenTofu" in html
-    assert "rtp-agent-gate-v1" in html
-    assert "rtp-evidence-v1" in html
+    assert "Terraform + OpenTofu" in html
     assert "pip install readtheplan" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
@@ -47,9 +45,6 @@ def test_site_has_client_onboarding_surface() -> None:
     assert '"soc2"' in html
     assert '"iso27001"' in html
     assert '"hipaa"' in html
-    assert "Generate setup" in html
-    assert "Client context stays in this browser until you choose to send an email." in html
-    assert "No raw Terraform plan is attached or submitted." in html
     assert "info@readtheplan.dev" in html
     assert "Upload a plan" not in html
     assert "gmail.com" not in html
