@@ -1,283 +1,149 @@
 # readtheplan
 
-> Read the plan. Every time. For real.
+> **Read the plan. Every time. For real.**
+>
+> [![Version](https://img.shields.io/pypi/v/readtheplan?color=blue)](https://pypi.org/project/readtheplan/)
+> [![License](https://img.shields.io/github/license/readtheplan/readtheplan)](./LICENSE)
+> [![CI](https://github.com/readtheplan/readtheplan/actions/workflows/test-action.yml/badge.svg)](https://github.com/readtheplan/readtheplan/actions)
+> [![Downloads](https://img.shields.io/pypi/dm/readtheplan)](https://pypi.org/project/readtheplan/)
+> [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-## See it in action
-
-[`examples/`](examples/) has three sample Terraform plans with rendered output and one signed evidence envelope. Start with [examples/02-dangerous-replacement/](examples/02-dangerous-replacement/) for the most interesting case.
-
-`readtheplan` is a Terraform plan risk explainer. It reads `terraform plan` output, classifies each change as **safe / review / dangerous / irreversible** based on the action × resource type × what compliance context it touches, and posts a markdown summary your release manager (or auditor, or AI agent) can read in 30 seconds.
-
-For real-plan corpus work, use the local-only
-[corpus feedback loop](docs/corpus/README.md). It generates scan bundles and
-review templates without uploading plans or copying raw Terraform plan JSON by
-default:
+**Terraform plan risk analysis for humans, CI pipelines, and AI agents.** Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC 2, ISO 27001, and HIPAA. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
-python tools/scan_corpus.py --output-dir .local/readtheplan-scans --redact plan.json
+pip install readtheplan && readtheplan analyze plan.json
 ```
 
-Generated scan bundles are ignored by default, but still review redacted output
-before sharing it.
+[Website](https://readtheplan.dev) · [Demo](https://readtheplan.dev/demo/) · [Docs](https://readtheplan.dev/docs/) · [Contributing](CONTRIBUTING.md)
 
-## status
+---
 
-🧪 **Alpha — v0.0.2 released.** The PyPI alpha ships the Python CLI and
-composite GitHub Action. Current `main` has shipped the MVP surface:
-resource-aware AWS risk rules, compliance framework annotations, evidence
-envelopes, signed attestation verification, customer rule overlays, examples,
-benchmarks, and the static onboarding site.
+## Why this exists
 
-## why this exists
+Terraform's plan/apply separation exists so a human reviews changes before they hit prod. In practice, nobody reads the 4,000-line text blob. Code diffs ≠ plan diffs. AI agents skip review. Compliance reviewers drown.
 
-Terraform's plan/apply separation exists so a human reviews changes before they hit prod. In practice:
+**I reviewed hundreds of Terraform plans manually before building this.** The same patterns kept killing us: a destroy+create that looked like an update, a KMS key rotation that nobody flagged, an IAM policy that quietly opened a bucket to the world. Every incident postmortem had the plan diff attached — and every one of them was reviewed and approved by a human who missed the signal.
 
-- the diff in code ≠ the diff in plan (renames show as destroy+create, provider bumps mutate untouched resources, `apply_immediately` flips have hidden timing implications)
-- AI agents now write Terraform PRs — most don't read the plan critically, they apply because "the test passed"
-- compliance reviewers (FinServ, healthcare, government) need a structured risk classification, not a 4,000-line text blob
-- existing tools either show prettier plans (Spacelift, env0) or scan code for policy violations (tflint, tfsec, checkov). Nobody opinionates the **plan diff** with blast-radius context.
+[Read the full story →](https://github.com/texasich/sre-field-notes/blob/main/notes/terraform-apply-is-roulette.md)
 
-## philosophy
+## What it does
 
-Anchored in this field note: **[terraform-apply-is-roulette](https://github.com/texasich/sre-field-notes/blob/main/notes/terraform-apply-is-roulette.md)**. If you've ever shipped a panic on `terraform validate` or watched a forward-fix cascade into a longer outage, this tool is built for you.
+readtheplan reads `terraform plan` JSON and classifies each change:
 
-## shipped MVP surface
+🟢 **safe** — no-op, tag update, read-only change
+🟡 **review** — security group rule change, minor config drift
+🟠 **dangerous** — instance replacement, IAM policy change, database modification
+🔴 **irreversible** — data deletion, KMS key destruction, RDS instance termination
 
-1. CLI: `readtheplan analyze plan.json` emits markdown or JSON risk summaries.
-2. Resource-aware AWS rules cover the first high-risk catalog, including KMS,
-   IAM, RDS, S3, EKS, Route53, Lambda, load balancers, and networking patterns.
-3. Compliance annotations, evidence envelopes, and sigstore-backed signed
-   attestation verification support audit-oriented review flows.
-4. GitHub Action wrapper: install as `uses: readtheplan/readtheplan@v1`, exposes
-   summary outputs for workflows.
-5. Local MCP preview: `readtheplan mcp` exposes stdio tools for local agent
-   and IDE integrations, including `analyze_plan` and `agent_gate`.
-6. YAML customer rule overlays define org-specific escalations and framework
-   mappings without changing the built-in catalog.
+It applies **resource-aware rules** (30+ AWS resource types), **compliance framework mappings** (SOC 2, ISO 27001, HIPAA), and produces **auditable evidence envelopes** with sigstore-backed signed attestations.
 
-The post-MVP backlog is focused on catalog breadth, rule quality, examples, and
-adoption docs. MCP integration is a preview surface only: it is a thin adapter
-over the Python CLI JSON contract, not a separate server-first product or the
-primary way to use readtheplan. See
-[ADR 0012](docs/adr/0012-mcp-preview-adapter.md) for the preview adapter scope.
+## Comparison: readtheplan vs. everything else
 
-## what's *not* in scope (and won't be)
+| Tool | Analyzes | Risk tiers | Compliance evidence | Agent gate | Local-only |
+|------|----------|------------|---------------------|------------|------------|
+| **readtheplan** | Plan diff | ✅ 4 tiers | ✅ SOC2/ISO/HIPAA | ✅ proceed/warn/block | ✅ |
+| tflint | Code (HCL) | ❌ lint only | ❌ | ❌ | ✅ |
+| tfsec | Code (HCL) | ❌ security only | ❌ | ❌ | ✅ |
+| checkov | Code + plan | ⚠️ pass/fail | ⚠️ policy checks | ❌ | ✅ |
+| Spacelift | Plan + state | ⚠️ visual only | ❌ | ⚠️ policy gates | ❌ SaaS |
+| env0 | Plan + state | ⚠️ visual only | ❌ | ❌ | ❌ SaaS |
+| Snyk IaC | Code (HCL) | ❌ security only | ❌ | ❌ | ❌ SaaS |
+| infracost | Plan diff | ❌ cost only | ❌ | ❌ | ❌ SaaS |
+| OPA/Sentinel | Policy engine | ⚠️ rule-based | ⚠️ | ⚠️ policy gates | ✅ |
 
-- multi-cloud beyond AWS (initial focus)
-- a SaaS dashboard (defer until revenue justifies)
-- a policy-as-code engine (OPA / Sentinel already exist)
-- competing with Spacelift / env0 / Snyk IaC on overlapping features
+**readtheplan is the only tool that:** classifies plan diffs by blast radius risk tier, annotates with compliance controls, produces auditable evidence envelopes, gates CI pipelines and AI agents, and runs entirely locally with no SaaS dependency.
 
-## license
+## Quickstart
 
-MIT — see [LICENSE](./LICENSE).
-
-## CLI JSON output
-
-The CLI exposes a stable machine-readable contract for automation:
+### CLI — 30 seconds to first result
 
 ```bash
+# Install
+pip install readtheplan
+
+# Generate a plan
+terraform plan -out=tfplan -input=false
+terraform show -json tfplan > plan.json
+
+# Analyze it
+readtheplan analyze plan.json
+
+# With compliance framework
+readtheplan analyze --framework soc2 plan.json
+
+# Machine-readable JSON
 readtheplan analyze --format json plan.json
 ```
 
-Resource-aware rules are enabled by default. To inspect the action-only baseline
-from ADR 0003:
-
-```bash
-readtheplan analyze --no-rules --format json plan.json
-```
-
-The JSON object includes:
-
-- `resource_change_count`: total Terraform `resource_changes` entries.
-- `actions`: counts keyed by Terraform action set, such as `create` or `delete/create`.
-- `risks`: counts keyed by readtheplan risk tier.
-- `changes`: one object per resource change with `address`, `type`, `actions`, `risk`, and `explanation`.
-
-### Customer rule overlays
-
-`--rules-file` applies a local `rtp-overlay-v1` YAML file on top of the
-built-in classifier and optional framework catalog:
-
-```bash
-readtheplan analyze --framework soc2 --rules-file .readtheplan/rules.yaml plan.json
-```
-
-Overlay files can add framework control mappings and escalate risk for
-matching resource types, address prefixes, or account IDs. Overlays are
-applied in CLI order and never downgrade built-in risk.
-
-Invalid input is reported on stderr and exits non-zero.
-
-## Agent gate
-
-`readtheplan agent-gate plan.json` emits a deterministic local contract for
-coding agents that need a proceed/warn/block decision before they merge or apply
-Terraform changes:
-
-```bash
-readtheplan agent-gate plan.json
-```
-
-The output schema is `rtp-agent-gate-v1` and includes `decision`, maximum
-`risk`, `required_checks`, allowed and prohibited next actions, a PR comment,
-evidence checklist, auditor summary, and risk counts. Dangerous or irreversible
-changes block merge/apply/auto-approval until human, security, change-record,
-and evidence checks are complete. Review-tier changes warn and require reviewer
-and change evidence. Safe-only plans proceed while still prohibiting
-policy-free auto-apply.
-
-Framework control IDs can be added to the required checks:
-
-```bash
-readtheplan agent-gate --framework soc2 plan.json
-```
-
-### GitHub Actions usage
-
-Use the `agent-gate` command in CI to enforce safe deployment practices. The structured output allows you to fail builds on `block` while still producing a review summary that does not include raw Terraform plan JSON.
-
-```yaml
-- name: Run Agent Gate
-  run: |
-    readtheplan agent-gate plan.json > agent-gate.json
-    DECISION=$(jq -r '.decision' agent-gate.json)
-    if [ "$DECISION" = "block" ]; then exit 1; fi
-```
-
-See [examples/04-agent-gate-ci/](examples/04-agent-gate-ci/) for a complete workflow example that writes the gate summary to the GitHub Actions step summary and documents evidence checklists.
-
-## MCP preview
-
-The experimental MCP v0 adapter runs locally over stdio and keeps Terraform
-plan JSON on your machine. It is optional and currently requires Python 3.10+
-because the upstream MCP SDK does. Install the extra only for MCP clients:
-
-```bash
-pip install "readtheplan[mcp]"
-readtheplan mcp
-```
-
-The preview exposes two local Terraform tools:
-
-- `analyze_plan` with input `{"plan_path": "plan.json"}`.
-- `agent_gate` with input `{"plan_path": "plan.json"}`.
-
-`analyze_plan` returns the same JSON summary object as:
-
-```bash
-readtheplan analyze --format json plan.json
-```
-
-`agent_gate` returns the same proceed/warn/block object as:
-
-```bash
-readtheplan agent-gate plan.json
-```
-
-MCP v0 does not expose evidence generation, signature verification, signing,
-framework annotations, customer rule overlays, or `--no-rules`. Use the CLI for
-those workflows.
-
-For sales/demo positioning of the local MCP preview, see
-[MCP Sales and Demo Notes](docs/mcp-sales-demo.md). Production custom-MCP
-engagements can cover auth, least privilege, audit logging, deployment guidance,
-and support, but those controls are not included in the OSS preview. The product
-boundary remains local-first: no hosted MCP service, no raw Terraform plan
-upload, no hosted plan analysis, no backend, no accounts, and no billing.
-
-### Compliance control IDs
-
-`readtheplan analyze --framework <name> plan.json` annotates each change
-with control IDs from a packaged compliance framework catalog.
-
-Available frameworks:
-
-- `soc2` — SOC 2 Trust Services Criteria 2017 (see ADR 0005)
-- `iso27001` — ISO/IEC 27001:2022 Annex A (see ADR 0006)
-- `hipaa` — HIPAA Security Rule, 45 CFR Part 164 Subpart C (see ADR 0009)
-
-Catalogs ship as data under `src/readtheplan/data/controls/`. PCI-DSS,
-NIST 800-53, and CIS AWS catalogs are planned in subsequent ADRs. The
-output is intended as one input to a human's evidence package, not a
-stand-alone audit artifact.
-
-### Evidence envelope
-
-`readtheplan analyze --framework soc2 --evidence evidence.json plan.json`
-writes a `rtp-evidence-v1` JSON document containing the plan hash, the
-framework view, controls touched, the change list, and the agent's
-read-attestation. Auditors and GRC platforms consume this envelope as
-the single artifact per change.
-
-```bash
-readtheplan analyze \
-    --framework soc2 \
-    --evidence evidence.json \
-    --reviewer-id alice@example.com \
-    --run-id "github-actions/${GITHUB_RUN_ID}" \
-    plan.json
-```
-
-Schema is documented in `docs/adr/0007-evidence-envelope.md`. Sigstore-backed
-signed envelopes are documented in `docs/adr/0008-signed-attestation.md`.
-
-### Signed attestation
-
-Add `--sign` to write a sigstore-signed evidence envelope:
-
-```bash
-readtheplan analyze --framework soc2 \
-                    --evidence evidence.json \
-                    --sign \
-                    plan.json
-```
-
-In CI, the workflow's OIDC identity is used automatically. Locally,
-`sigstore` opens a browser for one-time OAuth.
-
-Verify a signed envelope:
-
-```bash
-readtheplan verify evidence.json
-# OK identity=alice@example.com issuer=https://accounts.google.com rekor_uuid=...
-```
-
-`verify` exits 0 on success, 1 on any failure (unsigned, tampered,
-schema wrong, signature mismatch, Rekor entry missing). See
-`docs/adr/0008-signed-attestation.md` for the full schema and
-verification semantics.
-
-## GitHub Action
-
-This repository includes a composite GitHub Action at the repo root. It installs the
-local Python package from the action checkout by default, runs the JSON CLI contract,
-and exposes the parsed values as outputs.
+### GitHub Action — gate your CI pipeline
 
 ```yaml
 - name: Analyze Terraform plan
-  id: readtheplan
   uses: readtheplan/readtheplan@v1
   with:
     plan-file: plan.json
-    fail-on-changes: "false"
-
-- name: Use readtheplan output
-  run: |
-    echo "${{ steps.readtheplan.outputs['summary-json'] }}"
-    echo "${{ steps.readtheplan.outputs['resource-change-count'] }}"
 ```
 
-Action outputs:
+[Full GitHub Actions workflow →](https://readtheplan.dev)
 
-- `summary-json`: full JSON emitted by `readtheplan analyze --format json`.
-- `resource-change-count`: total resource changes.
-- `action-counts`: compact JSON object of action counts.
-- `risk-counts`: compact JSON object of risk counts.
+### AI agent gate — block unsafe auto-approvals
 
-The Action also writes a GitHub Step Summary with aggregate counts and a compact
-change table using the same `explanation` text as the CLI.
+```bash
+readtheplan agent-gate plan.json
+# → {"decision": "block", "risk": "irreversible", ...}
+```
 
-## contact
+Use this in your CI or coding agent pipeline to enforce human review on dangerous changes.
 
-OSS contributions welcome. Author: [@texasich](https://github.com/texasich).
+## Features
+
+- **CLI-first** — single `pip install`, runs anywhere Python runs
+- **GitHub Action** — copy-paste into any workflow
+- **Resource-aware rules** — 30+ AWS resource types: KMS, IAM, RDS, S3, EKS, Lambda, networking, etc.
+- **Compliance evidence** — SOC 2, ISO 27001, HIPAA control mappings with signed JSON envelopes
+- **Agent gate** — deterministic proceed/warn/block decisions for CI and AI agents
+- **Customer rule overlays** — org-specific risk escalations via YAML, no code changes needed
+- **MCP preview** — local stdio tools for agent and IDE integrations
+- **No uploads** — your Terraform plan JSON never leaves your machine
+- **MIT licensed** — use it anywhere, no strings attached
+
+## What's not in scope
+
+- Multi-cloud beyond AWS (Terraform/OpenTofu only for now)
+- SaaS dashboard (local-first by design)
+- Policy-as-code engine (OPA/Sentinel exist for that)
+- Competing with Spacelift/env0 on overlapping features
+
+## Documentation
+
+- [Website](https://readtheplan.dev) — setup generator, live demo, intake
+- [Docs](https://readtheplan.dev/docs/) — tutorials, API reference, examples
+- [`examples/`](examples/) — sample plans with rendered output
+- [`docs/adr/`](docs/adr/) — architecture decision records
+- [Corpus feedback loop](docs/corpus/README.md) — scan real plans, improve rules
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
+- Development environment setup
+- How to run tests
+- What makes a good first issue
+- PR review process
+- AI assistance disclosure policy
+
+Good first issues are tagged [`good first issue`](https://github.com/readtheplan/readtheplan/labels/good%20first%20issue).
+
+## Status
+
+**v0.3 — stable CLI + GitHub Action.** The PyPI package ships the Python CLI and composite GitHub Action. Current `main` includes: resource-aware AWS risk rules, compliance framework annotations, evidence envelopes, signed attestation verification, customer rule overlays, MCP preview, examples, benchmarks, and the static onboarding site.
+
+What's shipping next: in-browser plan playground (upload your plan, see results instantly), CloudFormation/Pulumi adapters, PCI-DSS and NIST 800-53 catalogs, expanded AWS resource coverage.
+
+## License
+
+MIT — see [LICENSE](./LICENSE).
+
+## Author
+
+[@texasich](https://github.com/texasich) — OSS contributions welcome.
