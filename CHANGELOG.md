@@ -1,10 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Repository issue templates, pull request template, CODEOWNERS, Dependabot config, and PyPI trusted-publisher workflow scaffolding.
+- GitHub Action parser tests and oversized `summary-json` output guardrail.
+
+### Changed
+- Sigstore is now a true optional `sign` extra with a clear install hint when signing is requested without it.
+- GitHub Action threshold behavior now checks risks at or above the configured threshold.
+- Site and docs copy now label static demos as example output and document the agent-gate JSON contract more explicitly.
+
 ## [0.3.0] — 2026-05-11
 
 ### Added
 - **In-browser playground** — drag a `plan.json`, see instant risk analysis with compliance annotations (SOC 2, ISO 27001, HIPAA). Zero install.
-- **Floci integration** — demo pipeline generates real Terraform plans against emulated AWS. Sample plans (create + destroy) available in playground.
+- **Floci integration** — demo pipeline for generating real Terraform plans against emulated AWS. Sample plans (create + destroy) available in playground.
 - **Documentation site** — `/docs/` with Quickstart, CLI Reference, and GitHub Action guide.
 - **Comparison table** — 8-tool comparison (readtheplan vs tflint/tfsec/checkov/Spacelift/env0/Snyk/infracost/OPA).
 - **"Why I built this" story** — linked from README.

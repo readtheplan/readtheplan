@@ -1,0 +1,39 @@
+name: Bug report
+description: Report something that is broken or confusing in readtheplan.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the failure, unexpected output, or confusing behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: Include the command, flags, and a minimized plan fixture if possible. Do not paste sensitive plan data.
+      placeholder: |
+        readtheplan analyze --framework soc2 plan.json
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: readtheplan version
+      placeholder: "0.3.0"
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, account IDs, and sensitive plan contents from this report.
+          required: true

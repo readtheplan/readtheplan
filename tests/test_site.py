@@ -22,8 +22,12 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="planRows"' in html
     assert 'id="demo" ' in html
     assert 'class="terminal-frame"' in html
-    assert "readtheplan analyze — live preview" in html
+    assert "readtheplan analyze — example preview" in html
     assert "See it in action." in html
+    assert "Works with Terraform and OpenTofu" in html
+    assert "rtp-agent-gate-v1" in html
+    assert "rtp-evidence-v1" in html
+    assert "pip install readtheplan" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
     assert "/mcp/" in html

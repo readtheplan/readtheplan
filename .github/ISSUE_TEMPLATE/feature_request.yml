@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest a new rule, integration, framework mapping, or workflow.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What Terraform/OpenTofu review workflow should readtheplan improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the command, rule, output, or documentation change you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI
+        - GitHub Action
+        - Risk rules
+        - Compliance evidence
+        - Agent gate
+        - Documentation or examples
+        - Site
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I can help test this with a redacted or minimized plan fixture.

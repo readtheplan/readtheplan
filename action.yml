@@ -10,8 +10,11 @@ inputs:
     description: "Fail when the plan contains ANY resource changes (including safe ones like tag updates). Use only for strict zero-diff policies. Default: false."
     required: false
     default: "false"
-    deprecation:
-      message: "Use fail-on-any-change. The old fail-on-changes input is deprecated."
+  fail-on-changes:
+    description: "Deprecated alias for fail-on-any-change. Fails on ANY resource change, including safe changes."
+    required: false
+    default: "false"
+    deprecationMessage: "Use fail-on-any-change. The fail-on-changes input is deprecated."
   fail-on-threshold:
     description: "Minimum risk tier that fails the workflow. One of: safe, review, dangerous, irreversible. Empty disables. Overrides fail-on-any-change when set."
     required: false
@@ -27,7 +30,7 @@ inputs:
 
 outputs:
   summary-json:
-    description: Full JSON emitted by readtheplan analyze --format json.
+    description: Full JSON emitted by readtheplan analyze --format json, unless the payload is too large for GitHub Actions outputs.
     value: ${{ steps.analyze.outputs['summary-json'] }}
   resource-change-count:
     description: Number of Terraform resource changes reported by readtheplan.
@@ -52,8 +55,13 @@ runs:
         set -euo pipefail
 
         # Support deprecated fail-on-changes (map to fail-on-any-change)
-        FAIL_ON_CHANGES="${{ inputs.fail-on-changes || 'false' }}"
-        FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-$FAIL_ON_CHANGES}"
+        FAIL_ON_CHANGES="${{ inputs.fail-on-changes }}"
+        FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-false}"
+        case "${FAIL_ON_CHANGES,,}" in
+          true) FAIL_ON_ANY_CHANGE="true" ;;
+          false) ;;
+          *) echo "::error::fail-on-changes must be true or false, got: $FAIL_ON_CHANGES"; exit 1 ;;
+        esac
 
         if [ -n "${FAIL_ON_THRESHOLD:-}" ]; then
           case "${FAIL_ON_THRESHOLD,,}" in
@@ -129,20 +137,30 @@ runs:
         python "$GITHUB_ACTION_PATH/scripts/parse_action_output.py" "$output_file" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" "$count_file"
 
         # Support deprecated fail-on-changes (map to fail-on-any-change)
-        FAIL_ON_CHANGES="${{ inputs.fail-on-changes || 'false' }}"
-        FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-$FAIL_ON_CHANGES}"
+        FAIL_ON_CHANGES="${{ inputs.fail-on-changes }}"
+        FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-false}"
+        if [ "${FAIL_ON_CHANGES,,}" = "true" ]; then
+          FAIL_ON_ANY_CHANGE="true"
+        fi
         FAIL_ON_THRESHOLD="${FAIL_ON_THRESHOLD:-}"
 
         resource_change_count="$(cat "$count_file")"
+        risk_counts="$(python -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding='utf-8'))['risks'], sort_keys=True, separators=(',', ':')))" "$output_file")"
 
         if [ -n "$FAIL_ON_THRESHOLD" ]; then
+          threshold_reached=false
           for risk in safe review dangerous irreversible; do
-            count=$(python3 -c "import sys,json; r=json.loads(sys.stdin.read()); print(r.get('$risk',0))" <<< "$risk_counts" 2>/dev/null || echo 0)
+            if [ "$risk" = "${FAIL_ON_THRESHOLD,,}" ]; then
+              threshold_reached=true
+            fi
+            if [ "$threshold_reached" != "true" ]; then
+              continue
+            fi
+            count=$(python -c "import sys,json; r=json.loads(sys.stdin.read()); print(r.get('$risk',0))" <<< "$risk_counts" 2>/dev/null || echo 0)
             if [ "$count" -gt 0 ]; then
               echo "::error::readtheplan found $count $risk changes (threshold: $FAIL_ON_THRESHOLD)"
               exit 1
             fi
-            if [ "$risk" = "$FAIL_ON_THRESHOLD" ]; then break; fi
           done
         elif [ "${FAIL_ON_ANY_CHANGE,,}" = "true" ] && [ "$resource_change_count" -gt 0 ]; then
           echo "::error::Plan contains $resource_change_count resource changes and fail-on-any-change is true"

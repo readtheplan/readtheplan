@@ -75,10 +75,11 @@ entry. This ADR's pseudocode is intentionally light on import paths —
 follow the upstream package's actual public API documented at
 [sigstore-python](https://sigstore.github.io/sigstore-python/api/sign/).
 
-This is the **first new runtime dependency** since PyYAML in PR #3.
-PyYAML was justified by readable catalog data; sigstore is justified by
-the entire premise of signed attestation. Reviewers should understand
-this is a deliberate, narrow expansion.
+This is the **first optional runtime dependency** since PyYAML in PR #3.
+PyYAML remains a core dependency for readable catalog data; sigstore is
+installed only through the `sign` extra because it is needed solely for
+signed attestation. Reviewers should understand this is a deliberate,
+narrow expansion.
 
 ### Identity model
 
@@ -170,10 +171,11 @@ it never reaches out to anything except Sigstore's public infrastructure
 
 ### Negative
 
-- New runtime dependency on `sigstore` (~30 transitive deps including
-  `cryptography`, `securesystemslib`). Heavier install footprint.
-  Mitigation: pin upper bound (`<4`), vendor in CI test runs, document
-  the install size in README.
+- Optional runtime dependency on `sigstore` (~30 transitive deps including
+  `cryptography`, `securesystemslib`). Heavier install footprint only for
+  users who request signing. Mitigation: keep it in the `sign` extra,
+  pin upper bound (`<5`), and print an install hint when signing is used
+  without the extra.
 - Online verify requires Sigstore public infrastructure to be
   reachable. If Rekor is down, verify fails. Mitigation: out-of-scope
   offline-verify ADR for later.

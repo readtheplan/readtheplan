@@ -51,7 +51,8 @@
         <div class="gc utility-panel-wide">
           <h2 id="install-title">Installation</h2>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pip install readtheplan</code></pre>
-          <p style="color:var(--muted);margin:8px 0 0">Requires Python 3.9+. MCP subcommand requires Python 3.10+.</p>
+          <p style="color:var(--muted);margin:8px 0 0">Requires Python 3.10+. Signing requires the optional <code>sign</code> extra.</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pip install "readtheplan[sign]"</code></pre>
         </div>
       </section>
 
@@ -91,9 +92,9 @@
             </tbody>
           </table>
           <h3 style="margin-top:24px;color:var(--accent)">Output</h3>
-          <p style="color:var(--muted)">JSON with <code>decision</code> (proceed/warn/block), <code>risk</code> tier, and flagged changes:</p>
+          <p style="color:var(--muted)">JSON with <code>schema</code>, <code>decision</code> (proceed/warn/block), <code>risk</code>, <code>required_checks</code>, <code>allowed_next_actions</code>, <code>prohibited_next_actions</code>, <code>pr_comment</code>, <code>evidence_checklist</code>, <code>auditor_summary</code>, and <code>risk_counts</code>.</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan agent-gate plan.json
-# → {"decision": "block", "risk": "irreversible", "findings": [...]}</code></pre>
+# → {"schema": "rtp-agent-gate-v1", "decision": "block", "risk": "irreversible", ...}</code></pre>
         </div>
       </section>
 
