@@ -64,7 +64,7 @@ existing surface.
     "schema_version": 1
   },
   "agent_attestation": {
-    "agent": "readtheplan@0.0.2",
+    "agent": "readtheplan@0.3.0",
     "read_at": "2026-05-02T18:24:11Z",
     "plan_sha256": "9f86d081…",
     "source": "terraform-show-json",

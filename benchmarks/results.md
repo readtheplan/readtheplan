@@ -1,7 +1,7 @@
 # Benchmark results
 
 Generated: 2026-05-03
-readtheplan version: 0.0.2
+readtheplan version: 0.3.0
 
 | Plan | Source | Resources | Actions | Risks | Time | Edge cases |
 | --- | --- | ---: | --- | --- | --- | --- |

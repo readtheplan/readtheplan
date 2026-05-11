@@ -1,6 +1,6 @@
 {
   "name": "readtheplan",
-  "version": "0.0.1",
+  "version": "0.3.0",
   "description": "Terraform plan risk explainer — reads `terraform plan` and classifies each change as safe/review/dangerous/irreversible.",
   "keywords": [
     "terraform",
