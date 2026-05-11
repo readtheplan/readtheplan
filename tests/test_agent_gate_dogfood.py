@@ -58,10 +58,10 @@ def test_agent_gate_workflow_is_valid() -> None:
 
 def test_readme_mentions_agent_gate_ci() -> None:
     content = README.read_text(encoding="utf-8")
-    assert "### GitHub Actions usage" in content
-    assert "readtheplan agent-gate plan.json > agent-gate.json" in content
-    assert "[examples/04-agent-gate-ci/](examples/04-agent-gate-ci/)" in content
-    assert "step summary" in content
+    assert "### GitHub Action" in content
+    assert "readtheplan agent-gate plan.json" in content
+    assert "Full GitHub Actions workflow" in content
+    assert "uses: readtheplan/readtheplan@v1" in content
 
 
 def test_examples_readme_mentions_agent_gate_ci() -> None:
