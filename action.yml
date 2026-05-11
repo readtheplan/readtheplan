@@ -6,18 +6,24 @@ inputs:
   plan-file:
     description: Path to a Terraform JSON plan file, usually from terraform show -json.
     required: true
-  fail-on-changes:
-    description: Fail the workflow when readtheplan reports one or more resource changes.
+  fail-on-any-change:
+    description: "Fail when the plan contains ANY resource changes (including safe ones like tag updates). Use only for strict zero-diff policies. Default: false."
     required: false
     default: "false"
+    deprecation:
+      message: "Use fail-on-any-change. The old fail-on-changes input is deprecated."
+  fail-on-threshold:
+    description: "Minimum risk tier that fails the workflow. One of: safe, review, dangerous, irreversible. Empty disables. Overrides fail-on-any-change when set."
+    required: false
+    default: ""
   python-version:
     description: Python version used to run the readtheplan CLI.
     required: false
     default: "3.11"
   install-source:
-    description: Pip install source for the CLI. Defaults to this action checkout.
+    description: Pip install source for the CLI. Defaults to the latest stable PyPI release (readtheplan). Set to empty to use this action's bundled source.
     required: false
-    default: ""
+    default: "readtheplan"
 
 outputs:
   summary-json:
@@ -40,15 +46,27 @@ runs:
       shell: bash
       env:
         PLAN_FILE: ${{ inputs.plan-file }}
-        FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
+        FAIL_ON_ANY_CHANGE: ${{ inputs.fail-on-any-change }}
+        FAIL_ON_THRESHOLD: ${{ inputs.fail-on-threshold }}
       run: |
         set -euo pipefail
 
-        case "${FAIL_ON_CHANGES,,}" in
+        # Support deprecated fail-on-changes (map to fail-on-any-change)
+        FAIL_ON_CHANGES="${{ inputs.fail-on-changes || 'false' }}"
+        FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-$FAIL_ON_CHANGES}"
+
+        if [ -n "${FAIL_ON_THRESHOLD:-}" ]; then
+          case "${FAIL_ON_THRESHOLD,,}" in
+            safe|review|dangerous|irreversible) ;;
+            *) echo "::error::fail-on-threshold must be one of: safe, review, dangerous, irreversible, got: $FAIL_ON_THRESHOLD"; exit 1 ;;
+          esac
+        fi
+
+        case "${FAIL_ON_ANY_CHANGE,,}" in
           true|false)
             ;;
           *)
-            echo "::error::fail-on-changes must be true or false, got: $FAIL_ON_CHANGES"
+            echo "::error::fail-on-any-change must be true or false, got: $FAIL_ON_ANY_CHANGE"
             exit 1
             ;;
         esac
@@ -84,7 +102,8 @@ runs:
       shell: bash
       env:
         PLAN_FILE: ${{ inputs.plan-file }}
-        FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
+        FAIL_ON_ANY_CHANGE: ${{ inputs.fail-on-any-change }}
+        FAIL_ON_THRESHOLD: ${{ inputs.fail-on-threshold }}
       run: |
         set -euo pipefail
 
@@ -201,9 +220,24 @@ runs:
         count_path.write_text(str(resource_change_count), encoding="utf-8")
         PY
 
+        # Support deprecated fail-on-changes (map to fail-on-any-change)
+        FAIL_ON_CHANGES="${{ inputs.fail-on-changes || 'false' }}"
+        FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-$FAIL_ON_CHANGES}"
+        FAIL_ON_THRESHOLD="${FAIL_ON_THRESHOLD:-}"
+
         resource_change_count="$(cat "$count_file")"
-        if [ "${FAIL_ON_CHANGES,,}" = "true" ] && [ "$resource_change_count" -gt 0 ]; then
-          echo "::error::Plan contains $resource_change_count resource changes and fail-on-changes is true"
+
+        if [ -n "$FAIL_ON_THRESHOLD" ]; then
+          for risk in safe review dangerous irreversible; do
+            count=$(python3 -c "import sys,json; r=json.loads(sys.stdin.read()); print(r.get('$risk',0))" <<< "$risk_counts" 2>/dev/null || echo 0)
+            if [ "$count" -gt 0 ]; then
+              echo "::error::readtheplan found $count $risk changes (threshold: $FAIL_ON_THRESHOLD)"
+              exit 1
+            fi
+            if [ "$risk" = "$FAIL_ON_THRESHOLD" ]; then break; fi
+          done
+        elif [ "${FAIL_ON_ANY_CHANGE,,}" = "true" ] && [ "$resource_change_count" -gt 0 ]; then
+          echo "::error::Plan contains $resource_change_count resource changes and fail-on-any-change is true"
           exit 1
         fi
 

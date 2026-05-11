@@ -18,7 +18,7 @@ const demoEvidenceNote = document.querySelector("#demoEvidenceNote");
 const handoffNote = document.querySelector("#handoffNote");
 
 // Placeholder until a production pilot inbox is chosen. Keep configurable and visible.
-const PILOT_HANDOFF_EMAIL = "pilot-contact@example.com";
+const PILOT_HANDOFF_EMAIL = "info@readtheplan.dev";
 
 const ciLabels = {
   github: "GitHub Actions",

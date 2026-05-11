@@ -55,7 +55,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "Add to GitHub Actions" in html
     assert "Client context stays in this browser until you choose to send an email." in html
     assert "No raw Terraform plan is attached or submitted." in html
-    assert "pilot-contact@example.com" in html
+    assert "info@readtheplan.dev" in html
     assert "Upload a plan" not in html
     assert "gmail.com" not in html
     assert '<form class="panel intake gc" id="onboardingForm">' in html
@@ -78,7 +78,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "Do not expose cloud credentials to forked pull_request jobs." in app
     assert "terraform init -input=false" not in app
     assert "PILOT_HANDOFF_EMAIL" in app
-    assert "pilot-contact@example.com" in app
+    assert "info@readtheplan.dev" in app
     assert "repoProfileLabels" in app
     assert "maturityLabels" in app
     assert "AWS resource priorities" in app
@@ -157,7 +157,7 @@ def test_static_seo_tools_preserve_local_first_privacy() -> None:
     assert "Terraform Security Group 0.0.0.0/0 Risk" in combined
     assert "Terraform CloudWatch Log Retention Risk" in combined
     assert "Request pilot setup" in combined
-    assert "pilot-contact@example.com" in combined
+    assert "info@readtheplan.dev" in combined
     assert 'itemscope itemtype="https://schema.org/FAQPage"' in combined
     assert "new FormData(calculator)" in tools_js
 
@@ -202,7 +202,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "Kubernetes",
         "Terraform-first today",
         "Request pilot setup",
-        "pilot-contact@example.com",
+        "info@readtheplan.dev",
         "auth design",
         "least privilege",
         "audit logs",
@@ -259,7 +259,7 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
         "Custom company-specific monitoring",
         "MCP/custom integration upsell",
         "Request first brief / private pilot",
-        "pilot-contact@example.com",
+        "info@readtheplan.dev",
         "Terraform/OpenTofu",
         "AWS logging",
         "AWS IAM",

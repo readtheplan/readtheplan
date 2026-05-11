@@ -22,10 +22,11 @@ classifiers = [
   "Topic :: Software Development :: Build Tools",
   "Topic :: System :: Systems Administration",
 ]
-dependencies = ["PyYAML>=6.0", "sigstore>=4.0,<5"]
+dependencies = ["PyYAML>=6.0"]
 
 [project.urls]
-Homepage = "https://github.com/readtheplan/readtheplan"
+Homepage = "https://readtheplan.dev"
+Documentation = "https://readtheplan.dev/docs/"
 Repository = "https://github.com/readtheplan/readtheplan"
 Issues = "https://github.com/readtheplan/readtheplan/issues"
 
@@ -34,6 +35,7 @@ readtheplan = "readtheplan.cli:main"
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0.0,<2.0.0; python_version >= '3.10'"]
+sign = ["sigstore>=4.0,<5"]
 test = ["pytest>=7.0"]
 
 [tool.setuptools]
