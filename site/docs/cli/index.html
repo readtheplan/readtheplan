@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="readtheplan CLI reference — every command, flag, and output format for analyze, agent-gate, verify, mcp, and cloudformation." />
+    <title>CLI Reference — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/docs/cli/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — CLI reference" />
+    <meta property="og:description" content="Complete CLI reference for readtheplan — analyze, agent-gate, verify, mcp, cloudformation." />
+    <meta property="og:url" content="https://readtheplan.dev/docs/cli/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan — CLI reference" />
+    <meta name="twitter:description" content="Complete CLI reference for readtheplan." />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/#resources">Tools</a>
+        <a href="/docs/">Docs</a>
+        <a href="/demo/">Demo</a>
+        <a href="/#setup">Setup</a>
+      </nav>
+      <div class="version-cell gc">v0.3.0</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / CLI Reference</p>
+          <h1 id="title">Every command. Every flag.</h1>
+          <p class="intro-copy">readtheplan ships as a single <code>readtheplan</code> CLI with five subcommands. All run locally — your plan JSON never leaves your machine.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="install-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="install-title">Installation</h2>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pip install readtheplan</code></pre>
+          <p style="color:var(--muted);margin:8px 0 0">Requires Python 3.9+. MCP subcommand requires Python 3.10+.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="analyze-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="analyze-title">readtheplan analyze</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Analyze a Terraform plan JSON file and classify every change by risk tier.</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan analyze [flags] plan.json</code></pre>
+          <h3 style="margin-top:24px;color:var(--accent)">Flags</h3>
+          <table style="width:100%;border-collapse:collapse;margin-top:12px">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px 12px;color:var(--muted)">Flag</th><th style="padding:8px 12px;color:var(--muted)">Description</th></tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--format text|json</td><td style="padding:8px 12px;color:var(--muted)">Output format. Default: text.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--no-rules</td><td style="padding:8px 12px;color:var(--muted)">Disable resource-aware rules. Use action-only classifier.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--rules-file PATH</td><td style="padding:8px 12px;color:var(--muted)">Apply overlay YAML on top of built-in rules. Repeatable.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--framework soc2|iso27001|hipaa</td><td style="padding:8px 12px;color:var(--muted)">Annotate with control IDs from named framework.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--evidence PATH</td><td style="padding:8px 12px;color:var(--muted)">Write rtp-evidence-v1 JSON envelope. Use - for stdout.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--sign</td><td style="padding:8px 12px;color:var(--muted)">Sign evidence envelope with sigstore keyless signing.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--agent-id ID</td><td style="padding:8px 12px;color:var(--muted)">Agent identifier for evidence attestation.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--reviewer-id ID</td><td style="padding:8px 12px;color:var(--muted)">Reviewer identifier for evidence output.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--reviewer-kind human|agent</td><td style="padding:8px 12px;color:var(--muted)">Reviewer kind. Default: human.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="agent-gate-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="agent-gate-title">readtheplan agent-gate</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Emit a proceed/warn/block decision for CI pipelines and AI coding agents.</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan agent-gate [flags] plan.json</code></pre>
+          <h3 style="margin-top:24px;color:var(--accent)">Flags</h3>
+          <table style="width:100%;border-collapse:collapse;margin-top:12px">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px 12px;color:var(--muted)">Flag</th><th style="padding:8px 12px;color:var(--muted)">Description</th></tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--framework soc2|iso27001|hipaa</td><td style="padding:8px 12px;color:var(--muted)">Include required check IDs from named framework.</td></tr>
+            </tbody>
+          </table>
+          <h3 style="margin-top:24px;color:var(--accent)">Output</h3>
+          <p style="color:var(--muted)">JSON with <code>decision</code> (proceed/warn/block), <code>risk</code> tier, and flagged changes:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan agent-gate plan.json
+# → {"decision": "block", "risk": "irreversible", "findings": [...]}</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="verify-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="verify-title">readtheplan verify</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Verify a signed rtp-evidence-v1 envelope.</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan verify evidence.json</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="mcp-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="mcp-title">readtheplan mcp</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Start the experimental local MCP stdio server for agent and IDE integrations. Requires Python 3.10+.</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan mcp</code></pre>
+          <p style="color:var(--muted);margin-top:8px">Install the MCP extra if you get missing dependency errors:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pip install "readtheplan[mcp]"</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="cfn-title" style="padding-bottom:80px">
+        <div class="gc utility-panel-wide">
+          <h2 id="cfn-title">readtheplan cloudformation</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Emit agent-gate decision for a CloudFormation Change Set or template diff. First IaC adapter beyond Terraform.</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation change-set.json</code></pre>
+          <p style="color:var(--muted);margin-top:16px">See <a href="/docs/github-action/">GitHub Action guide</a> for CI integration.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
