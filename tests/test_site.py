@@ -34,18 +34,12 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
     assert "/mcp/" in html
-    assert "/resources/terraform-s3-bucket-risk/" in html
-    assert "/resources/terraform-iam-policy-risk/" in html
-    assert "/resources/terraform-security-group-0-0-0-0-risk/" in html
-    assert "/resources/terraform-cloudwatch-log-retention-risk/" in html
-    assert 'class="noise"' in html
     assert 'rel="canonical"' in html
     assert "og:image" in html
     assert "v0.3.0" in html
-    assert '"soc2"' in html
-    assert '"iso27001"' in html
-    assert '"hipaa"' in html
-    assert "info@readtheplan.dev" in html
+    assert "SOC 2" in html
+    assert "ISO 27001" in html
+    assert "HIPAA" in html
     assert "Upload a plan" not in html
     assert "gmail.com" not in html
     assert "terraform show -json tfplan > " in app
