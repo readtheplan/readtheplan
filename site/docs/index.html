@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="readtheplan documentation — quickstart, CLI reference, GitHub Action guide, and examples."
+    />
+    <title>Docs — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/docs/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — docs" />
+    <meta
+      property="og:description"
+      content="Quickstart, CLI reference, GitHub Action setup, and examples for readtheplan."
+    />
+    <meta property="og:url" content="https://readtheplan.dev/docs/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan — docs" />
+    <meta
+      name="twitter:description"
+      content="Quickstart, CLI reference, GitHub Action setup, and examples for readtheplan."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/#resources">Tools</a>
+        <a href="/docs/">Docs</a>
+        <a href="/demo/">Demo</a>
+        <a href="/#setup">Setup</a>
+        <a href="/#pilot">Pilot</a>
+      </nav>
+      <div class="version-cell gc">v0.3.0</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="docs-title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow">Documentation</p>
+          <h1 id="docs-title">Everything you need to use readtheplan.</h1>
+          <p class="intro-copy">
+            From first install to production CI gating. All content sourced from the
+            <a href="https://github.com/readtheplan/readtheplan">repo</a> and
+            <a href="https://github.com/readtheplan/readtheplan/tree/main/docs/adr">ADRs</a>.
+          </p>
+        </div>
+        <div class="gc trust-strip" aria-label="Docs boundaries">
+          <span>Open source</span>
+          <span>MIT licensed</span>
+          <span>No accounts</span>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="guides-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="guides-title" style="margin-bottom:24px">Guides</h2>
+          <div class="card-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px">
+            <a href="/docs/quickstart/" class="card" style="display:block; padding:24px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:inherit; transition:border-color .2s">
+              <h3 style="margin:0 0 8px; color:var(--accent)">Quickstart →</h3>
+              <p style="margin:0; color:var(--muted)">Install, analyze a plan, and see results in under 30 seconds. Start here.</p>
+            </a>
+            <a href="/docs/cli/" class="card" style="display:block; padding:24px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:inherit; transition:border-color .2s">
+              <h3 style="margin:0 0 8px; color:var(--accent)">CLI Reference →</h3>
+              <p style="margin:0; color:var(--muted)">Every command, flag, and output format. analyze, agent-gate, verify, mcp, cloudformation.</p>
+            </a>
+            <a href="/docs/github-action/" class="card" style="display:block; padding:24px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:inherit; transition:border-color .2s">
+              <h3 style="margin:0 0 8px; color:var(--accent)">GitHub Action →</h3>
+              <p style="margin:0; color:var(--muted)">Gate your CI pipeline. Block dangerous changes before they reach prod.</p>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="reference-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="reference-title" style="margin-bottom:24px">Reference</h2>
+          <div class="card-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px">
+            <a href="https://github.com/readtheplan/readtheplan/tree/main/examples" class="card" style="display:block; padding:24px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:inherit; transition:border-color .2s">
+              <h3 style="margin:0 0 8px; color:var(--accent)">Examples →</h3>
+              <p style="margin:0; color:var(--muted)">Sample plans with rendered output. Safe, review, dangerous, irreversible.</p>
+            </a>
+            <a href="https://github.com/readtheplan/readtheplan/tree/main/docs/adr" class="card" style="display:block; padding:24px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:inherit; transition:border-color .2s">
+              <h3 style="margin:0 0 8px; color:var(--accent)">Architecture Decisions →</h3>
+              <p style="margin:0; color:var(--muted)">ADRs covering risk classification taxonomy, compliance framework design, and agent gate contracts.</p>
+            </a>
+            <a href="https://github.com/readtheplan/readtheplan/blob/main/CONTRIBUTING.md" class="card" style="display:block; padding:24px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:inherit; transition:border-color .2s">
+              <h3 style="margin:0 0 8px; color:var(--accent)">Contributing →</h3>
+              <p style="margin:0; color:var(--muted)">Dev setup, test commands, coding conventions, and good first issues.</p>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="frameworks-title" style="padding-bottom:80px">
+        <div class="gc utility-panel-wide">
+          <h2 id="frameworks-title" style="margin-bottom:24px">Compliance frameworks</h2>
+          <p style="color:var(--muted); margin:0 0 24px">
+            readtheplan annotates every change with control IDs from these frameworks:
+          </p>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px">
+            <div style="padding:20px; border:1px solid var(--border); border-radius:8px">
+              <h3 style="margin:0 0 6px; color:var(--accent)">SOC 2</h3>
+              <p style="margin:0; color:var(--muted); font-size:14px">Security, availability, confidentiality controls. CC1-CC9 mappings.</p>
+            </div>
+            <div style="padding:20px; border:1px solid var(--border); border-radius:8px">
+              <h3 style="margin:0 0 6px; color:var(--accent)">ISO 27001</h3>
+              <p style="margin:0; color:var(--muted); font-size:14px">Annex A controls. A.5-A.18 coverage for infrastructure changes.</p>
+            </div>
+            <div style="padding:20px; border:1px solid var(--border); border-radius:8px">
+              <h3 style="margin:0 0 6px; color:var(--accent)">HIPAA</h3>
+              <p style="margin:0; color:var(--muted); font-size:14px">Administrative, physical, and technical safeguards for PHI data.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

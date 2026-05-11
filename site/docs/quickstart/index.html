@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Quickstart guide for readtheplan — install, analyze a Terraform plan, and see risk results in 30 seconds." />
+    <title>Quickstart — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/docs/quickstart/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — quickstart" />
+    <meta property="og:description" content="Install readtheplan and analyze your first Terraform plan in 30 seconds." />
+    <meta property="og:url" content="https://readtheplan.dev/docs/quickstart/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan — quickstart" />
+    <meta name="twitter:description" content="Install readtheplan and analyze your first Terraform plan in 30 seconds." />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/#resources">Tools</a>
+        <a href="/docs/">Docs</a>
+        <a href="/demo/">Demo</a>
+        <a href="/#setup">Setup</a>
+      </nav>
+      <div class="version-cell gc">v0.3.0</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow"><a href="/docs/" style="color:var(--muted); text-decoration:none">Docs</a> / Quickstart</p>
+          <h1 id="title">Install and analyze in 30 seconds.</h1>
+          <p class="intro-copy">From zero to first risk report. No accounts, no uploads, no config files.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="install-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="install-title">1. Install</h2>
+          <p style="color:var(--muted); margin:8px 0 16px">Python 3.9+ required. One command:</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>pip install readtheplan</code></pre>
+          <p style="color:var(--muted); margin-top:8px">Verify it works:</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>readtheplan --help</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="plan-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="plan-title">2. Generate a plan</h2>
+          <p style="color:var(--muted); margin:8px 0 16px">If you have Terraform, generate a plan JSON:</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>terraform plan -out=tfplan -input=false
+terraform show -json tfplan &gt; plan.json</code></pre>
+          <p style="color:var(--muted); margin:16px 0 8px">No Terraform? Try the example plans in the repo:</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>git clone https://github.com/readtheplan/readtheplan.git
+cd readtheplan/examples/02-dangerous-replacement
+readtheplan analyze plan.json</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="analyze-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="analyze-title">3. Analyze</h2>
+          <p style="color:var(--muted); margin:8px 0 16px">Basic analysis — human-readable output:</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>readtheplan analyze plan.json</code></pre>
+
+          <p style="color:var(--muted); margin:16px 0 16px">With compliance framework mapping (SOC 2, ISO 27001, HIPAA):</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>readtheplan analyze --framework soc2 plan.json</code></pre>
+
+          <p style="color:var(--muted); margin:16px 0 16px">Machine-readable JSON output:</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>readtheplan analyze --format json plan.json</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="output-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="output-title">4. Understand the output</h2>
+          <p style="color:var(--muted); margin:8px 0 16px">Every change gets one of four risk tiers:</p>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:24px">
+            <div style="padding:16px; border:1px solid var(--border); border-radius:8px; border-left:3px solid #34d399">
+              <strong style="color:#34d399">🟢 Safe</strong>
+              <p style="margin:4px 0 0; color:var(--muted); font-size:14px">No-op, tag update, read-only change. Auto-approve.</p>
+            </div>
+            <div style="padding:16px; border:1px solid var(--border); border-radius:8px; border-left:3px solid #fbbf24">
+              <strong style="color:#fbbf24">🟡 Review</strong>
+              <p style="margin:4px 0 0; color:var(--muted); font-size:14px">Security group rule change, minor config drift. Human should check.</p>
+            </div>
+            <div style="padding:16px; border:1px solid var(--border); border-radius:8px; border-left:3px solid #f97316">
+              <strong style="color:#f97316">🟠 Dangerous</strong>
+              <p style="margin:4px 0 0; color:var(--muted); font-size:14px">Instance replacement, IAM policy change, DB modification. Approve with caution.</p>
+            </div>
+            <div style="padding:16px; border:1px solid var(--border); border-radius:8px; border-left:3px solid #ef4444">
+              <strong style="color:#ef4444">🔴 Irreversible</strong>
+              <p style="margin:4px 0 0; color:var(--muted); font-size:14px">Data deletion, KMS key destruction, RDS termination. Block unless explicitly authorized.</p>
+            </div>
+          </div>
+
+          <p style="color:var(--muted); margin:16px 0 8px">With <code>--framework soc2</code>, each change also shows compliance control IDs (e.g. CC6.1, CC7.1).</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="next-title" style="padding-bottom:80px">
+        <div class="gc utility-panel-wide">
+          <h2 id="next-title">Next steps</h2>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-top:16px">
+            <a href="/docs/cli/" class="card" style="display:block; padding:20px; border:1px solid var(--border); border-radius:8px; text-decoration:none; color:inherit">
+              <strong style="color:var(--accent)">CLI Reference →</strong>
+              <p style="margin:4px 0 0; color:var(--muted); font-size:14px">Every command and flag explained.</p>
+            </a>
+            <a href="/docs/github-action/" class="card" style="display:block; padding:20px; border:1px solid var(--border); border-radius:8px; text-decoration:none; color:inherit">
+              <strong style="color:var(--accent)">GitHub Action →</strong>
+              <p style="margin:4px 0 0; color:var(--muted); font-size:14px">Gate your CI pipeline automatically.</p>
+            </a>
+            <a href="/demo/" class="card" style="display:block; padding:20px; border:1px solid var(--border); border-radius:8px; text-decoration:none; color:inherit">
+              <strong style="color:var(--accent)">Live Demo →</strong>
+              <p style="margin:4px 0 0; color:var(--muted); font-size:14px">See an analysis in action without installing anything.</p>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

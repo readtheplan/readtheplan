@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Gate your CI pipeline with readtheplan's GitHub Action. Block dangerous Terraform changes before they reach production." />
+    <title>GitHub Action — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/docs/github-action/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#041C1C" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — GitHub Action guide" />
+    <meta property="og:description" content="Set up readtheplan as a CI gate in your GitHub Actions workflow." />
+    <meta property="og:url" content="https://readtheplan.dev/docs/github-action/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan — GitHub Action guide" />
+    <meta name="twitter:description" content="Set up readtheplan as a CI gate in your GitHub Actions workflow." />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/#resources">Tools</a>
+        <a href="/docs/">Docs</a>
+        <a href="/demo/">Demo</a>
+        <a href="/#setup">Setup</a>
+      </nav>
+      <div class="version-cell gc">v0.3.0</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / GitHub Action</p>
+          <h1 id="title">Gate your CI pipeline.</h1>
+          <p class="intro-copy">Block dangerous Terraform changes before they reach production. One YAML block to copy-paste.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="basic-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="basic-title">Basic setup</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Add this step to any GitHub Actions workflow that has a Terraform plan:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Analyze Terraform plan
+  uses: readtheplan/readtheplan@v1
+  with:
+    plan-file: plan.json</code></pre>
+          <p style="color:var(--muted);margin-top:16px">The action reads <code>plan-file</code>, runs the full analysis, and fails the workflow if irreversible or dangerous changes are detected. Safe + review changes pass silently.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="full-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="full-title">Full workflow example</h2>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>name: Terraform plan review
+on:
+  pull_request:
+    paths:
+      - '**.tf'
+      - '**.tfvars'
+
+jobs:
+  plan-and-analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6"
+
+      - name: Terraform plan
+        run: |
+          terraform init -input=false
+          terraform plan -out=tfplan -input=false
+          terraform show -json tfplan &gt; plan.json
+
+      - name: Analyze plan
+        uses: readtheplan/readtheplan@v1
+        with:
+          plan-file: plan.json</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="agent-gate-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="agent-gate-title">Agent gate for AI-driven PRs</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">If an AI agent opens a PR with Terraform changes, use <code>agent-gate</code> to enforce a human-approval gate on dangerous changes:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Agent gate check
+  run: |
+    pip install readtheplan
+    readtheplan agent-gate plan.json &gt; agent-gate.json
+    echo "::notice::Agent gate decision: $(jq -r .decision agent-gate.json)"
+
+- name: Block dangerous changes
+  if: failure()
+  run: |
+    echo "## ⚠️ Agent gate blocked these changes" &gt;&gt; $GITHUB_STEP_SUMMARY
+    jq -r '.findings[] | "- \(.resource): \(.risk) (\(.reason))"' agent-gate.json &gt;&gt; $GITHUB_STEP_SUMMARY
+    exit 1</code></pre>
+          <p style="color:var(--muted);margin-top:8px">The agent gate enforces these rules:</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-top:16px">
+            <div style="padding:16px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #34d399">
+              <strong style="color:#34d399">proceed</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Safe + review changes only. Auto-merge allowed.</p>
+            </div>
+            <div style="padding:16px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #fbbf24">
+              <strong style="color:#fbbf24">warn</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Dangerous changes present. Human should review.</p>
+            </div>
+            <div style="padding:16px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #ef4444">
+              <strong style="color:#ef4444">block</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Irreversible changes detected. Merge blocked.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="framework-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="framework-title">Compliance framework gating</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Annotate every change with SOC 2, ISO 27001, or HIPAA control IDs:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: SOC 2 compliance gate
+  uses: readtheplan/readtheplan@v1
+  with:
+    plan-file: plan.json
+    framework: soc2</code></pre>
+          <p style="color:var(--muted);margin-top:8px">Each change is annotated with the relevant control (e.g. CC6.1, CC7.1 for SOC 2). The evidence output is audit-ready.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="evidence-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="evidence-title">Evidence envelopes</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Generate a signed evidence envelope for compliance audits:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Generate SOC 2 evidence
+  uses: readtheplan/readtheplan@v1
+  with:
+    plan-file: plan.json
+    framework: soc2
+    evidence: evidence.json</code></pre>
+          <p style="color:var(--muted);margin-top:8px">The envelope follows <code>rtp-evidence-v1</code> schema — timestamped, signed, with full change-to-control mappings. Upload it as a CI artifact for your auditor.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="next-title" style="padding-bottom:80px">
+        <div class="gc utility-panel-wide">
+          <h2 id="next-title">Next steps</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px;margin-top:16px">
+            <a href="/docs/cli/" class="card" style="display:block;padding:20px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+              <strong style="color:var(--accent)">CLI Reference →</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Every command and flag explained.</p>
+            </a>
+            <a href="/docs/quickstart/" class="card" style="display:block;padding:20px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+              <strong style="color:var(--accent)">Quickstart →</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Install and analyze in 30 seconds.</p>
+            </a>
+            <a href="https://github.com/readtheplan/readtheplan/blob/main/CONTRIBUTING.md" class="card" style="display:block;padding:20px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+              <strong style="color:var(--accent)">Contributing →</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Dev setup, conventions, good first issues.</p>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
