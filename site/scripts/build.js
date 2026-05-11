@@ -58,4 +58,24 @@ fs.writeFileSync(
   "utf8",
 );
 
+// Fix absolute paths for GitHub Pages prefix (readtheplan.github.io/readtheplan/)
+const htmlFiles = [];
+function collectHtml(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) collectHtml(full);
+    else if (entry.name.endsWith(".html")) htmlFiles.push(full);
+  }
+}
+collectHtml(dist);
+
+const basePath = "/readtheplan";
+for (const file of htmlFiles) {
+  let content = fs.readFileSync(file, "utf8");
+  // Fix href and src that start with / but not // or http
+  content = content.replace(/(href|src)="\/(?!\/)([^"]*)"/g, `$1="${basePath}/$2"`);
+  fs.writeFileSync(file, content, "utf8");
+}
+console.log(`Fixed absolute paths in ${htmlFiles.length} HTML files`);
+
 console.log(`Built site into ${path.relative(process.cwd(), dist)}`);
