@@ -8,14 +8,14 @@ Thanks for your interest! This guide covers everything you need to start contrib
 git clone https://github.com/readtheplan/readtheplan.git
 cd readtheplan
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[test]"
 python -m pytest
 ```
 
 ## Development environment
 
 - **Python**: 3.9+ (3.10+ for MCP extra)
-- **Dependencies**: `pip install -e ".[dev,mcp]"`
+- **Dependencies**: `pip install -e ".[test,mcp]"`
 - **Tests**: `python -m pytest`
 - **Lint**: `ruff check src/`
 - **Site**: `npm --prefix site install && npm --prefix site test && npm --prefix site run build`
@@ -53,7 +53,7 @@ readtheplan/
 │   ├── controls.py        # Compliance framework mapping
 │   ├── agent_gate.py      # Agent gate contract
 │   ├── evidence.py        # Evidence envelope generation
-│   ├── verify.py          # Signed attestation verification
+│   ├── attestation.py      # Signed attestation verification
 │   └── data/controls/     # Compliance catalogs (YAML)
 ├── site/                  # Cloudflare Pages static site
 │   ├── index.html         # Landing page
@@ -78,12 +78,12 @@ The risk classification engine in `src/readtheplan/rules.py` works in two layers
 
 To add a new resource rule:
 
-1. Add the resource type dispatch in `_classify_resource_type()`
+1. Add the resource type dispatch in `apply_resource_rules()`
 2. Implement the classification function (returns a risk tier string)
 3. Add test cases in `tests/test_rules.py`
 4. If relevant, add compliance control mappings in `data/controls/*.yaml`
 
-See [ADR 0003](docs/adr/0003-resource-aware-rules.md) for the classification contract.
+See [ADR 0003](docs/adr/0003-risk-classification-taxonomy.md) for the classification contract.
 
 ## PR process
 
