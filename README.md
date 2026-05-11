@@ -8,34 +8,15 @@
 > [![Downloads](https://img.shields.io/pypi/dm/readtheplan)](https://pypi.org/project/readtheplan/)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-**Terraform plan risk analysis for humans, CI pipelines, and AI agents.** Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC 2, ISO 27001, and HIPAA. Runs locally — no uploads, no accounts, no backend.
+**Terraform / OpenTofu plan risk analysis for humans, CI pipelines, and AI agents.** Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC 2, ISO 27001, and HIPAA. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
 pip install readtheplan && readtheplan analyze plan.json
 ```
 
-[Website](https://readtheplan.dev) · [Demo](https://readtheplan.dev/demo/) · [Docs](https://readtheplan.dev/docs/) · [Contributing](CONTRIBUTING.md)
+[Website](https://readtheplan.dev) · [Demo](https://readtheplan.dev/demo/) · [Docs](https://readtheplan.dev/docs/) · [Playground](https://readtheplan.dev/playground/) · [Contributing](CONTRIBUTING.md)
 
 ---
-
-## Why this exists
-
-Terraform's plan/apply separation exists so a human reviews changes before they hit prod. In practice, nobody reads the 4,000-line text blob. Code diffs ≠ plan diffs. AI agents skip review. Compliance reviewers drown.
-
-**I reviewed hundreds of Terraform plans manually before building this.** The same patterns kept killing us: a destroy+create that looked like an update, a KMS key rotation that nobody flagged, an IAM policy that quietly opened a bucket to the world. Every incident postmortem had the plan diff attached — and every one of them was reviewed and approved by a human who missed the signal.
-
-[Read the full story →](https://github.com/texasich/sre-field-notes/blob/main/notes/terraform-apply-is-roulette.md)
-
-## What it does
-
-readtheplan reads `terraform plan` JSON and classifies each change:
-
-🟢 **safe** — no-op, tag update, read-only change
-🟡 **review** — security group rule change, minor config drift
-🟠 **dangerous** — instance replacement, IAM policy change, database modification
-🔴 **irreversible** — data deletion, KMS key destruction, RDS instance termination
-
-It applies **resource-aware rules** (30+ AWS resource types), **compliance framework mappings** (SOC 2, ISO 27001, HIPAA), and produces **auditable evidence envelopes** with sigstore-backed signed attestations.
 
 ## Comparison: readtheplan vs. everything else
 
@@ -53,6 +34,27 @@ It applies **resource-aware rules** (30+ AWS resource types), **compliance frame
 
 **readtheplan is the only tool that:** classifies plan diffs by blast radius risk tier, annotates with compliance controls, produces auditable evidence envelopes, gates CI pipelines and AI agents, and runs entirely locally with no SaaS dependency.
 
+---
+
+## Why this exists
+
+Terraform's plan/apply separation exists so a human reviews changes before they hit prod. In practice, nobody reads the 4,000-line text blob. Code diffs ≠ plan diffs. AI agents skip review. Compliance reviewers drown.
+
+**I reviewed hundreds of Terraform plans manually before building this.** The same patterns kept killing us: a destroy+create that looked like an update, a KMS key rotation that nobody flagged, an IAM policy that quietly opened a bucket to the world. Every incident postmortem had the plan diff attached — and every one of them was reviewed and approved by a human who missed the signal.
+
+[Read the full story →](https://github.com/texasich/sre-field-notes/blob/main/notes/terraform-apply-is-roulette.md)
+
+## What it does
+
+readtheplan reads `terraform plan` JSON (Terraform and OpenTofu) and classifies each change:
+
+🟢 **safe** — no-op, tag update, read-only change
+🟡 **review** — security group rule change, minor config drift
+🟠 **dangerous** — instance replacement, IAM policy change, database modification
+🔴 **irreversible** — data deletion, KMS key destruction, RDS instance termination
+
+It applies **resource-aware rules** (30+ AWS resource types), **compliance framework mappings** (SOC 2, ISO 27001, HIPAA), and produces **auditable evidence envelopes** with sigstore-backed signed attestations.
+
 ## Quickstart
 
 ### CLI — 30 seconds to first result
@@ -61,7 +63,7 @@ It applies **resource-aware rules** (30+ AWS resource types), **compliance frame
 # Install
 pip install readtheplan
 
-# Generate a plan
+# Generate a plan (Terraform or OpenTofu)
 terraform plan -out=tfplan -input=false
 terraform show -json tfplan > plan.json
 
@@ -138,7 +140,7 @@ Good first issues are tagged [`good first issue`](https://github.com/readtheplan
 
 **v0.3 — stable CLI + GitHub Action.** The PyPI package ships the Python CLI and composite GitHub Action. Current `main` includes: resource-aware AWS risk rules, compliance framework annotations, evidence envelopes, signed attestation verification, customer rule overlays, MCP preview, examples, benchmarks, and the static onboarding site.
 
-What's shipping next: in-browser plan playground (upload your plan, see results instantly), CloudFormation/Pulumi adapters, PCI-DSS and NIST 800-53 catalogs, expanded AWS resource coverage.
+What's shipping next: CloudFormation/Pulumi adapters, PCI-DSS and NIST 800-53 catalogs, expanded AWS resource coverage.
 
 ## License
 

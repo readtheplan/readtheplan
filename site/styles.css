@@ -201,6 +201,20 @@ pre,
   min-width: 0;
 }
 
+.trust-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 5px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: rgba(34,211,238,0.06);
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
 .trust-strip span,
 .status-pill {
   display: inline-flex;

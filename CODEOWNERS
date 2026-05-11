@@ -1,0 +1,9 @@
+# Default: @texasich reviews everything
+* @texasich
+
+# CI/CD workflows
+.github/workflows/ @texasich
+action.yml @texasich
+
+# Security-sensitive paths
+src/readtheplan/ @texasich

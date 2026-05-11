@@ -51,7 +51,7 @@ const requiredHtml = [
   "typingLine",
   "blink-cursor",
   "booting readtheplan",
-  "Live demo",
+  "Preview",
   "Open the full demo",
   "See it in action.",
 ];
