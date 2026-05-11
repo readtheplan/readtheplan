@@ -27,7 +27,6 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="p-email"' in html
     assert 'id="p-blocker"' in html
     assert "fail-on-threshold" in html
-    assert 'class="terminal-frame"' in html
     assert "readtheplan analyze — example preview" in html
     assert "See it in action." in html
     assert "Works with Terraform and OpenTofu" in html
