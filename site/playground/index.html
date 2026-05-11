@@ -121,8 +121,13 @@
             <p style="color:var(--muted);font-size:13px;margin-top:8px">Generated from <code>terraform show -json tfplan</code></p>
           </div>
           <input type="file" id="fileInput" accept=".json" style="display:none" />
-          <div style="text-align:center;margin-top:12px">
-            <a href="/demo/" style="color:var(--muted);font-size:13px">No plan? Try the live demo →</a>
+          <div style="text-align:center;margin-top:16px">
+            <p style="color:var(--muted);font-size:13px;margin-bottom:8px">No plan handy? Load a sample generated against real emulated AWS (Floci):</p>
+            <button id="loadCreate" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">📦 Create plan (4 resources)</button>
+            <button id="loadDestroy" style="background:var(--surface);color:#ef4444;border:1px solid #ef4444;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">💣 Destroy plan (2 resources)</button>
+          </div>
+          <div style="text-align:center;margin-top:8px">
+            <a href="/demo/" style="color:var(--muted);font-size:12px">Or see the interactive demo →</a>
           </div>
         </div>
       </section>
@@ -182,7 +187,7 @@
       // ── Load compliance data ──
       async function loadCompliance() {
         try {
-          const resp = await fetch("/playground/compliance.json");
+          const resp = await fetch("compliance.json");
           if (resp.ok) complianceData = await resp.json();
         } catch (e) {
           console.log("Compliance data not available (offline or build step skipped)");
@@ -305,6 +310,31 @@
       }
 
       function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+      // ── Sample plan loading (Floci-generated) ──
+      async function loadSamplePlan(url, label) {
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          planData = await resp.json();
+          if (!planData.resource_changes && !planData.planned_values) {
+            showError("This doesn't look like a Terraform plan JSON. Expected 'resource_changes' or 'planned_values'.");
+            return;
+          }
+          clearError();
+          dropZone.classList.add("has-file");
+          dropZone.querySelector(".drop-text").innerHTML = `<strong>${label}</strong> (Floci emulated AWS)`;
+          analyze();
+        } catch (err) {
+          showError("Failed to load sample plan: " + err.message);
+        }
+      }
+      document.getElementById("loadCreate").addEventListener("click", () =>
+        loadSamplePlan("floci-create-plan.json", "Create plan — 4 resources")
+      );
+      document.getElementById("loadDestroy").addEventListener("click", () =>
+        loadSamplePlan("floci-destroy-plan.json", "Destroy plan — 2 resources")
+      );
     </script>
   </body>
 </html>
