@@ -21,7 +21,7 @@ const files = [
   "sitemap.xml",
   "_redirects",
 ];
-const assetDirs = ["fonts", "img", "tools", "resources", "mcp", "brief", "demo", "docs"];
+const assetDirs = ["fonts", "img", "tools", "resources", "mcp", "brief", "demo", "docs", "playground"];
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
