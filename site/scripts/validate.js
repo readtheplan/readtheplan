@@ -52,8 +52,13 @@ const requiredHtml = [
   "blink-cursor",
   "booting readtheplan",
   "Preview",
+  "example preview",
   "Open the full demo",
   "See it in action.",
+  "Works with Terraform and OpenTofu",
+  "rtp-agent-gate-v1",
+  "rtp-evidence-v1",
+  "pip install readtheplan",
 ];
 
 for (const token of requiredHtml) {

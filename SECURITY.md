@@ -34,6 +34,13 @@ readtheplan is designed to run locally. Terraform plan JSON is never uploaded, t
 
 If you discover a way for readtheplan to exfiltrate plan data, make network calls without user intent, or bypass the local-only constraint, please report it immediately.
 
+## Supply Chain Policy
+
+- GitHub workflows declare least-privilege `permissions:` blocks and job timeouts.
+- GitHub Actions dependencies are monitored weekly with Dependabot.
+- Release publishing uses PyPI Trusted Publishing via GitHub OIDC (`id-token: write`), not a stored PyPI API token.
+- Third-party action SHA pinning is the target hardening posture. Until every workflow is SHA-pinned, action version bumps must come through reviewed Dependabot PRs or maintainer-authored PRs.
+
 ## Responsible Disclosure
 
 We follow a 90-day disclosure timeline. After the fix is released, we will publish a security advisory crediting the reporter (unless you request anonymity).

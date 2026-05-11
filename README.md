@@ -14,6 +14,8 @@
 pip install readtheplan && readtheplan analyze plan.json
 ```
 
+Requires Python 3.10+.
+
 [Website](https://readtheplan.dev) · [Demo](https://readtheplan.dev/demo/) · [Docs](https://readtheplan.dev/docs/) · [Playground](https://readtheplan.dev/playground/) · [Contributing](CONTRIBUTING.md)
 
 ---
@@ -75,15 +77,51 @@ readtheplan analyze --framework soc2 plan.json
 
 # Machine-readable JSON
 readtheplan analyze --format json plan.json
+
+# Optional signed evidence support
+pip install "readtheplan[sign]"
+
+# Optional local MCP preview
+pip install "readtheplan[mcp]"
+```
+
+### Sample CLI output
+
+```text
+# readtheplan summary: plan.json
+Resource changes: 3
+
+## Risk
+- dangerous: 1
+- review: 1
+- safe: 1
+
+## Changes
+| Risk | Actions | Resource | Type | Explanation |
+| --- | --- | --- | --- | --- |
+| safe | create | aws_s3_bucket.logs | aws_s3_bucket | Terraform will create S3 bucket infrastructure. |
+| review | update | aws_iam_role.deploy | aws_iam_role | Review trust policies, permission boundaries, and deny statements. |
+| dangerous | delete/create | aws_kms_key.customer_data | aws_kms_key | KMS key identity changes can break decrypt access. |
 ```
 
 ### GitHub Action — gate your CI pipeline
 
 ```yaml
 - name: Analyze Terraform plan
+  id: rtp
   uses: readtheplan/readtheplan@v1
   with:
     plan-file: plan.json
+    fail-on-threshold: dangerous
+```
+
+Downstream steps can consume compact outputs directly:
+
+```yaml
+- name: Use readtheplan JSON
+  run: |
+    echo '${{ steps.rtp.outputs.summary-json }}' > readtheplan-summary.json
+    echo "Risk counts: ${{ steps.rtp.outputs.risk-counts }}"
 ```
 
 [Full GitHub Actions workflow →](https://readtheplan.dev)
@@ -92,10 +130,46 @@ readtheplan analyze --format json plan.json
 
 ```bash
 readtheplan agent-gate plan.json
-# → {"decision": "block", "risk": "irreversible", ...}
 ```
 
-Use this in your CI or coding agent pipeline to enforce human review on dangerous changes.
+Example JSON contract:
+
+```json
+{
+  "schema": "rtp-agent-gate-v1",
+  "decision": "block",
+  "risk": "dangerous",
+  "required_checks": [
+    "rtp.check.change_record",
+    "rtp.check.evidence_packet",
+    "rtp.check.human_approval",
+    "rtp.check.security_review"
+  ],
+  "allowed_next_actions": ["post_pr_comment", "request_human_review", "collect_evidence", "open_change_record"],
+  "prohibited_next_actions": ["merge", "apply", "auto_approve", "auto_apply"],
+  "risk_counts": {"safe": 1, "review": 1, "dangerous": 1, "irreversible": 0}
+}
+```
+
+Wire this into coding-agent pipelines by making `decision` the stable gate: `proceed` may continue, `warn` requires reviewer acknowledgement, and `block` must stop merge/apply/auto-approval until the required checks are recorded.
+
+### Compliance evidence sample
+
+```json
+{
+  "schema": "rtp-evidence-v1",
+  "framework": {"name": "soc2", "version": "2017-tsc"},
+  "summary": {
+    "resource_change_count": 3,
+    "risks": {"safe": 1, "review": 1, "dangerous": 1},
+    "controls_touched": ["CC6.1", "CC6.6", "CC8.1"]
+  },
+  "agent_attestation": {
+    "agent": "readtheplan@0.3.0",
+    "plan_sha256": "..."
+  }
+}
+```
 
 ## Features
 
@@ -118,7 +192,7 @@ Use this in your CI or coding agent pipeline to enforce human review on dangerou
 
 ## Documentation
 
-- [Website](https://readtheplan.dev) — setup generator, live demo, intake
+- [Website](https://readtheplan.dev) — setup generator, example output, intake
 - [Docs](https://readtheplan.dev/docs/) — tutorials, API reference, examples
 - [`examples/`](examples/) — sample plans with rendered output
 - [`docs/adr/`](docs/adr/) — architecture decision records

@@ -52,10 +52,12 @@
           <h2 id="basic-title">Basic setup</h2>
           <p style="color:var(--muted);margin:8px 0 16px">Add this step to any GitHub Actions workflow that has a Terraform plan:</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Analyze Terraform plan
+  id: rtp
   uses: readtheplan/readtheplan@v1
   with:
-    plan-file: plan.json</code></pre>
-          <p style="color:var(--muted);margin-top:16px">The action reads <code>plan-file</code>, runs the full analysis, and fails the workflow if irreversible or dangerous changes are detected. Safe + review changes pass silently.</p>
+    plan-file: plan.json
+    fail-on-threshold: dangerous</code></pre>
+          <p style="color:var(--muted);margin-top:16px">The action reads <code>plan-file</code>, runs the full analysis, writes outputs such as <code>summary-json</code> and <code>risk-counts</code>, and fails only when the configured threshold is met. Leave <code>fail-on-threshold</code> empty for report-only mode.</p>
         </div>
       </section>
 
@@ -89,9 +91,14 @@ jobs:
           terraform show -json tfplan &gt; plan.json
 
       - name: Analyze plan
+        id: rtp
         uses: readtheplan/readtheplan@v1
         with:
-          plan-file: plan.json</code></pre>
+          plan-file: plan.json
+          fail-on-threshold: dangerous
+
+      - name: Save summary JSON
+        run: echo '${{ steps.rtp.outputs.summary-json }}' &gt; readtheplan-summary.json</code></pre>
         </div>
       </section>
 
@@ -103,27 +110,31 @@ jobs:
   run: |
     pip install readtheplan
     readtheplan agent-gate plan.json &gt; agent-gate.json
-    echo "::notice::Agent gate decision: $(jq -r .decision agent-gate.json)"
+    DECISION="$(jq -r .decision agent-gate.json)"
+    echo "::notice::Agent gate decision: $DECISION"
+    if [ "$DECISION" = "block" ]; then
+      exit 1
+    fi
 
 - name: Block dangerous changes
   if: failure()
   run: |
-    echo "## ⚠️ Agent gate blocked these changes" &gt;&gt; $GITHUB_STEP_SUMMARY
-    jq -r '.findings[] | "- \(.resource): \(.risk) (\(.reason))"' agent-gate.json &gt;&gt; $GITHUB_STEP_SUMMARY
+    echo "## Agent gate blocked this plan" &gt;&gt; $GITHUB_STEP_SUMMARY
+    jq -r '.pr_comment' agent-gate.json &gt;&gt; $GITHUB_STEP_SUMMARY
     exit 1</code></pre>
           <p style="color:var(--muted);margin-top:8px">The agent gate enforces these rules:</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-top:16px">
             <div style="padding:16px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #34d399">
               <strong style="color:#34d399">proceed</strong>
-              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Safe + review changes only. Auto-merge allowed.</p>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Safe-tier changes only. The agent may continue.</p>
             </div>
             <div style="padding:16px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #fbbf24">
               <strong style="color:#fbbf24">warn</strong>
-              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Dangerous changes present. Human should review.</p>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Review-tier changes present. Reviewer acknowledgement is required.</p>
             </div>
             <div style="padding:16px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #ef4444">
               <strong style="color:#ef4444">block</strong>
-              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Irreversible changes detected. Merge blocked.</p>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Dangerous or irreversible changes detected. Merge/apply/auto-approval is blocked.</p>
             </div>
           </div>
         </div>
@@ -132,12 +143,11 @@ jobs:
       <section class="g" aria-labelledby="framework-title">
         <div class="gc utility-panel-wide">
           <h2 id="framework-title">Compliance framework gating</h2>
-          <p style="color:var(--muted);margin:8px 0 16px">Annotate every change with SOC 2, ISO 27001, or HIPAA control IDs:</p>
+          <p style="color:var(--muted);margin:8px 0 16px">Use the CLI in a workflow step when you need SOC 2, ISO 27001, or HIPAA control IDs:</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: SOC 2 compliance gate
-  uses: readtheplan/readtheplan@v1
-  with:
-    plan-file: plan.json
-    framework: soc2</code></pre>
+  run: |
+    python -m pip install readtheplan
+    readtheplan analyze --framework soc2 --format json plan.json &gt; readtheplan-summary.json</code></pre>
           <p style="color:var(--muted);margin-top:8px">Each change is annotated with the relevant control (e.g. CC6.1, CC7.1 for SOC 2). The evidence output is audit-ready.</p>
         </div>
       </section>
@@ -145,13 +155,11 @@ jobs:
       <section class="g" aria-labelledby="evidence-title">
         <div class="gc utility-panel-wide">
           <h2 id="evidence-title">Evidence envelopes</h2>
-          <p style="color:var(--muted);margin:8px 0 16px">Generate a signed evidence envelope for compliance audits:</p>
+          <p style="color:var(--muted);margin:8px 0 16px">Generate a signed evidence envelope for compliance audits with the optional signing extra:</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Generate SOC 2 evidence
-  uses: readtheplan/readtheplan@v1
-  with:
-    plan-file: plan.json
-    framework: soc2
-    evidence: evidence.json</code></pre>
+  run: |
+    python -m pip install "readtheplan[sign]"
+    readtheplan analyze --framework soc2 --evidence evidence.json --sign plan.json</code></pre>
           <p style="color:var(--muted);margin-top:8px">The envelope follows <code>rtp-evidence-v1</code> schema — timestamped, signed, with full change-to-control mappings. Upload it as a CI artifact for your auditor.</p>
         </div>
       </section>

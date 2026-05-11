@@ -3,10 +3,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from readtheplan.cli import main
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_version_flag_prints_package_version(capsys) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--version"])
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert captured.out.strip() == "readtheplan 0.3.0"
+    assert captured.err == ""
 
 
 def test_analyze_valid_plan_prints_summary(capsys) -> None:

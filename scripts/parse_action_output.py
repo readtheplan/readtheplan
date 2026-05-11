@@ -17,6 +17,9 @@ import sys
 from pathlib import Path
 
 
+MAX_GITHUB_OUTPUT_BYTES = 900 * 1024
+
+
 def _markdown_cell(value):
     text = str(value).replace("\n", " ").replace("|", "\\|")
     return text if len(text) <= 240 else text[:237] + "..."
@@ -62,9 +65,18 @@ def main():
     summary_json = json.dumps(payload, indent=2, sort_keys=True)
 
     with github_output.open("a", encoding="utf-8") as output:
-        output.write("summary-json<<READTHEPLAN_JSON\n")
-        output.write(summary_json)
-        output.write("\nREADTHEPLAN_JSON\n")
+        if len(summary_json.encode("utf-8")) > MAX_GITHUB_OUTPUT_BYTES:
+            size_kib = len(summary_json.encode("utf-8")) // 1024
+            print(
+                "::warning::readtheplan summary-json is "
+                f"{size_kib} KiB, which is too large for safe GitHub output use. "
+                "Skipping summary-json; use the step summary or upload the JSON as an artifact.",
+            )
+            output.write("summary-json=\n")
+        else:
+            output.write("summary-json<<READTHEPLAN_JSON\n")
+            output.write(summary_json)
+            output.write("\nREADTHEPLAN_JSON\n")
         output.write(f"resource-change-count={resource_change_count}\n")
         output.write(f"action-counts={action_counts}\n")
         output.write(f"risk-counts={risk_counts}\n")

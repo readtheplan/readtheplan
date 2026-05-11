@@ -532,8 +532,8 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
       output: "→ {\"safe\": 12, \"review\": 3, \"dangerous\": 1, \"irreversible\": 0}",
     },
     {
-      cmd: "readtheplan gate --threshold dangerous",
-      output: "→ gate passed. 1 dangerous finding(s) flagged for review.",
+      cmd: "readtheplan agent-gate plan.json",
+      output: "→ {\"decision\":\"block\",\"risk\":\"dangerous\"}",
     },
   ];
 

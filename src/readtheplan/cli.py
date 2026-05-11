@@ -45,6 +45,11 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="readtheplan",
         description="Read and summarize Terraform plan JSON.",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_package_version()}",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     analyze = subparsers.add_parser(
@@ -174,11 +179,15 @@ def _framework_help_list() -> str:
 
 
 def _default_agent_id() -> str:
-    try:
-        package_version = version("readtheplan")
-    except PackageNotFoundError:
-        return "readtheplan@unknown"
+    package_version = _package_version()
     return f"readtheplan@{package_version}"
+
+
+def _package_version() -> str:
+    try:
+        return version("readtheplan")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def _analyze(args: argparse.Namespace) -> int:

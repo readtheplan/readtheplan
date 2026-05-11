@@ -5,16 +5,12 @@ import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, cast
 
-from cryptography import x509
-from cryptography.x509.oid import ObjectIdentifier
-from sigstore.errors import Error as SigstoreError
-from sigstore.errors import VerificationError as SigstoreVerificationError
-from sigstore.models import Bundle, ClientTrustConfig
-from sigstore.oidc import Issuer
-from sigstore.sign import SigningContext
-from sigstore.verify import Verifier, policy
-
 from readtheplan.evidence import EVIDENCE_SCHEMA, EvidenceEnvelope
+
+
+SIGNING_INSTALL_HINT = (
+    "Signing requires sigstore. Install with: pip install readtheplan[sign]"
+)
 
 
 class SigningError(ValueError):
@@ -23,6 +19,10 @@ class SigningError(ValueError):
 
 class VerificationError(ValueError):
     """Raised when evidence verification input is malformed."""
+
+
+class MissingSigningDependencyError(RuntimeError):
+    """Raised when optional signing dependencies are not installed."""
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class _BundleLike(Protocol):
     def signature(self) -> bytes: ...
 
     @property
-    def signing_certificate(self) -> x509.Certificate: ...
+    def signing_certificate(self) -> Any: ...
 
     @property
     def log_entry(self) -> Any: ...
@@ -134,6 +134,12 @@ def _sign_payload_with_sigstore(
     oidc_issuer: str | None,
     rekor_url: str | None,
 ) -> _SignedPayload:
+    try:
+        from sigstore.models import ClientTrustConfig
+        from sigstore.oidc import Issuer
+    except ImportError as exc:
+        raise MissingSigningDependencyError(SIGNING_INSTALL_HINT) from exc
+
     trust_config = ClientTrustConfig.production()
     issuer = Issuer(oidc_issuer or trust_config.signing_config.get_oidc_url())
     context = _signing_context(trust_config, rekor_url=rekor_url)
@@ -155,6 +161,14 @@ def _verify_payload_with_sigstore(
     bundle_json: str,
     rekor_url: str | None,
 ) -> VerificationResult:
+    try:
+        from sigstore.errors import Error as SigstoreError
+        from sigstore.errors import VerificationError as SigstoreVerificationError
+        from sigstore.models import Bundle
+        from sigstore.verify import policy
+    except ImportError as exc:
+        raise VerificationError(SIGNING_INSTALL_HINT) from exc
+
     try:
         bundle = Bundle.from_json(bundle_json)
         if base64.b64encode(bundle.signature).decode("ascii") != signature:
@@ -202,14 +216,22 @@ def _verify_payload_with_sigstore(
 
 
 def _signing_context(
-    trust_config: ClientTrustConfig,
+    trust_config: Any,
     *,
     rekor_url: str | None,
-) -> SigningContext:
+) -> Any:
+    try:
+        from sigstore.sign import SigningContext
+    except ImportError as exc:
+        raise MissingSigningDependencyError(SIGNING_INSTALL_HINT) from exc
+
     if not rekor_url:
         return SigningContext.from_trust_config(trust_config)
 
-    from sigstore._internal.rekor.client import RekorClient
+    try:
+        from sigstore._internal.rekor.client import RekorClient
+    except ImportError as exc:
+        raise MissingSigningDependencyError(SIGNING_INSTALL_HINT) from exc
 
     signing_config = trust_config.signing_config
     return SigningContext(
@@ -220,10 +242,18 @@ def _signing_context(
     )
 
 
-def _verifier(*, rekor_url: str | None) -> Verifier:
+def _verifier(*, rekor_url: str | None) -> Any:
+    try:
+        from sigstore.verify import Verifier
+    except ImportError as exc:
+        raise VerificationError(SIGNING_INSTALL_HINT) from exc
+
     verifier = Verifier.production()
     if rekor_url:
-        from sigstore._internal.rekor.client import RekorClient
+        try:
+            from sigstore._internal.rekor.client import RekorClient
+        except ImportError as exc:
+            raise VerificationError(SIGNING_INSTALL_HINT) from exc
 
         verifier._rekor = RekorClient(rekor_url)
     return verifier
@@ -250,7 +280,12 @@ def _json_copy(payload: Mapping[str, Any]) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(json.dumps(payload)))
 
 
-def _certificate_identity(cert: x509.Certificate) -> str:
+def _certificate_identity(cert: Any) -> str:
+    try:
+        from cryptography import x509
+    except ImportError as exc:
+        raise VerificationError(SIGNING_INSTALL_HINT) from exc
+
     try:
         san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     except x509.ExtensionNotFound:
@@ -265,7 +300,13 @@ def _certificate_identity(cert: x509.Certificate) -> str:
     return cert.subject.rfc4514_string()
 
 
-def _certificate_oidc_issuer(cert: x509.Certificate) -> str:
+def _certificate_oidc_issuer(cert: Any) -> str:
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import ObjectIdentifier
+    except ImportError as exc:
+        raise VerificationError(SIGNING_INSTALL_HINT) from exc
+
     for oid in (
         ObjectIdentifier("1.3.6.1.4.1.57264.1.8"),
         ObjectIdentifier("1.3.6.1.4.1.57264.1.1"),

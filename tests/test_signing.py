@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import builtins
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ from readtheplan.cli import main
 from readtheplan.evidence import EvidenceEnvelope, build_evidence
 from readtheplan.plan import analyze_plan_file
 from readtheplan.signing import (
+    SIGNING_INSTALL_HINT,
     SigningError,
     VerificationError,
     VerificationResult,
@@ -108,6 +110,39 @@ def test_cli_sign_requires_evidence(capsys: pytest.CaptureFixture[str]) -> None:
     assert exit_code != 0
     assert captured.out == ""
     assert "Error: --sign requires --evidence" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_cli_sign_without_sigstore_prints_install_hint(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def block_sigstore_import(name, *args, **kwargs):
+        if name.startswith("sigstore"):
+            raise ImportError("sigstore intentionally unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", block_sigstore_import)
+
+    exit_code = main(
+        [
+            "analyze",
+            "--framework",
+            "soc2",
+            "--evidence",
+            "-",
+            "--sign",
+            str(EVIDENCE_PLAN),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert SIGNING_INSTALL_HINT in captured.err
+    assert "ImportError" not in captured.err
     assert "Traceback" not in captured.err
 
 
