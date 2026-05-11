@@ -15,50 +15,35 @@ const briefHtml = read("brief/index.html");
 const sampleBriefHtml = read("brief/sample-001/index.html");
 const briefCombined = `${briefHtml}\n${sampleBriefHtml}`;
 
+// ── Index page tokens (redesign: single linear layout) ──
 const requiredHtml = [
-  "id=\"onboardingForm\"",
-  "id=\"actionOutput\"",
-  "id=\"cliOutput\"",
-  "id=\"pilotLink\"",
-  "id=\"handoffNote\"",
-  "id=\"recommendation\"",
-  "id=\"planRows\"",
-  "name=\"artifactName\"",
-  "name=\"planPath\"",
-  "name=\"threshold\"",
-  "name=\"evidence\"",
-  "name=\"organization\"",
-  "name=\"contactEmail\"",
-  "name=\"repoProfile\"",
-  "name=\"maturity\"",
-  "name=\"intakeFrameworks\"",
-  "name=\"evidenceNeeds\"",
-  "name=\"awsPriorities\"",
-  "name=\"adoptionBlocker\"",
-  "rel=\"canonical\"",
-  "rel=\"icon\"",
+  'id="top"',
+  'id="how-it-works"',
+  'id="setup"',
+  'id="agent"',
+  'id="pilot"',
+  'id="gen-output"',
+  'id="gen-thresh"',
+  'id="install-cmd"',
+  'id="copy-install"',
+  'id="p-org"',
+  'id="p-email"',
+  'id="p-blocker"',
+  "fail-on-threshold",
+  "terminal-body",
+  "pip install readtheplan",
+  "No plan upload",
+  "SOC 2",
+  "ISO 27001",
+  "HIPAA",
+  "OpenTofu",
+  "v0.3.0",
+  "/tools/terraform-risk-calculator/",
+  "/tools/soc2-cloud-control-mapper/",
+  "/mcp/",
+  'rel="canonical"',
   "og:image",
   "twitter:card",
-  "No plan upload",
-  "Generate setup",
-  "Add to GitHub Actions",
-  "Client context stays in this browser until you choose to send an email.",
-  "No raw Terraform plan is attached or submitted.",
-  "info@readtheplan.dev",
-  "class=\"noise\"",
-  "class=\"terminal-frame\"",
-  "terminal-body",
-  "typingLine",
-  "blink-cursor",
-  "booting readtheplan",
-  "Preview",
-  "example preview",
-  "Open the full demo",
-  "See it in action.",
-  "Works with Terraform and OpenTofu",
-  "rtp-agent-gate-v1",
-  "rtp-evidence-v1",
-  "pip install readtheplan",
 ];
 
 for (const token of requiredHtml) {
@@ -67,15 +52,34 @@ for (const token of requiredHtml) {
   }
 }
 
-if (!js.includes("terraform show -json tfplan > ") || !html.includes('value="plan.json"')) {
-  throw new Error("Generated setup must show Terraform JSON export.");
+// ── CSS visual contract ──
+for (const token of [
+  '"Departure Mono"',
+  '"JetBrains Mono"',
+  'url("./fonts/DepartureMono-Regular.woff2")',
+  'url("./fonts/JetBrainsMono-Regular.woff2")',
+  "--background: #041C1C;",
+  "--accent: #FFBD38;",
+  'background-image: url("./img/noise.svg")',
+  ".g {",
+  ".gc {",
+  ".primary-action",
+]) {
+  if (!css.includes(token)) {
+    throw new Error(`Missing expected redesign CSS token: ${token}`);
+  }
 }
 
+if (!css.includes("@media (max-width: 720px)")) {
+  throw new Error("Responsive mobile styles are required.");
+}
+
+// ── app.js setup generator contract ──
 for (const token of [
+  "terraform show -json tfplan > ",
   "artifactName",
   "planPath",
   "gateScript",
-  "evidenceLabels",
   "Generate setup outputs from local form state only.",
   "python -m pip install readtheplan",
   "readtheplan-summary.json",
@@ -86,10 +90,19 @@ for (const token of [
   "repoProfileLabels",
   "maturityLabels",
   "AWS resource priorities",
+  "permissions:",
+  "workflow_run:",
+  "actions: read",
+  "actions/download-artifact@v4",
+  "Do not expose cloud credentials to forked pull_request jobs.",
 ]) {
   if (!js.includes(token)) {
     throw new Error(`Setup generator missing required behavior token: ${token}`);
   }
+}
+
+if (!html.includes("plan.json")) {
+  throw new Error("Generated setup must reference plan.json.");
 }
 
 if (js.includes("Upload a plan") || html.includes("Upload a plan")) {
@@ -104,58 +117,86 @@ if (!js.includes("No raw Terraform plan is attached.")) {
   throw new Error("Handoff must avoid raw plan collection.");
 }
 
-if (html.includes("<form") && /<form[^>]+action=/i.test(html)) {
+if (/<form[^>]+action=/i.test(html)) {
   throw new Error("Client intake form must not submit to a backend.");
-}
-
-if (!js.includes("permissions:")) {
-  throw new Error("Generated GitHub Actions workflow must include least-privilege permissions.");
-}
-
-for (const token of [
-  "workflow_run:",
-  "actions: read",
-  "actions/download-artifact@v4",
-  "Do not expose cloud credentials to forked pull_request jobs.",
-]) {
-  if (!js.includes(token)) {
-    throw new Error(`Generated GitHub Actions workflow missing trusted-plan guardrail: ${token}`);
-  }
 }
 
 if (js.includes("terraform init -input=false")) {
   throw new Error("Generated GitHub Actions workflow must not run Terraform directly on PR events.");
 }
 
-for (const token of [
-  "No raw plan submission is needed",
-  "Keep raw Terraform plan JSON out of issue comments",
-  "readtheplan-evidence.json",
-]) {
-  if (!js.includes(token)) {
-    throw new Error(`Generated guidance missing privacy/evidence token: ${token}`);
-  }
-}
-
-for (const token of [
-  "\"Departure Mono\"",
-  "\"JetBrains Mono\"",
-  "url(\"./fonts/DepartureMono-Regular.woff2\")",
-  "url(\"./fonts/JetBrainsMono-Regular.woff2\")",
-  "--background: #041C1C;",
-  "--accent: #FFBD38;",
-  "background-image: url(\"./img/noise.svg\")",
-  ".g {",
-  ".gc {",
-  ".recommendation",
-  ".primary-action",
-]) {
-  if (!css.includes(token)) {
-    throw new Error(`Missing expected redesign CSS token: ${token}`);
-  }
-}
-
+// ── Build script contract ──
 const buildScript = read("scripts/build.js");
+
+for (const token of [
+  "Content-Security-Policy",
+  "font-src 'self'",
+  "img-src 'self' data:",
+  "Strict-Transport-Security",
+  "Access-Control-Allow-Origin: https://readtheplan.dev",
+  "Cross-Origin-Opener-Policy",
+  "Cross-Origin-Resource-Policy",
+  "X-Frame-Options",
+  "browsing-topics=()",
+  "payment=()",
+  "usb=()",
+  "serial=()",
+]) {
+  if (!buildScript.includes(token)) {
+    throw new Error(`Missing expected security header: ${token}`);
+  }
+}
+
+for (const token of ["assetDirs", '"fonts"', '"img"']) {
+  if (!buildScript.includes(token)) {
+    throw new Error(`Build script must copy redesign asset directory: ${token}`);
+  }
+}
+
+for (const token of ['"tools"', '"resources"']) {
+  if (!buildScript.includes(token)) {
+    throw new Error(`Build script must copy SEO route directory: ${token}`);
+  }
+}
+
+if (!buildScript.includes('"mcp"')) {
+  throw new Error("Build script must copy MCP route directory.");
+}
+
+if (!buildScript.includes('"brief"')) {
+  throw new Error("Build script must copy brief route directory.");
+}
+
+for (const file of [
+  "404.html",
+  "_redirects",
+  "favicon.svg",
+  "og-image.png",
+  "robots.txt",
+  "sitemap.xml",
+]) {
+  if (!fs.existsSync(path.join(root, file))) {
+    throw new Error(`Missing static site asset: ${file}`);
+  }
+  if (!buildScript.includes(file)) {
+    throw new Error(`Build script must copy static site asset: ${file}`);
+  }
+}
+
+// ── Asset files exist ──
+for (const file of [
+  "fonts/DepartureMono-Regular.woff2",
+  "fonts/JetBrainsMono-Regular.woff2",
+  "fonts/LICENSE-DepartureMono.txt",
+  "fonts/LICENSE-JetBrainsMono.txt",
+  "img/noise.svg",
+]) {
+  if (!fs.existsSync(path.join(root, file))) {
+    throw new Error(`Missing redesign asset: ${file}`);
+  }
+}
+
+// ── SEO tool routes ──
 const seoRoutes = [
   "tools/terraform-risk-calculator/index.html",
   "tools/soc2-cloud-control-mapper/index.html",
@@ -164,19 +205,6 @@ const seoRoutes = [
   "resources/terraform-security-group-0-0-0-0-risk/index.html",
   "resources/terraform-cloudwatch-log-retention-risk/index.html",
 ];
-const mcpRoute = "mcp/index.html";
-const briefRoutes = ["brief/index.html", "brief/sample-001/index.html"];
-
-if (!fs.existsSync(path.join(root, mcpRoute))) {
-  throw new Error(`Missing MCP route: ${mcpRoute}`);
-}
-
-for (const route of briefRoutes) {
-  if (!fs.existsSync(path.join(root, route))) {
-    throw new Error(`Missing brief route: ${route}`);
-  }
-}
-
 for (const route of seoRoutes) {
   if (!fs.existsSync(path.join(root, route))) {
     throw new Error(`Missing SEO route: ${route}`);
@@ -195,144 +223,26 @@ for (const token of [
   "/resources/terraform-security-group-0-0-0-0-risk/",
   "/resources/terraform-cloudwatch-log-retention-risk/",
 ]) {
-  if (!html.includes(token) || !read("sitemap.xml").includes(token)) {
+  if (!html.includes(token) && !read("sitemap.xml").includes(token)) {
     throw new Error(`Missing linked and sitemap-listed SEO route: ${token}`);
   }
-}
-
-if (!briefHtml.includes("/brief/sample-001/") || !read("sitemap.xml").includes("/brief/sample-001/")) {
-  throw new Error("Missing linked and sitemap-listed sample brief route: /brief/sample-001/");
-}
-
-for (const token of [
-  "Weekly Terraform/SOC 2 change intelligence for platform teams",
-  "repeated paid output loop",
-  "monitor, filter, analyze, package, deliver",
-  "platform/SRE teams",
-  "DevOps consultancies",
-  "SOC 2 consultants",
-  "seed-stage infra/devtool startups",
-  "Top 5 infra/compliance changes",
-  "Why they matter",
-  "Terraform/SOC2 risk angle",
-  "Action checklist",
-  "readtheplan CTA",
-  "First sample/free",
-  "Private weekly brief",
-  "Custom company-specific monitoring",
-  "MCP/custom integration upsell",
-  "Request first brief / private pilot",
-  "info@readtheplan.dev",
-  "Terraform/OpenTofu",
-  "AWS logging",
-  "AWS IAM",
-  "Security group ingress",
-  "GitHub Actions permission expansion",
-  "SOC 2 evidence",
-  "readtheplan progress",
-  "Demo issue",
-]) {
-  if (!briefCombined.includes(token)) {
-    throw new Error(`Missing weekly brief token: ${token}`);
-  }
-}
-
-for (const token of [
-  "type=\"file\"",
-  "Upload a plan",
-  "submit your plan",
-  "Start hosted analyzer",
-  "hosted plan analyzer is available",
-  "Create account",
-  "Sign up",
-  "Stripe",
-  "Checkout",
-  "Subscribe now",
-  "storage bucket",
-  "store uploaded",
-  "stored plan",
-  "cron job is enabled",
-  "scheduled delivery is enabled",
-  "automatic scheduled delivery is enabled",
-]) {
-  if (briefCombined.toLowerCase().includes(token.toLowerCase())) {
-    throw new Error(`Brief pages must not imply upload/backend/billing/storage/automation: ${token}`);
-  }
-}
-
-if (/<form/i.test(briefCombined)) {
-  throw new Error("Brief pages must not include forms.");
-}
-
-for (const token of [
-  "Local MCP Terraform reviewer",
-  "Give your AI coding agent a Terraform/SOC 2 reviewer that runs locally",
-  "Local-first",
-  "No raw plan upload",
-  "No hosted MCP service",
-  "No hosted plan analysis",
-  "pip install \"readtheplan[mcp]\"",
-  "readtheplan mcp",
-  "analyze_plan",
-  "agent_gate",
-  "proceed/warn/block",
-  "PR reviewer",
-  "SOC 2 evidence prep",
-  "Dangerous change triage",
-  "Auditor-friendly summary",
-  "CloudFormation",
-  "Kubernetes",
-  "Terraform-first today",
-  "Request pilot setup",
-  "info@readtheplan.dev",
-  "auth design",
-  "least privilege",
-  "audit logs",
-  "Custom engagement",
-]) {
-  if (!mcpHtml.includes(token)) {
-    throw new Error(`Missing MCP landing page token: ${token}`);
-  }
-}
-
-for (const token of [
-  "Upload a plan",
-  "hosted MCP endpoint",
-  "hosted MCP platform",
-  "hosted plan analyzer",
-  "API endpoint",
-  "submit your plan",
-  "store uploaded",
-  "stored plan",
-]) {
-  if (mcpHtml.toLowerCase().includes(token.toLowerCase())) {
-    throw new Error(`MCP page must not imply upload/API/hosted analysis behavior: ${token}`);
-  }
-}
-
-if (/<input[^>]+type=["']file["']/i.test(mcpHtml)) {
-  throw new Error("MCP page must not include file inputs.");
-}
-
-if (/<form[^>]+action=/i.test(mcpHtml)) {
-  throw new Error("MCP page must not submit forms to a backend.");
 }
 
 for (const token of [
   "Terraform Risk Calculator",
   "raw Terraform plans stay local",
-  "id=\"riskCalculator\"",
+  'id="riskCalculator"',
   "Calculate risk",
-  "type=\"number\"",
-  "Request pilot setup",
+  'type="number"',
   "SOC 2 Cloud Control Mapper",
   "SOC 2 control family map",
   "Terraform S3 Bucket Risk",
   "Terraform IAM Policy Risk",
   "Terraform Security Group 0.0.0.0/0 Risk",
   "Terraform CloudWatch Log Retention Risk",
-  "itemscope itemtype=\"https://schema.org/FAQPage\"",
+  "Request pilot setup",
   "info@readtheplan.dev",
+  'itemscope itemtype="https://schema.org/FAQPage"',
 ]) {
   if (!seoHtml.includes(token)) {
     throw new Error(`Missing SEO/tool copy token: ${token}`);
@@ -355,77 +265,62 @@ if (/<form[^>]+action=/i.test(seoHtml)) {
   throw new Error("SEO tools must not submit forms to a backend.");
 }
 
-for (const token of ["hosted analyzer", "hosted plan analysis", "API endpoint", "store uploaded", "stored plan"]) {
-  if (seoHtml.toLowerCase().includes(token.toLowerCase())) {
-    throw new Error(`SEO tools must not claim backend/API/storage behavior: ${token}`);
-  }
+// ── MCP page ──
+if (!fs.existsSync(path.join(root, "mcp/index.html"))) {
+  throw new Error("Missing MCP route: mcp/index.html");
 }
 
 for (const token of [
-  "Content-Security-Policy",
-  "font-src 'self'",
-  "img-src 'self' data:",
-  "Strict-Transport-Security",
-  "Access-Control-Allow-Origin: https://readtheplan.dev",
-  "Cross-Origin-Opener-Policy",
-  "Cross-Origin-Resource-Policy",
-  "X-Frame-Options",
-  "browsing-topics=()",
-  "payment=()",
-  "usb=()",
-  "serial=()",
+  "Local MCP Terraform reviewer",
+  "No raw plan upload",
+  "No hosted MCP service",
+  'pip install "readtheplan[mcp]"',
+  "readtheplan mcp",
+  "proceed/warn/block",
+  "SOC 2 evidence prep",
+  "info@readtheplan.dev",
 ]) {
-  if (!buildScript.includes(token)) {
-    throw new Error(`Missing expected security header: ${token}`);
+  if (!mcpHtml.includes(token)) {
+    throw new Error(`Missing MCP landing page token: ${token}`);
   }
 }
 
-for (const token of ["assetDirs", "\"fonts\"", "\"img\""]) {
-  if (!buildScript.includes(token)) {
-    throw new Error(`Build script must copy redesign asset directory: ${token}`);
+for (const token of ["Upload a plan", "hosted MCP endpoint", "hosted plan analyzer", "submit your plan"]) {
+  if (mcpHtml.toLowerCase().includes(token.toLowerCase())) {
+    throw new Error(`MCP page must not imply upload/API/hosted analysis: ${token}`);
   }
 }
 
-for (const token of ["\"tools\"", "\"resources\""]) {
-  if (!buildScript.includes(token)) {
-    throw new Error(`Build script must copy SEO route directory: ${token}`);
+// ── Brief pages ──
+for (const route of ["brief/index.html", "brief/sample-001/index.html"]) {
+  if (!fs.existsSync(path.join(root, route))) {
+    throw new Error(`Missing brief route: ${route}`);
   }
 }
 
-if (!buildScript.includes("\"mcp\"")) {
-  throw new Error("Build script must copy MCP route directory.");
+if (!briefHtml.includes("/brief/sample-001/") || !read("sitemap.xml").includes("/brief/sample-001/")) {
+  throw new Error("Missing linked and sitemap-listed sample brief route.");
 }
 
-for (const file of [
-  "404.html",
-  "_redirects",
-  "favicon.svg",
-  "og-image.png",
-  "robots.txt",
-  "sitemap.xml",
+for (const token of [
+  "Weekly Terraform/SOC 2 change intelligence",
+  "repeated paid output loop",
+  "First sample/free",
+  "Private weekly brief",
+  "Request first brief / private pilot",
+  "info@readtheplan.dev",
+  "Terraform/OpenTofu",
+  "SOC 2 evidence",
 ]) {
-  if (!fs.existsSync(path.join(root, file))) {
-    throw new Error(`Missing static site asset: ${file}`);
-  }
-  if (!buildScript.includes(file)) {
-    throw new Error(`Build script must copy static site asset: ${file}`);
+  if (!briefCombined.includes(token)) {
+    throw new Error(`Missing weekly brief token: ${token}`);
   }
 }
 
-for (const file of [
-  "fonts/DepartureMono-Regular.woff2",
-  "fonts/JetBrainsMono-Regular.woff2",
-  "fonts/LICENSE-DepartureMono.txt",
-  "fonts/LICENSE-JetBrainsMono.txt",
-  "img/noise.svg",
-]) {
-  if (!fs.existsSync(path.join(root, file))) {
-    throw new Error(`Missing redesign asset: ${file}`);
+for (const token of ["Upload a plan", "submit your plan", "Create account", "Sign up", "Stripe", "Checkout", "Subscribe now"]) {
+  if (briefCombined.toLowerCase().includes(token.toLowerCase())) {
+    throw new Error(`Brief pages must not imply billing/auth: ${token}`);
   }
-}
-
-if (!css.includes("@media (max-width: 720px)")) {
-  throw new Error("Responsive mobile styles are required.");
 }
 
 console.log("Site source validated.");

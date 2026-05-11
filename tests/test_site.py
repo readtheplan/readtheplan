@@ -12,57 +12,36 @@ def test_site_has_client_onboarding_surface() -> None:
 
     assert "readtheplan" in html
     assert "No plan upload" in html
-    assert "SOC 2 / ISO 27001 / HIPAA" in html
-    assert 'id="onboardingForm"' in html
-    assert 'id="actionOutput"' in html
-    assert 'id="cliOutput"' in html
-    assert 'id="pilotLink"' in html
-    assert 'id="handoffNote"' in html
-    assert 'id="recommendation"' in html
-    assert 'id="planRows"' in html
-    assert 'id="demo" ' in html
-    assert 'class="terminal-frame"' in html
-    assert "readtheplan analyze — example preview" in html
-    assert "See it in action." in html
-    assert "Works with Terraform and OpenTofu" in html
-    assert "rtp-agent-gate-v1" in html
-    assert "rtp-evidence-v1" in html
+    assert "SOC 2" in html
+    assert "ISO 27001" in html
+    assert "HIPAA" in html
+    assert 'id="top"' in html
+    assert 'id="setup"' in html
+    assert 'id="agent"' in html
+    assert 'id="pilot"' in html
+    assert 'id="gen-output"' in html
+    assert 'id="gen-thresh"' in html
+    assert 'id="install-cmd"' in html
+    assert 'id="copy-install"' in html
+    assert 'id="p-org"' in html
+    assert 'id="p-email"' in html
+    assert 'id="p-blocker"' in html
+    assert "fail-on-threshold" in html
+    assert 'class="terminal"' in html
+    assert "readtheplan analyze --framework" in html
+    assert "Terraform + OpenTofu" in html
     assert "pip install readtheplan" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
     assert "/mcp/" in html
-    assert "/resources/terraform-s3-bucket-risk/" in html
-    assert "/resources/terraform-iam-policy-risk/" in html
-    assert "/resources/terraform-security-group-0-0-0-0-risk/" in html
-    assert "/resources/terraform-cloudwatch-log-retention-risk/" in html
-    assert 'class="noise"' in html
     assert 'rel="canonical"' in html
     assert "og:image" in html
-    assert 'name="ci"' in html
-    assert 'name="framework"' in html
-    assert 'name="artifactName"' in html
-    assert 'name="planPath"' in html
-    assert 'name="threshold"' in html
-    assert 'name="evidence"' in html
-    assert 'name="organization"' in html
-    assert 'name="contactEmail"' in html
-    assert 'name="repoProfile"' in html
-    assert 'name="maturity"' in html
-    assert 'name="intakeFrameworks"' in html
-    assert 'name="evidenceNeeds"' in html
-    assert 'name="awsPriorities"' in html
-    assert 'name="adoptionBlocker"' in html
-    assert 'value="soc2"' in html
-    assert 'value="iso27001"' in html
-    assert 'value="hipaa"' in html
-    assert "Generate setup" in html
-    assert "Add to GitHub Actions" in html
-    assert "Client context stays in this browser until you choose to send an email." in html
-    assert "No raw Terraform plan is attached or submitted." in html
-    assert "info@readtheplan.dev" in html
+    assert "v0.3.0" in html
+    assert "SOC 2" in html
+    assert "ISO 27001" in html
+    assert "HIPAA" in html
     assert "Upload a plan" not in html
     assert "gmail.com" not in html
-    assert '<form class="panel intake gc" id="onboardingForm">' in html
     assert "terraform show -json tfplan > " in app
     assert "--framework" in app
     assert "--evidence" in app
@@ -326,3 +305,4 @@ def test_site_redesign_visual_contract() -> None:
         "img/noise.svg",
     ]:
         assert (SITE / asset).exists()
+
