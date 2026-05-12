@@ -4,6 +4,10 @@
 
   var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
+  }
+
   function initRain() {
     var rainCanvas = document.getElementById('matrix-rain');
     if (!rainCanvas || prefersReducedMotion) return;
@@ -151,7 +155,7 @@
     window.addEventListener('scroll', function() {
       var st = window.scrollY || document.documentElement.scrollTop;
       var dh = document.documentElement.scrollHeight - window.innerHeight;
-      targetScroll = dh > 0 ? st / dh : 0;
+      targetScroll = clamp01(dh > 0 ? st / dh : 0);
     });
 
     function animate() {

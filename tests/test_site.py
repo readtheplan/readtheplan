@@ -78,21 +78,20 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "SOC 2" in html
     assert "ISO 27001" in html
     assert "HIPAA" in html
-    assert 'id="workspace"' in html
+    assert 'id="top"' in html
+    assert 'id="matrix-rain"' in html
+    assert 'id="webgl-canvas"' in html
     assert 'id="setup"' in html
-    assert 'id="demo"' in html
+    assert 'id="agent"' in html
     assert 'id="pilot"' in html
     assert 'id="resources"' in html
-    assert 'id="checklist"' in html
-    assert 'id="onboardingForm"' in html
-    assert 'id="pilotLink"' in html
-    assert 'id="typingCmd"' in html
-    assert 'id="actionOutput"' in html
-    assert 'id="terminalBody"' in html
-    assert 'id="statusPill"' in html
-    assert 'id="handoffNote"' in html
-    assert "Terraform JSON in, review evidence out" in html
-    assert "Request pilot" in html
+    assert 'id="compare"' in html
+    assert 'id="gen-output"' in html
+    assert 'id="p-org"' in html
+    assert 'id="p-email"' in html
+    assert 'id="p-blocker"' in html
+    assert "Turn Terraform JSON plans into stable risk tiers" in html
+    assert "Request pilot setup" in html
     assert "mailto:" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
@@ -335,7 +334,7 @@ def test_docs_routes_are_sitemap_listed_and_landing_aligned() -> None:
 
         assert path.exists()
         assert url_path in sitemap
-        assert '<link rel="stylesheet" href="/styles.css" />' in html
+        assert '<link rel="stylesheet" href="/matrix.css" />' in html
         assert '<header class="topbar g"' in html
         assert 'class="version-cell gc">v0.3.0' in html
         assert "readtheplan" in html
@@ -366,7 +365,7 @@ def test_site_redesign_visual_contract() -> None:
     assert ".hero-spacer {" in css
     assert "Final landing-aligned cascade guard" in css
     assert "@media (max-width: 720px)" in css
-    assert '<link rel="stylesheet" href="/styles.css" />' in docs
+    assert '<link rel="stylesheet" href="/matrix.css" />' in docs
     assert '<header class="topbar g"' in docs
     assert 'class="version-cell gc">v0.3.0' in docs
 

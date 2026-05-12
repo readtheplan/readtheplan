@@ -31,6 +31,8 @@ const sitemap = read("sitemap.xml");
 // Index page contract: single linear landing page, local-first setup, no upload CTA.
 for (const token of [
   'id="top"',
+  'id="matrix-rain"',
+  'id="webgl-canvas"',
   'id="how-it-works"',
   'id="install-cmd"',
   'id="copy-install"',
