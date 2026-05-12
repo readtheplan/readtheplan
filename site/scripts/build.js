@@ -21,7 +21,7 @@ const files = [
   "sitemap.xml",
   "_redirects",
 ];
-const assetDirs = ["fonts", "img", "tools", "resources", "mcp", "brief", "demo", "docs", "playground"];
+const assetDirs = ["fonts", "img", "tools", "resources", "mcp", "brief", "demo", "docs", "playground", "cinematic"];
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
@@ -43,7 +43,7 @@ fs.writeFileSync(
   path.join(dist, "_headers"),
   [
     "/*",
-    "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+    "  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
     "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
     "  Access-Control-Allow-Origin: https://readtheplan.dev",
     "  Cross-Origin-Opener-Policy: same-origin",
