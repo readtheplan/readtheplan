@@ -491,6 +491,41 @@ async function copyFrom(targetId, button) {
   }, 1200);
 }
 
+async function copyText(text, button) {
+  await navigator.clipboard.writeText(text);
+  const original = button.textContent;
+  button.textContent = "Copied";
+  window.setTimeout(() => {
+    button.textContent = original;
+  }, 1200);
+}
+
+function enhanceCodeCopy() {
+  document.querySelectorAll("pre, .code-output").forEach((block, index) => {
+    if (block.closest(".copyable-code") || block.dataset.copyEnhanced === "true") {
+      return;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "copyable-code";
+    block.dataset.copyEnhanced = "true";
+    block.parentNode.insertBefore(wrapper, block);
+    wrapper.appendChild(block);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "copy-code";
+    button.textContent = "Copy";
+    button.setAttribute("aria-label", `Copy code block ${index + 1}`);
+    button.addEventListener("click", () => {
+      copyText(block.textContent.trim(), button).catch(() => {
+        button.textContent = "Select";
+      });
+    });
+    wrapper.appendChild(button);
+  });
+}
+
 if (form) {
   form.addEventListener("change", render);
   form.addEventListener("input", render);
@@ -509,6 +544,8 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
     });
   });
 });
+
+enhanceCodeCopy();
 
 // ── Live terminal animation ──────────────────────────────────
 (function initTerminal() {
