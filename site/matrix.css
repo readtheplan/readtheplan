@@ -16,6 +16,12 @@
   --matrix-fg-dim: #006622;
   --matrix-glow: 0 0 10px rgba(0, 255, 65, 0.4), 0 0 40px rgba(0, 255, 65, 0.15);
   --matrix-text-glow: 0 0 5px rgba(0, 255, 65, 0.3);
+  --background: var(--matrix-bg);
+  --foreground: var(--text-1);
+  --accent: var(--matrix-green);
+  --muted: var(--text-3);
+  --border: rgba(0, 255, 65, 0.16);
+  --surface: rgba(0, 255, 65, 0.035);
   --surface-0: rgba(0, 0, 0, 0.78);
   --surface-1: rgba(1, 14, 4, 0.82);
   --surface-2: rgba(2, 25, 7, 0.92);
@@ -132,19 +138,19 @@ h1,
 h2,
 h3 {
   margin: 0;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 h1 {
-  font-size: clamp(2.6rem, 6vw, 5rem);
-  line-height: 1.02;
+  font-size: 2.6rem;
+  line-height: 1.08;
   color: var(--text-1);
   text-shadow: 0 0 20px rgba(0, 255, 65, 0.16);
 }
 
 h2 {
-  font-size: clamp(1.8rem, 3vw, 2.8rem);
-  line-height: 1.1;
+  font-size: 1.75rem;
+  line-height: 1.18;
   color: var(--text-1);
 }
 
@@ -259,6 +265,16 @@ pre {
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
   gap: 28px;
   padding: clamp(28px, 4vw, 52px);
+}
+
+.hero-grid h1 {
+  font-size: 4.6rem;
+  line-height: 1.04;
+}
+
+.section-head h2 {
+  font-size: 2.6rem;
+  line-height: 1.12;
 }
 
 .hero-copy {
@@ -412,6 +428,10 @@ button.cta-btn {
   background: rgba(0, 255, 65, 0.03);
 }
 
+.terminal-head .copy-mini {
+  margin-left: auto;
+}
+
 .terminal-dot {
   width: 8px;
   height: 8px;
@@ -433,9 +453,51 @@ button.cta-btn {
 }
 
 .mini-terminal {
+  position: relative;
   border: 1px solid rgba(0, 255, 65, 0.12);
   border-radius: 16px;
   background: rgba(0, 0, 0, 0.46);
+  padding-top: 48px;
+}
+
+.copy-mini,
+.copy-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(0, 255, 65, 0.22);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.58);
+  color: var(--matrix-green);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.mini-terminal > .copy-mini {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.copyable-code {
+  position: relative;
+  margin: 12px 0;
+}
+
+.copyable-code pre,
+.copyable-code .code-output {
+  margin: 0;
+  padding-right: 86px !important;
+}
+
+.copyable-code .copy-code {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
 }
 
 .spacer {
@@ -833,15 +895,19 @@ footer {
 
 /* Legacy class compatibility (prevents UI breakage on routed pages) */
 .topbar {
+  width: min(1180px, calc(100% - 32px));
+  margin: 14px auto 0;
   background: rgba(0,0,0,0.92);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0,255,65,0.15);
+  border: 1px solid rgba(0,255,65,0.15);
+  border-radius: 18px;
   position: relative;
   z-index: 100;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1.1fr 0.8fr 1.4fr 0.7fr;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 2rem;
+  padding: 0;
+  overflow: hidden;
 }
 
 .navlinks {
@@ -855,6 +921,12 @@ footer {
   font-size: 0.85rem;
 }
 
+.version-cell {
+  color: var(--text-3);
+  font-size: 0.85rem;
+  justify-content: flex-end;
+}
+
 .noise {
   display: none;
 }
@@ -862,6 +934,65 @@ footer {
 .g,
 .gc {
   color: var(--matrix-fg);
+}
+
+.workspace {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 56px;
+  position: relative;
+  z-index: 1;
+}
+
+.g {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid rgba(0, 255, 65, 0.10);
+}
+
+.gc {
+  min-width: 0;
+  padding: 24px;
+  border-right: 1px solid rgba(0, 255, 65, 0.10);
+}
+
+.gc:last-child {
+  border-right: 0;
+}
+
+.hero {
+  min-height: auto;
+}
+
+.hero-spacer {
+  background: linear-gradient(180deg, transparent, rgba(0, 255, 65, 0.025));
+}
+
+.hero-content {
+  grid-column: span 2;
+  display: grid;
+  gap: 14px;
+  align-content: center;
+}
+
+.utility-hero .hero-content {
+  text-align: left;
+}
+
+.intro-copy,
+.utility-copy,
+.pilot-copy p {
+  max-width: 760px;
+  color: var(--text-2);
+}
+
+.utility-copy p,
+.utility-copy li {
+  color: var(--text-2);
+}
+
+.utility-panel-wide {
+  grid-column: 1 / -1;
 }
 
 .utility-panel-wide {
@@ -956,6 +1087,14 @@ hr {
   .install-wrap {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .hero-grid h1 {
+    font-size: 2.6rem;
+  }
+
+  .section-head h2 {
+    font-size: 1.9rem;
   }
 }
 
