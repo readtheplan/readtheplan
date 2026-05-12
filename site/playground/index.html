@@ -187,7 +187,7 @@
       // ── Load compliance data ──
       async function loadCompliance() {
         try {
-          const resp = await fetch("compliance.json");
+          const resp = await fetch("/playground/compliance.json");
           if (resp.ok) complianceData = await resp.json();
         } catch (e) {
           console.log("Compliance data not available (offline or build step skipped)");
