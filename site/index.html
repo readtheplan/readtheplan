@@ -1,430 +1,1103 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA."
-    />
-    <title>readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#041C1C" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="readtheplan" />
-    <meta
-      property="og:description"
-      content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA."
-    />
-    <meta property="og:url" content="https://readtheplan.dev/" />
-    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="readtheplan" />
-    <meta
-      name="twitter:description"
-      content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA."
-    />
-    <meta name="twitter:image" content="https://readtheplan.dev/og-image.png" />
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <div class="noise" aria-hidden="true"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>readtheplan</title>
+  <meta name="description" content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA." />
+  <link rel="canonical" href="https://readtheplan.dev/" />
+  <meta property="og:title" content="readtheplan" />
+  <meta property="og:description" content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA." />
+  <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://readtheplan.dev/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="readtheplan" />
+  <meta name="twitter:description" content="Turn Terraform JSON plans into stable risk tiers, control-ID-mapped compliance evidence, and signed attestations for SOC 2, ISO 27001, and HIPAA." />
+  <meta name="twitter:image" content="https://readtheplan.dev/og-image.png" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="color-scheme" content="dark" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="#workspace" aria-label="readtheplan home">
-        <span class="brand-mark" aria-hidden="true">rtp</span>
-        <span>readtheplan</span>
-      </a>
-      <nav class="navlinks gc" aria-label="Project links">
-        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
-      </nav>
-      <nav class="navlinks gc" aria-label="Page links">
-        <a href="#resources">Tools</a>
-        <a href="/brief/">Brief</a>
-        <a href="/docs/">Docs</a>
-        <a href="/demo/">Demo</a>
-        <a href="/playground/">Playground</a>
+    :root {
+      --bg: #0a0a0a;
+      --bg-2: #111111;
+      --bg-3: #1a1a1a;
+      --bg-4: #222222;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.15);
+      --text: #f0f0f0;
+      --text-2: #999;
+      --text-3: #555;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --orange: #f97316;
+      --red: #ef4444;
+      --accent: #f0f0f0;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Nav ── */
+    nav {
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .nav-logo svg { opacity: 0.9; }
+    .nav-version {
+      font-size: 11px;
+      color: var(--text-3);
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2px 8px;
+      font-family: var(--font-mono);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-links a {
+      font-size: 13px;
+      color: var(--text-2);
+      padding: 5px 10px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); background: var(--bg-3); }
+    .nav-gh {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text) !important;
+      border: 1px solid var(--border-hover) !important;
+      border-radius: 6px !important;
+      padding: 5px 12px !important;
+      background: var(--bg-3) !important;
+      transition: border-color 0.15s !important;
+    }
+    .nav-gh:hover { border-color: rgba(255,255,255,0.3) !important; background: var(--bg-4) !important; }
+
+    /* ── Sections ── */
+    section { padding: 64px 0; border-bottom: 1px solid var(--border); }
+    section:last-of-type { border-bottom: none; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 20px;
+    }
+
+    /* ── Hero ── */
+    .hero { padding: 80px 0 64px; border-bottom: 1px solid var(--border); }
+    .hero h1 {
+      font-size: clamp(26px, 4vw, 36px);
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      max-width: 600px;
+    }
+    .hero p {
+      font-size: 16px;
+      color: var(--text-2);
+      max-width: 520px;
+      line-height: 1.7;
+      margin-bottom: 32px;
+    }
+    .install-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      width: fit-content;
+      margin-bottom: 28px;
+      transition: border-color 0.15s;
+    }
+    .install-wrap:hover { border-color: var(--border-hover); }
+    .install-wrap code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text);
+    }
+    .copy-btn {
+      font-size: 11px;
+      color: var(--text-3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      background: var(--bg-3);
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { color: var(--text-2); border-color: var(--border-hover); }
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .badge {
+      font-size: 12px;
+      color: var(--text-3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 11px;
+      background: var(--bg-2);
+    }
+
+    /* ── Risk tiers ── */
+    .tiers {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 600px) { .tiers { grid-template-columns: 1fr 1fr; } }
+    .tier {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .tier-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-bottom: 10px;
+    }
+    .tier-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+    .tier-desc { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+
+    /* ── Output preview ── */
+    .terminal {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-3);
+    }
+    .terminal-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--bg-4);
+    }
+    .terminal-title {
+      font-size: 12px;
+      color: var(--text-3);
+      font-family: var(--font-mono);
+      margin-left: 6px;
+    }
+    .terminal-body {
+      padding: 16px 18px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.9;
+    }
+    .t-prompt { color: var(--text-3); }
+    .t-cmd { color: var(--text); }
+    .t-safe { color: var(--green); }
+    .t-review { color: var(--yellow); }
+    .t-danger { color: var(--orange); }
+    .t-irrev { color: var(--red); }
+    .t-addr { color: var(--text); }
+    .t-dim { color: var(--text-3); }
+    .t-summary { color: var(--text-2); border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
+
+    /* ── Setup wizard ── */
+    .wizard {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .wizard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+    .wizard-title { font-size: 13px; font-weight: 500; }
+    .wizard-hint { font-size: 12px; color: var(--text-3); }
+    .wizard-body { padding: 20px; }
+    .wiz-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 560px) { .wiz-grid { grid-template-columns: 1fr; } }
+    .wiz-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+    .seg { display: flex; flex-wrap: wrap; gap: 5px; }
+    .seg-btn {
+      font-size: 12px;
+      font-family: inherit;
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 5px 11px;
+      background: var(--bg-2);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .seg-btn:hover { color: var(--text); border-color: var(--border-hover); }
+    .seg-btn.active {
+      color: var(--bg);
+      background: var(--text);
+      border-color: var(--text);
+    }
+    .wiz-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+    .gen-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+    .gen-block {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.85;
+      color: var(--text-2);
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+    .gen-comment { color: var(--text-3); }
+    .gen-key { color: #a78bfa; }
+    .gen-val { color: #34d399; }
+    .gen-str { color: #fbbf24; }
+    .wiz-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+    }
+    .wiz-privacy { font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
+    .wiz-actions { display: flex; gap: 8px; }
+    .btn {
+      font-size: 12px;
+      font-family: inherit;
+      border-radius: var(--radius);
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .btn-outline {
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+    .btn-outline:hover { color: var(--text); border-color: var(--border-hover); }
+    .btn-solid {
+      color: var(--bg);
+      border: 1px solid var(--text);
+      background: var(--text);
+      font-weight: 500;
+    }
+    .btn-solid:hover { opacity: 0.85; }
+
+    /* ── Agent gate ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      background: var(--bg-2);
+    }
+    .card h3 {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h3 svg { opacity: 0.6; }
+    .card p { font-size: 13px; color: var(--text-2); line-height: 1.65; margin-bottom: 14px; }
+    .mini-terminal {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 11px 13px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.8;
+    }
+
+    /* ── Compliance ── */
+    .comp-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 560px) { .comp-grid { grid-template-columns: 1fr; } }
+    .comp-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      background: var(--bg-2);
+    }
+    .comp-card h4 { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+    .comp-controls { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); margin-bottom: 8px; }
+    .comp-card p { font-size: 12px; color: var(--text-2); line-height: 1.55; }
+
+    /* ── Comparison table ── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-2);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr.hl td {
+      background: var(--bg-2);
+      color: var(--text);
+      font-weight: 500;
+    }
+    .c-yes { color: var(--green); }
+    .c-no { color: var(--text-3); }
+    .c-partial { color: var(--yellow); }
+
+    /* ── Pilot ── */
+    .pilot-box {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      background: var(--bg-2);
+    }
+    .pilot-box h3 { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+    .pilot-box > p { font-size: 13px; color: var(--text-2); margin-bottom: 20px; line-height: 1.65; }
+    .pilot-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 560px) { .pilot-fields { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 11px; font-weight: 500; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+    .field input, .field textarea, .field select {
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 11px;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--border-hover); }
+    .field input::placeholder, .field textarea::placeholder { color: var(--text-3); }
+    .field textarea { resize: vertical; min-height: 72px; }
+    .field.full { grid-column: 1 / -1; }
+    .pilot-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .pilot-note { font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
+
+    /* ── Tools ── */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    @media (max-width: 560px) { .tools-grid { grid-template-columns: 1fr; } }
+    .tool-link {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      background: var(--bg-2);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .tool-link:hover { border-color: var(--border-hover); background: var(--bg-3); }
+    .tool-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      flex-shrink: 0;
+      color: var(--text-2);
+    }
+    .tool-info { min-width: 0; }
+    .tool-name { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+    .tool-desc { font-size: 12px; color: var(--text-3); line-height: 1.4; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 0;
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .footer-left { font-size: 12px; color: var(--text-3); }
+    .footer-links { display: flex; gap: 16px; }
+    .footer-links a { font-size: 12px; color: var(--text-3); transition: color 0.15s; }
+    .footer-links a:hover { color: var(--text-2); }
+
+    /* ── Misc ── */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    .spacer { height: 12px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <div class="nav-logo">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.25"/>
+          <path d="M4 5h8M4 8h6M4 11h4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+        </svg>
+        readtheplan
+        <span class="nav-version">v0.3.0</span>
+      </div>
+      <div class="nav-links">
+        <a href="#how-it-works">How it works</a>
         <a href="#setup">Setup</a>
+        <a href="#agent">Agent gate</a>
         <a href="#pilot">Pilot</a>
-      </nav>
-      <div class="version-cell gc">v0.3.0</div>
-    </header>
+        <a href="https://readtheplan.dev/docs/">Docs</a>
+        <a href="https://github.com/readtheplan/readtheplan" class="nav-gh">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+</nav>
 
-    <main id="workspace" class="workspace">
-      <section class="hero g" aria-labelledby="product-title">
-        <div class="gc hero-spacer" aria-hidden="true"></div>
-        <div class="gc hero-content">
-          <p class="eyebrow">Open Source / MIT License</p>
-          <h1 id="product-title">Generate a safe readtheplan setup.</h1>
-          <p class="intro-copy">
-            Choose how your CI already exports Terraform plan JSON, then copy a static
-            GitHub Actions gate and local CLI command. No uploads, accounts, or backend.
-          </p>
+<!-- ── Hero ── -->
+<div class="container">
+  <section class="hero" id="top">
+    <h1>Know what your Terraform plan will actually do — before it runs.</h1>
+    <p>Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC&nbsp;2, ISO&nbsp;27001, and HIPAA. Runs locally — no uploads, no accounts, no backend.</p>
+    <div class="install-wrap">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="opacity:0.4;flex-shrink:0">
+        <path d="M2 4l4 4-4 4M8 12h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <code id="install-cmd">pip install readtheplan &amp;&amp; readtheplan analyze plan.json</code>
+      <button class="copy-btn" id="copy-install" onclick="copyInstall()">Copy</button>
+    </div>
+    <div class="hero-badges">
+      <span class="badge">CLI-first</span>
+      <span class="badge">GitHub Action</span>
+      <span class="badge">No plan upload</span>
+      <span class="badge">SOC 2 · ISO 27001 · HIPAA</span>
+      <span class="badge">Terraform + OpenTofu</span>
+      <span class="badge">MIT license</span>
+    </div>
+  </section>
+
+  <!-- ── How it works ── -->
+  <section id="how-it-works">
+    <div class="section-label">Risk tiers</div>
+    <div class="tiers">
+      <div class="tier">
+        <div class="tier-dot" style="background:var(--green)"></div>
+        <div class="tier-name">Safe</div>
+        <div class="tier-desc">No-op, tag update, read-only change</div>
+      </div>
+      <div class="tier">
+        <div class="tier-dot" style="background:var(--yellow)"></div>
+        <div class="tier-name">Review</div>
+        <div class="tier-desc">Security group rule, minor config drift</div>
+      </div>
+      <div class="tier">
+        <div class="tier-dot" style="background:var(--orange)"></div>
+        <div class="tier-name">Dangerous</div>
+        <div class="tier-desc">Instance replacement, IAM policy change, DB modification</div>
+      </div>
+      <div class="tier">
+        <div class="tier-dot" style="background:var(--red)"></div>
+        <div class="tier-name">Irreversible</div>
+        <div class="tier-desc">Data deletion, KMS key destruction, RDS termination</div>
+      </div>
+    </div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <span class="terminal-title">readtheplan analyze --framework soc2 plan.json</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="t-prompt">$ </span><span class="t-cmd">readtheplan analyze --framework soc2 plan.json</span></div>
+        <div class="spacer"></div>
+        <div><span class="t-safe">✓ safe       </span><span class="t-addr">aws_s3_bucket.logs                  </span><span class="t-dim">tag update · CC6.1</span></div>
+        <div><span class="t-safe">✓ safe       </span><span class="t-addr">aws_cloudwatch_log_group.app        </span><span class="t-dim">retention policy · CC7.2</span></div>
+        <div><span class="t-review">⚠ review     </span><span class="t-addr">aws_security_group.web              </span><span class="t-dim">ingress rule change · CC6.6</span></div>
+        <div><span class="t-danger">! dangerous  </span><span class="t-addr">aws_iam_role_policy.app             </span><span class="t-dim">policy replaced · CC6.3</span></div>
+        <div><span class="t-irrev">✗ irreversible</span><span class="t-addr">aws_kms_key.primary                 </span><span class="t-dim">key deletion scheduled · CC6.7</span></div>
+        <div class="t-summary">
+          5 changes · 1 irreversible · 1 dangerous · evidence written to ./rtp-evidence-soc2.json
         </div>
-        <div class="gc trust-strip" aria-label="Product boundaries">
-          <span>CLI first</span>
-          <span>GitHub Action</span>
-          <span>No plan upload</span>
-          <span>SOC 2 / ISO 27001 / HIPAA</span>
-          <span>Signed evidence</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Setup wizard ── -->
+  <section id="setup">
+    <div class="section-label">Setup generator</div>
+    <div class="wizard">
+      <div class="wizard-header">
+        <span class="wizard-title">Configure your integration</span>
+        <span class="wizard-hint">Generated output updates live</span>
+      </div>
+      <div class="wizard-body">
+        <div class="wiz-grid">
+          <div class="wiz-group">
+            <label>CI system</label>
+            <div class="seg">
+              <button class="seg-btn active" data-group="ci" onclick="pick(this,'ci')">GitHub Actions</button>
+              <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">GitLab CI</button>
+              <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">CircleCI</button>
+              <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">Local only</button>
+            </div>
+          </div>
+          <div class="wiz-group">
+            <label>Compliance framework</label>
+            <div class="seg">
+              <button class="seg-btn active" data-group="fw" onclick="pick(this,'fw')">SOC 2</button>
+              <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">ISO 27001</button>
+              <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">HIPAA</button>
+              <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">None</button>
+            </div>
+          </div>
+          <div class="wiz-group">
+            <label>Blocking threshold</label>
+            <div class="seg">
+              <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Irreversible only</button>
+              <button class="seg-btn active" data-group="thresh" onclick="pick(this,'thresh')">Dangerous</button>
+              <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Review</button>
+              <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Don't block</button>
+            </div>
+          </div>
+          <div class="wiz-group">
+            <label>Evidence output</label>
+            <div class="seg">
+              <button class="seg-btn active" data-group="ev" onclick="pick(this,'ev')">JSON envelope</button>
+              <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Signed (OIDC)</button>
+              <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Checklist only</button>
+            </div>
+          </div>
         </div>
-      </section>
 
-      <section id="demo" class="g demo-section" aria-labelledby="demo-title">
-        <div class="gc demo-copy">
-          <p class="eyebrow">Live demo</p>
-          <h2 id="demo-title">See it in action.</h2>
+        <hr class="wiz-divider" />
+
+        <div class="gen-label">Generated GitHub Actions workflow</div>
+        <pre class="gen-block" id="gen-output"></pre>
+
+        <div class="wiz-footer">
+          <div class="wiz-privacy">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1L2 4v4c0 3.31 2.69 6 6 7 3.31-1 6-3.69 6-7V4L8 1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            No uploads. Runs entirely in your CI.
+          </div>
+          <div class="wiz-actions">
+            <button class="btn btn-outline" onclick="copyWorkflow()">Copy workflow</button>
+            <button class="btn btn-outline" onclick="copyCLI()">Copy CLI command</button>
+          </div>
         </div>
-        <div class="gc demo-terminal-cell">
-          <div class="terminal-frame" id="demo-terminal" style="max-width:680px; margin:0 auto; border-radius:12px; overflow:hidden">
-            <div class="terminal-bar">
-              <span class="dot dot-red"></span>
-              <span class="dot dot-yellow"></span>
-              <span class="dot dot-green"></span>
-              <span class="terminal-title">readtheplan analyze — live preview</span>
-            </div>
-            <div class="terminal-body" id="terminalBody" aria-live="polite" aria-label="Terminal animation showing readtheplan analysis output" style="min-height:280px; font-family:JetBrains Mono,ui-monospace,monospace; font-size:13px; line-height:1.7; overflow:hidden">
-              <div class="terminal-line" style="color:var(--muted)">booting readtheplan v0.3.0 — local only, no plan upload</div>
-              <div class="terminal-line" style="color:var(--soft)">[matrix] tracing terraform change graph · decoding blast radius</div>
-              <div class="terminal-line" id="typingLine" style="color:var(--accent)">λ <span id="typingCmd"></span><span class="blink-cursor" id="cursor">▊</span></div>
-            </div>
-          </div>
-          <p class="demo-intro" style="margin-top:1rem; text-align:center">
-            Watch a full Terraform plan analysis with risk tiers, SOC 2 controls, and evidence output.
-            <a href="/demo/">Open the full demo →</a>
-          </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Agent gate ── -->
+  <section id="agent">
+    <div class="section-label">Agent gate</div>
+    <div class="two-col">
+      <div class="card">
+        <h3>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3" y="1" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.25"/><path d="M5 7h6M5 5h2M8 13l-2 2M8 13l2 2M8 13v-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Block unsafe AI auto-approvals
+        </h3>
+        <p>Coding agents and agentic CI pipelines skip review. The agent-gate subcommand returns a deterministic proceed / warn / block decision your pipeline can act on without parsing human-readable output.</p>
+        <div class="mini-terminal">
+          <div><span style="color:var(--text-3)">$ </span>readtheplan agent-gate plan.json</div>
+          <div style="color:var(--red)">{</div>
+          <div style="color:var(--red)">&nbsp; "decision": "block",</div>
+          <div style="color:var(--red)">&nbsp; "risk": "irreversible",</div>
+          <div style="color:var(--red)">&nbsp; "reason": "KMS key deletion scheduled",</div>
+          <div style="color:var(--red)">&nbsp; "changes": 1</div>
+          <div style="color:var(--red)">}</div>
         </div>
-      </section>
-
-      <section class="app-grid g" aria-label="Setup generator workspace">
-        <form class="panel intake gc" id="onboardingForm">
-          <div class="panel-heading">
-            <p class="eyebrow">Setup generator</p>
-            <h2>First-run choices</h2>
-          </div>
-
-          <fieldset class="control-group">
-            <legend>CI system</legend>
-            <div class="segmented" role="radiogroup" aria-label="CI system">
-              <label>
-                <input type="radio" name="ci" value="github" checked />
-                <span>GitHub Actions</span>
-              </label>
-              <label>
-                <input type="radio" name="ci" value="gitlab" />
-                <span>GitLab CI</span>
-              </label>
-              <label>
-                <input type="radio" name="ci" value="circle" />
-                <span>CircleCI</span>
-              </label>
-              <label>
-                <input type="radio" name="ci" value="local" />
-                <span>Local only</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="control-group">
-            <legend>Compliance framework</legend>
-            <div
-              class="segmented framework-picker"
-              role="radiogroup"
-              aria-label="Compliance framework"
-            >
-              <label>
-                <input type="radio" name="framework" value="soc2" checked />
-                <span>SOC 2</span>
-              </label>
-              <label>
-                <input type="radio" name="framework" value="iso27001" />
-                <span>ISO 27001</span>
-              </label>
-              <label>
-                <input type="radio" name="framework" value="hipaa" />
-                <span>HIPAA</span>
-              </label>
-              <label>
-                <input type="radio" name="framework" value="none" />
-                <span>None</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="field-row">
-            <label>
-              Plan JSON artifact
-              <input name="artifactName" value="terraform-plan-json" autocomplete="off" />
-            </label>
-            <label>
-              Plan JSON path
-              <input name="planPath" value="plan.json" autocomplete="off" />
-            </label>
-          </div>
-
-          <fieldset class="control-group">
-            <legend>Blocking threshold</legend>
-            <div class="segmented" role="radiogroup" aria-label="Blocking threshold">
-              <label>
-                <input type="radio" name="threshold" value="dangerous" checked />
-                <span>Dangerous</span>
-              </label>
-              <label>
-                <input type="radio" name="threshold" value="review" />
-                <span>Review</span>
-              </label>
-              <label>
-                <input type="radio" name="threshold" value="irreversible" />
-                <span>Irreversible</span>
-              </label>
-              <label>
-                <input type="radio" name="threshold" value="off" />
-                <span>Do not block</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="control-group">
-            <legend>Evidence preference</legend>
-            <div class="stacked-options">
-              <label>
-                <input type="radio" name="evidence" value="unsigned" checked />
-                <span>Generate evidence checklist and JSON envelope</span>
-              </label>
-              <label>
-                <input type="radio" name="evidence" value="signed" />
-                <span>Generate and sign evidence with keyless OIDC</span>
-              </label>
-              <label>
-                <input type="radio" name="evidence" value="checklist" />
-                <span>Checklist only for the first run</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="panel-heading intake-heading">
-            <p class="eyebrow">Client intake</p>
-            <h2>Pilot context</h2>
-          </div>
-
-          <p class="privacy-note">
-            Client context stays in this browser until you choose to send an email.
-            No raw Terraform plan is attached or submitted.
-          </p>
-
-          <div class="field-row">
-            <label>
-              Organization / team
-              <input name="organization" value="Platform team" autocomplete="organization" />
-            </label>
-            <label>
-              Contact email
-              <input name="contactEmail" type="email" placeholder="name@example.com" autocomplete="email" />
-            </label>
-          </div>
-
-          <div class="field-row">
-            <label>
-              Repo profile
-              <select name="repoProfile">
-                <option value="single">1 production repo</option>
-                <option value="small" selected>2-5 Terraform repos</option>
-                <option value="portfolio">6-20 client or platform repos</option>
-                <option value="enterprise">20+ repos / regulated estate</option>
-              </select>
-            </label>
-            <label>
-              Terraform workflow maturity
-              <select name="maturity">
-                <option value="starting">Plans exist, review gates are new</option>
-                <option value="artifact" selected>Plan JSON artifact already exists</option>
-                <option value="policy">Policy checks already run in CI</option>
-                <option value="audited">Audit evidence process is established</option>
-              </select>
-            </label>
-          </div>
-
-          <fieldset class="control-group">
-            <legend>Compliance pressure</legend>
-            <div class="checks">
-              <label>
-                <input type="checkbox" name="intakeFrameworks" value="SOC 2" checked />
-                <span>SOC 2</span>
-              </label>
-              <label>
-                <input type="checkbox" name="intakeFrameworks" value="ISO 27001" />
-                <span>ISO 27001</span>
-              </label>
-              <label>
-                <input type="checkbox" name="intakeFrameworks" value="HIPAA" />
-                <span>HIPAA</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="control-group">
-            <legend>Evidence and signing needs</legend>
-            <div class="checks">
-              <label>
-                <input type="checkbox" name="evidenceNeeds" value="Auditor-ready evidence" checked />
-                <span>Audit evidence</span>
-              </label>
-              <label>
-                <input type="checkbox" name="evidenceNeeds" value="Signed attestations" />
-                <span>Signing</span>
-              </label>
-              <label>
-                <input type="checkbox" name="evidenceNeeds" value="Manual approval gates" checked />
-                <span>Review gates</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="control-group">
-            <legend>AWS resource priorities</legend>
-            <div class="checks">
-              <label>
-                <input type="checkbox" name="awsPriorities" value="IAM and permissions" checked />
-                <span>IAM</span>
-              </label>
-              <label>
-                <input type="checkbox" name="awsPriorities" value="Data stores and KMS" checked />
-                <span>Data / KMS</span>
-              </label>
-              <label>
-                <input type="checkbox" name="awsPriorities" value="Network and compute changes" />
-                <span>Network / compute</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="field-row single-field">
-            <label>
-              Biggest adoption blocker
-              <textarea name="adoptionBlocker" rows="3" placeholder="Example: proving the first gate will not leak plan data or block safe releases."></textarea>
-            </label>
-          </div>
-
-          <button class="primary-action" type="submit">Generate setup</button>
-        </form>
-
-        <section class="panel preview-panel gc" aria-labelledby="preview-title">
-          <div class="panel-heading row-heading">
-            <div>
-              <p class="eyebrow">Static output</p>
-              <h2 id="preview-title">Setup summary</h2>
-            </div>
-            <span class="status-pill" id="statusPill">no upload</span>
-          </div>
-
-          <p class="recommendation" id="recommendation"></p>
-
-          <div class="risk-meter" aria-label="Risk counts">
-            <div>
-              <span class="count safe" id="safeCount">4</span>
-              <span>choices</span>
-            </div>
-            <div>
-              <span class="count review" id="reviewCount">1</span>
-              <span>artifact</span>
-            </div>
-            <div>
-              <span class="count dangerous" id="dangerousCount">0</span>
-              <span>uploads</span>
-            </div>
-          </div>
-
-          <div class="plan-table setup-table" role="table" aria-label="Generated setup summary" aria-live="polite">
-            <div role="row" class="table-head">
-              <span role="columnheader">Area</span>
-              <span role="columnheader">Selection</span>
-              <span role="columnheader">Generated behavior</span>
-            </div>
-            <div class="plan-table-body" id="planRows"></div>
-          </div>
-        </section>
-      </section>
-
-      <section id="setup" class="output-grid g" aria-label="Generated setup">
-        <section class="panel output-panel gc">
-          <div class="panel-heading row-heading">
-            <div>
-              <p class="eyebrow">Generated</p>
-              <h2 id="actionTitle">GitHub Action</h2>
-            </div>
-            <button class="icon-button" type="button" data-copy="actionOutput">Add to GitHub Actions</button>
-          </div>
-          <pre id="actionOutput" class="code-output" tabindex="0"></pre>
-        </section>
-
-        <section class="panel output-panel gc">
-          <div class="panel-heading row-heading">
-            <div>
-              <p class="eyebrow">Generated</p>
-              <h2>CLI path</h2>
-            </div>
-            <button class="icon-button" type="button" data-copy="cliOutput">Copy</button>
-          </div>
-          <pre id="cliOutput" class="code-output" tabindex="0"></pre>
-        </section>
-      </section>
-
-      <section id="pilot" class="g pilot-panel" aria-labelledby="pilot-title">
-        <div class="gc">
-          <p class="eyebrow">Local privacy</p>
-          <h2 id="pilot-title">Bring the workflow, not the secrets.</h2>
+      </div>
+      <div class="card">
+        <h3>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.25"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+          MCP integration (preview)
+        </h3>
+        <p>Run readtheplan as a local MCP server. Connect to Claude, Cursor, or any MCP-compatible IDE to review plans inline without leaving your editor.</p>
+        <div class="mini-terminal">
+          <div><span style="color:var(--text-3)">$ </span>readtheplan mcp --stdio</div>
+          <div style="color:var(--green)">Listening on stdio</div>
+          <div style="color:var(--text-3)">Tools: analyze_plan, agent_gate,</div>
+          <div style="color:var(--text-3)">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; list_frameworks</div>
+          <div style="color:var(--text-3)">&nbsp;</div>
+          <div style="color:var(--text-3)"># Connect your MCP client to start</div>
         </div>
-        <div class="gc pilot-copy">
-          <p>
-            The setup and intake wizard runs entirely in your browser. It does not accept
-            raw Terraform plans, send telemetry, create accounts, or store generated
-            snippets. Client context stays local unless you open the generated email.
-          </p>
-          <a class="primary-link" id="pilotLink" href="mailto:pilot-contact@example.com">
-            Request pilot setup
-          </a>
-          <p class="handoff-note" id="handoffNote"></p>
-        </div>
-        <div class="gc pilot-checks">
-          <ul class="checklist" id="checklist" aria-label="Recommended setup checklist"></ul>
-        </div>
-      </section>
+      </div>
+    </div>
+  </section>
 
-      <section id="resources" class="g resource-band" aria-labelledby="resources-title">
-        <div class="gc">
-          <p class="eyebrow">Tools and resources</p>
-          <h2 id="resources-title">Estimate Terraform risk without sharing a plan.</h2>
-        </div>
-        <div class="gc resource-list">
-          <a href="/tools/terraform-risk-calculator/">Terraform risk calculator</a>
-          <a href="/tools/soc2-cloud-control-mapper/">SOC 2 cloud control mapper</a>
-          <a href="/mcp/">Local MCP Terraform reviewer</a>
-          <a href="/brief/">Weekly Terraform/SOC 2 brief</a>
-          <a href="/resources/terraform-s3-bucket-risk/">Terraform S3 bucket risk</a>
-        </div>
-        <div class="gc resource-list">
-          <a href="/resources/terraform-iam-policy-risk/">Terraform IAM policy risk</a>
-          <a href="/resources/terraform-security-group-0-0-0-0-risk/">Security group 0.0.0.0/0 risk</a>
-          <a href="/resources/terraform-cloudwatch-log-retention-risk/">CloudWatch log retention risk</a>
-        </div>
-        <div class="gc">
-          <p class="resource-note">
-            These static pages use manual counts and high-level mappings only. Raw
-            Terraform plans stay local in your workstation or CI.
-          </p>
-        </div>
-      </section>
+  <!-- ── Compliance ── -->
+  <section id="compliance">
+    <div class="section-label">Compliance evidence</div>
+    <div class="comp-grid">
+      <div class="comp-card">
+        <h4>SOC 2</h4>
+        <div class="comp-controls">CC6.1 · CC6.3 · CC6.6 · CC6.7</div>
+        <p>Trust Service Criteria controls annotated per change. Evidence output is auditor-ready JSON.</p>
+      </div>
+      <div class="comp-card">
+        <h4>ISO 27001</h4>
+        <div class="comp-controls">A.8 · A.9 · A.12</div>
+        <p>Annex A control IDs mapped per resource change. Use with <code style="font-size:11px;font-family:var(--font-mono)">--framework iso27001</code>.</p>
+      </div>
+      <div class="comp-card">
+        <h4>HIPAA</h4>
+        <div class="comp-controls">§164.312(a)(1) · §164.312(e)</div>
+        <p>PHI-adjacent resource changes flagged with relevant safeguard sections.</p>
+      </div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <div class="terminal-dot"></div>
+        <span class="terminal-title">rtp-evidence-soc2.json</span>
+      </div>
+      <div class="terminal-body">
+        <div><span style="color:var(--text-3)">// evidence envelope (excerpt)</span></div>
+        <div><span style="color:#a78bfa">"resource"</span>: <span style="color:#fbbf24">"aws_iam_role_policy.app"</span>,</div>
+        <div><span style="color:#a78bfa">"risk"</span>: <span style="color:var(--red)">"dangerous"</span>, <span style="color:#a78bfa">"action"</span>: <span style="color:#fbbf24">"update"</span>,</div>
+        <div><span style="color:#a78bfa">"controls"</span>: [<span style="color:#fbbf24">"CC6.3"</span>, <span style="color:#fbbf24">"CC6.1"</span>],</div>
+        <div><span style="color:#a78bfa">"signed"</span>: <span style="color:var(--green)">true</span>, <span style="color:#a78bfa">"sigstore_bundle"</span>: <span style="color:#fbbf24">"sha256:4a9f..."</span></div>
+      </div>
+    </div>
+  </section>
 
-      <footer class="g footer-grid">
-        <div class="gc">MIT License</div>
-        <div class="gc">No plan upload</div>
-        <div class="gc">Terraform JSON in, review evidence out</div>
-        <div class="gc"><a href="https://github.com/readtheplan/readtheplan">GitHub -></a></div>
-      </footer>
-    </main>
+  <!-- ── Comparison ── -->
+  <section id="compare">
+    <div class="section-label">vs. everything else</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Analyzes</th>
+            <th>Risk tiers</th>
+            <th>Compliance</th>
+            <th>Agent gate</th>
+            <th>Local-only</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="hl">
+            <td>readtheplan</td>
+            <td>Plan diff</td>
+            <td class="c-yes">✓ 4 tiers</td>
+            <td class="c-yes">✓ SOC2/ISO/HIPAA</td>
+            <td class="c-yes">✓ block/warn/ok</td>
+            <td class="c-yes">✓</td>
+          </tr>
+          <tr>
+            <td>tflint / tfsec</td>
+            <td>HCL code</td>
+            <td class="c-no">— lint only</td>
+            <td class="c-no">—</td>
+            <td class="c-no">—</td>
+            <td class="c-yes">✓</td>
+          </tr>
+          <tr>
+            <td>checkov</td>
+            <td>Code + plan</td>
+            <td class="c-partial">⚠ pass/fail</td>
+            <td class="c-partial">⚠ policy checks</td>
+            <td class="c-no">—</td>
+            <td class="c-yes">✓</td>
+          </tr>
+          <tr>
+            <td>Spacelift / env0</td>
+            <td>Plan + state</td>
+            <td class="c-partial">⚠ visual only</td>
+            <td class="c-no">—</td>
+            <td class="c-partial">⚠ policy gates</td>
+            <td class="c-no">— SaaS</td>
+          </tr>
+          <tr>
+            <td>OPA / Sentinel</td>
+            <td>Policy engine</td>
+            <td class="c-partial">⚠ rule-based</td>
+            <td class="c-partial">⚠</td>
+            <td class="c-partial">⚠ policy gates</td>
+            <td class="c-yes">✓</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
-    <script src="./app.js" type="module"></script>
-  </body>
+  <!-- ── Pilot ── -->
+  <section id="pilot">
+    <div class="section-label">Pilot</div>
+    <div class="pilot-box">
+      <h3>Request a pilot setup</h3>
+      <p>For regulated or multi-repo environments. Client context stays in your browser until you send — no Terraform plan is ever submitted.</p>
+      <div class="pilot-fields">
+        <div class="field">
+          <label>Organization / team</label>
+          <input type="text" id="p-org" placeholder="Acme Corp — platform team" />
+        </div>
+        <div class="field">
+          <label>Contact email</label>
+          <input type="email" id="p-email" placeholder="you@company.com" />
+        </div>
+        <div class="field">
+          <label>Repo profile</label>
+          <div class="seg">
+            <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">1 repo</button>
+            <button class="seg-btn active" data-group="repos" onclick="pick(this,'repos')">2–5 repos</button>
+            <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">6–20 repos</button>
+            <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">20+ repos</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Compliance pressure</label>
+          <div class="seg">
+            <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">SOC 2</button>
+            <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">ISO 27001</button>
+            <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">HIPAA</button>
+          </div>
+        </div>
+        <div class="field full">
+          <label>Biggest adoption blocker</label>
+          <textarea id="p-blocker" placeholder="e.g. we need signed evidence for our SOC 2 audit, but the plan review step adds too much friction for our dev team..."></textarea>
+        </div>
+      </div>
+      <div class="pilot-footer">
+        <div class="pilot-note">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1L2 4v4c0 3.31 2.69 6 6 7 3.31-1 6-3.69 6-7V4L8 1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          Context stays local. No plan upload. Opens your mail client on submit.
+        </div>
+        <button class="btn btn-solid" onclick="submitPilot()">Request pilot setup →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Tools ── -->
+  <section id="resources">
+    <div class="section-label">Tools and resources</div>
+    <div class="tools-grid">
+      <a href="https://www.readtheplan.dev/tools/terraform-risk-calculator/" class="tool-link">
+        <div class="tool-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.25"/><path d="M5 8h6M8 5v6" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+        </div>
+        <div class="tool-info">
+          <div class="tool-name">Terraform risk calculator</div>
+          <div class="tool-desc">Estimate blast radius without uploading a plan</div>
+        </div>
+      </a>
+      <a href="https://www.readtheplan.dev/tools/soc2-cloud-control-mapper/" class="tool-link">
+        <div class="tool-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8h12M8 2v12" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.25"/></svg>
+        </div>
+        <div class="tool-info">
+          <div class="tool-name">SOC 2 cloud control mapper</div>
+          <div class="tool-desc">Map AWS resources to CC Trust Service Criteria</div>
+        </div>
+      </a>
+      <a href="https://www.readtheplan.dev/mcp/" class="tool-link">
+        <div class="tool-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.25"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+        </div>
+        <div class="tool-info">
+          <div class="tool-name">Local MCP Terraform reviewer</div>
+          <div class="tool-desc">Connect to Claude, Cursor, and other MCP clients</div>
+        </div>
+      </a>
+      <a href="https://www.readtheplan.dev/brief/" class="tool-link">
+        <div class="tool-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.25"/><path d="M5 5h6M5 8h4M5 11h3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+        </div>
+        <div class="tool-info">
+          <div class="tool-name">Weekly Terraform / SOC 2 brief</div>
+          <div class="tool-desc">Digest of changes that affect compliance posture</div>
+        </div>
+      </a>
+    </div>
+  </section>
+</div>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">readtheplan · MIT license · no plan upload · built by <a href="https://github.com/texasich" style="color:var(--text-2)">@texasich</a></div>
+      <div class="footer-links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
+        <a href="https://readtheplan.dev/docs/">Docs</a>
+        <a href="https://readtheplan.dev/demo/">Demo</a>
+        <a href="https://readtheplan.dev/playground/">Playground</a>
+        <a href="https://readtheplan.dev/brief/">Brief</a>
+        <a href="#pilot">Pilot</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ── Segment picker ──
+  function pick(btn, group) {
+    document.querySelectorAll('[data-group="' + group + '"]').forEach(function(b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    updateGen();
+  }
+
+  // ── Wizard live update ──
+  var fwMap = { 'SOC 2': 'soc2', 'ISO 27001': 'iso27001', 'HIPAA': 'hipaa', 'None': 'none' };
+  var thMap = { 'Irreversible only': 'irreversible', 'Dangerous': 'dangerous', 'Review': 'review', "Don't block": 'none' };
+  var evMap = { 'JSON envelope': 'json-envelope', 'Signed (OIDC)': 'signed-oidc', 'Checklist only': 'checklist' };
+
+  function activeVal(group) {
+    var el = document.querySelector('[data-group="' + group + '"].active');
+    return el ? el.textContent.trim() : '';
+  }
+
+  function updateGen() {
+    document.getElementById('gen-output').textContent = workflowText();
+  }
+
+  function activeFramework() {
+    return fwMap[activeVal('fw')] || 'soc2';
+  }
+
+  function activeThreshold() {
+    return thMap[activeVal('thresh')] || 'dangerous';
+  }
+
+  function activeEvidence() {
+    return evMap[activeVal('ev')] || 'json-envelope';
+  }
+
+  function evidenceFile(ev) {
+    if (ev === 'checklist') return 'readtheplan-checklist.json';
+    return 'readtheplan-evidence.json';
+  }
+
+  function installPackage(ev) {
+    return ev === 'signed-oidc' ? '"readtheplan[sign]"' : 'readtheplan';
+  }
+
+  function cliCommand(forceJson) {
+    var fw = activeFramework();
+    var ev = activeEvidence();
+    var parts = ['readtheplan', 'analyze'];
+    if (fw !== 'none') {
+      parts.push('--framework', fw);
+    }
+    if (forceJson || ev !== 'checklist') {
+      parts.push('--format', 'json');
+    }
+    if (ev !== 'checklist') {
+      parts.push('--evidence', evidenceFile(ev));
+    }
+    if (ev === 'signed-oidc') {
+      parts.push('--sign');
+    }
+    parts.push('plan.json');
+    return parts.join(' ');
+  }
+
+  function workflowText() {
+    var fw = activeFramework();
+    var th = activeThreshold();
+    var ev = activeEvidence();
+    var lines = [
+      '# .github/workflows/terraform-review.yml',
+      '- name: Analyze Terraform plan',
+      '  id: readtheplan',
+      '  uses: readtheplan/readtheplan@v1',
+      '  with:',
+      '    plan-file: plan.json'
+    ];
+
+    if (th !== 'none') {
+      lines.push('    fail-on-threshold: ' + th);
+    }
+
+    if (fw !== 'none' || ev !== 'checklist') {
+      lines.push(
+        '',
+        '- name: Generate evidence artifact',
+        '  if: always()',
+        '  run: |',
+        '    python -m pip install ' + installPackage(ev),
+        '    ' + cliCommand(true) + ' > readtheplan-summary.json'
+      );
+    }
+
+    return lines.join('\n');
+  }
+
+  // ── Copy helpers ──
+  function copyInstall() {
+    navigator.clipboard.writeText('pip install readtheplan && readtheplan analyze plan.json');
+    var btn = document.getElementById('copy-install');
+    btn.textContent = 'Copied';
+    setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+  }
+
+  function copyWorkflow() {
+    navigator.clipboard.writeText(workflowText());
+  }
+
+  function copyCLI() {
+    navigator.clipboard.writeText(cliCommand());
+  }
+
+  // ── Pilot submit ──
+  function submitPilot() {
+    var org = document.getElementById('p-org').value;
+    var email = document.getElementById('p-email').value;
+    var blocker = document.getElementById('p-blocker').value;
+    var repos = activeVal('repos');
+    var fw = activeVal('pfw');
+    var body = [
+      'Organization: ' + org,
+      'Repo profile: ' + repos,
+      'Compliance: ' + fw,
+      'Blocker: ' + blocker
+    ].join('\n');
+    var subject = encodeURIComponent('readtheplan pilot setup request');
+    window.location.href = 'mailto:pilot@readtheplan.dev?subject=' + subject + '&body=' + encodeURIComponent(body);
+  }
+
+  updateGen();
+</script>
+</body>
 </html>
