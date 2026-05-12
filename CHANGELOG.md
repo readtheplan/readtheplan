@@ -11,6 +11,11 @@
 - GitHub Action threshold behavior now checks risks at or above the configured threshold.
 - Site and docs copy now label static demos as example output and document the agent-gate JSON contract more explicitly.
 
+### Breaking Changes
+- **GitHub Action: `fail-on-changes` deprecated.** The `fail-on-changes` input is superseded by `fail-on-any-change`. Workflows using `fail-on-changes` will continue to work but should migrate. The new `fail-on-threshold` input (risk-tier gating: safe/review/dangerous/irreversible) takes precedence over both.
+- **Sigstore is now an optional extra.** Signing support requires `pip install "readtheplan[sign]"` instead of `pip install readtheplan`. Running `readtheplan sign` without the extra will print a clear install hint.
+- **Python 3.10+ required.** The minimum Python version is now 3.10 (was 3.9). This aligns with the MCP dependency requirement.
+
 ## [0.3.0] — 2026-05-11
 
 ### Added

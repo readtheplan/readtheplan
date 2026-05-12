@@ -7,16 +7,16 @@ inputs:
     description: Path to a Terraform JSON plan file, usually from terraform show -json.
     required: true
   fail-on-any-change:
-    description: "Fail when the plan contains ANY resource changes (including safe ones like tag updates). Use only for strict zero-diff policies. Default: false."
+    description: "Fail when the plan contains ANY resource changes (including safe ones like tag updates). Use only for strict zero-diff policies. Ignored when fail-on-threshold is set."
     required: false
     default: "false"
   fail-on-changes:
-    description: "Deprecated alias for fail-on-any-change. Fails on ANY resource change, including safe changes."
+    description: "DEPRECATED — use fail-on-any-change instead. If set to 'true', behaves identically to fail-on-any-change: true. Still overridden by fail-on-threshold."
     required: false
     default: "false"
-    deprecationMessage: "Use fail-on-any-change. The fail-on-changes input is deprecated."
+    deprecationMessage: "Use fail-on-any-change. The fail-on-changes input is deprecated and will be removed in a future release."
   fail-on-threshold:
-    description: "Minimum risk tier that fails the workflow. One of: safe, review, dangerous, irreversible. Empty disables. Overrides fail-on-any-change when set."
+    description: "Minimum risk tier that fails the workflow (safe, review, dangerous, irreversible). Takes precedence over both fail-on-any-change and the deprecated fail-on-changes. Empty disables all threshold gating."
     required: false
     default: ""
   python-version:
@@ -79,6 +79,10 @@ runs:
             ;;
         esac
 
+        # Export resolved values so downstream steps don't re-read raw inputs
+        echo "RESOLVED_FAIL_ON_ANY_CHANGE=$FAIL_ON_ANY_CHANGE" >> "$GITHUB_ENV"
+        echo "RESOLVED_FAIL_ON_THRESHOLD=${FAIL_ON_THRESHOLD:-}" >> "$GITHUB_ENV"
+
         if [ ! -f "$PLAN_FILE" ]; then
           echo "::error::Plan file not found: $PLAN_FILE"
           exit 1
@@ -110,8 +114,8 @@ runs:
       shell: bash
       env:
         PLAN_FILE: ${{ inputs.plan-file }}
-        FAIL_ON_ANY_CHANGE: ${{ inputs.fail-on-any-change }}
-        FAIL_ON_THRESHOLD: ${{ inputs.fail-on-threshold }}
+        FAIL_ON_ANY_CHANGE: ${{ env.RESOLVED_FAIL_ON_ANY_CHANGE }}
+        FAIL_ON_THRESHOLD: ${{ env.RESOLVED_FAIL_ON_THRESHOLD }}
       run: |
         set -euo pipefail
 
@@ -136,12 +140,8 @@ runs:
 
         python "$GITHUB_ACTION_PATH/scripts/parse_action_output.py" "$output_file" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" "$count_file"
 
-        # Support deprecated fail-on-changes (map to fail-on-any-change)
-        FAIL_ON_CHANGES="${{ inputs.fail-on-changes }}"
+        # Use resolved values from Validate step (already handle deprecated fail-on-changes mapping)
         FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-false}"
-        if [ "${FAIL_ON_CHANGES,,}" = "true" ]; then
-          FAIL_ON_ANY_CHANGE="true"
-        fi
         FAIL_ON_THRESHOLD="${FAIL_ON_THRESHOLD:-}"
 
         resource_change_count="$(cat "$count_file")"
