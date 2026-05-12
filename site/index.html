@@ -330,10 +330,13 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 14px 16px;
+      margin: 0;
       font-family: var(--font-mono);
       font-size: 12px;
       line-height: 1.85;
       color: var(--text-2);
+      white-space: pre-wrap;
+      overflow-x: auto;
     }
     .gen-comment { color: var(--text-3); }
     .gen-key { color: #a78bfa; }
@@ -705,13 +708,7 @@
         <hr class="wiz-divider" />
 
         <div class="gen-label">Generated GitHub Actions workflow</div>
-        <div class="gen-block" id="gen-output">
-<span class="gen-comment"># .github/workflows/terraform-review.yml</span>
-- <span class="gen-key">name</span>: <span class="gen-val">Analyze Terraform plan</span>
-  <span class="gen-key">uses</span>: <span class="gen-val">readtheplan/readtheplan@v1</span>
-  <span class="gen-key">with</span>:
-    <span class="gen-key">plan-file</span>: <span class="gen-str">plan.json</span>
-    <span class="gen-key">fail-on-threshold</span>: <span class="gen-str" id="gen-thresh">dangerous</span></div>
+        <pre class="gen-block" id="gen-output"></pre>
 
         <div class="wiz-footer">
           <div class="wiz-privacy">
@@ -963,6 +960,7 @@
         <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
         <a href="https://readtheplan.dev/docs/">Docs</a>
         <a href="https://readtheplan.dev/demo/">Demo</a>
+        <a href="https://readtheplan.dev/playground/">Playground</a>
         <a href="https://readtheplan.dev/brief/">Brief</a>
         <a href="#pilot">Pilot</a>
       </div>
@@ -991,8 +989,79 @@
   }
 
   function updateGen() {
-    var th = thMap[activeVal('thresh')] || 'dangerous';
-    document.getElementById('gen-thresh').textContent = th;
+    document.getElementById('gen-output').textContent = workflowText();
+  }
+
+  function activeFramework() {
+    return fwMap[activeVal('fw')] || 'soc2';
+  }
+
+  function activeThreshold() {
+    return thMap[activeVal('thresh')] || 'dangerous';
+  }
+
+  function activeEvidence() {
+    return evMap[activeVal('ev')] || 'json-envelope';
+  }
+
+  function evidenceFile(ev) {
+    if (ev === 'checklist') return 'readtheplan-checklist.json';
+    return 'readtheplan-evidence.json';
+  }
+
+  function installPackage(ev) {
+    return ev === 'signed-oidc' ? '"readtheplan[sign]"' : 'readtheplan';
+  }
+
+  function cliCommand(forceJson) {
+    var fw = activeFramework();
+    var ev = activeEvidence();
+    var parts = ['readtheplan', 'analyze'];
+    if (fw !== 'none') {
+      parts.push('--framework', fw);
+    }
+    if (forceJson || ev !== 'checklist') {
+      parts.push('--format', 'json');
+    }
+    if (ev !== 'checklist') {
+      parts.push('--evidence', evidenceFile(ev));
+    }
+    if (ev === 'signed-oidc') {
+      parts.push('--sign');
+    }
+    parts.push('plan.json');
+    return parts.join(' ');
+  }
+
+  function workflowText() {
+    var fw = activeFramework();
+    var th = activeThreshold();
+    var ev = activeEvidence();
+    var lines = [
+      '# .github/workflows/terraform-review.yml',
+      '- name: Analyze Terraform plan',
+      '  id: readtheplan',
+      '  uses: readtheplan/readtheplan@v1',
+      '  with:',
+      '    plan-file: plan.json'
+    ];
+
+    if (th !== 'none') {
+      lines.push('    fail-on-threshold: ' + th);
+    }
+
+    if (fw !== 'none' || ev !== 'checklist') {
+      lines.push(
+        '',
+        '- name: Generate evidence artifact',
+        '  if: always()',
+        '  run: |',
+        '    python -m pip install ' + installPackage(ev),
+        '    ' + cliCommand(true) + ' > readtheplan-summary.json'
+      );
+    }
+
+    return lines.join('\n');
   }
 
   // ── Copy helpers ──
@@ -1004,25 +1073,11 @@
   }
 
   function copyWorkflow() {
-    var th = document.getElementById('gen-thresh').textContent;
-    var text = [
-      '# .github/workflows/terraform-review.yml',
-      '- name: Analyze Terraform plan',
-      '  uses: readtheplan/readtheplan@v1',
-      '  with:',
-      '    plan-file: plan.json',
-      '    fail-on-threshold: ' + th
-    ].join('\n');
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(workflowText());
   }
 
   function copyCLI() {
-    var fw = fwMap[activeVal('fw')] || 'none';
-    if (fw === 'none') {
-      navigator.clipboard.writeText('readtheplan analyze plan.json');
-    } else {
-      navigator.clipboard.writeText('readtheplan analyze --framework ' + fw + ' plan.json');
-    }
+    navigator.clipboard.writeText(cliCommand());
   }
 
   // ── Pilot submit ──
@@ -1041,6 +1096,8 @@
     var subject = encodeURIComponent('readtheplan pilot setup request');
     window.location.href = 'mailto:pilot@readtheplan.dev?subject=' + subject + '&body=' + encodeURIComponent(body);
   }
+
+  updateGen();
 </script>
 </body>
 </html>

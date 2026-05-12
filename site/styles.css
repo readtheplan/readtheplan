@@ -893,6 +893,397 @@ textarea {
   margin: 0 0 18px;
 }
 
+/* Landing-aligned shared page theme.
+   The homepage redesign is self-contained in index.html; these overrides bring
+   the routed pages that use styles.css into the same restrained visual system. */
+:root {
+  --background: #0a0a0a;
+  --foreground: #f0f0f0;
+  --accent: #f0f0f0;
+  --line: rgba(255, 255, 255, 0.08);
+  --border: var(--line);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  --surface: #111111;
+  --surface-strong: #1a1a1a;
+  --surface-hot: #1a1a1a;
+  --muted: #999999;
+  --soft: #555555;
+  --safe: #22c55e;
+  --review: #f59e0b;
+  --dangerous: #f97316;
+  --irreversible: #ef4444;
+  --shadow: none;
+  --radius: 8px;
+  --radius-lg: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--line-strong);
+}
+
+a:hover {
+  color: var(--foreground);
+  text-decoration-color: var(--foreground);
+}
+
+.noise {
+  display: none;
+}
+
+.workspace {
+  width: min(860px, calc(100% - 48px));
+  padding: 0;
+}
+
+.topbar.g {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  width: 100%;
+  margin: 0;
+  padding: 0 max(24px, calc((100% - 860px) / 2));
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.topbar .gc {
+  padding: 0;
+  border-right: 0;
+}
+
+.brand,
+.navlinks,
+.version-cell {
+  min-height: 52px;
+  color: var(--foreground);
+  font-size: 13px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.brand {
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-color: var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.navlinks {
+  gap: 6px;
+}
+
+.navlinks a {
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.navlinks a:hover {
+  background: var(--surface-strong);
+  color: var(--foreground);
+}
+
+.version-cell {
+  min-height: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-strong);
+  color: var(--soft);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.g {
+  display: block;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.gc {
+  padding: 0;
+  border-right: 0;
+}
+
+.hero {
+  min-height: auto;
+  padding: 80px 0 64px;
+}
+
+.hero-spacer {
+  display: none;
+}
+
+.hero-content {
+  display: block;
+  text-align: left;
+}
+
+.eyebrow {
+  margin: 0 0 20px;
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+h1,
+h2 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+h1 {
+  max-width: 620px;
+  font-size: clamp(26px, 4vw, 36px);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: clamp(20px, 2.8vw, 28px);
+  line-height: 1.25;
+}
+
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.intro-copy,
+.demo-intro,
+.pilot-copy p {
+  max-width: 620px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.trust-strip {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 6px;
+  margin-top: 28px;
+}
+
+.trust-strip span,
+.status-pill,
+.trust-badge {
+  min-height: auto;
+  padding: 3px 11px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--soft);
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+section[id] {
+  scroll-margin-top: 72px;
+}
+
+.utility-panel,
+.utility-panel-wide,
+.panel,
+.metric-card,
+.result-card,
+.terminal-frame {
+  margin: 64px 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.utility-panel h2,
+.utility-panel-wide h2,
+.panel h2 {
+  margin-bottom: 16px;
+}
+
+.utility-copy,
+.utility-copy p,
+.utility-copy li,
+.privacy-note,
+.handoff-note,
+.demo-evidence,
+.faq-list p {
+  color: var(--muted);
+}
+
+pre,
+.code-output {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface-strong) !important;
+  color: var(--muted) !important;
+}
+
+.terminal-bar {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.terminal-title {
+  color: var(--soft);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.segmented,
+.checks,
+.stacked-options,
+.risk-meter,
+.plan-table,
+.control-map {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.segmented span,
+.checks label,
+.stacked-options label,
+.risk-meter div,
+.plan-table [role="row"] > *,
+.control-map-row > * {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.segmented input:checked + span {
+  border-bottom-color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}
+
+select,
+input[type="text"],
+input[type="email"],
+input:not([type]),
+textarea {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  color: var(--foreground);
+}
+
+.primary-action,
+.primary-link,
+.icon-button {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.primary-action:hover,
+.primary-link:hover,
+.icon-button:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: #222222;
+  color: var(--foreground);
+}
+
+.card,
+.utility-panel-wide .card,
+.utility-panel .card {
+  border-color: var(--line) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--surface) !important;
+}
+
+.card:hover {
+  border-color: var(--line-strong) !important;
+}
+
+.table-head {
+  background: var(--surface-strong);
+}
+
+.faq-list details,
+.faq-list details:last-child {
+  border-color: var(--line);
+}
+
+@media (max-width: 760px) {
+  .topbar.g {
+    position: static;
+    flex-wrap: wrap;
+    padding: 0 24px 10px;
+  }
+
+  .brand,
+  .navlinks {
+    min-height: 42px;
+  }
+
+  .navlinks {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .version-cell {
+    margin-left: auto;
+  }
+
+  .workspace {
+    width: min(100% - 32px, 860px);
+  }
+
+  .hero {
+    padding: 56px 0 48px;
+  }
+
+  .utility-grid,
+  .field-row,
+  .risk-meter,
+  .checks {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-table [role="row"],
+  .demo-table [role="row"],
+  .control-map-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .handoff-note {
   color: var(--soft);
   font-size: 12px;
@@ -1049,5 +1440,65 @@ textarea {
   .code-output {
     min-height: 250px;
     font-size: 12px;
+  }
+}
+
+/* Final landing-aligned cascade guard. Keep this last so legacy responsive
+   rules above cannot pull routed pages back into the old grid aesthetic. */
+.primary-link,
+.primary-action,
+.icon-button {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  color: var(--foreground);
+  letter-spacing: normal;
+  text-decoration: none;
+  text-transform: none;
+}
+
+.primary-link:hover,
+.primary-action:hover,
+.icon-button:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: #222222;
+  color: var(--foreground);
+}
+
+.checklist {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.checklist li {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .topbar.g {
+    position: static;
+    display: flex;
+    width: 100%;
+    margin: 0;
+    padding: 0 24px 10px;
+  }
+
+  .g {
+    display: block;
+    grid-template-columns: none;
+  }
+
+  .gc,
+  .gc:last-child {
+    padding: 0;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .version-cell {
+    justify-content: center;
   }
 }
