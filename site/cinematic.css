@@ -1,0 +1,211 @@
+/* ── Cinematic Theme for readtheplan ── */
+@font-face {
+  font-family: 'JetBrains';
+  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+
+:root {
+  --safe: #00e676;
+  --review: #ffc107;
+  --danger: #f44336;
+  --irreversible: #d500f9;
+  --bg: #041C1C;
+  --fg: #e0f2ef;
+  --accent: #26c6da;
+  --border: rgba(38, 198, 218, 0.2);
+  --border-glow: rgba(38, 198, 218, 0.4);
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ── Typography ── */
+h1 { font-size: clamp(2rem, 6vw, 4.5rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 1rem; }
+h2 { font-size: clamp(1.5rem, 4vw, 2.5rem); font-weight: 700; margin-bottom: 1rem; }
+h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+p { line-height: 1.7; color: rgba(224, 242, 239, 0.85); max-width: 600px; margin: 0 auto 1.5rem; }
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent), var(--safe));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Layout ── */
+.container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+.page { min-height: 100vh; padding-top: 80px; }
+
+/* ── Navigation ── */
+.navbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: rgba(4, 28, 28, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.navbar .brand {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--fg);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.navbar .brand-mark {
+  background: linear-gradient(135deg, var(--accent), var(--safe));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+.navbar .nav-links {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.navbar .nav-links a {
+  color: rgba(224, 242, 239, 0.7);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+.navbar .nav-links a:hover { color: var(--accent); }
+.navbar .nav-version { font-size: 0.7rem; color: var(--safe); opacity: 0.6; }
+
+/* ── Terminal Box ── */
+.terminal-box {
+  background: rgba(4, 28, 28, 0.8);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius);
+  padding: 1.5rem 2rem;
+  max-width: 600px;
+  margin: 0 auto;
+  backdrop-filter: blur(10px);
+  font-family: 'JetBrains Mono', monospace;
+  overflow-x: auto;
+}
+.terminal-box .prompt { color: var(--accent); font-weight: 700; }
+.terminal-box .cmd { color: var(--safe); }
+
+/* ── Buttons ── */
+.cta-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--accent), var(--safe));
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 1rem 2.5rem;
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: none;
+  cursor: pointer;
+}
+.cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(38, 198, 218, 0.3);
+}
+.cta-btn.outline {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.cta-btn.outline:hover { box-shadow: 0 8px 30px rgba(38, 198, 218, 0.15); }
+
+/* ── Cards ── */
+.card {
+  background: rgba(4, 28, 28, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  max-width: 900px;
+  margin: 2rem auto;
+}
+.tier-card { text-align: center; }
+.tier-icon { font-size: 2.5rem; display: block; margin-bottom: 0.75rem; }
+
+/* ── Badges ── */
+.badge {
+  background: rgba(4, 28, 28, 0.7);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 1.5rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.badge-row { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin-top: 2rem; }
+
+/* ── Code blocks ── */
+pre, code {
+  background: rgba(4, 28, 28, 0.5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.2em 0.5em;
+  font-family: 'JetBrains Mono', monospace;
+}
+pre { padding: 1.5rem; overflow-x: auto; white-space: pre-wrap; }
+pre code { border: none; padding: 0; background: none; }
+
+/* ── Page sections ── */
+.section {
+  padding: 4rem 2rem;
+  border-bottom: 1px solid var(--border);
+}
+.section:last-child { border-bottom: none; }
+
+/* ── Progress bar ── */
+.progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--safe));
+  z-index: 101;
+  width: 0%;
+}
+
+/* ── Links ── */
+a { color: var(--accent); transition: color 0.2s; }
+a:hover { color: var(--safe); }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .navbar { padding: 0.75rem 1rem; }
+  .navbar .nav-links { gap: 0.75rem; font-size: 0.75rem; }
+  .tier-grid { grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .section { padding: 2rem 1rem; }
+}
+@media (max-width: 480px) {
+  .tier-grid { grid-template-columns: 1fr; }
+  .badge-row { flex-direction: column; align-items: center; }
+}

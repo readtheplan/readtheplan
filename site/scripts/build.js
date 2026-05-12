@@ -13,6 +13,7 @@ const demoSource = path.join(
 const files = [
   "index.html",
   "styles.css",
+  "cinematic.css",
   "app.js",
   "404.html",
   "favicon.svg",
@@ -43,7 +44,7 @@ fs.writeFileSync(
   path.join(dist, "_headers"),
   [
     "/*",
-    "  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+    "  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
     "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
     "  Access-Control-Allow-Origin: https://readtheplan.dev",
     "  Cross-Origin-Opener-Policy: same-origin",

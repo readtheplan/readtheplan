@@ -1,68 +1,69 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Review Terraform CloudWatch log retention risk for retention decreases, log deletion, audit evidence, and SOC 2 monitoring controls." />
-    <title>Terraform CloudWatch Log Retention Risk | readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/resources/terraform-cloudwatch-log-retention-risk/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#041C1C" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="article" />
-    <meta property="og:title" content="Terraform CloudWatch Log Retention Risk | readtheplan" />
-    <meta property="og:description" content="High-intent Terraform CloudWatch retention guide for audit evidence changes." />
-    <meta property="og:url" content="https://readtheplan.dev/resources/terraform-cloudwatch-log-retention-risk/" />
-    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="../../styles.css" />
-  </head>
-  <body>
-    <div class="noise" aria-hidden="true"></div>
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="/#workspace" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span></a>
-      <nav class="navlinks gc" aria-label="Project links"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></nav>
-      <nav class="navlinks gc" aria-label="Page links"><a href="/tools/terraform-risk-calculator/">Risk calculator</a><a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a></nav>
-      <div class="version-cell gc">resource</div>
-    </header>
-    <main id="workspace" class="workspace">
-      <section class="hero g utility-hero" aria-labelledby="resource-title">
-        <div class="gc hero-content">
-          <p class="eyebrow">Terraform CloudWatch log retention risk</p>
-          <h1 id="resource-title">Do not lose evidence by accident.</h1>
-          <p class="intro-copy">Log retention changes affect investigations, audit trails, and incident review. This page is static guidance; raw Terraform plans stay local in your workstation or CI.</p>
-        </div>
-        <div class="gc trust-strip" aria-label="Privacy boundaries"><span>No plan upload</span><span>Manual review guide</span><span>SOC 2 evidence</span></div>
-        <div class="gc utility-copy"><p>High-risk signals include lowering retention days, deleting log groups, removing alarms, changing destinations, or shortening retention below policy requirements.</p></div>
-        <div class="gc"><a class="primary-link" href="/#pilot">Request pilot setup</a></div>
-      </section>
-      <section class="g" aria-labelledby="checks-title">
-        <div class="gc utility-panel">
-          <p class="eyebrow">Review checklist</p>
-          <h2 id="checks-title">Logging signals</h2>
-          <ul class="checklist">
-            <li>Retention days decrease or become unset.</li>
-            <li>Production log groups are deleted or replaced.</li>
-            <li>Metric filters, alarms, or delivery subscriptions are removed.</li>
-            <li>Retention no longer matches SOC 2, incident response, or customer contract requirements.</li>
-          </ul>
-        </div>
-        <div class="gc utility-panel">
-          <p class="eyebrow">SOC 2 angle</p>
-          <h2>Evidence to keep</h2>
-          <p class="utility-copy">Map CloudWatch retention changes to CC7 monitoring, CC8 change management, and evidence completeness. readtheplan can highlight retention decreases from Terraform JSON in your local workflow.</p>
-          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20CloudWatch%20risk%20pilot">Request pilot setup</a>
-          <p class="handoff-note">Placeholder inbox: info@readtheplan.dev.</p>
-        </div>
-      </section>
-      <section class="g" aria-labelledby="faq-title" itemscope itemtype="https://schema.org/FAQPage">
-        <div class="gc utility-panel-wide faq-list">
-          <p class="eyebrow">FAQ</p>
-          <h2 id="faq-title">CloudWatch retention questions</h2>
-          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Why is decreasing retention risky?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Shorter retention can remove evidence needed for security investigations, audits, customer requests, and incident timelines.</p></div></details>
-          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What should be checked before apply?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Confirm policy minimums, affected environments, alerting impact, and whether older logs are preserved elsewhere before changing retention.</p></div></details>
-        </div>
-      </section>
-    </main>
-  </body>
-</html>
+     1|<!doctype html>
+     2|<html lang="en">
+     3|  <head>
+     4|    <meta charset="utf-8" />
+     5|    <meta name="viewport" content="width=device-width, initial-scale=1" />
+     6|    <meta name="description" content="Review Terraform CloudWatch log retention risk for retention decreases, log deletion, audit evidence, and SOC 2 monitoring controls." />
+     7|    <title>Terraform CloudWatch Log Retention Risk | readtheplan</title>
+     8|    <link rel="canonical" href="https://readtheplan.dev/resources/terraform-cloudwatch-log-retention-risk/" />
+     9|    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    10|    <meta name="theme-color" content="#041C1C" />
+    11|    <meta name="color-scheme" content="dark" />
+    12|    <meta property="og:type" content="article" />
+    13|    <meta property="og:title" content="Terraform CloudWatch Log Retention Risk | readtheplan" />
+    14|    <meta property="og:description" content="High-intent Terraform CloudWatch retention guide for audit evidence changes." />
+    15|    <meta property="og:url" content="https://readtheplan.dev/resources/terraform-cloudwatch-log-retention-risk/" />
+    16|    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+    17|    <meta name="twitter:card" content="summary_large_image" />
+    18|    <link rel="stylesheet" href="../../styles.css" />
+    19|  </head>
+    20|  <body>
+    21|    <div class="noise" aria-hidden="true"></div>
+    22|    <header class="topbar g" aria-label="Primary">
+    23|      <a class="brand gc" href="/#workspace" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span></a>
+    24|      <nav class="navlinks gc" aria-label="Project links"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></nav>
+    25|      <nav class="navlinks gc" aria-label="Page links"><a href="/tools/terraform-risk-calculator/">Risk calculator</a><a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a></nav>
+    26|      <div class="version-cell gc">resource</div>
+    27|    </header>
+    28|    <main id="workspace" class="workspace">
+    29|      <section class="hero g utility-hero" aria-labelledby="resource-title">
+    30|        <div class="gc hero-content">
+    31|          <p class="eyebrow">Terraform CloudWatch log retention risk</p>
+    32|          <h1 id="resource-title">Do not lose evidence by accident.</h1>
+    33|          <p class="intro-copy">Log retention changes affect investigations, audit trails, and incident review. This page is static guidance; raw Terraform plans stay local in your workstation or CI.</p>
+    34|        </div>
+    35|        <div class="gc trust-strip" aria-label="Privacy boundaries"><span>No plan upload</span><span>Manual review guide</span><span>SOC 2 evidence</span></div>
+    36|        <div class="gc utility-copy"><p>High-risk signals include lowering retention days, deleting log groups, removing alarms, changing destinations, or shortening retention below policy requirements.</p></div>
+    37|        <div class="gc"><a class="primary-link" href="/#pilot">Request pilot setup</a></div>
+    38|      </section>
+    39|      <section class="g" aria-labelledby="checks-title">
+    40|        <div class="gc utility-panel">
+    41|          <p class="eyebrow">Review checklist</p>
+    42|          <h2 id="checks-title">Logging signals</h2>
+    43|          <ul class="checklist">
+    44|            <li>Retention days decrease or become unset.</li>
+    45|            <li>Production log groups are deleted or replaced.</li>
+    46|            <li>Metric filters, alarms, or delivery subscriptions are removed.</li>
+    47|            <li>Retention no longer matches SOC 2, incident response, or customer contract requirements.</li>
+    48|          </ul>
+    49|        </div>
+    50|        <div class="gc utility-panel">
+    51|          <p class="eyebrow">SOC 2 angle</p>
+    52|          <h2>Evidence to keep</h2>
+    53|          <p class="utility-copy">Map CloudWatch retention changes to CC7 monitoring, CC8 change management, and evidence completeness. readtheplan can highlight retention decreases from Terraform JSON in your local workflow.</p>
+    54|          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20CloudWatch%20risk%20pilot">Request pilot setup</a>
+    55|          <p class="handoff-note">Placeholder inbox: info@readtheplan.dev.</p>
+    56|        </div>
+    57|      </section>
+    58|      <section class="g" aria-labelledby="faq-title" itemscope itemtype="https://schema.org/FAQPage">
+    59|        <div class="gc utility-panel-wide faq-list">
+    60|          <p class="eyebrow">FAQ</p>
+    61|          <h2 id="faq-title">CloudWatch retention questions</h2>
+    62|          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Why is decreasing retention risky?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Shorter retention can remove evidence needed for security investigations, audits, customer requests, and incident timelines.</p></div></details>
+    63|          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What should be checked before apply?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Confirm policy minimums, affected environments, alerting impact, and whether older logs are preserved elsewhere before changing retention.</p></div></details>
+    64|        </div>
+    65|      </section>
+    66|    </main>
+    67|  </body>
+    68|</html>
+    69|
