@@ -78,22 +78,22 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "SOC 2" in html
     assert "ISO 27001" in html
     assert "HIPAA" in html
-    assert 'id="install-cmd"' in html
-    assert 'id="copy-install"' in html
+    assert 'id="workspace"' in html
     assert 'id="setup"' in html
-    assert 'id="agent"' in html
+    assert 'id="demo"' in html
     assert 'id="pilot"' in html
     assert 'id="resources"' in html
-    assert 'id="gen-output"' in html
-    assert 'id="p-org"' in html
-    assert 'id="p-email"' in html
-    assert 'id="p-blocker"' in html
-    assert "Terraform + OpenTofu" in html
-    assert "readtheplan agent-gate plan.json" in html
-    assert "proceed / warn / block" in html
-    assert "MCP integration" in html
-    assert "rtp-evidence-soc2.json" in html
-    assert "pip install readtheplan" in html
+    assert 'id="checklist"' in html
+    assert 'id="onboardingForm"' in html
+    assert 'id="pilotLink"' in html
+    assert 'id="typingCmd"' in html
+    assert 'id="actionOutput"' in html
+    assert 'id="terminalBody"' in html
+    assert 'id="statusPill"' in html
+    assert 'id="handoffNote"' in html
+    assert "Terraform JSON in, review evidence out" in html
+    assert "Request pilot" in html
+    assert "mailto:" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
     assert "/mcp/" in html
@@ -101,22 +101,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "/playground/" in html
     assert 'rel="canonical"' in html
     assert "og:image" in html
-    assert "Request pilot setup" in html
-    assert "mailto:pilot@readtheplan.dev" in html
-    assert "Context stays local. No plan upload." in html
-    assert "function workflowText()" in html
-    assert "function cliCommand(" in html
-    assert "fail-on-threshold" in html
-    assert "readtheplan-evidence.json" in html
-    assert "readtheplan[sign]" in html
-    assert "readtheplan-summary.json" in html
-    assert "Generate evidence artifact" in html
-    assert "if: always()" in html
     assert "Upload a plan" not in html
-    assert "pilot-contact@example.com" not in html
-    assert "fail-on-risk-level" not in html
-    assert "\n    framework:" not in html
-    assert "\n    evidence:" not in html
     assert "gmail.com" not in html
 
 

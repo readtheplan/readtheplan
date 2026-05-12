@@ -20,7 +20,7 @@ function forbidIncludes(source, token, label) {
 }
 
 const html = read("index.html");
-const css = read("styles.css");
+const css = read("matrix.css");
 const buildScript = read("scripts/build.js");
 const mcpHtml = read("mcp/index.html");
 const briefHtml = read("brief/index.html");
@@ -110,30 +110,31 @@ if (/<form[^>]+action=/i.test(html)) {
   throw new Error("Client intake form must not submit to a backend.");
 }
 
-// Shared visual contract: routed pages should match the merged landing aesthetic.
+// Shared visual contract: routed pages should match the Matrix theme.
 for (const token of [
-  "\"Departure Mono\"",
-  "\"JetBrains Mono\"",
-  "url(\"./fonts/DepartureMono-Regular.woff2\")",
-  "url(\"./fonts/JetBrainsMono-Regular.woff2\")",
-  "--background: #041C1C;",
-  "--accent: #FFBD38;",
-  "background-image: url(\"./img/noise.svg\")",
-  ".g {",
-  ".gc {",
-  ".recommendation",
-  ".primary-action",
-  "Landing-aligned shared page theme",
-  "--background: #0a0a0a;",
-  "--foreground: #f0f0f0;",
-  "--border: var(--line);",
-  ".topbar.g {",
-  "Final landing-aligned cascade guard",
+  "JetBrains Mono",
+  "url('/fonts/JetBrainsMono-Regular.woff2')",
+  "--matrix-bg: #000000;",
+  "--matrix-green: #00FF41;",
+  "--matrix-fg: #00CC33;",
+  "--matrix-glow:",
+  "--matrix-text-glow:",
+  "font-family: var(--font-mono);",
+  ".gradient-text {",
+  ".navbar {",
+  ".cta-btn",
+  ".terminal-box {",
+  "Matrix Theme for readtheplan",
+  "Scanline overlay",
+  "Digital rain",
+  "phosp",
+  "background: var(--matrix-bg);",
+  "border: 1px solid rgba(0, 255, 65,",
 ]) {
-  requireIncludes(css, token, "redesign CSS token");
+  requireIncludes(css, token, "Matrix CSS token");
 }
 
-if (!css.includes("@media (max-width: 720px)")) {
+if (!css.includes("@media (max-width: 768px)") && !css.includes("@media (max-width: 720px)")) {
   throw new Error("Responsive mobile styles are required.");
 }
 

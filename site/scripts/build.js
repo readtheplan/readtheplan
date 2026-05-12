@@ -14,6 +14,8 @@ const files = [
   "index.html",
   "styles.css",
   "cinematic.css",
+  "matrix.css",
+  "matrix.js",
   "app.js",
   "404.html",
   "favicon.svg",
