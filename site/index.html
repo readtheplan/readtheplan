@@ -24,406 +24,386 @@
   <canvas id="matrix-rain"></canvas>
   <canvas id="webgl-canvas"></canvas>
   <div class="progress-bar" id="progress-bar"></div>
-  <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; background: radial-gradient(ellipse at 30% 40%, rgba(0, 255, 65, 0.03) 0%, transparent 50%), radial-gradient(ellipse at 70% 60%, rgba(0, 143, 17, 0.02) 0%, transparent 50%);"></div>
+  <div class="matrix-vignette" aria-hidden="true"></div>
 
-
-<!-- ── Nav ── -->
-<nav>
-  <div class="container">
-    <div class="nav-inner">
-      <div class="nav-logo">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.25"/>
-          <path d="M4 5h8M4 8h6M4 11h4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
-        </svg>
-        readtheplan
+  <nav class="navbar">
+    <div class="container nav-shell">
+      <a class="brand" href="#top" aria-label="readtheplan home">
+        <span class="brand-mark">rtp</span>
+        <span>readtheplan</span>
         <span class="nav-version">v0.3.0</span>
-      </div>
+      </a>
       <div class="nav-links">
         <a href="#how-it-works">How it works</a>
         <a href="#setup">Setup</a>
         <a href="#agent">Agent gate</a>
         <a href="#pilot">Pilot</a>
         <a href="https://readtheplan.dev/docs/">Docs</a>
-        <a href="https://github.com/readtheplan/readtheplan" class="nav-gh">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-          </svg>
-          GitHub
-        </a>
+        <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
       </div>
     </div>
-  </div>
-</nav>
+  </nav>
 
-<!-- ── Hero ── -->
-<div class="container">
-  <section class="hero" id="top">
-    <h1>Know what your Terraform plan will actually do — before it runs.</h1>
-    <p>Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC&nbsp;2, ISO&nbsp;27001, and HIPAA. Runs locally — no uploads, no accounts, no backend.</p>
-    <div class="install-wrap">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="opacity:0.4;flex-shrink:0">
-        <path d="M2 4l4 4-4 4M8 12h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <code id="install-cmd">pip install readtheplan &amp;&amp; readtheplan analyze plan.json</code>
-      <button class="copy-btn" id="copy-install" onclick="copyInstall()">Copy</button>
-    </div>
-    <div class="hero-badges">
-      <span class="badge">CLI-first</span>
-      <span class="badge">GitHub Action</span>
-      <span class="badge">No plan upload</span>
-      <span class="badge">SOC 2 · ISO 27001 · HIPAA</span>
-      <span class="badge">Terraform + OpenTofu</span>
-      <span class="badge">MIT license</span>
-    </div>
-  </section>
-
-  <!-- ── How it works ── -->
-  <section id="how-it-works">
-    <div class="section-label">Risk tiers</div>
-    <div class="tiers">
-      <div class="tier">
-        <div class="tier-dot" style="background:var(--green)"></div>
-        <div class="tier-name">Safe</div>
-        <div class="tier-desc">No-op, tag update, read-only change</div>
-      </div>
-      <div class="tier">
-        <div class="tier-dot" style="background:var(--yellow)"></div>
-        <div class="tier-name">Review</div>
-        <div class="tier-desc">Security group rule, minor config drift</div>
-      </div>
-      <div class="tier">
-        <div class="tier-dot" style="background:var(--orange)"></div>
-        <div class="tier-name">Dangerous</div>
-        <div class="tier-desc">Instance replacement, IAM policy change, DB modification</div>
-      </div>
-      <div class="tier">
-        <div class="tier-dot" style="background:var(--red)"></div>
-        <div class="tier-name">Irreversible</div>
-        <div class="tier-desc">Data deletion, KMS key destruction, RDS termination</div>
-      </div>
-    </div>
-
-    <div class="terminal">
-      <div class="terminal-bar">
-        <div class="terminal-dot"></div>
-        <div class="terminal-dot"></div>
-        <div class="terminal-dot"></div>
-        <span class="terminal-title">readtheplan analyze --framework soc2 plan.json</span>
-      </div>
-      <div class="terminal-body">
-        <div><span class="t-prompt">$ </span><span class="t-cmd">readtheplan analyze --framework soc2 plan.json</span></div>
-        <div class="spacer"></div>
-        <div><span class="t-safe">✓ safe       </span><span class="t-addr">aws_s3_bucket.logs                  </span><span class="t-dim">tag update · CC6.1</span></div>
-        <div><span class="t-safe">✓ safe       </span><span class="t-addr">aws_cloudwatch_log_group.app        </span><span class="t-dim">retention policy · CC7.2</span></div>
-        <div><span class="t-review">⚠ review     </span><span class="t-addr">aws_security_group.web              </span><span class="t-dim">ingress rule change · CC6.6</span></div>
-        <div><span class="t-danger">! dangerous  </span><span class="t-addr">aws_iam_role_policy.app             </span><span class="t-dim">policy replaced · CC6.3</span></div>
-        <div><span class="t-irrev">✗ irreversible</span><span class="t-addr">aws_kms_key.primary                 </span><span class="t-dim">key deletion scheduled · CC6.7</span></div>
-        <div class="t-summary">
-          5 changes · 1 irreversible · 1 dangerous · evidence written to ./rtp-evidence-soc2.json
+  <main class="page">
+    <div class="container landing-shell">
+      <section class="hero-grid" id="top">
+        <div class="hero-copy">
+          <div class="eyebrow">Local-first Terraform review</div>
+          <h1>Know what your Terraform plan will actually do before it runs.</h1>
+          <p class="hero-lead">Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC 2, ISO 27001, and HIPAA. Runs locally with no accounts, no backend, and <span class="gradient-text">No plan upload</span>.</p>
+          <div class="hero-actions">
+            <div class="install-wrap">
+              <span class="prompt-mark" aria-hidden="true">&gt;</span>
+              <code id="install-cmd">pip install readtheplan &amp;&amp; readtheplan analyze plan.json</code>
+              <button class="copy-btn" id="copy-install" onclick="copyInstall()">Copy</button>
+            </div>
+            <div class="cta-row">
+              <a class="cta-btn" href="#setup">Generate setup</a>
+              <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan">View GitHub Action</a>
+            </div>
+          </div>
+          <div class="hero-badges">
+            <span class="badge">CLI-first</span>
+            <span class="badge">GitHub Action</span>
+            <span class="badge">No plan upload</span>
+            <span class="badge">Terraform + OpenTofu</span>
+            <span class="badge">SOC 2 · ISO 27001 · HIPAA</span>
+            <span class="badge">MIT license</span>
+          </div>
         </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ── Setup wizard ── -->
-  <section id="setup">
-    <div class="section-label">Setup generator</div>
-    <div class="wizard">
-      <div class="wizard-header">
-        <span class="wizard-title">Configure your integration</span>
-        <span class="wizard-hint">Generated output updates live</span>
-      </div>
-      <div class="wizard-body">
-        <div class="wiz-grid">
-          <div class="wiz-group">
-            <label>CI system</label>
-            <div class="seg">
-              <button class="seg-btn active" data-group="ci" onclick="pick(this,'ci')">GitHub Actions</button>
-              <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">GitLab CI</button>
-              <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">CircleCI</button>
-              <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">Local only</button>
+        <div class="hero-proof">
+          <div class="terminal-box hero-terminal">
+            <div class="terminal-head">
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+              <span class="terminal-title">readtheplan analyze --framework soc2 plan.json</span>
+            </div>
+            <div class="terminal-body">
+              <div><span class="t-prompt">$</span> <span class="t-cmd">readtheplan analyze --framework soc2 plan.json</span></div>
+              <div class="spacer"></div>
+              <div><span class="t-safe">safe</span> <span class="t-addr">aws_s3_bucket.logs</span> <span class="t-dim">tag update · CC6.1</span></div>
+              <div><span class="t-review">review</span> <span class="t-addr">aws_security_group.web</span> <span class="t-dim">ingress rule change · CC6.6</span></div>
+              <div><span class="t-danger">dangerous</span> <span class="t-addr">aws_iam_role_policy.app</span> <span class="t-dim">policy replaced · CC6.3</span></div>
+              <div><span class="t-irrev">irreversible</span> <span class="t-addr">aws_kms_key.primary</span> <span class="t-dim">key deletion scheduled · CC6.7</span></div>
+              <div class="t-summary">5 changes · evidence written to ./rtp-evidence-soc2.json</div>
             </div>
           </div>
-          <div class="wiz-group">
-            <label>Compliance framework</label>
-            <div class="seg">
-              <button class="seg-btn active" data-group="fw" onclick="pick(this,'fw')">SOC 2</button>
-              <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">ISO 27001</button>
-              <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">HIPAA</button>
-              <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">None</button>
+
+          <div class="hero-aside">
+            <div class="aside-card">
+              <div class="aside-label">Pipeline contract</div>
+              <div class="aside-copy">Deterministic proceed / warn / block output for humans, CI, and coding agents.</div>
             </div>
-          </div>
-          <div class="wiz-group">
-            <label>Blocking threshold</label>
-            <div class="seg">
-              <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Irreversible only</button>
-              <button class="seg-btn active" data-group="thresh" onclick="pick(this,'thresh')">Dangerous</button>
-              <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Review</button>
-              <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Don't block</button>
-            </div>
-          </div>
-          <div class="wiz-group">
-            <label>Evidence output</label>
-            <div class="seg">
-              <button class="seg-btn active" data-group="ev" onclick="pick(this,'ev')">JSON envelope</button>
-              <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Signed (OIDC)</button>
-              <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Checklist only</button>
+            <div class="aside-card">
+              <div class="aside-label">Why it matters</div>
+              <div class="aside-copy">Terraform’s plan/apply split only works if the risky changes are easy to see before approval.</div>
             </div>
           </div>
         </div>
+      </section>
 
-        <hr class="wiz-divider" />
+      <section class="section-shell" id="how-it-works">
+        <div class="section-head">
+          <div class="section-label">Risk tiers</div>
+          <h2>Keep the matrix mood, but put the product signal first.</h2>
+          <p>The homepage should feel like an operator console, not a toy scene. These four tiers are the core mental model, so they should be the first thing users can scan after the hero.</p>
+        </div>
 
-        <div class="gen-label">Generated GitHub Actions workflow</div>
-        <pre class="gen-block" id="gen-output"></pre>
+        <div class="tiers">
+          <article class="tier">
+            <div class="tier-dot tier-safe"></div>
+            <div class="tier-name">Safe</div>
+            <div class="tier-desc">No-op, tag update, read-only change</div>
+          </article>
+          <article class="tier">
+            <div class="tier-dot tier-review"></div>
+            <div class="tier-name">Review</div>
+            <div class="tier-desc">Security group rule, minor config drift</div>
+          </article>
+          <article class="tier">
+            <div class="tier-dot tier-danger"></div>
+            <div class="tier-name">Dangerous</div>
+            <div class="tier-desc">Instance replacement, IAM policy change, DB modification</div>
+          </article>
+          <article class="tier">
+            <div class="tier-dot tier-irrev"></div>
+            <div class="tier-name">Irreversible</div>
+            <div class="tier-desc">Data deletion, KMS key destruction, RDS termination</div>
+          </article>
+        </div>
+      </section>
 
-        <div class="wiz-footer">
-          <div class="wiz-privacy">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1L2 4v4c0 3.31 2.69 6 6 7 3.31-1 6-3.69 6-7V4L8 1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-            No uploads. Runs entirely in your CI.
+      <section class="section-shell" id="setup">
+        <div class="section-head">
+          <div class="section-label">Setup generator</div>
+          <h2>Generate the exact review gate you want.</h2>
+          <p>The setup block should do most of the conversion work. Keep it high-utility, calm, and easy to copy, with the matrix background staying behind it instead of competing with it.</p>
+        </div>
+
+        <div class="wizard">
+          <div class="wizard-header">
+            <span class="wizard-title">Configure your integration</span>
+            <span class="wizard-hint">Generated output updates live</span>
           </div>
-          <div class="wiz-actions">
-            <button class="btn btn-outline" onclick="copyWorkflow()">Copy workflow</button>
-            <button class="btn btn-outline" onclick="copyCLI()">Copy CLI command</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+          <div class="wizard-body">
+            <div class="wiz-grid">
+              <div class="wiz-group">
+                <label>CI system</label>
+                <div class="seg">
+                  <button class="seg-btn active" data-group="ci" onclick="pick(this,'ci')">GitHub Actions</button>
+                  <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">GitLab CI</button>
+                  <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">CircleCI</button>
+                  <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">Local only</button>
+                </div>
+              </div>
+              <div class="wiz-group">
+                <label>Compliance framework</label>
+                <div class="seg">
+                  <button class="seg-btn active" data-group="fw" onclick="pick(this,'fw')">SOC 2</button>
+                  <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">ISO 27001</button>
+                  <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">HIPAA</button>
+                  <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">None</button>
+                </div>
+              </div>
+              <div class="wiz-group">
+                <label>Blocking threshold</label>
+                <div class="seg">
+                  <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Irreversible only</button>
+                  <button class="seg-btn active" data-group="thresh" onclick="pick(this,'thresh')">Dangerous</button>
+                  <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Review</button>
+                  <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Don't block</button>
+                </div>
+              </div>
+              <div class="wiz-group">
+                <label>Evidence output</label>
+                <div class="seg">
+                  <button class="seg-btn active" data-group="ev" onclick="pick(this,'ev')">JSON envelope</button>
+                  <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Signed (OIDC)</button>
+                  <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Checklist only</button>
+                </div>
+              </div>
+            </div>
 
-  <!-- ── Agent gate ── -->
-  <section id="agent">
-    <div class="section-label">Agent gate</div>
-    <div class="two-col">
-      <div class="card">
-        <h3>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3" y="1" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.25"/><path d="M5 7h6M5 5h2M8 13l-2 2M8 13l2 2M8 13v-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-          Block unsafe AI auto-approvals
-        </h3>
-        <p>Coding agents and agentic CI pipelines skip review. The agent-gate subcommand returns a deterministic proceed / warn / block decision your pipeline can act on without parsing human-readable output.</p>
-        <div class="mini-terminal">
-          <div><span style="color:var(--text-3)">$ </span>readtheplan agent-gate plan.json</div>
-          <div style="color:var(--red)">{</div>
-          <div style="color:var(--red)">&nbsp; "decision": "block",</div>
-          <div style="color:var(--red)">&nbsp; "risk": "irreversible",</div>
-          <div style="color:var(--red)">&nbsp; "reason": "KMS key deletion scheduled",</div>
-          <div style="color:var(--red)">&nbsp; "changes": 1</div>
-          <div style="color:var(--red)">}</div>
-        </div>
-      </div>
-      <div class="card">
-        <h3>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.25"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
-          MCP integration (preview)
-        </h3>
-        <p>Run readtheplan as a local MCP server. Connect to Claude, Cursor, or any MCP-compatible IDE to review plans inline without leaving your editor.</p>
-        <div class="mini-terminal">
-          <div><span style="color:var(--text-3)">$ </span>readtheplan mcp --stdio</div>
-          <div style="color:var(--green)">Listening on stdio</div>
-          <div style="color:var(--text-3)">Tools: analyze_plan, agent_gate,</div>
-          <div style="color:var(--text-3)">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; list_frameworks</div>
-          <div style="color:var(--text-3)">&nbsp;</div>
-          <div style="color:var(--text-3)"># Connect your MCP client to start</div>
-        </div>
-      </div>
-    </div>
-  </section>
+            <div class="wizard-meta">
+              <div class="meta-card">
+                <span class="meta-title">Local-first promise</span>
+                <span class="meta-copy">No uploads. Runs entirely in your CI.</span>
+              </div>
+              <div class="meta-card">
+                <span class="meta-title">Artifact names</span>
+                <span class="meta-copy">Uses <code>plan.json</code>, <code>readtheplan-evidence.json</code>, and optional <code>readtheplan[sign]</code>.</span>
+              </div>
+            </div>
 
-  <!-- ── Compliance ── -->
-  <section id="compliance">
-    <div class="section-label">Compliance evidence</div>
-    <div class="comp-grid">
-      <div class="comp-card">
-        <h4>SOC 2</h4>
-        <div class="comp-controls">CC6.1 · CC6.3 · CC6.6 · CC6.7</div>
-        <p>Trust Service Criteria controls annotated per change. Evidence output is auditor-ready JSON.</p>
-      </div>
-      <div class="comp-card">
-        <h4>ISO 27001</h4>
-        <div class="comp-controls">A.8 · A.9 · A.12</div>
-        <p>Annex A control IDs mapped per resource change. Use with <code style="font-size:11px;font-family:var(--font-mono)">--framework iso27001</code>.</p>
-      </div>
-      <div class="comp-card">
-        <h4>HIPAA</h4>
-        <div class="comp-controls">§164.312(a)(1) · §164.312(e)</div>
-        <p>PHI-adjacent resource changes flagged with relevant safeguard sections.</p>
-      </div>
-    </div>
-    <div class="terminal">
-      <div class="terminal-bar">
-        <div class="terminal-dot"></div>
-        <div class="terminal-dot"></div>
-        <div class="terminal-dot"></div>
-        <span class="terminal-title">rtp-evidence-soc2.json</span>
-      </div>
-      <div class="terminal-body">
-        <div><span style="color:var(--text-3)">// evidence envelope (excerpt)</span></div>
-        <div><span style="color:#a78bfa">"resource"</span>: <span style="color:#fbbf24">"aws_iam_role_policy.app"</span>,</div>
-        <div><span style="color:#a78bfa">"risk"</span>: <span style="color:var(--red)">"dangerous"</span>, <span style="color:#a78bfa">"action"</span>: <span style="color:#fbbf24">"update"</span>,</div>
-        <div><span style="color:#a78bfa">"controls"</span>: [<span style="color:#fbbf24">"CC6.3"</span>, <span style="color:#fbbf24">"CC6.1"</span>],</div>
-        <div><span style="color:#a78bfa">"signed"</span>: <span style="color:var(--green)">true</span>, <span style="color:#a78bfa">"sigstore_bundle"</span>: <span style="color:#fbbf24">"sha256:4a9f..."</span></div>
-      </div>
-    </div>
-  </section>
+            <div class="gen-panel">
+              <div class="gen-label">Generated GitHub Actions workflow</div>
+              <pre class="gen-block" id="gen-output"></pre>
+            </div>
 
-  <!-- ── Comparison ── -->
-  <section id="compare">
-    <div class="section-label">vs. everything else</div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Tool</th>
-            <th>Analyzes</th>
-            <th>Risk tiers</th>
-            <th>Compliance</th>
-            <th>Agent gate</th>
-            <th>Local-only</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="hl">
-            <td>readtheplan</td>
-            <td>Plan diff</td>
-            <td class="c-yes">✓ 4 tiers</td>
-            <td class="c-yes">✓ SOC2/ISO/HIPAA</td>
-            <td class="c-yes">✓ block/warn/ok</td>
-            <td class="c-yes">✓</td>
-          </tr>
-          <tr>
-            <td>tflint / tfsec</td>
-            <td>HCL code</td>
-            <td class="c-no">— lint only</td>
-            <td class="c-no">—</td>
-            <td class="c-no">—</td>
-            <td class="c-yes">✓</td>
-          </tr>
-          <tr>
-            <td>checkov</td>
-            <td>Code + plan</td>
-            <td class="c-partial">⚠ pass/fail</td>
-            <td class="c-partial">⚠ policy checks</td>
-            <td class="c-no">—</td>
-            <td class="c-yes">✓</td>
-          </tr>
-          <tr>
-            <td>Spacelift / env0</td>
-            <td>Plan + state</td>
-            <td class="c-partial">⚠ visual only</td>
-            <td class="c-no">—</td>
-            <td class="c-partial">⚠ policy gates</td>
-            <td class="c-no">— SaaS</td>
-          </tr>
-          <tr>
-            <td>OPA / Sentinel</td>
-            <td>Policy engine</td>
-            <td class="c-partial">⚠ rule-based</td>
-            <td class="c-partial">⚠</td>
-            <td class="c-partial">⚠ policy gates</td>
-            <td class="c-yes">✓</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- ── Pilot ── -->
-  <section id="pilot">
-    <div class="section-label">Pilot</div>
-    <div class="pilot-box">
-      <h3>Request a pilot setup</h3>
-      <p>For regulated or multi-repo environments. Client context stays in your browser until you send — no Terraform plan is ever submitted.</p>
-      <div class="pilot-fields">
-        <div class="field">
-          <label>Organization / team</label>
-          <input type="text" id="p-org" placeholder="Acme Corp — platform team" />
-        </div>
-        <div class="field">
-          <label>Contact email</label>
-          <input type="email" id="p-email" placeholder="you@company.com" />
-        </div>
-        <div class="field">
-          <label>Repo profile</label>
-          <div class="seg">
-            <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">1 repo</button>
-            <button class="seg-btn active" data-group="repos" onclick="pick(this,'repos')">2–5 repos</button>
-            <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">6–20 repos</button>
-            <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">20+ repos</button>
+            <div class="wiz-footer">
+              <div class="wiz-privacy">No plan upload. Review happens where your Terraform already runs.</div>
+              <div class="wiz-actions">
+                <button class="btn btn-outline" onclick="copyWorkflow()">Copy workflow</button>
+                <button class="btn btn-outline" onclick="copyCLI()">Copy CLI command</button>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label>Compliance pressure</label>
-          <div class="seg">
-            <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">SOC 2</button>
-            <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">ISO 27001</button>
-            <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">HIPAA</button>
+      </section>
+
+      <section class="section-shell" id="agent">
+        <div class="section-head">
+          <div class="section-label">Pipeline proof</div>
+          <h2>One section for gates, evidence, and editor workflows.</h2>
+          <p>The old page split related proof points into separate blocks. This version keeps the story tighter: gate the apply, emit evidence, and expose the same logic to MCP clients.</p>
+        </div>
+
+        <div class="panel-grid">
+          <article class="card">
+            <h3>Block unsafe AI auto-approvals</h3>
+            <p>Coding agents and agentic CI pipelines skip nuance. The agent-gate subcommand returns a stable proceed / warn / block result your pipeline can trust.</p>
+            <div class="mini-terminal">
+              <div><span class="t-prompt">$</span> readtheplan agent-gate plan.json</div>
+              <div class="t-danger">{</div>
+              <div class="t-danger">  "decision": "block",</div>
+              <div class="t-danger">  "risk": "irreversible",</div>
+              <div class="t-danger">  "reason": "KMS key deletion scheduled"</div>
+              <div class="t-danger">}</div>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>MCP integration</h3>
+            <p>Run readtheplan as a local MCP server and review plans inline from Claude, Cursor, or another MCP-compatible editor without leaving the repo.</p>
+            <div class="mini-terminal">
+              <div><span class="t-prompt">$</span> readtheplan mcp --stdio</div>
+              <div class="t-safe">Listening on stdio</div>
+              <div class="t-dim">Tools: analyze_plan, agent_gate, list_frameworks</div>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>Compliance evidence</h3>
+            <p>Emit control-mapped evidence envelopes without building a backend. The homepage should show this as proof, not bury it under ornament.</p>
+            <div class="mini-terminal">
+              <div><span class="t-dim">// rtp-evidence-soc2.json</span></div>
+              <div><span class="json-key">"resource"</span>: <span class="json-value">"aws_iam_role_policy.app"</span>,</div>
+              <div><span class="json-key">"risk"</span>: <span class="t-danger">"dangerous"</span>,</div>
+              <div><span class="json-key">"controls"</span>: <span class="json-value">["CC6.3", "CC6.1"]</span>,</div>
+              <div><span class="json-key">"signed"</span>: <span class="t-safe">true</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-shell" id="compare">
+        <div class="section-head">
+          <div class="section-label">Comparison</div>
+          <h2>Keep the table, but demote it below the proof.</h2>
+          <p>The comparison still matters for positioning, but it should support the conversion path instead of interrupting it.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Analyzes</th>
+                <th>Risk tiers</th>
+                <th>Compliance</th>
+                <th>Agent gate</th>
+                <th>Local-only</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="hl">
+                <td>readtheplan</td>
+                <td>Plan diff</td>
+                <td class="c-yes">4 tiers</td>
+                <td class="c-yes">SOC2/ISO/HIPAA</td>
+                <td class="c-yes">block/warn/ok</td>
+                <td class="c-yes">yes</td>
+              </tr>
+              <tr>
+                <td>tflint / tfsec</td>
+                <td>HCL code</td>
+                <td class="c-no">lint only</td>
+                <td class="c-no">-</td>
+                <td class="c-no">-</td>
+                <td class="c-yes">yes</td>
+              </tr>
+              <tr>
+                <td>checkov</td>
+                <td>Code + plan</td>
+                <td class="c-partial">pass/fail</td>
+                <td class="c-partial">policy checks</td>
+                <td class="c-no">-</td>
+                <td class="c-yes">yes</td>
+              </tr>
+              <tr>
+                <td>Spacelift / env0</td>
+                <td>Plan + state</td>
+                <td class="c-partial">visual only</td>
+                <td class="c-no">-</td>
+                <td class="c-partial">policy gates</td>
+                <td class="c-no">SaaS</td>
+              </tr>
+              <tr>
+                <td>OPA / Sentinel</td>
+                <td>Policy engine</td>
+                <td class="c-partial">rule-based</td>
+                <td class="c-partial">partial</td>
+                <td class="c-partial">policy gates</td>
+                <td class="c-yes">yes</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section-shell" id="pilot">
+        <div class="section-head">
+          <div class="section-label">Pilot</div>
+          <h2>Use the final block as the handoff, not another detour.</h2>
+          <p>For regulated or multi-repo environments. Client context stays in your browser until you send, and no Terraform plan is ever submitted.</p>
+        </div>
+
+        <div class="pilot-box">
+          <div class="pilot-intro">
+            <h3>Request pilot setup</h3>
+            <p>Share the repo footprint, compliance pressure, and the blocker slowing adoption. The request opens your mail client with local browser state only.</p>
+          </div>
+          <div class="pilot-fields">
+            <div class="field">
+              <label>Organization / team</label>
+              <input type="text" id="p-org" placeholder="Acme Corp - platform team" />
+            </div>
+            <div class="field">
+              <label>Contact email</label>
+              <input type="email" id="p-email" placeholder="you@company.com" />
+            </div>
+            <div class="field">
+              <label>Repo profile</label>
+              <div class="seg">
+                <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">1 repo</button>
+                <button class="seg-btn active" data-group="repos" onclick="pick(this,'repos')">2-5 repos</button>
+                <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">6-20 repos</button>
+                <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">20+ repos</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Compliance pressure</label>
+              <div class="seg">
+                <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">SOC 2</button>
+                <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">ISO 27001</button>
+                <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">HIPAA</button>
+              </div>
+            </div>
+            <div class="field full">
+              <label>Biggest adoption blocker</label>
+              <textarea id="p-blocker" placeholder="e.g. we need signed evidence for our SOC 2 audit, but plan review still feels too manual for our dev team..."></textarea>
+            </div>
+          </div>
+          <div class="pilot-footer">
+            <div class="pilot-note">Context stays local. No plan upload. Opens your mail client on submit.</div>
+            <button class="btn btn-solid" onclick="submitPilot()">Request pilot setup</button>
           </div>
         </div>
-        <div class="field full">
-          <label>Biggest adoption blocker</label>
-          <textarea id="p-blocker" placeholder="e.g. we need signed evidence for our SOC 2 audit, but the plan review step adds too much friction for our dev team..."></textarea>
-        </div>
-      </div>
-      <div class="pilot-footer">
-        <div class="pilot-note">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1L2 4v4c0 3.31 2.69 6 6 7 3.31-1 6-3.69 6-7V4L8 1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-          Context stays local. No plan upload. Opens your mail client on submit.
-        </div>
-        <button class="btn btn-solid" onclick="submitPilot()">Request pilot setup →</button>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- ── Tools ── -->
-  <section id="resources">
-    <div class="section-label">Tools and resources</div>
-    <div class="tools-grid">
-      <a href="https://www.readtheplan.dev/tools/terraform-risk-calculator/" class="tool-link">
-        <div class="tool-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.25"/><path d="M5 8h6M8 5v6" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+      <section class="section-shell" id="resources">
+        <div class="section-head">
+          <div class="section-label">Tools and resources</div>
+          <h2>Keep the ecosystem links, but present them as follow-ons.</h2>
         </div>
-        <div class="tool-info">
-          <div class="tool-name">Terraform risk calculator</div>
-          <div class="tool-desc">Estimate blast radius without uploading a plan</div>
-        </div>
-      </a>
-      <a href="https://www.readtheplan.dev/tools/soc2-cloud-control-mapper/" class="tool-link">
-        <div class="tool-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8h12M8 2v12" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.25"/></svg>
-        </div>
-        <div class="tool-info">
-          <div class="tool-name">SOC 2 cloud control mapper</div>
-          <div class="tool-desc">Map AWS resources to CC Trust Service Criteria</div>
-        </div>
-      </a>
-      <a href="https://www.readtheplan.dev/mcp/" class="tool-link">
-        <div class="tool-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.25"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
-        </div>
-        <div class="tool-info">
-          <div class="tool-name">Local MCP Terraform reviewer</div>
-          <div class="tool-desc">Connect to Claude, Cursor, and other MCP clients</div>
-        </div>
-      </a>
-      <a href="https://www.readtheplan.dev/brief/" class="tool-link">
-        <div class="tool-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.25"/><path d="M5 5h6M5 8h4M5 11h3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
-        </div>
-        <div class="tool-info">
-          <div class="tool-name">Weekly Terraform / SOC 2 brief</div>
-          <div class="tool-desc">Digest of changes that affect compliance posture</div>
-        </div>
-      </a>
-    </div>
-  </section>
-</div>
 
-<!-- ── Footer ── -->
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <div class="footer-left">readtheplan · MIT license · no plan upload · built by <a href="https://github.com/texasich" style="color:var(--text-2)">@texasich</a></div>
+        <div class="tools-grid">
+          <a href="https://www.readtheplan.dev/tools/terraform-risk-calculator/" class="tool-link">
+            <div class="tool-name">Terraform risk calculator</div>
+            <div class="tool-desc">Estimate blast radius without uploading a plan.</div>
+          </a>
+          <a href="https://www.readtheplan.dev/tools/soc2-cloud-control-mapper/" class="tool-link">
+            <div class="tool-name">SOC 2 cloud control mapper</div>
+            <div class="tool-desc">Map AWS resources to CC Trust Service Criteria.</div>
+          </a>
+          <a href="https://www.readtheplan.dev/mcp/" class="tool-link">
+            <div class="tool-name">Local MCP Terraform reviewer</div>
+            <div class="tool-desc">Connect to Claude, Cursor, and other MCP clients.</div>
+          </a>
+          <a href="https://www.readtheplan.dev/brief/" class="tool-link">
+            <div class="tool-name">Weekly Terraform / SOC 2 brief</div>
+            <div class="tool-desc">Digest of changes that affect compliance posture.</div>
+          </a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <div class="footer-left">readtheplan · MIT license · no plan upload · built by <a href="https://github.com/texasich">@texasich</a></div>
       <div class="footer-links">
         <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
         <a href="https://readtheplan.dev/docs/">Docs</a>
@@ -433,141 +413,143 @@
         <a href="#pilot">Pilot</a>
       </div>
     </div>
-  </div>
-</footer>
+  </footer>
 
-<script>
-  // ── Segment picker ──
-  function pick(btn, group) {
-    document.querySelectorAll('[data-group="' + group + '"]').forEach(function(b) {
-      b.classList.remove('active');
-    });
-    btn.classList.add('active');
+  <script>
+    function pick(btn, group) {
+      document.querySelectorAll('[data-group="' + group + '"]').forEach(function(b) {
+        b.classList.remove('active');
+      });
+      btn.classList.add('active');
+      updateGen();
+    }
+
+    var fwMap = { 'SOC 2': 'soc2', 'ISO 27001': 'iso27001', 'HIPAA': 'hipaa', 'None': 'none' };
+    var thMap = { 'Irreversible only': 'irreversible', 'Dangerous': 'dangerous', 'Review': 'review', "Don't block": 'none' };
+    var evMap = { 'JSON envelope': 'json-envelope', 'Signed (OIDC)': 'signed-oidc', 'Checklist only': 'checklist' };
+
+    function activeVal(group) {
+      var el = document.querySelector('[data-group="' + group + '"].active');
+      return el ? el.textContent.trim() : '';
+    }
+
+    function activeFramework() {
+      return fwMap[activeVal('fw')] || 'soc2';
+    }
+
+    function activeThreshold() {
+      return thMap[activeVal('thresh')] || 'dangerous';
+    }
+
+    function activeEvidence() {
+      return evMap[activeVal('ev')] || 'json-envelope';
+    }
+
+    function evidenceFile(ev) {
+      if (ev === 'checklist') return 'readtheplan-checklist.json';
+      return 'readtheplan-evidence.json';
+    }
+
+    function installPackage(ev) {
+      return ev === 'signed-oidc' ? '"readtheplan[sign]"' : 'readtheplan';
+    }
+
+    function cliCommand(forceJson) {
+      var fw = activeFramework();
+      var ev = activeEvidence();
+      var parts = ['readtheplan', 'analyze'];
+      if (fw !== 'none') {
+        parts.push('--framework', fw);
+      }
+      if (forceJson || ev !== 'checklist') {
+        parts.push('--format', 'json');
+      }
+      if (ev !== 'checklist') {
+        parts.push('--evidence', evidenceFile(ev));
+      }
+      if (ev === 'signed-oidc') {
+        parts.push('--sign');
+      }
+      parts.push('plan.json');
+      return parts.join(' ');
+    }
+
+    function workflowText() {
+      var fw = activeFramework();
+      var th = activeThreshold();
+      var ev = activeEvidence();
+      var lines = [
+        '# .github/workflows/terraform-review.yml',
+        '- name: Analyze Terraform plan',
+        '  id: readtheplan',
+        '  uses: readtheplan/readtheplan@v1',
+        '  with:',
+        '    plan-file: plan.json'
+      ];
+
+      if (th !== 'none') {
+        lines.push('    fail-on-threshold: ' + th);
+      }
+
+      if (fw !== 'none' || ev !== 'checklist') {
+        lines.push(
+          '',
+          '- name: Generate evidence artifact',
+          '  if: always()',
+          '  run: |',
+          '    python -m pip install ' + installPackage(ev),
+          '    ' + cliCommand(true) + ' > readtheplan-summary.json'
+        );
+      }
+
+      return lines.join('\n');
+    }
+
+    function flashButton(id, nextLabel) {
+      var btn = document.getElementById(id);
+      if (!btn) return;
+      var original = btn.textContent;
+      btn.textContent = nextLabel;
+      setTimeout(function() {
+        btn.textContent = original;
+      }, 1500);
+    }
+
+    function updateGen() {
+      document.getElementById('gen-output').textContent = workflowText();
+    }
+
+    function copyInstall() {
+      navigator.clipboard.writeText('pip install readtheplan && readtheplan analyze plan.json');
+      flashButton('copy-install', 'Copied');
+    }
+
+    function copyWorkflow() {
+      navigator.clipboard.writeText(workflowText());
+    }
+
+    function copyCLI() {
+      navigator.clipboard.writeText(cliCommand());
+    }
+
+    function submitPilot() {
+      var org = document.getElementById('p-org').value;
+      var email = document.getElementById('p-email').value;
+      var blocker = document.getElementById('p-blocker').value;
+      var repos = activeVal('repos');
+      var fw = activeVal('pfw');
+      var body = [
+        'Organization: ' + org,
+        'Repo profile: ' + repos,
+        'Compliance: ' + fw,
+        'Blocker: ' + blocker
+      ].join('\n');
+      var subject = encodeURIComponent('readtheplan pilot setup request');
+      window.location.href = 'mailto:pilot@readtheplan.dev?subject=' + subject + '&body=' + encodeURIComponent(body);
+    }
+
     updateGen();
-  }
-
-  // ── Wizard live update ──
-  var fwMap = { 'SOC 2': 'soc2', 'ISO 27001': 'iso27001', 'HIPAA': 'hipaa', 'None': 'none' };
-  var thMap = { 'Irreversible only': 'irreversible', 'Dangerous': 'dangerous', 'Review': 'review', "Don't block": 'none' };
-  var evMap = { 'JSON envelope': 'json-envelope', 'Signed (OIDC)': 'signed-oidc', 'Checklist only': 'checklist' };
-
-  function activeVal(group) {
-    var el = document.querySelector('[data-group="' + group + '"].active');
-    return el ? el.textContent.trim() : '';
-  }
-
-  function updateGen() {
-    document.getElementById('gen-output').textContent = workflowText();
-  }
-
-  function activeFramework() {
-    return fwMap[activeVal('fw')] || 'soc2';
-  }
-
-  function activeThreshold() {
-    return thMap[activeVal('thresh')] || 'dangerous';
-  }
-
-  function activeEvidence() {
-    return evMap[activeVal('ev')] || 'json-envelope';
-  }
-
-  function evidenceFile(ev) {
-    if (ev === 'checklist') return 'readtheplan-checklist.json';
-    return 'readtheplan-evidence.json';
-  }
-
-  function installPackage(ev) {
-    return ev === 'signed-oidc' ? '"readtheplan[sign]"' : 'readtheplan';
-  }
-
-  function cliCommand(forceJson) {
-    var fw = activeFramework();
-    var ev = activeEvidence();
-    var parts = ['readtheplan', 'analyze'];
-    if (fw !== 'none') {
-      parts.push('--framework', fw);
-    }
-    if (forceJson || ev !== 'checklist') {
-      parts.push('--format', 'json');
-    }
-    if (ev !== 'checklist') {
-      parts.push('--evidence', evidenceFile(ev));
-    }
-    if (ev === 'signed-oidc') {
-      parts.push('--sign');
-    }
-    parts.push('plan.json');
-    return parts.join(' ');
-  }
-
-  function workflowText() {
-    var fw = activeFramework();
-    var th = activeThreshold();
-    var ev = activeEvidence();
-    var lines = [
-      '# .github/workflows/terraform-review.yml',
-      '- name: Analyze Terraform plan',
-      '  id: readtheplan',
-      '  uses: readtheplan/readtheplan@v1',
-      '  with:',
-      '    plan-file: plan.json'
-    ];
-
-    if (th !== 'none') {
-      lines.push('    fail-on-threshold: ' + th);
-    }
-
-    if (fw !== 'none' || ev !== 'checklist') {
-      lines.push(
-        '',
-        '- name: Generate evidence artifact',
-        '  if: always()',
-        '  run: |',
-        '    python -m pip install ' + installPackage(ev),
-        '    ' + cliCommand(true) + ' > readtheplan-summary.json'
-      );
-    }
-
-    return lines.join('\n');
-  }
-
-  // ── Copy helpers ──
-  function copyInstall() {
-    navigator.clipboard.writeText('pip install readtheplan && readtheplan analyze plan.json');
-    var btn = document.getElementById('copy-install');
-    btn.textContent = 'Copied';
-    setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
-  }
-
-  function copyWorkflow() {
-    navigator.clipboard.writeText(workflowText());
-  }
-
-  function copyCLI() {
-    navigator.clipboard.writeText(cliCommand());
-  }
-
-  // ── Pilot submit ──
-  function submitPilot() {
-    var org = document.getElementById('p-org').value;
-    var email = document.getElementById('p-email').value;
-    var blocker = document.getElementById('p-blocker').value;
-    var repos = activeVal('repos');
-    var fw = activeVal('pfw');
-    var body = [
-      'Organization: ' + org,
-      'Repo profile: ' + repos,
-      'Compliance: ' + fw,
-      'Blocker: ' + blocker
-    ].join('\n');
-    var subject = encodeURIComponent('readtheplan pilot setup request');
-    window.location.href = 'mailto:pilot@readtheplan.dev?subject=' + subject + '&body=' + encodeURIComponent(body);
-  }
-
-  updateGen();
-</script>
-
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="./matrix.js"></script>
 </body>
