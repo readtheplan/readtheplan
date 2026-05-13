@@ -68,6 +68,7 @@
             <p style="color:var(--muted);font-size:13px;margin-bottom:8px">No plan handy? Load a sample generated against real emulated AWS (Floci):</p>
             <button id="loadCreate" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">📦 Create plan (4 resources)</button>
             <button id="loadDestroy" style="background:var(--surface);color:#ef4444;border:1px solid #ef4444;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">💣 Destroy plan (2 resources)</button>
+            <p id="sampleMeta" style="color:var(--muted);font-size:12px;margin-top:8px">Sample source: Floci emulated AWS</p>
           </div>
           <div style="text-align:center;margin-top:8px">
             <a href="/demo/" style="color:var(--muted);font-size:12px">Or see the interactive demo →</a>
@@ -278,6 +279,21 @@
       document.getElementById("loadDestroy").addEventListener("click", () =>
         loadSamplePlan("floci-destroy-plan.json", "Destroy plan — 2 resources")
       );
+
+      // Surface sample freshness metadata when available.
+      (async function renderSampleMeta() {
+        const el = document.getElementById("sampleMeta");
+        if (!el) return;
+        try {
+          const resp = await fetch("floci-samples.meta.json");
+          if (!resp.ok) return;
+          const meta = await resp.json();
+          const stamp = meta.generated_at_utc ? new Date(meta.generated_at_utc).toLocaleString() : "unknown";
+          el.textContent = `Sample source: Floci emulated AWS · generated: ${stamp} UTC`;
+        } catch (_) {
+          // keep default text
+        }
+      })();
     </script>
   </body>
 </html>

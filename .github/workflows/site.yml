@@ -29,6 +29,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Verify Floci playground sample freshness
+        run: site/scripts/check_floci_samples_freshness.sh
+
       - name: Validate site source
         run: npm --prefix site test
 

@@ -58,3 +58,16 @@ terraform destroy -auto-approve
 ## For the in-browser playground
 
 Copy `plan.json` → drag into https://readtheplan.dev/playground/
+
+## Refresh committed playground samples
+
+When `site/playground/floci-demo.tf` changes, regenerate the checked-in sample plans:
+
+```bash
+python3 site/scripts/regenerate_floci_samples.py
+```
+
+This updates:
+- `site/playground/floci-create-plan.json`
+- `site/playground/floci-destroy-plan.json`
+- `site/playground/floci-samples.meta.json`
