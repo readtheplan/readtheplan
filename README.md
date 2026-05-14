@@ -187,6 +187,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 
 - Multi-cloud beyond AWS (Terraform/OpenTofu only for now)
 - SaaS dashboard (local-first by design)
+- Hosted analyzer service until ADR 0013 security gates are implemented and enforced
 - Policy-as-code engine (OPA/Sentinel exist for that)
 - Competing with Spacelift/env0 on overlapping features
 

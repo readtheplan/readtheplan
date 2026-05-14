@@ -1,0 +1,86 @@
+name: hosted-security-gates
+
+on:
+  pull_request:
+    paths:
+      - "docs/adr/0013-hosted-analyzer-data-handling-boundary.md"
+      - "docs/security/**"
+      - "tests/hosted_security/**"
+      - ".github/workflows/hosted-security-gates.yml"
+      - "SECURITY.md"
+      - "README.md"
+  push:
+    branches: [main]
+    paths:
+      - "docs/adr/0013-hosted-analyzer-data-handling-boundary.md"
+      - "docs/security/**"
+      - "tests/hosted_security/**"
+      - ".github/workflows/hosted-security-gates.yml"
+      - "SECURITY.md"
+      - "README.md"
+
+permissions:
+  contents: read
+
+jobs:
+  hosted-security-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package and test extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Verify required hosted-security docs exist
+        run: |
+          required=(
+            "docs/security/hosted-analyzer-release-gates.md"
+            "docs/security/threat-model-hosted-analyzer.md"
+            "docs/security/incident-response-hosted-data.md"
+          )
+          for file in "${required[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing required file: $file" >&2
+              exit 1
+            fi
+          done
+
+      - name: Run hosted security gate tests
+        run: |
+          pytest tests/hosted_security -q
+
+      - name: Generate hosted security gate report
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          report = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "gate": "hosted-security-gates",
+            "status": "pass",
+            "checks": [
+              "required-docs-present",
+              "hosted-security-tests-pass"
+            ]
+          }
+          with open("hosted-security-gate-report.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+          print("wrote hosted-security-gate-report.json")
+          PY
+
+      - name: Upload hosted security gate artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: hosted-security-gate-report
+          path: hosted-security-gate-report.json
