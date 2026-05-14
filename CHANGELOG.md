@@ -10,6 +10,7 @@
 - Sigstore is now a true optional `sign` extra with a clear install hint when signing is requested without it.
 - GitHub Action threshold behavior now checks risks at or above the configured threshold.
 - Site and docs copy now label static demos as example output and document the agent-gate JSON contract more explicitly.
+- Site deploy target migrated from GitHub Pages to Azure static website hosting (OIDC + blob sync workflow).
 
 ### Breaking Changes
 - **GitHub Action: `fail-on-changes` deprecated.** The `fail-on-changes` input is superseded by `fail-on-any-change`. Workflows using `fail-on-changes` will continue to work but should migrate. The new `fail-on-threshold` input (risk-tier gating: safe/review/dangerous/irreversible) takes precedence over both.
