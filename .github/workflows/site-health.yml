@@ -1,0 +1,36 @@
+name: Site health
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe apex
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/apex.html -w "%{http_code}" https://readtheplan.dev)
+          echo "apex_status=$code"
+          test "$code" = "200"
+
+      - name: Probe www
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/www.html -w "%{http_code}" https://www.readtheplan.dev)
+          echo "www_status=$code"
+          test "$code" = "200"
+
+      - name: Verify key page content
+        run: |
+          set -euo pipefail
+          grep -qi "readtheplan" /tmp/apex.html
