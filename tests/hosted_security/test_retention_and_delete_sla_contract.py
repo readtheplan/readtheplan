@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 MAX_RETENTION_DAYS = 30
@@ -30,7 +30,7 @@ def _validate_retention_contract(record: dict) -> list[str]:
 
 
 def test_retention_contract_accepts_policy_compliant_record() -> None:
-    now = datetime.now(UTC).replace(microsecond=0)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
     record = {
         "retention_days": 30,
         "delete_requested_at": now.isoformat().replace("+00:00", "Z"),
@@ -40,7 +40,7 @@ def test_retention_contract_accepts_policy_compliant_record() -> None:
 
 
 def test_retention_contract_rejects_policy_violations() -> None:
-    now = datetime.now(UTC).replace(microsecond=0)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
     record = {
         "retention_days": 90,
         "delete_requested_at": now.isoformat().replace("+00:00", "Z"),
