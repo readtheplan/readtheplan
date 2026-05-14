@@ -1,20 +1,16 @@
-name: Deploy site
+name: Deploy site (Azure)
 
 on:
   push:
     branches: [main]
   pull_request:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
-  pages: write
   id-token: write
 
-# Allow only one concurrent deployment
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -38,21 +34,55 @@ jobs:
       - name: Build static site
         run: npm --prefix site run build
 
-      - name: Upload artifact
+      - name: Upload build artifact
         if: github.event_name == 'push'
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
+          name: site-dist
           path: site/dist
+          if-no-files-found: error
 
-  deploy:
+  deploy-azure:
     if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 15
+    environment: production
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site-dist
+          path: site/dist
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Enable static website hosting
+        run: |
+          az storage blob service-properties update \
+            --account-name "${{ secrets.AZURE_STATIC_SITE_STORAGE_ACCOUNT }}" \
+            --static-website \
+            --index-document index.html \
+            --404-document 404.html \
+            --auth-mode login
+
+      - name: Sync site to $web container
+        run: |
+          az storage blob sync \
+            --account-name "${{ secrets.AZURE_STATIC_SITE_STORAGE_ACCOUNT }}" \
+            --container '$web' \
+            --source site/dist \
+            --delete-destination true \
+            --auth-mode login
+
+      - name: Emit website endpoint
+        run: |
+          ENDPOINT=$(az storage account show \
+            --name "${{ secrets.AZURE_STATIC_SITE_STORAGE_ACCOUNT }}" \
+            --query "primaryEndpoints.web" -o tsv)
+          echo "Deployed static site endpoint: ${ENDPOINT}"

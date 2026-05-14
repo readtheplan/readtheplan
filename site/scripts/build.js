@@ -61,7 +61,7 @@ fs.writeFileSync(
   "utf8",
 );
 
-// Fix absolute paths for GitHub Pages prefix (readtheplan.github.io/readtheplan/)
+// Normalize absolute paths for root-domain hosting (Azure/GitHub/custom domain)
 const htmlFiles = [];
 function collectHtml(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
