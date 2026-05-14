@@ -8,29 +8,39 @@ on:
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Probe apex
+      - name: Probe production endpoints and assert HTTP 200
         run: |
           set -euo pipefail
-          code=$(curl -sS -o /tmp/apex.html -w "%{http_code}" https://readtheplan.dev)
-          echo "apex_status=$code"
-          test "$code" = "200"
 
-      - name: Probe www
-        run: |
-          set -euo pipefail
-          code=$(curl -sS -o /tmp/www.html -w "%{http_code}" https://www.readtheplan.dev)
-          echo "www_status=$code"
-          test "$code" = "200"
+          probe() {
+            local label="$1"
+            local url="$2"
+            local body="$3"
+            local code
+            code=$(curl -sS -L --max-time 20 -o "$body" -w "%{http_code}" "$url")
+            echo "$label status=$code url=$url"
+            if [ "$code" != "200" ]; then
+              echo "❌ $label failed: expected 200 got $code ($url)" | tee -a "$GITHUB_STEP_SUMMARY"
+              return 1
+            fi
+          }
 
-      - name: Verify key page content
-        run: |
-          set -euo pipefail
-          grep -qi "readtheplan" /tmp/apex.html
+          probe "apex" "https://readtheplan.dev" "/tmp/apex.html"
+          probe "www" "https://www.readtheplan.dev" "/tmp/www.html"
+
+          if ! grep -qi "readtheplan" /tmp/apex.html; then
+            echo "❌ apex content check failed: missing 'readtheplan' marker" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          {
+            echo "✅ Site health check passed"
+            echo "- apex: 200"
+            echo "- www: 200"
+            echo "- content marker: present"
+          } >> "$GITHUB_STEP_SUMMARY"
