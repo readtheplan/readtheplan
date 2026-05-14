@@ -34,6 +34,8 @@ readtheplan is designed to run locally. Terraform plan JSON is never uploaded, t
 
 If you discover a way for readtheplan to exfiltrate plan data, make network calls without user intent, or bypass the local-only constraint, please report it immediately.
 
+Hosted analyzer work is currently blocked by ADR 0013 (`docs/adr/0013-hosted-analyzer-data-handling-boundary.md`) until release-gate controls are implemented and verifiably passing.
+
 ## Supply Chain Policy
 
 - GitHub workflows declare least-privilege `permissions:` blocks and job timeouts.
