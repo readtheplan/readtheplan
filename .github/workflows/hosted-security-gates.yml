@@ -2,13 +2,6 @@ name: hosted-security-gates
 
 on:
   pull_request:
-    paths:
-      - "docs/adr/0013-hosted-analyzer-data-handling-boundary.md"
-      - "docs/security/**"
-      - "tests/hosted_security/**"
-      - ".github/workflows/hosted-security-gates.yml"
-      - "SECURITY.md"
-      - "README.md"
   push:
     branches: [main]
     paths:
