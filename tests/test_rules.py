@@ -425,6 +425,79 @@ def test_network_topology_route_to_internet_gateway_is_dangerous(
     )
 
 
+def test_security_group_open_ingress_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "aws_security_group",
+            ["update"],
+            before={
+                "ingress": [
+                    {
+                        "from_port": 443,
+                        "to_port": 443,
+                        "protocol": "tcp",
+                        "cidr_blocks": ["10.0.0.0/16"],
+                    }
+                ]
+            },
+            after={
+                "ingress": [
+                    {
+                        "from_port": 443,
+                        "to_port": 443,
+                        "protocol": "tcp",
+                        "cidr_blocks": ["0.0.0.0/0"],
+                    }
+                ]
+            },
+        ),
+    )
+
+    summary = analyze_plan_file(plan)
+
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "internet-wide access" in summary.resource_changes[0].explanation
+
+
+def test_vpc_security_group_ingress_rule_open_ipv4_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "aws_vpc_security_group_ingress_rule",
+            ["create"],
+            after={
+                "from_port": 22,
+                "to_port": 22,
+                "ip_protocol": "tcp",
+                "cidr_ipv4": "0.0.0.0/0",
+            },
+        ),
+    )
+
+    summary = analyze_plan_file(plan)
+
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "internet-wide access" in summary.resource_changes[0].explanation
+
+
+def test_vpc_security_group_egress_rule_non_public_is_review(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "aws_vpc_security_group_egress_rule",
+            ["update"],
+            before={"cidr_ipv4": "10.0.0.0/16"},
+            after={"cidr_ipv4": "172.16.0.0/12"},
+        ),
+    )
+
+    summary = analyze_plan_file(plan)
+
+    assert summary.resource_changes[0].risk == "review"
+    assert "change security group rules" in summary.resource_changes[0].explanation
+
+
 def test_cloudwatch_log_group_retention_decrease_is_dangerous(tmp_path: Path) -> None:
     plan = _write_plan(
         tmp_path,

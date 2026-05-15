@@ -114,6 +114,13 @@ def _rule_candidates(
     }:
         return _platform_service_candidates(resource_type, action_set, change)
     if resource_type in {
+        "aws_security_group",
+        "aws_security_group_rule",
+        "aws_vpc_security_group_ingress_rule",
+        "aws_vpc_security_group_egress_rule",
+    }:
+        return _security_group_candidates(resource_type, action_set, change)
+    if resource_type in {
         "aws_subnet",
         "aws_route_table",
         "aws_route",
@@ -847,6 +854,58 @@ def _platform_service_candidates(
     return candidates
 
 
+def _security_group_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "Terraform will replace security group network boundaries. "
+                    "Attached workloads may lose expected traffic paths during rollout."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "Terraform will delete security group configuration. "
+                    "Ingress/egress permissions for attached workloads may break."
+                ),
+            )
+        )
+    elif "update" in action_set or "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "Terraform will change security group rules. Review ports, "
+                    "protocols, and source/destination boundaries before applying."
+                ),
+            )
+        )
+
+    if _security_group_opens_to_internet(resource_type, change):
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "This security group change appears to allow internet-wide access "
+                    "(0.0.0.0/0 or ::/0). Confirm this exposure is intentional."
+                ),
+            )
+        )
+
+    return candidates
+
+
 def _network_topology_candidates(
     resource_type: str,
     action_set: set[str],
@@ -1312,6 +1371,37 @@ def _s3_public_exposure(resource_type: str, change: dict[str, Any]) -> bool:
     if resource_type == "aws_s3_bucket_policy" or _after_value(change, "policy"):
         policy = _policy_document(_after_value(change, "policy"))
         return policy is not None and _policy_allows_public(policy)
+    return False
+
+
+def _security_group_opens_to_internet(resource_type: str, change: dict[str, Any]) -> bool:
+    if resource_type == "aws_security_group":
+        ingress = _after_value(change, "ingress")
+        if isinstance(ingress, list):
+            return any(_rule_block_opens_to_internet(rule) for rule in ingress)
+        return _rule_block_opens_to_internet(ingress)
+
+    return _rule_block_opens_to_internet(change.get("after"))
+
+
+def _rule_block_opens_to_internet(value: Any) -> bool:
+    if isinstance(value, dict):
+        cidrs = value.get("cidr_blocks")
+        if isinstance(cidrs, list) and any(cidr == "0.0.0.0/0" for cidr in cidrs):
+            return True
+        ipv6_cidrs = value.get("ipv6_cidr_blocks")
+        if isinstance(ipv6_cidrs, list) and any(cidr == "::/0" for cidr in ipv6_cidrs):
+            return True
+
+        if value.get("cidr_ipv4") == "0.0.0.0/0" or value.get("cidr_ipv6") == "::/0":
+            return True
+
+        nested_ingress = value.get("ingress")
+        if isinstance(nested_ingress, list) and any(
+            _rule_block_opens_to_internet(rule) for rule in nested_ingress
+        ):
+            return True
+
     return False
 
 
