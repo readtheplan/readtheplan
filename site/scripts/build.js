@@ -13,7 +13,6 @@ const demoSource = path.join(
 const files = [
   "index.html",
   "styles.css",
-  "cinematic.css",
   "matrix.css",
   "matrix.js",
   "app.js",
@@ -24,7 +23,7 @@ const files = [
   "sitemap.xml",
   "_redirects",
 ];
-const assetDirs = ["fonts", "img", "tools", "resources", "mcp", "brief", "demo", "docs", "playground", "cinematic"];
+const assetDirs = ["fonts", "img", "tools", "resources", "mcp", "brief", "demo", "docs", "playground"];
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
