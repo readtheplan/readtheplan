@@ -3,6 +3,7 @@
 This document operationalizes ADR 0013 (`docs/adr/0013-hosted-analyzer-data-handling-boundary.md`).
 
 A hosted analyzer cannot ship (beta or GA) unless every gate here is passing with machine-verifiable evidence.
+<!-- trigger hosted-security-gates check for non-security-path PRs -->
 
 ## Gate Matrix
 
