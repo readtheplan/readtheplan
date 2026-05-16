@@ -73,6 +73,18 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://readtheplan.dev/terms/</loc>
+    <lastmod>2026-05-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://readtheplan.dev/privacy/</loc>
+    <lastmod>2026-05-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://readtheplan.dev/brief/sample-001/</loc>
     <lastmod>2026-05-06</lastmod>
     <changefreq>monthly</changefreq>
