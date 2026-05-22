@@ -1,0 +1,19 @@
+name: Trigger CF Pages Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy in readtheplan-infra
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: readtheplan/readtheplan-infra
+          event-type: deploy-pages
