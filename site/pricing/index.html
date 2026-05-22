@@ -177,7 +177,9 @@
           <dd>
             No. readtheplan is local-first by design. Raw Terraform plan JSON never
             leaves your machine. The managed platform only stores metadata: org/project
-            info, policy profiles, and signed analysis summaries.
+            info, policy profiles, and full signed evidence envelopes. Evidence envelopes
+            are typically 2–5 KB (risk analysis output + compliance mappings + signature)
+            — not raw Terraform plans.
           </dd>
 
           <dt>Can I switch from OSS to Managed later?</dt>
