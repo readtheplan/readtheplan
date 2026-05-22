@@ -614,10 +614,31 @@ button.cta-btn {
   box-shadow: 0 0 14px currentColor;
 }
 
-.tier-safe { background: var(--safe); color: var(--safe); }
-.tier-review { background: var(--review); color: var(--review); }
-.tier-danger { background: var(--danger); color: var(--danger); }
-.tier-irrev { background: var(--irrev); color: var(--irrev); }
+.tier-safe { background: var(--safe); color: var(--safe); box-shadow: 0 0 12px rgba(52,211,153,0.5); }
+.tier-review { background: var(--review); color: var(--review); box-shadow: 0 0 12px rgba(245,158,11,0.5); }
+.tier-danger { background: var(--danger); color: var(--danger); box-shadow: 0 0 12px rgba(239,68,68,0.5); }
+.tier-irrev { background: var(--irrev); color: var(--irrev); box-shadow: 0 0 12px rgba(255,90,103,0.5); }
+
+/* Sequential CLI animation */
+.cli-line { opacity: 0; animation: fadeIn 0.3s forwards; }
+.cli-line:nth-child(3) { animation-delay: 0.5s; }
+.cli-line:nth-child(4) { animation-delay: 1.0s; }
+.cli-line:nth-child(5) { animation-delay: 1.5s; }
+.cli-line:nth-child(6) { animation-delay: 2.0s; }
+.cli-line:nth-child(7) { animation-delay: 2.5s; }
+@keyframes fadeIn { to { opacity: 1; } }
+
+/* Live CLI preview */
+.cli-preview {
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 255, 65, 0.12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.52);
+}
+.cli-preview code {
+  color: var(--matrix-green);
+  font-size: 0.92rem;
+}
 
 .wizard {
   border: 1px solid rgba(0, 255, 65, 0.14);

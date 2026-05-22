@@ -19,6 +19,29 @@
     var drops = [];
     var frameHandle = null;
     var lastTime = 0;
+    var speedBoost = 0;          // 0 = normal, ramps up on scroll past hero
+    var speedBoostTimeout = null;
+    var heroBottom = 0;
+
+    function recalcHero() {
+      var hero = document.querySelector('.hero-grid');
+      if (hero) {
+        var rect = hero.getBoundingClientRect();
+        heroBottom = rect.bottom + (window.scrollY || document.documentElement.scrollTop);
+      }
+    }
+
+    window.addEventListener('scroll', function() {
+      var st = window.scrollY || document.documentElement.scrollTop;
+      if (heroBottom === 0) recalcHero();
+      if (st > heroBottom && speedBoost === 0) {
+        speedBoost = 2.5;
+        if (speedBoostTimeout) clearTimeout(speedBoostTimeout);
+        speedBoostTimeout = setTimeout(function() {
+          speedBoost = 0;
+        }, 800);
+      }
+    });
 
     function resize() {
       rainCanvas.width = window.innerWidth;
@@ -31,6 +54,20 @@
     }
 
     function draw(now) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        // Draw static frame, skip animation loop
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.07)';
+        ctx.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
+        ctx.font = fontSize + 'px monospace';
+        for (var i = 0; i < drops.length; i++) {
+          var sx = i * fontSize;
+          var sy = drops[i] * fontSize;
+          ctx.fillStyle = 'rgba(195, 255, 210, 0.92)';
+          ctx.fillText(chars[Math.floor(Math.random() * chars.length)], sx, sy);
+        }
+        return;
+      }
+
       if (now - lastTime < 70) {
         frameHandle = window.requestAnimationFrame(draw);
         return;
@@ -59,7 +96,8 @@
         if (y > rainCanvas.height && Math.random() > 0.976) {
           drops[i] = Math.random() * -24;
         } else {
-          drops[i] += 0.34 + Math.random() * 0.38;
+          var boost = speedBoost > 0 ? speedBoost : 1;
+          drops[i] += (0.34 + Math.random() * 0.38) * boost;
         }
       }
 
