@@ -87,11 +87,11 @@
             <div class="terminal-body">
               <div><span class="t-prompt">$</span> <span class="t-cmd">readtheplan analyze --framework soc2 plan.json</span></div>
               <div class="spacer"></div>
-              <div><span class="t-safe">safe</span> <span class="t-addr">aws_s3_bucket.logs</span> <span class="t-dim">tag update · CC6.1</span></div>
-              <div><span class="t-review">review</span> <span class="t-addr">aws_security_group.web</span> <span class="t-dim">ingress rule change · CC6.6</span></div>
-              <div><span class="t-danger">dangerous</span> <span class="t-addr">aws_iam_role_policy.app</span> <span class="t-dim">policy replaced · CC6.3</span></div>
-              <div><span class="t-irrev">irreversible</span> <span class="t-addr">aws_kms_key.primary</span> <span class="t-dim">key deletion scheduled · CC6.7</span></div>
-              <div class="t-summary">5 changes · evidence written to ./rtp-evidence-soc2.json</div>
+              <div class="cli-line"><span class="t-safe">safe</span> <span class="t-addr">aws_s3_bucket.logs</span> <span class="t-dim">tag update · CC6.1</span></div>
+              <div class="cli-line"><span class="t-review">review</span> <span class="t-addr">aws_security_group.web</span> <span class="t-dim">ingress rule change · CC6.6</span></div>
+              <div class="cli-line"><span class="t-danger">dangerous</span> <span class="t-addr">aws_iam_role_policy.app</span> <span class="t-dim">policy replaced · CC6.3</span></div>
+              <div class="cli-line"><span class="t-irrev">irreversible</span> <span class="t-addr">aws_kms_key.primary</span> <span class="t-dim">key deletion scheduled · CC6.7</span></div>
+              <div class="cli-line t-summary">5 changes · evidence written to ./rtp-evidence-soc2.json</div>
             </div>
           </div>
 
@@ -156,36 +156,36 @@
               <div class="wiz-group">
                 <label>CI system</label>
                 <div class="seg">
-                  <button class="seg-btn active" data-group="ci" onclick="pick(this,'ci')">GitHub Actions</button>
-                  <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">GitLab CI</button>
-                  <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">CircleCI</button>
-                  <button class="seg-btn" data-group="ci" onclick="pick(this,'ci')">Local only</button>
+                  <button class="seg-btn active" data-group="ci" aria-pressed="true" onclick="pick(this,'ci')">GitHub Actions</button>
+                  <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">GitLab CI</button>
+                  <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">CircleCI</button>
+                  <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">Local only</button>
                 </div>
               </div>
               <div class="wiz-group">
                 <label>Compliance framework</label>
                 <div class="seg">
-                  <button class="seg-btn active" data-group="fw" onclick="pick(this,'fw')">SOC 2</button>
-                  <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">ISO 27001</button>
-                  <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">HIPAA</button>
-                  <button class="seg-btn" data-group="fw" onclick="pick(this,'fw')">None</button>
+                  <button class="seg-btn active" data-group="fw" aria-pressed="true" onclick="pick(this,'fw')">SOC 2</button>
+                  <button class="seg-btn" data-group="fw" aria-pressed="false" onclick="pick(this,'fw')">ISO 27001</button>
+                  <button class="seg-btn" data-group="fw" aria-pressed="false" onclick="pick(this,'fw')">HIPAA</button>
+                  <button class="seg-btn" data-group="fw" aria-pressed="false" onclick="pick(this,'fw')">None</button>
                 </div>
               </div>
               <div class="wiz-group">
                 <label>Blocking threshold</label>
                 <div class="seg">
-                  <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Irreversible only</button>
-                  <button class="seg-btn active" data-group="thresh" onclick="pick(this,'thresh')">Dangerous</button>
-                  <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Review</button>
-                  <button class="seg-btn" data-group="thresh" onclick="pick(this,'thresh')">Don't block</button>
+                  <button class="seg-btn" data-group="thresh" aria-pressed="false" onclick="pick(this,'thresh')">Irreversible only</button>
+                  <button class="seg-btn active" data-group="thresh" aria-pressed="true" onclick="pick(this,'thresh')">Dangerous</button>
+                  <button class="seg-btn" data-group="thresh" aria-pressed="false" onclick="pick(this,'thresh')">Review</button>
+                  <button class="seg-btn" data-group="thresh" aria-pressed="false" onclick="pick(this,'thresh')">Don't block</button>
                 </div>
               </div>
               <div class="wiz-group">
                 <label>Evidence output</label>
                 <div class="seg">
-                  <button class="seg-btn active" data-group="ev" onclick="pick(this,'ev')">JSON envelope</button>
-                  <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Signed (OIDC)</button>
-                  <button class="seg-btn" data-group="ev" onclick="pick(this,'ev')">Checklist only</button>
+                  <button class="seg-btn active" data-group="ev" aria-pressed="true" onclick="pick(this,'ev')">JSON envelope</button>
+                  <button class="seg-btn" data-group="ev" aria-pressed="false" onclick="pick(this,'ev')">Signed (OIDC)</button>
+                  <button class="seg-btn" data-group="ev" aria-pressed="false" onclick="pick(this,'ev')">Checklist only</button>
                 </div>
               </div>
             </div>
@@ -199,6 +199,10 @@
                 <span class="meta-title">Artifact names</span>
                 <span class="meta-copy">Uses <code>plan.json</code>, <code>readtheplan-evidence.json</code>, and optional <code>readtheplan[sign]</code>.</span>
               </div>
+            </div>
+
+            <div class="cli-preview">
+              <code id="cli-preview-cmd">readtheplan analyze --framework soc2 --format json --evidence readtheplan-evidence.json plan.json</code>
             </div>
 
             <div class="gen-panel">
@@ -354,18 +358,18 @@
             <div class="field">
               <label>Repo profile</label>
               <div class="seg">
-                <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">1 repo</button>
-                <button class="seg-btn active" data-group="repos" onclick="pick(this,'repos')">2-5 repos</button>
-                <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">6-20 repos</button>
-                <button class="seg-btn" data-group="repos" onclick="pick(this,'repos')">20+ repos</button>
+                <button class="seg-btn" data-group="repos" aria-pressed="false" onclick="pick(this,'repos')">1 repo</button>
+                <button class="seg-btn active" data-group="repos" aria-pressed="true" onclick="pick(this,'repos')">2-5 repos</button>
+                <button class="seg-btn" data-group="repos" aria-pressed="false" onclick="pick(this,'repos')">6-20 repos</button>
+                <button class="seg-btn" data-group="repos" aria-pressed="false" onclick="pick(this,'repos')">20+ repos</button>
               </div>
             </div>
             <div class="field">
               <label>Compliance pressure</label>
               <div class="seg">
-                <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">SOC 2</button>
-                <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">ISO 27001</button>
-                <button class="seg-btn" data-group="pfw" onclick="pick(this,'pfw')">HIPAA</button>
+                <button class="seg-btn" data-group="pfw" aria-pressed="false" onclick="pick(this,'pfw')">SOC 2</button>
+                <button class="seg-btn" data-group="pfw" aria-pressed="false" onclick="pick(this,'pfw')">ISO 27001</button>
+                <button class="seg-btn" data-group="pfw" aria-pressed="false" onclick="pick(this,'pfw')">HIPAA</button>
               </div>
             </div>
             <div class="field full">
@@ -426,9 +430,17 @@
     function pick(btn, group) {
       document.querySelectorAll('[data-group="' + group + '"]').forEach(function(b) {
         b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
       });
       btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
       updateGen();
+      updateCLIPreview();
+    }
+
+    function updateCLIPreview() {
+      var el = document.getElementById('cli-preview-cmd');
+      if (el) el.textContent = cliCommand();
     }
 
     var fwMap = { 'SOC 2': 'soc2', 'ISO 27001': 'iso27001', 'HIPAA': 'hipaa', 'None': 'none' };
@@ -571,6 +583,7 @@
     }
 
     updateGen();
+    updateCLIPreview();
   </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="./matrix.js"></script>
