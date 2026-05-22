@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="readtheplan blog — compliance engineering, Terraform security, and infrastructure-as-code best practices." />
+  <title>Blog — readtheplan</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="stylesheet" href="/matrix.css" />
+  <style>
+    .blog-shell { max-width: 720px; margin: 0 auto; padding: 120px 24px 80px; }
+    .blog-shell h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--accent, #0ff); }
+    .blog-shell .subtitle { color: #888; margin-bottom: 3rem; font-size: 0.9rem; }
+    .post-card { border: 1px solid #1a1a2e; border-radius: 8px; padding: 24px; margin-bottom: 20px; background: rgba(10,10,30,0.5); transition: border-color 0.2s; }
+    .post-card:hover { border-color: var(--accent, #0ff); }
+    .post-card h2 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    .post-card h2 a { color: #e0e0e0; text-decoration: none; }
+    .post-card h2 a:hover { color: var(--accent, #0ff); }
+    .post-card .date { color: #666; font-size: 0.8rem; margin-bottom: 0.75rem; }
+    .post-card .excerpt { color: #aaa; font-size: 0.9rem; line-height: 1.6; }
+    .back-link { color: #666; text-decoration: none; font-size: 0.85rem; }
+    .back-link:hover { color: var(--accent, #0ff); }
+  </style>
+</head>
+<body>
+  <canvas id="matrix-rain"></canvas>
+  <div class="matrix-vignette" aria-hidden="true"></div>
+
+  <nav class="navbar">
+    <div class="container nav-shell">
+      <a class="brand" href="/" aria-label="readtheplan home">
+        <span class="brand-mark">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <div class="nav-links">
+        <a href="/#how-it-works">How it works</a>
+        <a href="/playground/">Playground</a>
+        <a href="/docs/">Docs</a>
+        <a href="/blog/">Blog</a>
+        <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="blog-shell">
+    <a href="/" class="back-link">← back to readtheplan</a>
+    <h1>▸ Blog</h1>
+    <p class="subtitle">Compliance engineering, Terraform security, and infrastructure-as-code.</p>
+
+    <div class="post-card">
+      <h2><a href="/blog/terraform-risk-classification.html">Why Every Terraform Change Is a Compliance Event</a></h2>
+      <div class="date">May 12, 2026</div>
+      <p class="excerpt">Most teams treat Terraform plans as deployment artifacts. They're actually compliance evidence. Here's how to map every resource change to a SOC 2 control before it hits production.</p>
+    </div>
+
+    <div class="post-card">
+      <h2><a href="/blog/soc2-evidence-automation.html">Automating SOC 2 Evidence Collection with Terraform</a></h2>
+      <div class="date">April 28, 2026</div>
+      <p class="excerpt">Manual evidence collection is the bottleneck in every SOC 2 audit. We built a pipeline that maps Terraform state to control IDs and generates auditor-ready attestations automatically.</p>
+    </div>
+
+    <div class="post-card">
+      <h2><a href="/blog/agent-gate-design.html">Designing an AI Agent Gate for Infrastructure Changes</a></h2>
+      <div class="date">April 15, 2026</div>
+      <p class="excerpt">AI coding agents are writing Terraform now. How do you enforce compliance when the author is non-human? The agent gate pattern — policy-as-code meets AI safety.</p>
+    </div>
+  </main>
+
+  <script src="/matrix.js"></script>
+</body>
+</html>
