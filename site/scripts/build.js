@@ -41,6 +41,24 @@ for (const dir of assetDirs) {
 
 fs.copyFileSync(demoSource, path.join(dist, "demo-evidence.json"));
 
+// Copy Cloudflare Pages Functions
+const functionsDir = path.join(root, "functions");
+if (fs.existsSync(functionsDir)) {
+  fs.cpSync(functionsDir, path.join(dist, "functions"), { recursive: true });
+  console.log("Copied functions/ to dist/");
+}
+
+// Generate _routes.json — only API/health routes go to Functions
+fs.writeFileSync(
+  path.join(dist, "_routes.json"),
+  JSON.stringify({
+    version: 1,
+    include: ["/api/*", "/health", "/openapi.json"],
+    exclude: []
+  }, null, 2),
+  "utf8"
+);
+
 fs.writeFileSync(
   path.join(dist, "_headers"),
   [
