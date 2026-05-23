@@ -136,6 +136,18 @@ def test_analyze_invalid_plan_prints_stderr(capsys) -> None:
     assert "Error: invalid JSON" in captured.err
 
 
+
+def test_analyze_malformed_plan_prints_graceful_error(capsys) -> None:
+    exit_code = main(["analyze", str(FIXTURES / "malformed_plan.json")])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error: invalid JSON" in captured.err
+
+
+
+
 def test_analyze_invalid_plan_with_json_format_still_prints_stderr(capsys) -> None:
     exit_code = main(["analyze", "--format", "json", str(FIXTURES / "invalid_plan.json")])
 
