@@ -88,6 +88,8 @@ def _rule_candidates(
         return _route53_candidates(action_set)
     if resource_type == "aws_eks_node_group":
         return _eks_node_group_candidates(action_set)
+    if resource_type == "aws_ecs_service":
+        return _ecs_service_candidates(action_set, change)
     if resource_type in {
         "aws_lb",
         "aws_lb_listener",
@@ -184,6 +186,17 @@ def _rds_candidates(
                 (
                     f"The {label} engine_version appears to cross a major version. "
                     "Major database upgrades can be irreversible or require downtime."
+                ),
+            )
+        )
+    if _runtime_deprecated(change):
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "Lambda runtime is deprecated or approaching end-of-life. AWS "
+                    "may block function updates or invocations for deprecated runtimes. "
+                    "Upgrade to a supported runtime before applying."
                 ),
             )
         )
@@ -410,6 +423,70 @@ def _eks_node_group_candidates(action_set: set[str]) -> list[RuleResult]:
                 ),
             )
         ]
+    return []
+
+
+def _ecs_service_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "create" in action_set and "delete" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "Terraform will replace an ECS service. Expect running tasks to be "
+                    "drained, possible service disruption, and ALB re-registration delay."
+                ),
+            )
+        ]
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "Terraform will delete an ECS service. All tasks, service discovery "
+                    "entries, and auto-scaling policies will be removed. Confirm that "
+                    "traffic has been routed away."
+                ),
+            )
+        ]
+    if "update" in action_set:
+        candidates: list[RuleResult] = []
+        if _attribute_changed(change, "force_new_deployment"):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "force_new_deployment is set on an ECS service update. All "
+                        "running tasks will be replaced, causing a rolling restart "
+                        "with potential service disruption."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "launch_type"):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "ECS launch_type is changing (e.g. EC2 to FARGATE). Review "
+                        "capacity providers, networking mode, and task placement "
+                        "compatibility."
+                    ),
+                )
+            )
+        if not candidates:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Terraform will update an ECS service. Review deployment "
+                        "configuration, desired count, task definition, and health "
+                        "check grace period before applying."
+                    ),
+                )
+            )
+        return candidates
     return []
 
 
@@ -1293,6 +1370,38 @@ def _extract_runtime_major(runtime: str) -> str | None:
     if match is None:
         return None
     return f"{match.group(1)}{match.group(2)}"
+
+
+# AWS Lambda runtimes deprecated as of 2026-05.
+# See https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html
+_DEPRECATED_RUNTIMES: set[str] = {
+    "nodejs12.x",
+    "nodejs14.x",
+    "nodejs16.x",
+    "python3.6",
+    "python3.7",
+    "python3.8",
+    "dotnetcore3.1",
+    "dotnet5.0",
+    "dotnet6",
+    "ruby2.5",
+    "ruby2.7",
+    "java8",
+    "java8.al2",
+    "go1.x",
+    "provided",
+}
+
+
+def _runtime_deprecated(change: dict[str, Any]) -> bool:
+    """Check if the runtime is deprecated (in after value) or changing to deprecated."""
+    after = _after_value(change, "runtime")
+    if isinstance(after, str) and after in _DEPRECATED_RUNTIMES:
+        return True
+    before = _before_value(change, "runtime")
+    if isinstance(before, str) and before in _DEPRECATED_RUNTIMES:
+        return True
+    return False
 
 
 def _max_result(current: RuleResult, candidate: RuleResult) -> RuleResult:
