@@ -37,7 +37,7 @@
         <a href="#how-it-works">How it works</a>
         <a href="#setup">Setup</a>
         <a href="#agent">Agent gate</a>
-        <a href="#pilot">Pilot</a>
+        <a href="#community">Community</a>
         <a href="https://readtheplan.dev/playground/">Playground</a>
         <a href="https://readtheplan.dev/docs/">Docs</a>
         <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
@@ -333,53 +333,31 @@
         </div>
       </section>
 
-      <section class="section-shell" id="pilot">
+      <section class="section-shell" id="community">
         <div class="section-head">
-          <div class="section-label">Pilot</div>
-          <h2>Request a pilot for regulated or multi-repo environments.</h2>
-          <p>For regulated or multi-repo environments. Client context stays in your browser until you send, and no Terraform plan is ever submitted.</p>
+          <div class="section-label">Community</div>
+          <h2>Open source, MIT licensed, built in public.</h2>
+          <p>readtheplan is free forever. Contributions, questions, and ideas are welcome — no enterprise sales funnel, no pilot form, no vendor lock-in.</p>
         </div>
 
-        <div class="pilot-box">
-          <div class="pilot-intro">
-            <h3>Request pilot setup</h3>
-            <p>Share the repo footprint, compliance pressure, and the blocker slowing adoption. The request opens your mail client with local browser state only.</p>
-          </div>
-          <div class="pilot-fields">
-            <div class="field">
-              <label>Organization / team</label>
-              <input type="text" id="p-org" placeholder="Acme Corp - platform team" />
-            </div>
-            <div class="field">
-              <label>Contact email</label>
-              <input type="email" id="p-email" placeholder="you@company.com" />
-            </div>
-            <div class="field">
-              <label>Repo profile</label>
-              <div class="seg">
-                <button class="seg-btn" data-group="repos" aria-pressed="false" onclick="pick(this,'repos')">1 repo</button>
-                <button class="seg-btn active" data-group="repos" aria-pressed="true" onclick="pick(this,'repos')">2-5 repos</button>
-                <button class="seg-btn" data-group="repos" aria-pressed="false" onclick="pick(this,'repos')">6-20 repos</button>
-                <button class="seg-btn" data-group="repos" aria-pressed="false" onclick="pick(this,'repos')">20+ repos</button>
-              </div>
-            </div>
-            <div class="field">
-              <label>Compliance pressure</label>
-              <div class="seg">
-                <button class="seg-btn" data-group="pfw" aria-pressed="false" onclick="pick(this,'pfw')">SOC 2</button>
-                <button class="seg-btn" data-group="pfw" aria-pressed="false" onclick="pick(this,'pfw')">ISO 27001</button>
-                <button class="seg-btn" data-group="pfw" aria-pressed="false" onclick="pick(this,'pfw')">HIPAA</button>
-              </div>
-            </div>
-            <div class="field full">
-              <label>Biggest adoption blocker</label>
-              <textarea id="p-blocker" placeholder="e.g. we need signed evidence for our SOC 2 audit, but plan review still feels too manual for our dev team..."></textarea>
-            </div>
-          </div>
-          <div class="pilot-footer">
-            <div class="pilot-note">Context stays local. No plan upload. Opens your mail client on submit.</div>
-            <button class="btn btn-solid" onclick="submitPilot()">Request pilot setup</button>
-          </div>
+        <div class="panel-grid">
+          <article class="card">
+            <h3>Contribute</h3>
+            <p>Good first issues tagged and ready. Add a resource rule, improve compliance mappings, or fix a classifier bug in ~30 lines of Python.</p>
+            <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan/labels/good%20first%20issue">Browse good first issues →</a>
+          </article>
+
+          <article class="card">
+            <h3>Discuss</h3>
+            <p>Ask questions, share how you're using readtheplan, or propose features. GitHub Discussions is open and active.</p>
+            <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan/discussions">Join the discussion →</a>
+          </article>
+
+          <article class="card">
+            <h3>Report security issues</h3>
+            <p>Found a vulnerability? Report it privately to the maintainer. 90-day disclosure timeline, credited in the advisory.</p>
+            <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan/blob/main/SECURITY.md">Security policy →</a>
+          </article>
         </div>
       </section>
 
@@ -420,7 +398,7 @@
         <a href="https://readtheplan.dev/demo/">Demo</a>
         <a href="https://readtheplan.dev/playground/">Playground</a>
         <a href="https://readtheplan.dev/brief/">Brief</a>
-        <a href="#pilot">Pilot</a>
+        <a href="#community">Community</a>
       </div>
     </div>
   </footer>
@@ -563,22 +541,6 @@
       setTimeout(function() {
         btn.textContent = original;
       }, 1200);
-    }
-
-    function submitPilot() {
-      var org = document.getElementById('p-org').value;
-      var email = document.getElementById('p-email').value;
-      var blocker = document.getElementById('p-blocker').value;
-      var repos = activeVal('repos');
-      var fw = activeVal('pfw');
-      var body = [
-        'Organization: ' + org,
-        'Repo profile: ' + repos,
-        'Compliance: ' + fw,
-        'Blocker: ' + blocker
-      ].join('\n');
-      var subject = encodeURIComponent('readtheplan pilot setup request');
-      window.location.href = 'mailto:pilot@readtheplan.dev?subject=' + subject + '&body=' + encodeURIComponent(body);
     }
 
     updateGen();

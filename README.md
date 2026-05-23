@@ -3,9 +3,12 @@
 > **Read the plan. Every time. For real.**
 >
 > [![Version](https://img.shields.io/pypi/v/readtheplan?color=blue)](https://pypi.org/project/readtheplan/)
-> [![License](https://img.shields.io/github/license/readtheplan/readtheplan)](./LICENSE)
+> [![Python](https://img.shields.io/pypi/pyversions/readtheplan)](https://pypi.org/project/readtheplan/)
 > [![CI](https://github.com/readtheplan/readtheplan/actions/workflows/test-action.yml/badge.svg)](https://github.com/readtheplan/readtheplan/actions)
+> [![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](https://github.com/readtheplan/readtheplan/actions)
+> [![License](https://img.shields.io/github/license/readtheplan/readtheplan)](./LICENSE)
 > [![Downloads](https://img.shields.io/pypi/dm/readtheplan)](https://pypi.org/project/readtheplan/)
+> [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
 **Terraform / OpenTofu plan risk analysis for humans, CI pipelines, and AI agents.** Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC 2, ISO 27001, and HIPAA. Runs locally — no uploads, no accounts, no backend.
@@ -84,6 +87,14 @@ pip install "readtheplan[sign]"
 # Optional local MCP preview
 pip install "readtheplan[mcp]"
 ```
+
+### Docker
+
+```bash
+docker run --rm -v $(pwd):/workspace readtheplan/readtheplan analyze plan.json
+```
+
+[![Docker](https://img.shields.io/badge/docker-readtheplan%2Freadtheplan-blue)](https://github.com/readtheplan/readtheplan/pkgs/container/readtheplan)
 
 ### Sample CLI output
 
@@ -198,6 +209,13 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - [`examples/`](examples/) — sample plans with rendered output
 - [`docs/adr/`](docs/adr/) — architecture decision records
 - [Corpus feedback loop](docs/corpus/README.md) — scan real plans, improve rules
+
+## Community
+
+- [GitHub Discussions](https://github.com/readtheplan/readtheplan/discussions) — ask questions, share ideas
+- [Issues](https://github.com/readtheplan/readtheplan/issues) — report bugs, request features
+- [Good first issues](https://github.com/readtheplan/readtheplan/labels/good%20first%20issue) — start contributing
+- [Security policy](SECURITY.md) — report vulnerabilities privately
 
 ## Contributing
 
