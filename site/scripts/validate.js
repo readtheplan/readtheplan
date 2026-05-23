@@ -28,7 +28,7 @@ const sampleBriefHtml = read("brief/sample-001/index.html");
 const briefCombined = `${briefHtml}\n${sampleBriefHtml}`;
 const sitemap = read("sitemap.xml");
 
-// Index page contract: single linear landing page, local-first setup, no upload CTA.
+// Index page contract: single linear landing page, local-first setup, community-driven.
 for (const token of [
   'id="top"',
   'id="matrix-rain"',
@@ -38,12 +38,9 @@ for (const token of [
   'id="copy-install"',
   'id="setup"',
   'id="agent"',
-  'id="pilot"',
+  'id="community"',
   'id="resources"',
   'id="gen-output"',
-  'id="p-org"',
-  'id="p-email"',
-  'id="p-blocker"',
   'rel="canonical"',
   "og:image",
   "twitter:card",
@@ -54,8 +51,7 @@ for (const token of [
   "proceed / warn / block",
   "MCP integration",
   "rtp-evidence-soc2.json",
-  "Request pilot setup",
-  "mailto:pilot@readtheplan.dev",
+  "Good first issues tagged",
   "pip install readtheplan",
   "fail-on-threshold",
   "readtheplan-evidence.json",
@@ -76,7 +72,7 @@ for (const token of [
   "function workflowText()",
   "function cliCommand(",
   "installPackage(ev)",
-  "\"readtheplan[sign]\"",
+  '"readtheplan[sign]"',
   "python -m pip install",
   "readtheplan-summary.json",
   "readtheplan analyze --framework",
@@ -102,10 +98,6 @@ for (const token of [
   if (html.includes(token)) {
     throw new Error(`Landing page must not include stale or unsupported token: ${token}`);
   }
-}
-
-if (html.includes("rogma") || html.includes("gmail.com")) {
-  throw new Error("Pilot handoff must not contain a personal email address.");
 }
 
 if (/<form[^>]+action=/i.test(html)) {
@@ -254,7 +246,7 @@ for (const token of [
   "topbar g",
   "utility-panel-wide",
   "readtheplan agent-gate",
-  "pip install \"readtheplan[sign]\"",
+  'pip install "readtheplan[sign]"',
 ]) {
   requireIncludes(docsHtml, token, "docs route token");
 }
@@ -267,7 +259,6 @@ for (const token of [
   'id="riskCalculator"',
   "Calculate risk",
   'type="number"',
-  "Request pilot setup",
   "SOC 2 Cloud Control Mapper",
   "SOC 2 control family map",
   "Terraform S3 Bucket Risk",
@@ -361,7 +352,7 @@ for (const token of [
   "No raw plan upload",
   "No hosted MCP service",
   "No hosted plan analysis",
-  "pip install \"readtheplan[mcp]\"",
+  'pip install "readtheplan[mcp]"',
   "readtheplan mcp",
   "analyze_plan",
   "agent_gate",
@@ -373,7 +364,6 @@ for (const token of [
   "CloudFormation",
   "Kubernetes",
   "Terraform-first today",
-  "Request pilot setup",
   "info@readtheplan.dev",
   "auth design",
   "least privilege",
