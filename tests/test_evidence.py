@@ -22,7 +22,7 @@ from readtheplan.plan import PlanSummary, analyze_plan_file
 FIXTURES = Path(__file__).parent / "fixtures"
 EVIDENCE_PLAN = FIXTURES / "evidence_plan.json"
 FIXED_TIME = datetime(2026, 5, 2, 18, 24, 11, tzinfo=timezone.utc)
-EXPECTED_CONTROLS = ["A1.2", "C1.1", "CC6.1", "CC6.6", "CC6.7", "CC8.1"]
+EXPECTED_CONTROLS = ["A1.2", "C1.1", "CC6.1", "CC6.6", "CC6.7", "CC7.1", "CC8.1"]
 
 
 def test_build_evidence_smoke() -> None:

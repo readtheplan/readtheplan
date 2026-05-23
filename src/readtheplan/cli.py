@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import subprocess
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Callable, Sequence, TextIO, cast
@@ -179,15 +180,31 @@ def _framework_help_list() -> str:
 
 
 def _default_agent_id() -> str:
-    package_version = _package_version()
+    try:
+        package_version = version("readtheplan")
+    except PackageNotFoundError:
+        package_version = "unknown"
     return f"readtheplan@{package_version}"
 
 
 def _package_version() -> str:
     try:
-        return version("readtheplan")
+        pkg_version = version("readtheplan")
     except PackageNotFoundError:
-        return "unknown"
+        pkg_version = "unknown"
+
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+        if commit.returncode == 0 and commit.stdout.strip():
+            return f"{pkg_version} (git:{commit.stdout.strip()})"
+    except (OSError, subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    return pkg_version
 
 
 def _analyze(args: argparse.Namespace) -> int:

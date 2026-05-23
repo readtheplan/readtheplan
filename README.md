@@ -60,6 +60,73 @@ readtheplan reads `terraform plan` JSON (Terraform and OpenTofu) and classifies 
 
 It applies **resource-aware rules** (30+ AWS resource types), **compliance framework mappings** (SOC 2, ISO 27001, HIPAA), and produces **auditable evidence envelopes** with sigstore-backed signed attestations.
 
+## How it looks
+
+Here's readtheplan analyzing a plan that replaces a security group and creates a new S3 bucket:
+
+<details>
+<summary><b>Terminal output (click to expand)</b></summary>
+
+```
+$ readtheplan analyze plan.json
+
+Resource changes: 2
+  aws_security_group.web  –  update  ⚠️  review
+  aws_s3_bucket.logs      –  create  ✅  safe
+
+── Risk Summary ──
+  safe ................ 1
+  review .............. 1
+  dangerous ........... 0
+  irreversible ........ 0
+```
+</details>
+
+And with a compliance framework:
+
+<details>
+<summary><b>With SOC 2 controls (click to expand)</b></summary>
+
+```
+$ readtheplan analyze --framework soc2 plan.json
+
+Resource changes: 2
+  aws_security_group.web  –  update  ⚠️  review
+    SOC 2: CC6.6 Boundary Protection, CC8.1 Change Management
+  aws_s3_bucket.logs      –  create  ✅  safe
+    SOC 2: CC8.1 Change Management
+```
+</details>
+
+### Example: EKS cluster plan
+
+An EKS node group change triggers danger-level classification:
+
+```hcl
+# terraform plan for EKS node group scaling
+resource "aws_eks_node_group" "workers" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "prod-workers"
+  scaling_config {
+    desired_size = 6  # was 4
+    max_size     = 10
+    min_size     = 4
+  }
+}
+```
+
+```bash
+$ terraform plan -out=tfplan && terraform show -json tfplan > plan.json
+$ readtheplan analyze plan.json
+
+Resource changes: 1
+  aws_eks_node_group.workers  –  update  🟡 review
+    Terraform will update an EKS node group. Review rollout settings,
+    surge capacity, labels, taints, and workload disruption budgets.
+```
+
+Try the [interactive playground](https://readtheplan.dev/playground/) to see readtheplan analyze sample plans in your browser — no install required.
+
 ## Quickstart
 
 ### CLI — 30 seconds to first result

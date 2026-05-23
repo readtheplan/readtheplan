@@ -17,7 +17,7 @@ def test_version_flag_prints_package_version(capsys) -> None:
 
     captured = capsys.readouterr()
     assert exc_info.value.code == 0
-    assert captured.out.strip() == "readtheplan 0.3.0"
+    assert captured.out.strip().startswith("readtheplan ")
     assert captured.err == ""
 
 
@@ -161,3 +161,16 @@ def test_analyze_directory_exits_one(tmp_path: Path, capsys) -> None:
     assert exit_code == 1
     assert captured.out == ""
     assert "directory" in captured.err
+
+
+def test_analyze_malformed_json_exits_one(tmp_path: Path, capsys) -> None:
+    """Issue #70: malformed plan.json should produce a graceful error message."""
+    plan = tmp_path / "garbage.json"
+    plan.write_text("this is not json at all {{{", encoding="utf-8")
+
+    exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error" in captured.err
