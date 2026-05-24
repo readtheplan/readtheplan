@@ -81,18 +81,14 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="top"' in html
     assert 'id="matrix-rain"' in html
     assert 'id="webgl-canvas"' in html
+    assert 'id="how-it-works"' in html
     assert 'id="setup"' in html
     assert 'id="agent"' in html
-    assert 'id="pilot"' in html
+    assert 'id="community"' in html
     assert 'id="resources"' in html
     assert 'id="compare"' in html
     assert 'id="gen-output"' in html
-    assert 'id="p-org"' in html
-    assert 'id="p-email"' in html
-    assert 'id="p-blocker"' in html
     assert "Turn Terraform JSON plans into stable risk tiers" in html
-    assert "Request pilot setup" in html
-    assert "mailto:" in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
     assert "/mcp/" in html
