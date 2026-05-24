@@ -155,6 +155,33 @@ pip install "readtheplan[sign]"
 pip install "readtheplan[mcp]"
 ```
 
+## Usage
+
+### 1) Basic plan parsing
+
+```bash
+readtheplan analyze plan.json
+```
+
+### 2) JSON output for automation
+
+```bash
+readtheplan analyze --format json plan.json > readtheplan-summary.json
+```
+
+### 3) Custom severity filter (dangerous + irreversible only)
+
+```bash
+readtheplan analyze --format json plan.json \
+  | jq '.changes[] | select(.risk == "dangerous" or .risk == "irreversible")'
+```
+
+### 4) Framework-annotated review for audits
+
+```bash
+readtheplan analyze --framework soc2 plan.json
+```
+
 ### Docker
 
 ```bash
