@@ -13,7 +13,7 @@ readtheplan operates as two complementary products sharing a common rules engine
 |-------|-----------|------|
 | API | FastAPI (Python 3.12) | `readtheplan/readtheplan-cloud-api` |
 | Frontend | Next.js 16 (React) | `readtheplan/readtheplan-cloud-web` |
-| Database | PostgreSQL 16 | Managed on droplet |
+| Database | N/A (API currently offline) | When SaaS backend is re-enabled, database choice is TBD |
 | Auth | JWT (python-jose + passlib[bcrypt]) | cloud-api |
 | Migrations | Alembic | cloud-api |
 | Reverse proxy | Nginx + Let's Encrypt | Droplet |
@@ -61,19 +61,16 @@ User (id, email, hashed_password, full_name, is_active)
   └── RevokedToken (jti, user_id, token_type, expires_at)
 ```
 
-## Deployment (hermes-cloud droplet)
+## Deployment (current production state)
 
 ```
 Internet
   │
-  ├── :443 (Nginx + Let's Encrypt)
-  │     ├── /api/* → proxy_pass http://127.0.0.1:8080 (FastAPI)
-  │     └── /*     → proxy_pass http://127.0.0.1:3000 (Next.js)
+  ├── :443 (Nginx thin proxy)
+  │     ├── /api/* → Cloudflare Pages Functions stubs (503 while backend is offline)
+  │     └── /*     → Cloudflare Pages static frontend
   │
-  ├── FastAPI (:8080, bound to 127.0.0.1)
-  │     └── PostgreSQL (:5432, local)
-  │
-  └── Next.js (:3000, bound to 127.0.0.1)
+  └── No active readtheplan API/database service on this host
 ```
 
 ## Security boundaries
@@ -92,14 +89,11 @@ Internet
 | Dependency audit | pip-audit + Semgrep in CI |
 | Secret scanning | Gitleaks in CI |
 
-## Current state (2026-05-16)
+## Current state (2026-05-26)
 
-- ✅ API scaffolded (auth, orgs, projects, policies, evidence)
-- ✅ Frontend scaffolded (Next.js 16, org dashboard, auth flow)
-- ✅ Nginx with CSP + security headers configured
-- ✅ JWT with bcrypt 12 rounds, aud claim, logout revocation
-- ✅ Pydantic models for all create/update endpoints
-- ✅ Sensitive-field redaction middleware
-- ❌ No staging deploy (manual droplet deploy)
-- ❌ No E2E integration tests
-- ❌ No billing/subscription
+- ✅ Frontend is live on Cloudflare Pages
+- ✅ Nginx thin-proxy serves `readtheplan.dev`
+- ✅ `/health` endpoint is live
+- ℹ️ `/api/*` currently returns 503 stub responses while SaaS backend is offline
+- ❌ No active readtheplan cloud-api service
+- ❌ No active readtheplan production database service
