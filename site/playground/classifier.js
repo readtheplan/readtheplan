@@ -178,6 +178,39 @@ function observabilityRules(type, actions) {
   return [];
 }
 
+function ecsRules(actions, change) {
+  const results = [];
+  if (actions.includes("delete") && actions.includes("create")) {
+    results.push({ risk: "dangerous", explanation: "ECS service will be replaced. Verify task definition, load balancer, and service discovery." });
+  } else if (actions.includes("delete")) {
+    results.push({ risk: "irreversible", explanation: "ECS service will be deleted. Running tasks are terminated irreversibly." });
+  } else if (actions.includes("update")) {
+    results.push({ risk: "review", explanation: "ECS service will be updated. Check desired count, task definition, and deployment configuration." });
+  }
+  if (change?.before?.desired_count !== undefined && change?.after?.desired_count !== undefined) {
+    if (change.before.desired_count > change.after.desired_count) {
+      results.push({ risk: "review", explanation: `Desired count scaled down from ${change.before.desired_count} to ${change.after.desired_count}. Verify capacity requirements.` });
+    }
+  }
+  return results;
+}
+
+function platformServiceRules(type, actions) {
+  const results = [];
+  if (actions.includes("delete")) {
+    if (type.startsWith("aws_ecr")) {
+      results.push({ risk: "irreversible", explanation: "ECR resource will be deleted. Images and artifacts may be permanently lost." });
+    } else if (type.startsWith("aws_sqs")) {
+      results.push({ risk: "irreversible", explanation: "SQS queue will be deleted. Messages in flight are permanently lost." });
+    } else if (type.startsWith("aws_glue")) {
+      results.push({ risk: "review", explanation: "Glue resource will be deleted. Verify dependent jobs and catalog references." });
+    }
+  } else if (actions.includes("update")) {
+    results.push({ risk: "review", explanation: `Platform service ${type} will be updated. Review configuration changes.` });
+  }
+  return results;
+}
+
 // ── Main classifier ────────────────────────────────────────────────────
 
 function classifyChange(resourceType, actions, change) {
@@ -208,10 +241,14 @@ function classifyChange(resourceType, actions, change) {
     candidates = eksRules(actions);
   } else if (["aws_lb", "aws_lb_listener", "aws_lb_listener_rule", "aws_lb_target_group"].includes(rt)) {
     candidates = lbRules(rt, actions);
+  } else if (rt === "aws_ecs_service") {
+    candidates = ecsRules(actions, change);
   } else if (["aws_subnet", "aws_route_table", "aws_route", "aws_nat_gateway", "aws_internet_gateway"].includes(rt)) {
     candidates = networkRules(rt, actions);
   } else if (["aws_cloudwatch_metric_alarm", "aws_cloudwatch_event_rule", "aws_cloudwatch_log_group"].includes(rt)) {
     candidates = observabilityRules(rt, actions);
+  } else if (rt.startsWith("aws_ecr") || rt.startsWith("aws_sqs") || rt.startsWith("aws_glue")) {
+    candidates = platformServiceRules(rt, actions);
   }
 
   for (const c of candidates) {

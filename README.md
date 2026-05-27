@@ -190,6 +190,49 @@ docker run --rm -v $(pwd):/workspace readtheplan/readtheplan analyze plan.json
 
 [![Docker](https://img.shields.io/badge/docker-readtheplan%2Freadtheplan-blue)](https://github.com/readtheplan/readtheplan/pkgs/container/readtheplan)
 
+### 5) JSON shortcut
+
+```bash
+# Same as --format json
+readtheplan analyze --json plan.json
+```
+
+### 6) CloudFormation adapter
+
+```bash
+readtheplan cloudformation template.json
+```
+
+### 7) Evidence envelope with signing
+
+```bash
+readtheplan analyze --evidence --sign plan.json
+```
+
+### 8) Custom rules overlay
+
+```bash
+readtheplan analyze --rules-file my-rules.yaml plan.json
+```
+
+### 9) Agent gate with custom thresholds
+
+```bash
+readtheplan agent-gate plan.json --dangerous-threshold 0 --irreversible-threshold 0
+```
+
+### 10) Verify an evidence envelope
+
+```bash
+readtheplan verify evidence.sig.json
+```
+
+### 11) MCP server (for AI coding agents)
+
+```bash
+readtheplan mcp
+```
+
 ### Sample CLI output
 
 ```text

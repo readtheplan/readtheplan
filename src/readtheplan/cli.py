@@ -64,6 +64,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output format. Defaults to text.",
     )
     analyze.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_shortcut",
+        help="Shortcut for --format json.",
+    )
+    analyze.add_argument(
         "--no-rules",
         action="store_true",
         help="Disable resource-aware rules and use the action-only classifier.",
@@ -291,7 +297,7 @@ def _analyze(args: argparse.Namespace) -> int:
             )
             return 1
 
-    if args.format == "json":
+    if args.format == "json" or args.json_shortcut:
         json.dump(_summary_to_dict(summary, catalog), sys.stdout, indent=2)
         print()
     else:

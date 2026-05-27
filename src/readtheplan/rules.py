@@ -115,6 +115,8 @@ def _rule_candidates(
         "aws_glue_job",
     }:
         return _platform_service_candidates(resource_type, action_set, change)
+    if resource_type == "aws_dynamodb_table":
+        return _dynamodb_candidates(action_set, change)
     if resource_type in {
         "aws_security_group",
         "aws_security_group_rule",
@@ -927,6 +929,79 @@ def _platform_service_candidates(
                     ),
                 )
             )
+
+    return candidates
+
+
+def _dynamodb_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    """Rule candidates for aws_dynamodb_table."""
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                "Terraform will replace this DynamoDB table. Verify backups (PITR), "
+                "stream consumers, and global table replicas.",
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                "Terraform will delete this DynamoDB table. All data is permanently "
+                "removed unless PITR or on-demand backups are enabled.",
+            )
+        )
+    elif "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "safe",
+                "Terraform will create a new DynamoDB table.",
+            )
+        )
+    elif "update" in action_set:
+        # Check for billing mode or protection attribute changes
+        billing_before = _before_value(change, "billing_mode")
+        billing_after = _after_value(change, "billing_mode")
+        if billing_before and billing_after and billing_before != billing_after:
+            direction = f"from {billing_before} to {billing_after}"
+            candidates.append(
+                RuleResult(
+                    "review",
+                    f"DynamoDB billing_mode changing {direction}. Verify cost implications.",
+                )
+            )
+
+        if _attribute_changed(change, "deletion_protection_enabled"):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    "DynamoDB deletion_protection_enabled toggled. Verify the table "
+                    "is intentionally protectable or removable.",
+                )
+            )
+
+        if _attribute_changed(change, "point_in_time_recovery_enabled"):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    "DynamoDB PITR setting changed. Verify backup and recovery posture.",
+                )
+            )
+
+        if candidates:
+            return candidates
+
+        candidates.append(
+            RuleResult(
+                "review",
+                "Terraform will update this DynamoDB table in place. Review changed attributes.",
+            )
+        )
 
     return candidates
 

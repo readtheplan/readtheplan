@@ -13,6 +13,52 @@ Thanks for your interest! Here's how to get started.
 
 Check [issues labeled "good-first-issue"](https://github.com/readtheplan/readtheplan/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). These are small, scoped tasks perfect for new contributors.
 
+## Making Your First Contribution
+
+New to the project? Here's a step-by-step walkthrough:
+
+1. **Fork and clone**
+   ```bash
+   gh repo fork readtheplan/readtheplan --clone
+   cd readtheplan
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+3. **Run the tests** to verify everything works
+   ```bash
+   pytest
+   ```
+   All tests should pass before you start.
+
+4. **Pick an issue** — browse [good first issues](https://github.com/readtheplan/readtheplan/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) and comment to claim one.
+
+5. **Create a branch**
+   ```bash
+   git checkout -b feat/my-change
+   ```
+
+6. **Make your change** — follow the code style below. Add tests if applicable.
+
+7. **Run tests again**
+   ```bash
+   pytest
+   ```
+
+8. **Commit and push**
+   ```bash
+   git add .
+   git commit -m "feat: your change description"
+   git push origin feat/my-change
+   ```
+
+9. **Open a PR** — from your branch to `main`. CI will run automatically. A maintainer will review within a few days.
+
+**Need help?** Comment on your issue or open a discussion. We're a small team but responsive.
+
 ## Code Style
 
 - Type hints required on all public functions
