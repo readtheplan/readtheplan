@@ -1,0 +1,558 @@
+# PCI-DSS v4.0 — change-time control mapping.
+#
+# Maps Terraform resource changes to PCI-DSS v4.0 requirements.
+# PCI-DSS applies to any system that stores, processes, or transmits
+# cardholder data (CHD) or sensitive authentication data (SAD).
+#
+# Mapping principles:
+#   - Req 1: Network Security Controls → security groups, NACLs
+#   - Req 2: Secure Configurations → all resource changes (CM equivalent)
+#   - Req 3: Protect Stored Account Data → KMS, S3 encryption, RDS encryption
+#   - Req 4: Protect CHD in Transit → TLS, load balancer listeners
+#   - Req 6: Secure Systems and Software → Lambda, ECS, EKS
+#   - Req 7: Restrict Access → IAM, S3 bucket policies
+#   - Req 8: Identify and Authenticate → IAM users, roles
+#   - Req 10: Log and Monitor → CloudTrail, CloudWatch
+#   - Req 11: Test Security → security group rules, network ACLs
+#   - Req 12: Information Security Policy → overarching governance
+
+framework: pci-dss
+framework_version: '4.0'
+schema_version: 1
+
+mappings:
+  # ── KMS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_kms_key
+    actions: [create]
+    controls:
+      - id: Req-3.5.1
+        title: Cryptographic Key Management
+        rationale: >-
+          New customer-managed key establishes the cryptographic boundary
+          for cardholder data at rest.
+      - id: Req-3.6.1
+        title: Key Management Procedures
+        rationale: >-
+          Key creation must follow documented key-management procedures
+          including key custodians, dual control, and key rotation.
+
+  - resource_type: aws_kms_key
+    actions: [update]
+    controls:
+      - id: Req-3.5.1
+        title: Cryptographic Key Management
+        rationale: >-
+          Key policy or spec updates change who can encrypt and decrypt
+          cardholder data.
+      - id: Req-3.6.4
+        title: Key Custodian Responsibilities
+        rationale: >-
+          Key policy changes affect who has access to cryptographic
+          material — must be reviewed by key custodians.
+      - id: Req-7.2.1
+        title: Access Control for Cardholder Data
+        rationale: >-
+          Key policy is a primary authorization surface for access to
+          encrypted cardholder data.
+
+  - resource_type: aws_kms_key
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: Req-3.5.1
+        title: Cryptographic Key Management
+        rationale: >-
+          Replacement or destruction of a key changes the cryptographic
+          boundary on every ciphertext that depended on it.
+      - id: Req-3.7.3
+        title: Key Retirement and Replacement
+        rationale: >-
+          Key retirement must follow documented procedures — verify
+          that retired keys are archived and data is re-encrypted.
+      - id: Req-10.5.1
+        title: Audit Trail Integrity
+        rationale: >-
+          Key destruction is a significant security event — must be
+          logged and reviewed.
+
+  - resource_type: aws_kms_alias
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-3.5.1
+        title: Cryptographic Key Management
+        rationale: Alias changes can redirect encryption to a different key.
+      - id: Req-3.6.1
+        title: Key Management Procedures
+        rationale: Alias changes must be documented in key inventory.
+
+  # ── RDS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_db_instance
+    actions: [create]
+    controls:
+      - id: Req-3.4.1
+        title: Protect Stored Cardholder Data
+        rationale: >-
+          New database instance may store cardholder data — verify
+          encryption, access controls, and logging are enabled.
+
+  - resource_type: aws_db_instance
+    actions: [update]
+    controls:
+      - id: Req-3.4.1
+        title: Protect Stored Cardholder Data
+        rationale: >-
+          Database parameter, master-user, or network changes affect
+          the access boundary on cardholder data.
+      - id: Req-4.2.1
+        title: Encrypt Transmission of Cardholder Data
+        rationale: >-
+          Network and TLS-related parameter changes affect cardholder
+          data in transit.
+      - id: Req-7.2.1
+        title: Access Control for Cardholder Data
+        rationale: >-
+          Database configuration changes may grant or restrict access
+          to cardholder data.
+      - id: Req-2.2.1
+        title: Secure Configuration Standards
+        rationale: Database configuration update.
+
+  - resource_type: aws_db_instance
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: Req-3.7.2
+        title: Secure Deletion of Cardholder Data
+        rationale: >-
+          Database replacement creates a new endpoint and discards the
+          prior instance — verify cardholder data is securely deleted
+          or migrated per PCI-DSS secure deletion requirements.
+      - id: Req-10.5.1
+        title: Audit Trail Integrity
+        rationale: >-
+          Database replacement is a significant event — must be logged
+          and reviewed for potential data exposure.
+
+  - resource_type: aws_rds_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-3.4.1
+        title: Protect Stored Cardholder Data
+        rationale: Database cluster lifecycle affects cardholder data storage.
+      - id: Req-7.2.1
+        title: Access Control for Cardholder Data
+        rationale: Cluster configuration change.
+      - id: Req-2.2.1
+        title: Secure Configuration Standards
+        rationale: Database cluster change.
+
+  # ── S3 ──────────────────────────────────────────────────────────────────
+  - resource_type: aws_s3_bucket
+    actions: [create]
+    controls:
+      - id: Req-3.4.1
+        title: Protect Stored Cardholder Data
+        rationale: >-
+          New cloud storage container — verify encryption and access
+          controls before storing cardholder data.
+
+  - resource_type: aws_s3_bucket
+    actions: [update]
+    controls:
+      - id: Req-3.4.1
+        title: Protect Stored Cardholder Data
+        rationale: >-
+          Bucket configuration changes affect cardholder data storage
+          posture including encryption, versioning, and access logging.
+      - id: Req-7.2.1
+        title: Access Control for Cardholder Data
+        rationale: >-
+          Bucket configuration changes affect who can access stored
+          cardholder data.
+      - id: Req-2.2.1
+        title: Secure Configuration Standards
+        rationale: Bucket configuration update.
+
+  - resource_type: aws_s3_bucket
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: Req-3.7.2
+        title: Secure Deletion of Cardholder Data
+        rationale: >-
+          Bucket destruction removes stored objects — verify cardholder
+          data is securely deleted per PCI-DSS requirements.
+      - id: Req-10.5.1
+        title: Audit Trail Integrity
+        rationale: Bucket replacement is a significant event.
+
+  - resource_type: aws_s3_bucket_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-7.2.1
+        title: Access Control for Cardholder Data
+        rationale: >-
+          Bucket policy is the primary access-control surface for
+          cardholder data in S3.
+      - id: Req-7.2.2
+        title: Least Privilege Access
+        rationale: >-
+          Public or cross-account principals in a bucket policy may
+          violate least-privilege access to cardholder data.
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: >-
+          Bucket policy that allows public access bypasses network
+          security controls protecting cardholder data.
+
+  - resource_type: aws_s3_bucket_public_access_block
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-7.2.1
+        title: Access Control for Cardholder Data
+        rationale: >-
+          Public-access-block toggles the strictest S3 access guardrail
+          protecting cardholder data.
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: >-
+          Removing the block can expose cardholder data publicly —
+          violates PCI-DSS network isolation requirements.
+
+  # ── IAM ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_iam_role
+    actions: [create]
+    controls:
+      - id: Req-7.1.1
+        title: Access Control Policy
+        rationale: >-
+          New IAM role establishes a new authorization context — must
+          comply with access control policy for cardholder data.
+      - id: Req-8.2.1
+        title: Unique User Identification
+        rationale: New role lifecycle event.
+
+  - resource_type: aws_iam_role
+    actions: [update]
+    controls:
+      - id: Req-7.2.2
+        title: Least Privilege Access
+        rationale: >-
+          Trust policy or attached-policy changes can broaden who can
+          assume the role and access cardholder data.
+      - id: Req-8.2.1
+        title: Unique User Identification
+        rationale: >-
+          Trust policy changes who can authenticate as the role —
+          must be reviewed for authorization scope.
+
+  - resource_type: aws_iam_role
+    actions: [delete, "delete/create", replace]
+    controls:
+      - id: Req-7.1.1
+        title: Access Control Policy
+        rationale: Role lifecycle change affects cardholder data access paths.
+      - id: Req-8.2.5
+        title: Access Revocation
+        rationale: >-
+          Role deletion must be accompanied by access revocation for
+          all principals that depended on it.
+
+  - resource_type: aws_iam_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-7.1.1
+        title: Access Control Policy
+        rationale: >-
+          Policy changes alter what attached principals can do with
+          cardholder data environments.
+      - id: Req-7.2.2
+        title: Least Privilege Access
+        rationale: >-
+          Policies are the carrier for least-privilege enforcement in
+          cardholder data environments.
+
+  - resource_type: aws_iam_role_policy
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-7.1.1
+        title: Access Control Policy
+        rationale: Inline role policy directly affects role permissions.
+      - id: Req-7.2.2
+        title: Least Privilege Access
+        rationale: >-
+          Inline policy defines the least-privilege boundary for
+          cardholder data access.
+
+  - resource_type: aws_iam_user
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-8.2.1
+        title: Unique User Identification
+        rationale: >-
+          IAM user lifecycle is a primary user-identification event.
+      - id: Req-8.2.2
+        title: User Access Reviews
+        rationale: >-
+          New or changed users must be included in quarterly access
+          reviews for cardholder data environments.
+      - id: Req-8.3.1
+        title: Multi-Factor Authentication
+        rationale: >-
+          All non-console administrative access to CDE requires MFA —
+          verify MFA is enforced for this user.
+
+  # ── Networking ──────────────────────────────────────────────────────────
+  - resource_type: aws_security_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: >-
+          Security groups are the primary network-boundary control for
+          cardholder data environments.
+      - id: Req-1.3.1
+        title: Network Segmentation
+        rationale: >-
+          Security group changes can merge or separate CDE and non-CDE
+          network segments — violating segmentation requirements.
+      - id: Req-1.3.3
+        title: Restrict Inbound Traffic
+        rationale: >-
+          Inbound traffic rules must be restricted to only necessary
+          services for cardholder data environments.
+
+  - resource_type: aws_security_group_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: >-
+          Ingress/egress rules adjust the cardholder data network boundary.
+      - id: Req-1.3.3
+        title: Restrict Inbound Traffic
+        rationale: >-
+          Inbound rules must be restricted to documented, business-justified
+          ports and services.
+
+  - resource_type: aws_vpc_security_group_ingress_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: Ingress rules adjust who can reach CDE workloads.
+      - id: Req-1.3.3
+        title: Restrict Inbound Traffic
+        rationale: Ingress changes must be reviewed against CDE requirements.
+
+  - resource_type: aws_subnet
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.3.1
+        title: Network Segmentation
+        rationale: >-
+          Subnets define workload placement — CDE and non-CDE workloads
+          must be in separate subnets.
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: Subnet topology affects network reachability for CDE.
+
+  - resource_type: aws_route_table
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.3.1
+        title: Network Segmentation
+        rationale: >-
+          Route tables define private, public, and egress boundaries for
+          cardholder data environments.
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: Route table change.
+
+  - resource_type: aws_route
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: Routes determine which network boundary traffic crosses.
+
+  - resource_type: aws_route_table_association
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.3.1
+        title: Network Segmentation
+        rationale: >-
+          Association changes move subnets between routing policies —
+          can break CDE segmentation.
+
+  - resource_type: aws_nat_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: NAT gateways govern private subnet egress from CDE.
+      - id: Req-1.3.1
+        title: Network Segmentation
+        rationale: >-
+          NAT gateway changes can interrupt CDE workload egress or
+          create unauthorized paths.
+
+  - resource_type: aws_internet_gateway
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: >-
+          Internet gateways expose VPC routes to the public internet —
+          must not be attached to CDE subnets.
+      - id: Req-1.3.1
+        title: Network Segmentation
+        rationale: >-
+          Internet gateway changes can bridge CDE and public networks.
+
+  - resource_type: aws_route53_zone
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: Zone changes can move where CDE traffic resolves.
+
+  - resource_type: aws_route53_record
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: DNS record changes can redirect cardholder data traffic.
+
+  # ── EKS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_eks_cluster
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-6.3.1
+        title: Secure System Configurations
+        rationale: >-
+          Cluster-endpoint and authentication changes affect access to
+          CDE workloads.
+      - id: Req-8.2.1
+        title: Unique User Identification
+        rationale: Cluster authentication mode changes who can authenticate.
+      - id: Req-2.2.1
+        title: Secure Configuration Standards
+        rationale: EKS cluster change.
+
+  - resource_type: aws_eks_node_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-6.3.1
+        title: Secure System Configurations
+        rationale: Node group changes affect cluster capacity for CDE workloads.
+
+  # ── Load Balancer ──────────────────────────────────────────────────────
+  - resource_type: aws_lb
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-4.1.1
+        title: Encrypt Transmission of Cardholder Data
+        rationale: >-
+          Load balancer scheme and listener configuration define the
+          network boundary for cardholder data traffic.
+      - id: Req-6.3.1
+        title: Secure System Configurations
+        rationale: Load balancer lifecycle affects CDE availability.
+
+  - resource_type: aws_lb_listener
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-4.1.1
+        title: Encrypt Transmission of Cardholder Data
+        rationale: >-
+          Listeners define which ports and protocols are exposed for
+          cardholder data traffic — must enforce TLS 1.2+.
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: Listener changes affect CDE traffic routing.
+
+  - resource_type: aws_lb_listener_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-1.2.1
+        title: Network Security Controls
+        rationale: Listener rule changes affect CDE traffic routing precedence.
+
+  # ── Lambda ──────────────────────────────────────────────────────────────
+  - resource_type: aws_lambda_function
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-6.3.1
+        title: Secure System Configurations
+        rationale: Lambda function lifecycle in CDE.
+      - id: Req-6.5.1
+        title: Change Control Procedures
+        rationale: Function code or configuration changes in CDE.
+
+  # ── ECR ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_ecr_repository
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-6.3.1
+        title: Secure System Configurations
+        rationale: Container registry configuration for CDE images.
+      - id: Req-6.5.2
+        title: Vulnerability Management
+        rationale: >-
+          Image scanning and tag mutability affect container integrity
+          for CDE workloads.
+
+  # ── CloudWatch / Monitoring ─────────────────────────────────────────────
+  - resource_type: aws_cloudwatch_metric_alarm
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-10.4.1
+        title: Monitor Security Events
+        rationale: >-
+          Metric alarm changes affect threat detection for CDE
+          security events.
+      - id: Req-10.6.1
+        title: Alert and Respond to Security Events
+        rationale: >-
+          Alarm thresholds define when security events in CDE
+          escalate to incident response.
+
+  - resource_type: aws_cloudwatch_log_group
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-10.3.1
+        title: Audit Log Retention
+        rationale: >-
+          PCI-DSS requires 12 months of audit log history with 3 months
+          immediately available — retention changes may violate this.
+      - id: Req-10.5.1
+        title: Audit Trail Integrity
+        rationale: >-
+          Log group configuration changes affect audit trail integrity
+          for CDE systems.
+
+  - resource_type: aws_cloudwatch_event_rule
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-10.4.1
+        title: Monitor Security Events
+        rationale: Event rules define automated detection for CDE.
+
+  # ── ECS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_ecs_service
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-6.3.1
+        title: Secure System Configurations
+        rationale: ECS service lifecycle in CDE.
+
+  # ── SQS ─────────────────────────────────────────────────────────────────
+  - resource_type: aws_sqs_queue
+    actions: [create, update, delete, "delete/create", replace]
+    controls:
+      - id: Req-3.4.1
+        title: Protect Stored Cardholder Data
+        rationale: >-
+          SSE and KMS key configuration protect queued messages that
+          may contain cardholder data.
+      - id: Req-7.2.1
+        title: Access Control for Cardholder Data
+        rationale: Queue policy is the access-control surface for messages.
