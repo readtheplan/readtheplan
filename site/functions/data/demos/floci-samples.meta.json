@@ -1,0 +1,7 @@
+{
+  "generated_at_utc": "2026-05-13T00:00:00Z",
+  "source": "site/playground/floci-demo.tf",
+  "generator": "site/scripts/regenerate_floci_samples.py",
+  "terraform_version": "unknown",
+  "floci_endpoint": "http://localhost:4566"
+}

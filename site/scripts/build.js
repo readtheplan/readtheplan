@@ -1,8 +1,18 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { execSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(root, "..");
+
+// Convert YAML compliance catalogs → JSON for Pages Functions
+console.log("Converting compliance catalogs...");
+try {
+  execSync("python3 site/scripts/convert_data.py", { cwd: repoRoot, stdio: "inherit" });
+} catch (e) {
+  console.warn("WARNING: data conversion failed, using existing bundle if available");
+}
+
 const dist = path.join(root, "dist");
 const demoSource = path.join(
   repoRoot,
