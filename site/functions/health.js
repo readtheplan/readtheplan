@@ -1,13 +1,16 @@
 export async function onRequest(context) {
-  // Try to load index for stats (may not be bundled yet in first deploy)
   let frameworks = 0;
   let controlsTotal = 0;
   try {
-    const idx = await import("../data/index.json").then(m => m.default);
-    frameworks = Object.keys(idx.frameworks || {}).length;
-    controlsTotal = Object.values(idx.frameworks || {})
-      .reduce((sum, f) => sum + (f.control_count || 0), 0);
-  } catch (_) { /* pre-data-bundle */ }
+    const url = new URL("/data/index.json", context.request.url);
+    const resp = await fetch(url);
+    if (resp.ok) {
+      const idx = await resp.json();
+      frameworks = Object.keys(idx.frameworks || {}).length;
+      controlsTotal = Object.values(idx.frameworks || {})
+        .reduce((sum, f) => sum + (f.control_count || 0), 0);
+    }
+  } catch (_) { /* data not yet deployed */ }
 
   return new Response(JSON.stringify({
     status: "ok",
