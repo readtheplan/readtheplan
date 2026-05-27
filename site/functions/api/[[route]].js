@@ -1,43 +1,37 @@
 // api/[[route]].js — readtheplan static data API
-// Serves compliance catalogs, demo plans, and version info from bundled JSON.
+// Fetches bundled JSON data from /data/ (served as static assets by Cloudflare Pages)
 
-import indexData from "../data/index.json";
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "https://readtheplan.dev",
+  "Cache-Control": "public, max-age=3600",
+};
 
-// Preload framework data (imports resolve at deploy time)
-const frameworks = {};
-const frameworkNames = Object.keys(indexData.frameworks);
-for (const name of frameworkNames) {
-  frameworks[name] = await import(`../data/${name}.json`).then(m => m.default);
-}
-
-// Preload demo list
-let demoList = { demos: [] };
-try {
-  demoList = await import("../data/demos/index.json").then(m => m.default);
-} catch (_) { /* no demos */ }
-
-function json(data, status = 200, extraHeaders = {}) {
+function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "https://readtheplan.dev",
-      "Cache-Control": "public, max-age=3600",
-      ...extraHeaders,
-    },
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   });
 }
 
+async function fetchData(request, path) {
+  const url = new URL(path, request.url);
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+  return resp.json();
+}
+
 export async function onRequest(context) {
-  const url = new URL(context.request.url);
+  const { request } = context;
   let route = context.params.route || [];
   if (!Array.isArray(route)) route = [route];
 
   // /api/v1/controls — list all frameworks
   if (route[0] === "v1" && route[1] === "controls" && !route[2]) {
-    const list = frameworkNames.map(name => ({
+    const idx = await fetchData(request, "/data/index.json");
+    if (!idx) return json({ error: "data not available" }, 503);
+    const list = Object.keys(idx.frameworks).map(name => ({
       id: name,
-      control_count: indexData.frameworks[name].control_count,
+      control_count: idx.frameworks[name].control_count,
       url: `/api/v1/controls/${name}`,
     }));
     return json({ frameworks: list, total: list.length });
@@ -45,59 +39,69 @@ export async function onRequest(context) {
 
   // /api/v1/controls/:framework
   if (route[0] === "v1" && route[1] === "controls" && route[2]) {
-    const fw = route[2].toLowerCase();
-    const data = frameworks[fw];
-    if (!data) {
-      return json({ error: "not found", available: frameworkNames }, 404);
+    const fw = route[2].toLowerCase().replace(/[^a-z0-9_]/g, "");
+    const idx = await fetchData(request, "/data/index.json");
+    if (!idx) return json({ error: "data not available" }, 503);
+    if (!idx.frameworks[fw]) {
+      return json({ error: "not found", available: Object.keys(idx.frameworks) }, 404);
     }
+    const data = await fetchData(request, `/data/${fw}.json`);
+    if (!data) return json({ error: "framework data not available" }, 503);
     return json(data);
   }
 
   // /api/v1/version
   if (route[0] === "v1" && route[1] === "version") {
+    const idx = await fetchData(request, "/data/index.json");
+    if (!idx) {
+      return json({ version: "0.3.0", service: "readtheplan", data_available: false });
+    }
     return json({
-      version: indexData.version,
-      frameworks: frameworkNames.length,
-      controls_total: Object.values(indexData.frameworks)
-        .reduce((sum, f) => sum + f.control_count, 0),
-      demos: demoList.demos?.length || 0,
+      version: idx.version || "0.3.0",
+      frameworks: Object.keys(idx.frameworks || {}).length,
+      controls_total: Object.values(idx.frameworks || {})
+        .reduce((sum, f) => sum + (f.control_count || 0), 0),
       service: "readtheplan",
     });
   }
 
-  // /api/v1/demo/:plan
-  if (route[0] === "v1" && route[1] === "demo" && route[2]) {
-    const plan = route[2].replace(/\.json$/i, "");
-    try {
-      const data = await import(`../data/demos/${plan}.json`).then(m => m.default);
-      return json(data);
-    } catch (_) {
-      try {
-        const data = await import(`../data/demos/${plan}.meta.json`).then(m => m.default);
-        return json(data);
-      } catch (_2) {
-        return json({
-          error: "demo plan not found",
-          available: demoList.demos || [],
-        }, 404);
-      }
-    }
-  }
-
   // /api/v1/demo — list demo plans
   if (route[0] === "v1" && route[1] === "demo" && !route[2]) {
+    const demos = await fetchData(request, "/data/demos/index.json");
+    if (!demos) return json({ error: "demo data not available" }, 503);
     return json({
-      demos: (demoList.demos || []).map(d => ({
+      demos: (demos.demos || []).map(d => ({
         id: d.replace(/\.json$/i, ""),
         url: `/api/v1/demo/${d.replace(/\.json$/i, "")}`,
       })),
     });
   }
 
-  // Catch-all: route not implemented
+  // /api/v1/demo/:plan
+  if (route[0] === "v1" && route[1] === "demo" && route[2]) {
+    const plan = route[2].replace(/[^a-zA-Z0-9_.-]/g, "");
+    const data = await fetchData(request, `/data/demos/${plan}.json`);
+    if (data) return json(data);
+    // Try .meta.json variant
+    const metaPlan = plan.replace(/\.meta$/, "");
+    const meta = await fetchData(request, `/data/demos/${metaPlan}.meta.json`);
+    if (meta) return json(meta);
+    const demos = await fetchData(request, "/data/demos/index.json");
+    return json({
+      error: "demo plan not found",
+      available: (demos?.demos || []).map(d => d.replace(/\.json$/i, "")),
+    }, 404);
+  }
+
+  // Catch-all
+  const idx = await fetchData(request, "/data/index.json");
   return json({
     error: "not found",
-    available_endpoints: indexData.endpoints,
+    available_endpoints: idx?.endpoints || {
+      controls: "/api/v1/controls",
+      demo: "/api/v1/demo",
+      version: "/api/v1/version",
+    },
     documentation: "https://readtheplan.dev/docs",
   }, 404);
 }

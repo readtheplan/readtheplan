@@ -4,7 +4,7 @@ import json, yaml, sys
 from pathlib import Path
 
 SRC = Path("src/readtheplan/data/controls")
-OUT = Path("site/functions/data")
+OUT = Path("site/data")
 OUT.mkdir(parents=True, exist_ok=True)
 
 # Convert each framework
