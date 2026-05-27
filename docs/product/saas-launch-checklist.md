@@ -1,7 +1,15 @@
 # SaaS Launch Checklist
-# Updated: 2026-05-20 07:45 UTC — all launch blockers resolved
+# Updated: 2026-05-26 — historical checklist retained; current production is Pages frontend + API stubs (backend offline)
 
-## Pre-launch (ALL COMPLETE ✅)
+## Current production status (authoritative)
+
+- Frontend: Cloudflare Pages (active)
+- API: Pages Functions stubs (returns 503 by design while backend is offline)
+- Database: no active production database for readtheplan at this time
+
+---
+
+## Pre-launch (historical, ALL COMPLETE ✅)
 
 ### Security
 - [x] JWT bcrypt 12 rounds, aud claim, logout revocation
@@ -50,7 +58,7 @@
 
 **Fix required:** Upgrade Litestream to v0.4.x+ which uses a modern Azure SDK. Can be done by updating the Dockerfile `LITESTREAM_VERSION` arg.
 
-**Fallback:** `scripts/backup-sqlite.sh` created for cron-based backup. PostgreSQL `readtheplan-cloud-pg2` has 7-day retention (standby, not primary DB).
+**Fallback (historical):** `scripts/backup-sqlite.sh` was created for cron-based backup during prior SaaS backend iterations. No active readtheplan production DB is currently running.
 
 **Impact:** No data loss risk — Litestream is installed and will start replicating immediately once auth is fixed. The entrypoint, config, and infrastructure are all correct.
 

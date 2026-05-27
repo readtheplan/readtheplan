@@ -1,0 +1,41 @@
+{
+  "version": "0.3.0",
+  "frameworks": {
+    "fedramp_moderate": {
+      "id": "fedramp_moderate",
+      "file": "fedramp_moderate.json",
+      "control_count": 43
+    },
+    "hipaa": {
+      "id": "hipaa",
+      "file": "hipaa.json",
+      "control_count": 57
+    },
+    "hitrust": {
+      "id": "hitrust",
+      "file": "hitrust.json",
+      "control_count": 40
+    },
+    "iso27001": {
+      "id": "iso27001",
+      "file": "iso27001.json",
+      "control_count": 63
+    },
+    "pci_dss": {
+      "id": "pci_dss",
+      "file": "pci_dss.json",
+      "control_count": 42
+    },
+    "soc2": {
+      "id": "soc2",
+      "file": "soc2.json",
+      "control_count": 63
+    }
+  },
+  "endpoints": {
+    "list": "/api/v1/controls",
+    "get": "/api/v1/controls/{framework}",
+    "demo": "/api/v1/demo/{plan}",
+    "version": "/api/v1/version"
+  }
+}
