@@ -175,7 +175,7 @@
             }
             clearError();
             dropZone.classList.add("has-file");
-            dropZone.querySelector(".drop-text").innerHTML = `<strong>${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB)`;
+            dropZone.querySelector(".drop-text").innerHTML = `<strong>${esc(file.name)}</strong> (${(file.size / 1024).toFixed(1)} KB)`;
             analyze();
           } catch (err) {
             showError("Invalid JSON: " + err.message);
@@ -226,9 +226,9 @@
         </tr></thead><tbody>`;
 
         for (const c of changes) {
-          const actions = c.actions.map(a => `<span class="action-tag">${a}</span>`).join(" ");
+          const actions = c.actions.map(a => `<span class="action-tag">${esc(a)}</span>`).join(" ");
           const controls = c.controls?.length
-            ? `<td><div class="controls-list">${c.controls.map(ctrl => `<span title="${ctrl.title}">${ctrl.id}</span>`).join(" ")}</div></td>`
+            ? `<td><div class="controls-list">${c.controls.map(ctrl => `<span title="${esc(ctrl.title)}">${esc(ctrl.id)}</span>`).join(" ")}</div></td>`
             : "";
           html += `<tr>
             <td><code style="color:var(--text)">${esc(c.address)}</code></td>
@@ -253,7 +253,7 @@
         errorSection.style.display = "none";
       }
 
-      function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+      function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 
       // ── Sample plan loading (Floci-generated) ──
       async function loadSamplePlan(url, label) {
@@ -267,7 +267,7 @@
           }
           clearError();
           dropZone.classList.add("has-file");
-          dropZone.querySelector(".drop-text").innerHTML = `<strong>${label}</strong> (Floci emulated AWS)`;
+          dropZone.querySelector(".drop-text").innerHTML = `<strong>${esc(label)}</strong> (Floci emulated AWS)`;
           analyze();
         } catch (err) {
           showError("Failed to load sample plan: " + err.message);

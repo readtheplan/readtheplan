@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, cast
 
+from readtheplan.exceptions import ReadThePlanError
 from readtheplan.evidence import EVIDENCE_SCHEMA, EvidenceEnvelope
 
 
@@ -13,7 +14,7 @@ SIGNING_INSTALL_HINT = (
 )
 
 
-class SigningError(ValueError):
+class SigningError(ReadThePlanError):
     """Raised when signing fails."""
 
 
@@ -180,7 +181,13 @@ def _verify_payload_with_sigstore(
                 reason="signature mismatch",
             )
         verifier = _verifier(rekor_url=rekor_url)
-        verifier.verify_artifact(payload, bundle, policy.UnsafeNoOp())
+        if certificate_identity and certificate_oidc_issuer:
+            verifier.verify_artifact(
+                payload, bundle,
+                policy.Identity(identity=certificate_identity, issuer=certificate_oidc_issuer),
+            )
+        else:
+            verifier.verify_artifact(payload, bundle, policy.UnsafeNoOp())
     except SigstoreVerificationError as exc:
         return VerificationResult(
             ok=False,

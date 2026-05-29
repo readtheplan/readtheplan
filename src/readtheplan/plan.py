@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from readtheplan.exceptions import ReadThePlanError
 from readtheplan.rules import RuleResult, action_explanation, apply_resource_rules
 
 
-class PlanError(ValueError):
+class PlanError(ReadThePlanError):
     """Raised when a Terraform plan JSON file cannot be analyzed."""
 
 
@@ -88,9 +89,13 @@ def load_plan(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def analyze_plan_file(path: str | Path, *, use_rules: bool = True) -> PlanSummary:
-    plan_path = Path(path)
-    data = load_plan(plan_path)
+def analyze_plan_file(path: str | Path | dict, *, use_rules: bool = True, _original_path: Path | None = None) -> PlanSummary:
+    if isinstance(path, dict):
+        data = path
+        plan_path = _original_path or Path("<inline>")
+    else:
+        plan_path = Path(path)
+        data = load_plan(plan_path)
     resource_changes = data.get("resource_changes", [])
     if resource_changes is None:
         resource_changes = []
