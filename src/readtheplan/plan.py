@@ -6,11 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from readtheplan.exceptions import ReadThePlanError
 from readtheplan.rules import RuleResult, action_explanation, apply_resource_rules
 
 
-class PlanError(ReadThePlanError):
+class PlanError(ValueError):
     """Raised when a Terraform plan JSON file cannot be analyzed."""
 
 

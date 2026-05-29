@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from readtheplan.exceptions import ReadThePlanError
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
 from readtheplan.summary import summary_to_dict
@@ -14,7 +13,7 @@ class MissingMCPDependencyError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class MCPToolInputError(ReadThePlanError):
+class MCPToolInputError(ValueError):
     code: str
     message: str
 

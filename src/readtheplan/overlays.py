@@ -7,7 +7,6 @@ from typing import Any, Mapping, cast
 
 import yaml
 
-from readtheplan.exceptions import ReadThePlanError
 from readtheplan.controls import ControlCatalog, ControlEntry
 from readtheplan.plan import ResourceChange
 from readtheplan.rules import RISK_ORDER
@@ -32,7 +31,7 @@ class Overlay:
     control_additions: Mapping[str, Any] | None
 
 
-class OverlayError(ReadThePlanError):
+class OverlayError(ValueError):
     """Raised when an overlay file is invalid."""
 
 

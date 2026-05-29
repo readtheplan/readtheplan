@@ -5,7 +5,6 @@ import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, cast
 
-from readtheplan.exceptions import ReadThePlanError
 from readtheplan.evidence import EVIDENCE_SCHEMA, EvidenceEnvelope
 
 
@@ -14,7 +13,7 @@ SIGNING_INSTALL_HINT = (
 )
 
 
-class SigningError(ReadThePlanError):
+class SigningError(ValueError):
     """Raised when signing fails."""
 
 
@@ -83,6 +82,8 @@ def verify_envelope(
     envelope_bytes: bytes,
     *,
     rekor_url: str | None = None,
+    certificate_identity: str | None = None,
+    certificate_oidc_issuer: str | None = None,
 ) -> VerificationResult:
     """Verify a signed rtp-evidence-v1 envelope."""
 
@@ -118,6 +119,8 @@ def verify_envelope(
         signature=signature,
         bundle_json=bundle_json,
         rekor_url=rekor_url,
+        certificate_identity=certificate_identity,
+        certificate_oidc_issuer=certificate_oidc_issuer,
     )
 
 
@@ -161,6 +164,8 @@ def _verify_payload_with_sigstore(
     signature: str,
     bundle_json: str,
     rekor_url: str | None,
+    certificate_identity: str | None = None,
+    certificate_oidc_issuer: str | None = None,
 ) -> VerificationResult:
     try:
         from sigstore.errors import Error as SigstoreError

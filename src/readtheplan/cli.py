@@ -372,7 +372,12 @@ def _verify(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        result = verify_envelope(envelope_bytes, rekor_url=args.rekor_url)
+        result = verify_envelope(
+            envelope_bytes,
+            rekor_url=args.rekor_url,
+            certificate_identity=args.certificate_identity,
+            certificate_oidc_issuer=args.certificate_oidc_issuer,
+        )
     except VerificationError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
