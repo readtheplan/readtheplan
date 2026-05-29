@@ -240,8 +240,24 @@ def _analyze(args: argparse.Namespace) -> int:
             return 1
 
     try:
-        plan_data = load_plan(args.plan_file)
-        summary = analyze_plan_file(plan_data, use_rules=not args.no_rules, _original_path=Path(args.plan_file))
+        plan_bytes = Path(args.plan_file).read_bytes()
+        plan_data = json.loads(plan_bytes)
+    except json.JSONDecodeError as exc:
+        print(
+            f"Error: invalid JSON in {args.plan_file}:"
+            f" line {exc.lineno}, column {exc.colno}: {exc.msg}",
+            file=sys.stderr,
+        )
+        return 1
+    except FileNotFoundError:
+        print(f"Error: plan file does not exist: {args.plan_file}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"Error: cannot read plan file {args.plan_file}: {exc}", file=sys.stderr)
+        return 1
+
+    summary = analyze_plan_file(plan_data, use_rules=not args.no_rules, _original_path=Path(args.plan_file))
+    try:
         if overlay_items:
             summary = _apply_overlays_to_summary(
                 summary,
@@ -257,7 +273,7 @@ def _analyze(args: argparse.Namespace) -> int:
         try:
             evidence = build_evidence(
                 plan_summary=summary,
-                plan_json=json.dumps(plan_data).encode(),
+                plan_json=plan_bytes,
                 catalog=catalog,
                 agent_id=args.agent_id,
                 reviewer=(
@@ -368,6 +384,19 @@ def _verify(args: argparse.Namespace) -> int:
     except OSError as exc:
         print(
             f"Error: cannot read envelope file {args.envelope}: {exc}", file=sys.stderr
+        )
+        return 1
+
+    if args.certificate_identity and not args.certificate_oidc_issuer:
+        print(
+            "Error: --certificate-oidc-issuer is required when --certificate-identity is set",
+            file=sys.stderr,
+        )
+        return 1
+    if args.certificate_oidc_issuer and not args.certificate_identity:
+        print(
+            "Error: --certificate-identity is required when --certificate-oidc-issuer is set",
+            file=sys.stderr,
         )
         return 1
 
