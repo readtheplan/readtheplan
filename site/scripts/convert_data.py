@@ -11,10 +11,10 @@ OUT.mkdir(parents=True, exist_ok=True)
 frameworks = {}
 for yf in sorted(SRC.glob("*.yaml")):
     name = yf.stem
-    with open(yf) as f:
+    with open(yf, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     out_file = OUT / f"{name}.json"
-    with open(out_file, "w") as f:
+    with open(out_file, "w", encoding="utf-8") as f:
         json.dump(data, f)
     frameworks[name] = {
         "id": name,
@@ -34,7 +34,7 @@ index = {
         "version": "/api/v1/version"
     }
 }
-with open(OUT / "index.json", "w") as f:
+with open(OUT / "index.json", "w", encoding="utf-8") as f:
     json.dump(index, f, indent=2)
 print(f"\n  index: {len(frameworks)} frameworks → {OUT / 'index.json'}")
 
@@ -45,10 +45,10 @@ DEMO_OUT.mkdir(exist_ok=True)
 demos = []
 for jf in sorted(PLAYGROUND.glob("*.json")):
     dest = DEMO_OUT / jf.name
-    dest.write_text(jf.read_text())
+    dest.write_text(jf.read_text(encoding="utf-8"), encoding="utf-8")
     demos.append(jf.stem)
     print(f"  demo: {jf.stem} → {dest}")
-with open(DEMO_OUT / "index.json", "w") as f:
+with open(DEMO_OUT / "index.json", "w", encoding="utf-8") as f:
     json.dump({"demos": demos}, f)
 print(f"  demos: {len(demos)} plans")
 

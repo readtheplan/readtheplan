@@ -1,4 +1,4 @@
-name: Deploy site (Azure)
+name: Site build and validate
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build:
@@ -24,64 +23,19 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify Floci playground sample freshness
-        run: site/scripts/check_floci_samples_freshness.sh
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Python deps
+        run: python -m pip install pyyaml
+
+      - name: Generate compliance data JSON
+        run: python site/scripts/convert_data.py
 
       - name: Validate site source
         run: npm --prefix site test
 
       - name: Build static site
         run: npm --prefix site run build
-
-      - name: Upload build artifact
-        if: github.event_name == 'push'
-        uses: actions/upload-artifact@v7
-        with:
-          name: site-dist
-          path: site/dist
-          if-no-files-found: error
-
-  deploy-azure:
-    if: github.event_name == 'push'
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: site-dist
-          path: site/dist
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Enable static website hosting
-        run: |
-          az storage blob service-properties update \
-            --account-name "${{ secrets.AZURE_STATIC_SITE_STORAGE_ACCOUNT }}" \
-            --static-website \
-            --index-document index.html \
-            --404-document 404.html \
-            --auth-mode login
-
-      - name: Sync site to $web container
-        run: |
-          az storage blob sync \
-            --account-name "${{ secrets.AZURE_STATIC_SITE_STORAGE_ACCOUNT }}" \
-            --container '$web' \
-            --source site/dist \
-            --delete-destination true \
-            --auth-mode login
-
-      - name: Emit website endpoint
-        run: |
-          ENDPOINT=$(az storage account show \
-            --name "${{ secrets.AZURE_STATIC_SITE_STORAGE_ACCOUNT }}" \
-            --query "primaryEndpoints.web" -o tsv)
-          echo "Deployed static site endpoint: ${ENDPOINT}"
