@@ -24,7 +24,12 @@ export async function onRequest(context) {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "https://readtheplan.dev",
-      "Cache-Control": "no-cache"
+      "Cache-Control": "no-cache",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
     }
   });
 }

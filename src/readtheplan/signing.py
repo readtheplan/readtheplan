@@ -82,6 +82,8 @@ def verify_envelope(
     envelope_bytes: bytes,
     *,
     rekor_url: str | None = None,
+    certificate_identity: str | None = None,
+    certificate_oidc_issuer: str | None = None,
 ) -> VerificationResult:
     """Verify a signed rtp-evidence-v1 envelope."""
 
@@ -117,6 +119,8 @@ def verify_envelope(
         signature=signature,
         bundle_json=bundle_json,
         rekor_url=rekor_url,
+        certificate_identity=certificate_identity,
+        certificate_oidc_issuer=certificate_oidc_issuer,
     )
 
 
@@ -160,6 +164,8 @@ def _verify_payload_with_sigstore(
     signature: str,
     bundle_json: str,
     rekor_url: str | None,
+    certificate_identity: str | None = None,
+    certificate_oidc_issuer: str | None = None,
 ) -> VerificationResult:
     try:
         from sigstore.errors import Error as SigstoreError
@@ -180,7 +186,13 @@ def _verify_payload_with_sigstore(
                 reason="signature mismatch",
             )
         verifier = _verifier(rekor_url=rekor_url)
-        verifier.verify_artifact(payload, bundle, policy.UnsafeNoOp())
+        if certificate_identity and certificate_oidc_issuer:
+            verifier.verify_artifact(
+                payload, bundle,
+                policy.Identity(identity=certificate_identity, issuer=certificate_oidc_issuer),
+            )
+        else:
+            verifier.verify_artifact(payload, bundle, policy.UnsafeNoOp())
     except SigstoreVerificationError as exc:
         return VerificationResult(
             ok=False,

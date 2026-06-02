@@ -160,6 +160,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--rekor-url",
         help="Rekor transparency log URL. Defaults to sigstore public.",
     )
+    verify.add_argument(
+        "--certificate-identity",
+        help="Expected certificate identity (e.g., https://github.com/readtheplan/readtheplan/.github/workflows/release.yml@refs/tags/v0.3.0). When set, verification fails if the signer does not match.",
+    )
+    verify.add_argument(
+        "--certificate-oidc-issuer",
+        help="Expected OIDC issuer (e.g., https://token.actions.githubusercontent.com). Required when --certificate-identity is set.",
+    )
     verify.add_argument("envelope", help="Path to evidence envelope JSON.")
     verify.set_defaults(func=_verify)
 
@@ -232,12 +240,29 @@ def _analyze(args: argparse.Namespace) -> int:
             return 1
 
     try:
-        summary = analyze_plan_file(args.plan_file, use_rules=not args.no_rules)
+        plan_bytes = Path(args.plan_file).read_bytes()
+        plan_data = json.loads(plan_bytes)
+    except json.JSONDecodeError as exc:
+        print(
+            f"Error: invalid JSON in {args.plan_file}:"
+            f" line {exc.lineno}, column {exc.colno}: {exc.msg}",
+            file=sys.stderr,
+        )
+        return 1
+    except FileNotFoundError:
+        print(f"Error: plan file does not exist: {args.plan_file}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"Error: cannot read plan file {args.plan_file}: {exc}", file=sys.stderr)
+        return 1
+
+    summary = analyze_plan_file(plan_data, use_rules=not args.no_rules, _original_path=Path(args.plan_file))
+    try:
         if overlay_items:
             summary = _apply_overlays_to_summary(
                 summary,
                 overlay_items,
-                plan_account_id=_plan_account_id(args.plan_file),
+                plan_account_id=_plan_account_id(args.plan_file, plan_data=plan_data),
             )
     except PlanError as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -248,7 +273,7 @@ def _analyze(args: argparse.Namespace) -> int:
         try:
             evidence = build_evidence(
                 plan_summary=summary,
-                plan_json=Path(args.plan_file).read_bytes(),
+                plan_json=plan_bytes,
                 catalog=catalog,
                 agent_id=args.agent_id,
                 reviewer=(
@@ -321,6 +346,7 @@ def _agent_gate(args: argparse.Namespace) -> int:
 
 def _cloudformation_gate(args: argparse.Namespace) -> int:
     """Emit the agent-gate contract for a CloudFormation Change Set / template diff."""
+    from readtheplan.adapters import detect_adapter
     from readtheplan.adapters.cloudformation import analyze_cloudformation
 
     try:
@@ -331,6 +357,11 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
 
     if not isinstance(data, dict):
         print("Error: input must be a JSON object", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "cloudformation":
+        print(f"Error: input not recognized as a supported IaC format (detected: {adapter.adapter_name if adapter else 'none'})", file=sys.stderr)
         return 1
 
     catalog: ControlCatalog | None = None
@@ -356,8 +387,26 @@ def _verify(args: argparse.Namespace) -> int:
         )
         return 1
 
+    if args.certificate_identity and not args.certificate_oidc_issuer:
+        print(
+            "Error: --certificate-oidc-issuer is required when --certificate-identity is set",
+            file=sys.stderr,
+        )
+        return 1
+    if args.certificate_oidc_issuer and not args.certificate_identity:
+        print(
+            "Error: --certificate-identity is required when --certificate-oidc-issuer is set",
+            file=sys.stderr,
+        )
+        return 1
+
     try:
-        result = verify_envelope(envelope_bytes, rekor_url=args.rekor_url)
+        result = verify_envelope(
+            envelope_bytes,
+            rekor_url=args.rekor_url,
+            certificate_identity=args.certificate_identity,
+            certificate_oidc_issuer=args.certificate_oidc_issuer,
+        )
     except VerificationError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -410,8 +459,8 @@ def _apply_overlays_to_summary(
     )
 
 
-def _plan_account_id(plan_file: str | Path) -> str | None:
-    data = load_plan(plan_file)
+def _plan_account_id(plan_file: str | Path, plan_data: dict | None = None) -> str | None:
+    data = plan_data if plan_data is not None else load_plan(plan_file)
     for key in ("account_id", "aws_account_id"):
         value = data.get(key)
         if value is not None:

@@ -1,0 +1,109 @@
+name: floci-integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  floci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install readtheplan
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      # ── Try floci API first (5s), fall back to git install (30s) ──────
+
+      - name: Try floci API or install locally
+        id: floci
+        run: |
+          if curl -sSf --connect-timeout 5 --max-time 10 \
+            "https://floci.readtheplan.dev/health" > /dev/null 2>&1; then
+            echo "mode=api" >> "$GITHUB_OUTPUT"
+            echo "floci API reachable — using HTTP"
+          else
+            echo "mode=local" >> "$GITHUB_OUTPUT"
+            echo "floci API unreachable — installing from git"
+            python -m pip install "git+https://github.com/readtheplan/floci-moto-spike.git"
+            floci list-scenarios
+          fi
+
+      # ── Scenario 1: mixed (5 resource types) ──────────────────────────
+
+      - name: Generate plan — mixed scenario
+        run: |
+          set -e
+          if [ "${{ steps.floci.outputs.mode }}" = "api" ]; then
+            curl -sS --fail-with-body -X POST \
+              "https://floci.readtheplan.dev/create?scenario=mixed" \
+              -o /tmp/floci-mixed.json
+          else
+            floci create --scenario mixed -o /tmp/floci-mixed.json
+          fi
+          echo "=== Analyzing with readtheplan (SOC 2) ==="
+          readtheplan analyze --framework soc2 /tmp/floci-mixed.json
+          echo "=== Verifying JSON output ==="
+          readtheplan analyze --format json --framework soc2 /tmp/floci-mixed.json \
+            | python -c "import sys,json; d=json.load(sys.stdin); assert d['resource_change_count'] > 0; print(f'OK: {d[\"resource_change_count\"]} resources classified')"
+
+      # ── Scenario 2: security (SG + IAM + KMS) ─────────────────────────
+
+      - name: Generate plan — security scenario
+        run: |
+          set -e
+          if [ "${{ steps.floci.outputs.mode }}" = "api" ]; then
+            curl -sS --fail-with-body -X POST \
+              "https://floci.readtheplan.dev/create?scenario=security" \
+              -o /tmp/floci-security.json
+          else
+            floci create --scenario security -o /tmp/floci-security.json
+          fi
+          readtheplan analyze --framework soc2 /tmp/floci-security.json
+          readtheplan analyze --format json --framework soc2 /tmp/floci-security.json \
+            | python -c "import sys,json; d=json.load(sys.stdin); assert d['resource_change_count'] > 0; print(f'OK: {d[\"resource_change_count\"]} resources classified')"
+
+      # ── Scenario 3: update (before/after diffs) ───────────────────────
+
+      - name: Generate plan — update scenario (diffs)
+        run: |
+          set -e
+          if [ "${{ steps.floci.outputs.mode }}" = "api" ]; then
+            curl -sS --fail-with-body -X POST \
+              "https://floci.readtheplan.dev/update?scenario=update" \
+              -o /tmp/floci-update.json
+          else
+            floci update --scenario update -o /tmp/floci-update.json
+          fi
+          echo "=== Verifying update plan has mixed actions ==="
+          python -c "
+          import json
+          plan = json.load(open('/tmp/floci-update.json'))
+          actions = {a for rc in plan['resource_changes'] for a in rc['change']['actions']}
+          print(f'Actions in plan: {actions}')
+          assert 'update' in actions or 'create' in actions, f'No update or create actions: {actions}'
+          print('OK')
+          "
+
+      - name: Upload generated plans
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: floci-plans
+          path: /tmp/floci-*.json
+          retention-days: 7

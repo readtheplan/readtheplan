@@ -41,7 +41,7 @@ def action_explanation(actions: tuple[str, ...], *, tool_name: str = "Terraform"
         )
     if action_set <= {"no-op", "read"}:
         return f"{tool_name} is only reading or refreshing this resource."
-    if "create" in action_set:
+    if "create" in action_set and action_set <= {"create", "no-op", "read", "update"}:
         return f"{tool_name} will create a new resource without changing existing state."
     return f"{tool_name} action metadata is missing or unknown; human review is required."
 
@@ -57,14 +57,13 @@ def apply_resource_rules(
     result = baseline
     for candidate in _rule_candidates(resource_type, actions, change):
         result = _max_result(result, candidate)
-    # Post-process: if a rule escalated the explanation, ensure the tool name
-    # in it matches the caller (CloudFormation, Pulumi, etc.).  Rules are
-    # authored in Terraform language by default; non-Terraform adapters get
-    # their tool name substituted in.
-    if tool_name != "Terraform" and result is not baseline:
+    # Post-process: replace __TOOL__ sentinel with the actual tool name.
+    # This avoids blind string-replace of "Terraform" which could
+    # mangle compound names like "Terraform Cloud".
+    if result is not baseline:
         result = RuleResult(
             risk=result.risk,
-            explanation=result.explanation.replace("Terraform", tool_name),
+            explanation=result.explanation.replace("__TOOL__", tool_name),
         )
     return result
 
@@ -153,7 +152,7 @@ def _rds_candidates(
             RuleResult(
                 "dangerous",
                 (
-                    f"Terraform will replace this {label}. Confirm snapshots, "
+                    f"__TOOL__ will replace this {label}. Confirm snapshots, "
                     "restore path, endpoint changes, and maintenance-window impact."
                 ),
             )
@@ -163,7 +162,7 @@ def _rds_candidates(
             RuleResult(
                 "irreversible",
                 (
-                    f"Terraform will delete this {label}. Without a verified final "
+                    f"__TOOL__ will delete this {label}. Without a verified final "
                     "snapshot or restore plan, database data may be lost."
                 ),
             )
@@ -173,7 +172,7 @@ def _rds_candidates(
             RuleResult(
                 "review",
                 (
-                    f"Terraform will update this {label}. Check backup state, "
+                    f"__TOOL__ will update this {label}. Check backup state, "
                     "maintenance windows, and whether the provider will force replacement."
                 ),
             )
@@ -186,17 +185,6 @@ def _rds_candidates(
                 (
                     f"The {label} engine_version appears to cross a major version. "
                     "Major database upgrades can be irreversible or require downtime."
-                ),
-            )
-        )
-    if _runtime_deprecated(change):
-        candidates.append(
-            RuleResult(
-                "dangerous",
-                (
-                    "Lambda runtime is deprecated or approaching end-of-life. AWS "
-                    "may block function updates or invocations for deprecated runtimes. "
-                    "Upgrade to a supported runtime before applying."
                 ),
             )
         )
@@ -217,7 +205,7 @@ def _s3_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete an S3 bucket with force_destroy enabled. "
+                        "__TOOL__ will delete an S3 bucket with force_destroy enabled. "
                         "Objects can be removed along with the bucket, making recovery unlikely."
                     ),
                 )
@@ -227,7 +215,7 @@ def _s3_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete an S3 bucket or bucket control resource. "
+                        "__TOOL__ will delete an S3 bucket or bucket control resource. "
                         "Confirm object retention, replication, and recovery requirements."
                     ),
                 )
@@ -237,7 +225,7 @@ def _s3_candidates(
             RuleResult(
                 "review",
                 (
-                    "Terraform will update S3 bucket controls. Review public access, "
+                    "__TOOL__ will update S3 bucket controls. Review public access, "
                     "retention, encryption, and data exposure settings."
                 ),
             )
@@ -247,7 +235,7 @@ def _s3_candidates(
             RuleResult(
                 "safe",
                 (
-                    "Terraform will create S3 bucket infrastructure. Confirm public "
+                    "__TOOL__ will create S3 bucket infrastructure. Confirm public "
                     "access blocks and data classification before storing sensitive data."
                 ),
             )
@@ -272,7 +260,7 @@ def _kms_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "dangerous",
                 (
-                    "Terraform will replace a KMS key. Key identity changes can break "
+                    "__TOOL__ will replace a KMS key. Key identity changes can break "
                     "decrypt access for data and services that depend on the old key."
                 ),
             )
@@ -282,7 +270,7 @@ def _kms_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "irreversible",
                 (
-                    "Terraform will schedule deletion of a KMS key. Once the deletion "
+                    "__TOOL__ will schedule deletion of a KMS key. Once the deletion "
                     "window completes, data encrypted only by that key cannot be decrypted."
                 ),
             )
@@ -292,7 +280,7 @@ def _kms_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "review",
                 (
-                    "Terraform will update a KMS key. Review key policy, rotation, "
+                    "__TOOL__ will update a KMS key. Review key policy, rotation, "
                     "deletion window, and service dependencies."
                 ),
             )
@@ -311,7 +299,7 @@ def _iam_candidates(
             RuleResult(
                 "irreversible",
                 (
-                    "Terraform will delete IAM authorization infrastructure. Confirm "
+                    "__TOOL__ will delete IAM authorization infrastructure. Confirm "
                     "no workloads, humans, or break-glass paths depend on it."
                 ),
             )
@@ -321,7 +309,7 @@ def _iam_candidates(
             RuleResult(
                 "review",
                 (
-                    "Terraform will update IAM authorization. Review trust policies, "
+                    "__TOOL__ will update IAM authorization. Review trust policies, "
                     "permission boundaries, and deny statements for lockout or escalation risk."
                 ),
             )
@@ -364,7 +352,7 @@ def _route53_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "dangerous",
                 (
-                    "Terraform will replace a Route53 hosted zone. Name server changes "
+                    "__TOOL__ will replace a Route53 hosted zone. Name server changes "
                     "can take production DNS offline until delegations and records are repaired."
                 ),
             )
@@ -374,7 +362,7 @@ def _route53_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "irreversible",
                 (
-                    "Terraform will delete a Route53 hosted zone. DNS for the zone can "
+                    "__TOOL__ will delete a Route53 hosted zone. DNS for the zone can "
                     "go dark, and recreating it may produce different name servers."
                 ),
             )
@@ -384,7 +372,7 @@ def _route53_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "review",
                 (
-                    "Terraform will update a Route53 hosted zone. Review delegation, "
+                    "__TOOL__ will update a Route53 hosted zone. Review delegation, "
                     "record ownership, and downstream DNS dependencies."
                 ),
             )
@@ -398,7 +386,7 @@ def _eks_node_group_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "dangerous",
                 (
-                    "Terraform will replace an EKS node group. Expect pod evictions, "
+                    "__TOOL__ will replace an EKS node group. Expect pod evictions, "
                     "capacity churn, and possible cluster disruption during rollout."
                 ),
             )
@@ -408,7 +396,7 @@ def _eks_node_group_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "irreversible",
                 (
-                    "Terraform will delete an EKS node group. Confirm replacement "
+                    "__TOOL__ will delete an EKS node group. Confirm replacement "
                     "capacity and disruption budgets before applying."
                 ),
             )
@@ -418,7 +406,7 @@ def _eks_node_group_candidates(action_set: set[str]) -> list[RuleResult]:
             RuleResult(
                 "review",
                 (
-                    "Terraform will update an EKS node group. Review rollout settings, "
+                    "__TOOL__ will update an EKS node group. Review rollout settings, "
                     "surge capacity, labels, taints, and workload disruption budgets."
                 ),
             )
@@ -435,7 +423,7 @@ def _ecs_service_candidates(
             RuleResult(
                 "dangerous",
                 (
-                    "Terraform will replace an ECS service. Expect running tasks to be "
+                    "__TOOL__ will replace an ECS service. Expect running tasks to be "
                     "drained, possible service disruption, and ALB re-registration delay."
                 ),
             )
@@ -445,7 +433,7 @@ def _ecs_service_candidates(
             RuleResult(
                 "irreversible",
                 (
-                    "Terraform will delete an ECS service. All tasks, service discovery "
+                    "__TOOL__ will delete an ECS service. All tasks, service discovery "
                     "entries, and auto-scaling policies will be removed. Confirm that "
                     "traffic has been routed away."
                 ),
@@ -480,7 +468,7 @@ def _ecs_service_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update an ECS service. Review deployment "
+                        "__TOOL__ will update an ECS service. Review deployment "
                         "configuration, desired count, task definition, and health "
                         "check grace period before applying."
                     ),
@@ -503,7 +491,7 @@ def _lb_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace this load balancer. Expect DNS rebinding, "
+                        "__TOOL__ will replace this load balancer. Expect DNS rebinding, "
                         "connection draining, and possible downtime for all fronted services."
                     ),
                 )
@@ -513,7 +501,7 @@ def _lb_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete this load balancer. All listeners, target "
+                        "__TOOL__ will delete this load balancer. All listeners, target "
                         "groups, and DNS aliases are affected immediately."
                     ),
                 )
@@ -523,7 +511,7 @@ def _lb_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update this load balancer. Review attribute changes "
+                        "__TOOL__ will update this load balancer. Review attribute changes "
                         "for availability impact."
                     ),
                 )
@@ -546,7 +534,7 @@ def _lb_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will delete a load balancer listener. "
+                        "__TOOL__ will delete a load balancer listener. "
                         "Production traffic on this port will be dropped."
                     ),
                 )
@@ -588,7 +576,7 @@ def _lb_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update a listener rule. Review condition and "
+                        "__TOOL__ will update a listener rule. Review condition and "
                         "action changes for routing impact."
                     ),
                 )
@@ -600,7 +588,7 @@ def _lb_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace this target group. Target registrations "
+                        "__TOOL__ will replace this target group. Target registrations "
                         "are lost and must re-register, causing a traffic gap."
                     ),
                 )
@@ -610,7 +598,7 @@ def _lb_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete this target group. Confirm no listeners "
+                        "__TOOL__ will delete this target group. Confirm no listeners "
                         "still reference it and no traffic depends on it."
                     ),
                 )
@@ -642,7 +630,7 @@ def _lb_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will detach a target from a target group. "
+                        "__TOOL__ will detach a target from a target group. "
                         "Traffic will no longer route to this target."
                     ),
                 )
@@ -715,6 +703,17 @@ def _lambda_candidates(
                 ),
             )
         )
+    if _runtime_deprecated(change):
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "Lambda runtime is deprecated or approaching end-of-life. AWS "
+                    "may block function updates or invocations for deprecated runtimes. "
+                    "Upgrade to a supported runtime before applying."
+                ),
+            )
+        )
 
     return candidates
 
@@ -732,7 +731,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace an ECR repository. Image URLs, "
+                        "__TOOL__ will replace an ECR repository. Image URLs, "
                         "repository policy, scanning, and pull paths may change."
                     ),
                 )
@@ -742,7 +741,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete an ECR repository. Container images "
+                        "__TOOL__ will delete an ECR repository. Container images "
                         "and tags may be removed with the repository."
                     ),
                 )
@@ -752,7 +751,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update an ECR repository. Review image "
+                        "__TOOL__ will update an ECR repository. Review image "
                         "scanning, mutability, encryption, and lifecycle posture."
                     ),
                 )
@@ -774,7 +773,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will delete an ECR lifecycle policy. Old images "
+                        "__TOOL__ will delete an ECR lifecycle policy. Old images "
                         "may accumulate or retention assumptions may change."
                     ),
                 )
@@ -784,7 +783,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will change an ECR lifecycle policy. Confirm tag "
+                        "__TOOL__ will change an ECR lifecycle policy. Confirm tag "
                         "retention rules will not expire rollback images too early."
                     ),
                 )
@@ -796,7 +795,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace an SQS queue. Queue URL/ARN changes "
+                        "__TOOL__ will replace an SQS queue. Queue URL/ARN changes "
                         "can break producers, consumers, and dead-letter routing."
                     ),
                 )
@@ -806,7 +805,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete an SQS queue. Undelivered messages "
+                        "__TOOL__ will delete an SQS queue. Undelivered messages "
                         "and dead-letter history can be lost."
                     ),
                 )
@@ -816,7 +815,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update an SQS queue. Review retention, "
+                        "__TOOL__ will update an SQS queue. Review retention, "
                         "visibility timeout, encryption, and redrive policy changes."
                     ),
                 )
@@ -860,7 +859,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        f"Terraform will replace a {label}. Data catalog identity "
+                        f"__TOOL__ will replace a {label}. Data catalog identity "
                         "changes can break analytics jobs and lineage references."
                     ),
                 )
@@ -870,7 +869,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        f"Terraform will delete a {label}. Queries and ETL jobs "
+                        f"__TOOL__ will delete a {label}. Queries and ETL jobs "
                         "depending on the catalog entry may fail."
                     ),
                 )
@@ -880,7 +879,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "review",
                     (
-                        f"Terraform will update a {label}. Review schema, location, "
+                        f"__TOOL__ will update a {label}. Review schema, location, "
                         "classification, and consumer compatibility."
                     ),
                 )
@@ -892,7 +891,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace a Glue job. Schedule bindings, "
+                        "__TOOL__ will replace a Glue job. Schedule bindings, "
                         "bookmarks, permissions, and ETL behavior may change."
                     ),
                 )
@@ -902,7 +901,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete a Glue job. Dependent data pipelines "
+                        "__TOOL__ will delete a Glue job. Dependent data pipelines "
                         "will stop running unless an equivalent job exists."
                     ),
                 )
@@ -912,7 +911,7 @@ def _platform_service_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update a Glue job. Review script, role, "
+                        "__TOOL__ will update a Glue job. Review script, role, "
                         "worker, bookmark, and connection changes before rollout."
                     ),
                 )
@@ -943,7 +942,7 @@ def _security_group_candidates(
             RuleResult(
                 "dangerous",
                 (
-                    "Terraform will replace security group network boundaries. "
+                    "__TOOL__ will replace security group network boundaries. "
                     "Attached workloads may lose expected traffic paths during rollout."
                 ),
             )
@@ -953,7 +952,7 @@ def _security_group_candidates(
             RuleResult(
                 "dangerous",
                 (
-                    "Terraform will delete security group configuration. "
+                    "__TOOL__ will delete security group configuration. "
                     "Ingress/egress permissions for attached workloads may break."
                 ),
             )
@@ -963,7 +962,7 @@ def _security_group_candidates(
             RuleResult(
                 "review",
                 (
-                    "Terraform will change security group rules. Review ports, "
+                    "__TOOL__ will change security group rules. Review ports, "
                     "protocols, and source/destination boundaries before applying."
                 ),
             )
@@ -996,7 +995,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace a subnet. ENIs, load balancers, "
+                        "__TOOL__ will replace a subnet. ENIs, load balancers, "
                         "NAT placement, and workload attachment may be disrupted."
                     ),
                 )
@@ -1006,7 +1005,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will delete a subnet. Workloads and network "
+                        "__TOOL__ will delete a subnet. Workloads and network "
                         "interfaces in that subnet must move first."
                     ),
                 )
@@ -1016,7 +1015,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update subnet configuration. Review CIDR, "
+                        "__TOOL__ will update subnet configuration. Review CIDR, "
                         "availability zone, public IP, and routing assumptions."
                     ),
                 )
@@ -1038,7 +1037,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace route table topology. Subnet "
+                        "__TOOL__ will replace route table topology. Subnet "
                         "egress, ingress, and private/public boundaries may shift."
                     ),
                 )
@@ -1048,7 +1047,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will delete route table topology. Attached "
+                        "__TOOL__ will delete route table topology. Attached "
                         "subnets may lose expected routing."
                     ),
                 )
@@ -1058,7 +1057,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update route table topology. Review subnet "
+                        "__TOOL__ will update route table topology. Review subnet "
                         "associations and default route behavior."
                     ),
                 )
@@ -1070,7 +1069,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace a route. Traffic may briefly blackhole "
+                        "__TOOL__ will replace a route. Traffic may briefly blackhole "
                         "or move to a different network boundary."
                     ),
                 )
@@ -1080,7 +1079,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will delete a route. Dependent traffic may lose "
+                        "__TOOL__ will delete a route. Dependent traffic may lose "
                         "connectivity immediately."
                     ),
                 )
@@ -1090,7 +1089,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update a route. Review destination CIDRs "
+                        "__TOOL__ will update a route. Review destination CIDRs "
                         "and next-hop targets for reachability impact."
                     ),
                 )
@@ -1112,7 +1111,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace a NAT gateway. Private subnet egress "
+                        "__TOOL__ will replace a NAT gateway. Private subnet egress "
                         "may be interrupted until routes point at the new gateway."
                     ),
                 )
@@ -1122,7 +1121,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will delete a NAT gateway. Private subnet egress "
+                        "__TOOL__ will delete a NAT gateway. Private subnet egress "
                         "for patching, pulls, and outbound calls may stop."
                     ),
                 )
@@ -1132,7 +1131,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will change a NAT gateway. Review egress routing, "
+                        "__TOOL__ will change a NAT gateway. Review egress routing, "
                         "AZ placement, and elastic IP dependencies."
                     ),
                 )
@@ -1144,7 +1143,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will replace an internet gateway. Public subnet "
+                        "__TOOL__ will replace an internet gateway. Public subnet "
                         "ingress and egress may be interrupted."
                     ),
                 )
@@ -1154,7 +1153,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will delete an internet gateway. Public subnet "
+                        "__TOOL__ will delete an internet gateway. Public subnet "
                         "connectivity through that VPC will stop."
                     ),
                 )
@@ -1164,7 +1163,7 @@ def _network_topology_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will change an internet gateway. Review which "
+                        "__TOOL__ will change an internet gateway. Review which "
                         "subnets and routes should become internet reachable."
                     ),
                 )
@@ -1186,7 +1185,7 @@ def _observability_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        "Terraform will delete a CloudWatch alarm. Detection and "
+                        "__TOOL__ will delete a CloudWatch alarm. Detection and "
                         "incident response coverage may be reduced."
                     ),
                 )
@@ -1196,7 +1195,7 @@ def _observability_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update a CloudWatch alarm. Review threshold, "
+                        "__TOOL__ will update a CloudWatch alarm. Review threshold, "
                         "period, evaluation, and action changes for detection impact."
                     ),
                 )
@@ -1233,7 +1232,7 @@ def _observability_candidates(
                 RuleResult(
                     "dangerous",
                     (
-                        f"Terraform will delete an {label}. Automated detection, "
+                        f"__TOOL__ will delete an {label}. Automated detection, "
                         "routing, or remediation may stop."
                     ),
                 )
@@ -1243,7 +1242,7 @@ def _observability_candidates(
                 RuleResult(
                     "review",
                     (
-                        f"Terraform will update an {label}. Review event pattern, "
+                        f"__TOOL__ will update an {label}. Review event pattern, "
                         "schedule, target, and retry behavior."
                     ),
                 )
@@ -1268,7 +1267,7 @@ def _observability_candidates(
                 RuleResult(
                     "irreversible",
                     (
-                        "Terraform will delete a CloudWatch log group. Log history "
+                        "__TOOL__ will delete a CloudWatch log group. Log history "
                         "used for investigations and audit evidence may be removed."
                     ),
                 )
@@ -1278,7 +1277,7 @@ def _observability_candidates(
                 RuleResult(
                     "review",
                     (
-                        "Terraform will update a CloudWatch log group. Review "
+                        "__TOOL__ will update a CloudWatch log group. Review "
                         "retention, encryption, and subscription changes."
                     ),
                 )
@@ -1309,7 +1308,7 @@ def _policy_resource_candidates(
             RuleResult(
                 "dangerous",
                 (
-                    f"Terraform will delete a {label}. Access for {protected_subject} "
+                    f"__TOOL__ will delete a {label}. Access for {protected_subject} "
                     "may become too broad or too restrictive depending on defaults."
                 ),
             )
@@ -1319,7 +1318,7 @@ def _policy_resource_candidates(
             RuleResult(
                 "review",
                 (
-                    f"Terraform will change a {label}. Review principals, actions, "
+                    f"__TOOL__ will change a {label}. Review principals, actions, "
                     "and cross-account access before applying."
                 ),
             )

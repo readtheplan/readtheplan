@@ -298,6 +298,7 @@ def _fake_verify_payload(
     signature: str,
     bundle_json: str,
     rekor_url: str | None,
+    **_kwargs: object,
 ) -> VerificationResult:
     bundle = _loads_json(bundle_json)
     inner = _mapping(bundle["readtheplan_test_bundle_v1"])

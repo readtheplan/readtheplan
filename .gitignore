@@ -49,3 +49,4 @@ docs/handoff/
 uv.lock
 # sensitive operational docs — real IPs/credentials
 docs/security/agent-vault-remote-cutover.txt
+.coverage

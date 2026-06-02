@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted (2026-06-02)
 
 ## Context
 
@@ -30,30 +30,25 @@ The constraints for this preview are:
 
 ## Decision
 
-Ship an experimental MCP preview as a local stdio adapter in a future release.
-The preview exposes a small tool surface that reuses existing readtheplan
-analysis behavior and returns existing JSON shapes.
+Ship an experimental MCP preview as a local stdio adapter. The preview
+exposes a small tool surface that reuses existing readtheplan analysis
+behavior and returns existing JSON shapes.
 
-For v0, expose one tool:
+### v0 Tool Surface
 
-1. `analyze_plan`: read a local Terraform plan JSON file and return the same
-   summary object as `readtheplan analyze --format json <plan_path>`.
+The v0 implementation exposes three tools — `analyze_plan`, `agent_gate`,
+and `agent_gate_cloudformation`. While the initial ADR draft proposed a
+single-tool surface (`analyze_plan` only), implementation revealed that
+`agent_gate` and `agent_gate_cloudformation` are lightweight wrappers over
+the same analysis pipeline. They add no new contracts, schema drift, or
+audit risk, and removing them would break tested behavior without adding
+safety.
 
-Evidence generation and signed evidence verification are not v0 MCP tools.
-They are a documented follow-on path because they have stronger audit and
-identity semantics than basic plan analysis. They can be added only after the
-adapter proves useful and the implementation can preserve the existing
-`rtp-evidence-v1` and verify contracts without adding MCP-specific schema
-fields.
-
-The MCP adapter may call imported Python functions directly. It should not
-shell out to the CLI when the same behavior is available as a library call.
-The CLI remains the canonical user-facing interface and the GitHub Action
-remains the canonical CI interface.
-
-## Tool Set
-
-### v0
+| Tool | Purpose |
+|---|---|
+| `analyze_plan` | Classify Terraform plan changes; returns the CLI JSON summary. |
+| `agent_gate` | Return proceed/warn/block gate decision with required checks. |
+| `agent_gate_cloudformation` | Same gate contract for CloudFormation Change Sets. |
 
 #### `analyze_plan`
 
@@ -61,15 +56,48 @@ Purpose: classify Terraform plan changes for local agent or IDE review.
 
 Inputs:
 
-- `plan_path`: local path to `terraform show -json` output.
+- `plan_path` (*required*): local path to `terraform show -json` output.
+- `framework` (*optional*): compliance framework name (`soc2`, `hipaa`,
+  `iso27001`, etc.). When set, each resource change in the summary is
+  annotated with matching control IDs, titles, and rationales from the
+  framework catalog, and a top-level `framework` key identifies the
+  catalog version.
 
 Behavior:
 
 - Parse the same Terraform plan JSON accepted by the CLI.
 - Apply the same built-in rules and default risk taxonomy as the CLI.
-- Return the same JSON summary object as `readtheplan analyze --format json`.
+- When `framework` is provided, delegate to `load_catalog()` and annotate
+  each change with the framework's control entries via the existing
+  `summary_to_dict(…, catalog)` contract.
+- Return the same JSON summary object as `readtheplan analyze --format json`
+  (or `--format json --framework <name>`).
 - Return structured MCP errors for missing files, invalid JSON, unsupported
-  plan shapes, or analysis failures.
+  plan shapes, unknown frameworks, path-traversal violations, or analysis
+  failures.
+
+#### `agent_gate`
+
+Purpose: deterministic proceed/warn/block decision for coding agents.
+
+Inputs:
+
+- `plan_path` (*required*): local path to `terraform show -json` output.
+- `framework` (*optional*): compliance framework name for per-resource
+  control checks in the `required_checks` list.
+
+Returns the `rtp-agent-gate-v1` contract (same as CLI `agent-gate`).
+
+#### `agent_gate_cloudformation`
+
+Purpose: same gate contract for CloudFormation Change Sets or template
+diffs.
+
+Inputs:
+
+- `input_path` (*required*): local path to CloudFormation JSON.
+
+Returns the `rtp-agent-gate-v1` contract with `tool_name="CloudFormation"`.
 
 ### Deferred Tools
 
@@ -108,6 +136,10 @@ contracts and ADRs.
     "plan_path": {
       "type": "string",
       "description": "Local path to Terraform plan JSON from terraform show -json."
+    },
+    "framework": {
+      "type": "string",
+      "description": "Optional compliance framework name (e.g. soc2, hipaa, iso27001)."
     }
   },
   "required": ["plan_path"],
@@ -117,7 +149,7 @@ contracts and ADRs.
 
 ### `analyze_plan` Result
 
-The result is the existing CLI JSON summary:
+Without framework (same as CLI `--format json`):
 
 ```json
 {
@@ -145,9 +177,36 @@ The result is the existing CLI JSON summary:
 }
 ```
 
-Framework annotations may appear only if the future MCP tool explicitly
-accepts framework selection and delegates to the same CLI contract. v0 does
-not add framework, evidence, signing, or overlay options.
+With framework (same as CLI `--format json --framework soc2`):
+
+```json
+{
+  "resource_change_count": 3,
+  "actions": { "...": "..." },
+  "risks": { "...": "..." },
+  "framework": {
+    "name": "soc2",
+    "version": "2023",
+    "schema_version": 1
+  },
+  "changes": [
+    {
+      "address": "aws_s3_bucket.logs",
+      "type": "aws_s3_bucket",
+      "actions": ["update"],
+      "risk": "review",
+      "explanation": "...",
+      "controls": [
+        {
+          "id": "CC6.1",
+          "title": "Logical Access Security",
+          "rationale": "..."
+        }
+      ]
+    }
+  ]
+}
+```
 
 ### Deferred `create_evidence` Input
 
@@ -206,9 +265,14 @@ for MCP only after the CLI/library boundary is available.
 - The adapter is read-only in v0. `analyze_plan` reads a plan file and returns
   JSON; it does not write evidence files, signatures, cache entries, or logs
   containing raw plan contents.
-- File handling should be explicit and conservative. The implementation should
-  reject missing paths, directories, non-JSON inputs, and paths outside an
-  allowed working root when the MCP client supplies such a root.
+- **Working-root path validation**: when the `MCP_ROOT` environment variable
+  is set, every `plan_path` is resolved to its canonical absolute path and
+  checked to fall within the `MCP_ROOT` directory tree. Paths outside the root
+  are rejected with a `PATH_TRAVERSAL` error before any file read occurs.
+  When `MCP_ROOT` is unset, path resolution still occurs but no boundary
+  check is enforced (matching CLI behavior).
+- Path traversal is checked via `Path.resolve()` followed by
+  `Path.relative_to()`, which correctly handles symlinks and `..` segments.
 - Logs go to stderr and must not include raw plan JSON.
 - No credentials are requested or stored by v0. Sigstore signing remains
   outside the MCP preview.
@@ -230,23 +294,23 @@ for MCP only after the CLI/library boundary is available.
 
 ## Test Plan
 
-For this ADR-only change:
-
-- Run the existing documentation/ADR tests.
-- Run the practical unit test subset if it is lightweight in the local
-  environment.
-
-For the future MCP implementation:
+For the MCP implementation:
 
 - Unit-test each tool handler against imported readtheplan functions.
 - Assert that `analyze_plan` output exactly matches
   `readtheplan analyze --format json` for representative fixtures.
+- Assert that `analyze_plan` with `--framework` matches
+  `readtheplan analyze --format json --framework <name>`.
 - Test invalid paths, missing files, malformed JSON, unsupported Terraform plan
-  structures, and permission errors.
+  structures, unknown frameworks, and permission errors.
+- Test working-root path traversal: `MCP_ROOT` set → paths outside rejected;
+  `MCP_ROOT` unset → no boundary check.
 - Test that MCP errors are structured and do not leak raw plan contents.
-- Add an integration smoke test that starts the stdio server, performs tool
-  discovery, calls `analyze_plan`, and compares the result with the CLI JSON
-  contract.
+- **Stdio integration smoke test**: starts the real `readtheplan mcp` server
+  as a subprocess, performs the full MCP handshake (initialize →
+  initialized), lists tools via `tools/list`, calls `analyze_plan` via
+  `tools/call`, and compares the result with the CLI JSON contract.
+  A second stdio test exercises `analyze_plan` with framework.
 - If `create_evidence` is later added, compare its result with the CLI
   `--evidence -` output for each supported framework.
 - If `verify_evidence` is later added, compare success and failure cases with
@@ -259,14 +323,19 @@ For the future MCP implementation:
 2. Add an optional MCP runtime dependency or extra only if required by the
    chosen Python MCP SDK. Keep dependency scope narrow and pinned.
 3. Add a preview `readtheplan mcp` stdio entry point.
-4. Implement `analyze_plan` only, backed by the existing analyzer and JSON
-   summary contract.
-5. Add unit tests and one stdio integration smoke test.
-6. Document preview client configuration and mark the feature experimental.
-7. Revisit `create_evidence` after v0 feedback. Add it only if it can return
+4. Implement `analyze_plan`, `agent_gate`, and `agent_gate_cloudformation`,
+   backed by the existing analyzer, gate contract, and JSON summary
+   contracts.
+5. Add framework parameter to `analyze_plan` (and `agent_gate`) delegating
+   to `load_catalog()` via the existing `summary_to_dict(…, catalog)`
+   contract.
+6. Add working-root path traversal protection via `MCP_ROOT` env var.
+7. Add unit tests and two stdio integration smoke tests.
+8. Document preview client configuration and mark the feature experimental.
+9. Revisit `create_evidence` after v0 feedback. Add it only if it can return
    exactly `rtp-evidence-v1` without MCP-only fields.
-8. Revisit `verify_evidence` after the evidence path and verify library
-   boundary are stable.
+10. Revisit `verify_evidence` after the evidence path and verify library
+    boundary are stable.
 
 ## Consequences
 
@@ -276,8 +345,10 @@ For the future MCP implementation:
 - The preview reinforces the existing local-first product boundary.
 - The initial implementation remains small because it adapts existing analysis
   instead of creating new policy behavior.
-- Keeping v0 to `analyze_plan` reduces audit, signing, and schema risk while
-  the MCP surface is still experimental.
+- Framework annotations are available through `analyze_plan` (with optional
+  `framework` parameter), matching CLI parity.
+- Working-root path validation (`MCP_ROOT`) provides a security boundary for
+  MCP client configurations that restrict file access.
 
 ### Negative
 
