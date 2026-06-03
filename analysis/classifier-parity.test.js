@@ -753,29 +753,30 @@ function loadPlan(filename) {
   return JSON.parse(raw);
 }
 
-assert("fixture: floci-create-plan matches Python", () => {
-  const plan = loadPlan("floci-create-plan.json");
+assert("fixture: floci-spike-create-plan matches Python", () => {
+  const plan = loadPlan("floci-spike-create-plan.json");
   const changes = parsePlan(plan);
   const byAddr = {};
   for (const c of changes) byAddr[c.address] = c;
 
-  eq(changes.length, 4, "4 resources");
-  eq(byAddr["aws_iam_policy.data_access"].risk, "safe");
-  eq(byAddr["aws_kms_key.data"].risk, "safe");
-  eq(byAddr["aws_s3_bucket.logs"].risk, "safe");
-  eq(byAddr["aws_sqs_queue.events"].risk, "safe");
+  eq(changes.length, 7, "7 resources");
+  // All creates → safe
+  eq(byAddr["aws_s3_bucket.static-assets"].risk, "safe");
+  eq(byAddr["aws_dynamodb_table.sessions"].risk, "safe");
+  eq(byAddr["aws_iam_role.lambda-exec"].risk, "safe");
 });
 
-assert("fixture: floci-destroy-plan matches Python", () => {
-  const plan = loadPlan("floci-destroy-plan.json");
+assert("fixture: floci-spike-destroy-plan matches Python", () => {
+  const plan = loadPlan("floci-spike-destroy-plan.json");
   const changes = parsePlan(plan);
   const byAddr = {};
   for (const c of changes) byAddr[c.address] = c;
 
-  eq(changes.length, 2, "2 resources");
-  // Both are deletes → both irreversible
-  eq(byAddr["aws_iam_policy.data_access"].risk, "irreversible");
-  eq(byAddr["aws_kms_key.data"].risk, "irreversible");
+  eq(changes.length, 7, "7 resources");
+  // All deletes → irreversible
+  eq(byAddr["aws_s3_bucket.static-assets"].risk, "irreversible");
+  eq(byAddr["aws_dynamodb_table.sessions"].risk, "irreversible");
+  eq(byAddr["aws_iam_role.lambda-exec"].risk, "irreversible");
 });
 
 assert("fixture: floci-spike-create-plan matches Python", () => {
