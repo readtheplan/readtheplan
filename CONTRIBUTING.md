@@ -19,7 +19,7 @@ Check [issues labeled "good-first-issue"](https://github.com/readtheplan/readthe
 
 - Type hints required on all public functions
 - pytest for tests, colocated in `tests/`
-- Black formatting (line length 100)
+- Ruff linting and formatting (line length 100)
 - Conventional commits: `feat:`, `fix:`, `docs:`, etc.
 
 ## PR Process
