@@ -753,8 +753,8 @@ function loadPlan(filename) {
   return JSON.parse(raw);
 }
 
-assert("fixture: floci-create-plan matches Python", () => {
-  const plan = loadPlan("floci-create-plan.json");
+assert("fixture: floci-spike-create-plan matches Python", () => {
+  const plan = loadPlan("floci-spike-create-plan.json");
   const changes = parsePlan(plan);
   const byAddr = {};
   for (const c of changes) byAddr[c.address] = c;
@@ -766,8 +766,8 @@ assert("fixture: floci-create-plan matches Python", () => {
   eq(byAddr["aws_sqs_queue.events"].risk, "safe");
 });
 
-assert("fixture: floci-destroy-plan matches Python", () => {
-  const plan = loadPlan("floci-destroy-plan.json");
+assert("fixture: floci-spike-destroy-plan matches Python", () => {
+  const plan = loadPlan("floci-spike-destroy-plan.json");
   const changes = parsePlan(plan);
   const byAddr = {};
   for (const c of changes) byAddr[c.address] = c;
