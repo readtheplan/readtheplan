@@ -2,6 +2,8 @@
 
 Thanks for your interest! Here's how to get started.
 
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+
 ## Quickstart
 
 1. **Fork** the repo and clone it
@@ -17,7 +19,7 @@ Check [issues labeled "good-first-issue"](https://github.com/readtheplan/readthe
 
 - Type hints required on all public functions
 - pytest for tests, colocated in `tests/`
-- Black formatting (line length 100)
+- Ruff linting and formatting (line length 100)
 - Conventional commits: `feat:`, `fix:`, `docs:`, etc.
 
 ## PR Process

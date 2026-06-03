@@ -39,6 +39,7 @@ readtheplan = "readtheplan.cli:main"
 mcp = ["mcp>=1.0.0,<2.0.0; python_version >= '3.10'"]
 sign = ["sigstore>=4.0,<5"]
 test = ["pytest>=7.0", "pytest-cov>=4.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.5"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -61,3 +62,13 @@ show_missing = true
 [tool.pytest.ini_options]
 addopts = "--cov=readtheplan --cov-report=term-missing"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Conservative start so the gate is green on the current tree.
+# Ratchet up (add "E","F","I","UP") after clearing the unused-import backlog
+# with `ruff check --fix` (11 of 13 existing nits are auto-fixable).
+select = ["E9", "F63", "F7", "F82"]

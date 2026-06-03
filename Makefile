@@ -1,9 +1,12 @@
-.PHONY: test lint check
+.PHONY: test lint site check
 
 test:
-	@echo "No automated tests for static site"
+	pytest
 
 lint:
-	@echo "No linter configured for static site"
+	ruff check .
 
-check: test lint
+site:
+	npm --prefix site test && npm --prefix site run build
+
+check: lint test
