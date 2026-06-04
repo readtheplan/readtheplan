@@ -10,7 +10,8 @@ console.log("Converting compliance catalogs...");
 try {
   execSync("python3 site/scripts/convert_data.py", { cwd: repoRoot, stdio: "inherit" });
 } catch (e) {
-  console.warn("WARNING: data conversion failed, using existing bundle if available");
+  console.error("ERROR: data conversion failed; refusing to build with stale data");
+  process.exit(1);
 }
 
 const dist = path.join(root, "dist");

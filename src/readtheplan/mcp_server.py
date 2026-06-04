@@ -127,11 +127,10 @@ def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
             message="input_path must be a non-empty string",
         )
 
-    from pathlib import Path
-
     try:
         import json
 
+        input_path = _resolve_path(input_path)
         data = json.loads(Path(input_path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise MCPToolInputError(

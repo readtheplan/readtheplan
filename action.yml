@@ -50,12 +50,12 @@ runs:
       env:
         PLAN_FILE: ${{ inputs.plan-file }}
         FAIL_ON_ANY_CHANGE: ${{ inputs.fail-on-any-change }}
+        FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
         FAIL_ON_THRESHOLD: ${{ inputs.fail-on-threshold }}
       run: |
         set -euo pipefail
 
         # Support deprecated fail-on-changes (map to fail-on-any-change)
-        FAIL_ON_CHANGES="${{ inputs.fail-on-changes }}"
         FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-false}"
         case "${FAIL_ON_CHANGES,,}" in
           true) FAIL_ON_ANY_CHANGE="true" ;;
