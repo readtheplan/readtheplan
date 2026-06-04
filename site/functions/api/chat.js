@@ -104,19 +104,19 @@ export async function onRequest(context) {
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: {
+      headers: securityHeaders({
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Max-Age': '86400',
-      }
+      })
     });
   }
 
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
     });
   }
 
@@ -125,7 +125,7 @@ export async function onRequest(context) {
   if (contentLength > MAX_BODY_SIZE) {
     return new Response(JSON.stringify({ error: 'Payload too large' }), {
       status: 413,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
     });
   }
 
@@ -143,11 +143,11 @@ export async function onRequest(context) {
     const retryAfter = Math.ceil((entry.windowStart + RATE_WINDOW_MS - now) / 1000);
     return new Response(JSON.stringify({ error: 'Too many requests' }), {
       status: 429,
-      headers: {
+      headers: securityHeaders({
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Retry-After': String(retryAfter),
-      }
+      })
     });
   }
 
@@ -168,7 +168,7 @@ export async function onRequest(context) {
     if (rawMessages.length === 0) {
       return new Response(JSON.stringify({ error: 'Missing messages' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
       });
     }
     
@@ -212,7 +212,7 @@ export async function onRequest(context) {
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'API key not configured' }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
       });
     }
 
@@ -243,7 +243,7 @@ export async function onRequest(context) {
         reply: "I'm having trouble connecting right now. Please try again in a moment, or email info@readtheplan.dev for help."
       }), {
         status: 502,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
       });
     }
 
@@ -260,11 +260,11 @@ export async function onRequest(context) {
 
     return new Response(JSON.stringify({ reply }), {
       status: 200,
-      headers: {
+      headers: securityHeaders({
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'no-store',
-      }
+      })
     });
 
   } catch (err) {
@@ -276,7 +276,7 @@ export async function onRequest(context) {
       reply: "Something went wrong on my end. Please try again or email info@readtheplan.dev."
     }), {
       status,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
     });
   }
 }
