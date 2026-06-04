@@ -1,0 +1,12 @@
+# Cloudflare Pages _headers — CSP and security headers
+# Applies to all routes on readtheplan.dev
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://plausible.io https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://plausible.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+/api/*
+  Access-Control-Allow-Origin: https://readtheplan.dev
