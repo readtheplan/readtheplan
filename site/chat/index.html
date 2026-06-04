@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>readtheplan — AI Sales Agent</title>
+  <meta name="description" content="Chat with readtheplan's AI agent. Ask about Terraform plan analysis, compliance frameworks, pricing, and integrations." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/matrix.css" />
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .chat-container {
+      flex: 1; display: flex; flex-direction: column;
+      max-width: 800px; width: 100%; margin: 0 auto; padding: 1rem;
+    }
+    .chat-header {
+      text-align: center; padding: 2rem 0 1rem;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .chat-header h1 { font-size: 1.6rem; margin: 0 0 0.3rem; }
+    .chat-header p { color: var(--matrix-fg-dim); font-size: 0.9rem; margin: 0; }
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 1rem 0;
+      display: flex; flex-direction: column; gap: 0.75rem;
+    }
+    .msg {
+      max-width: 85%; padding: 0.75rem 1rem; border-radius: 8px;
+      line-height: 1.5; font-size: 0.9rem; word-wrap: break-word;
+    }
+    .msg.user {
+      align-self: flex-end; background: rgba(0,255,65,0.08);
+      border: 1px solid var(--line-mid);
+    }
+    .msg.agent {
+      align-self: flex-start; background: var(--surface-1);
+      border: 1px solid var(--line-soft);
+    }
+    .msg.agent p { margin: 0.5em 0; }
+    .msg.agent p:first-child { margin-top: 0; }
+    .msg.agent p:last-child { margin-bottom: 0; }
+    .msg.agent code {
+      background: rgba(0,255,65,0.08); padding: 0.1em 0.3em; border-radius: 3px;
+      font-family: 'JetBrains', monospace; font-size: 0.85em;
+    }
+    .msg.agent pre {
+      background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 6px;
+      overflow-x: auto; font-size: 0.8em; margin: 0.5em 0;
+      border: 1px solid var(--line-soft);
+    }
+    .msg.agent a { color: var(--matrix-green); }
+    .typing { color: var(--matrix-fg-dim); font-style: italic; font-size: 0.85rem; }
+    .chat-input-area {
+      padding: 1rem 0; border-top: 1px solid var(--line-soft);
+      display: flex; gap: 0.5rem;
+    }
+    .chat-input-area input {
+      flex: 1; background: var(--surface-1); border: 1px solid var(--line-mid);
+      color: var(--matrix-green); padding: 0.6rem 0.8rem; border-radius: 6px;
+      font-family: 'JetBrains', monospace; font-size: 0.9rem; outline: none;
+    }
+    .chat-input-area input:focus { border-color: var(--matrix-green); }
+    .chat-input-area button {
+      background: rgba(0,255,65,0.1); border: 1px solid var(--matrix-green);
+      color: var(--matrix-green); padding: 0.6rem 1.2rem; border-radius: 6px;
+      cursor: pointer; font-family: 'JetBrains', monospace; font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    .chat-input-area button:hover { background: rgba(0,255,65,0.2); }
+    .chat-input-area button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .suggestions {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0;
+    }
+    .suggestion {
+      background: var(--surface-1); border: 1px solid var(--line-soft);
+      color: var(--matrix-fg-dim); padding: 0.3rem 0.7rem; border-radius: 14px;
+      font-size: 0.8rem; cursor: pointer; font-family: 'JetBrains', monospace;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .suggestion:hover { border-color: var(--matrix-green); color: var(--matrix-green); }
+    .error-msg { color: #ff5555; font-size: 0.8rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">
+      <h1>⚡ readtheplan AI</h1>
+      <p>Ask me about Terraform risk analysis, compliance, pricing, or getting started</p>
+    </div>
+    <div class="chat-messages" id="messages">
+      <div class="msg agent">
+        <p>Hey! I'm the readtheplan sales agent. I can help you:</p>
+        <p>• Understand what readtheplan does with your terraform plan<br>
+        • Pick the right plan (OSS CLI, GitHub Action, or Enterprise)<br>
+        • Walk through compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP, HITRUST)<br>
+        • Explain risk classifications (safe → review → dangerous → irreversible)</p>
+        <p>What brings you here?</p>
+      </div>
+    </div>
+    <div class="suggestions" id="suggestions">
+      <span class="suggestion" onclick="ask('How does readtheplan classify terraform changes?')">How does risk classification work?</span>
+      <span class="suggestion" onclick="ask('What compliance frameworks do you support?')">Compliance frameworks?</span>
+      <span class="suggestion" onclick="ask('How do I add readtheplan to GitHub Actions CI?')">GitHub Actions setup?</span>
+      <span class="suggestion" onclick="ask('What does pricing look like for teams?')">Pricing for teams?</span>
+    </div>
+    <div class="chat-input-area">
+      <input type="text" id="userInput" placeholder="Ask about readtheplan..." 
+             onkeydown="if(event.key==='Enter')send()" />
+      <button id="sendBtn" onclick="send()">Send</button>
+    </div>
+    <div class="error-msg" id="error" style="display:none"></div>
+  </div>
+
+<script>
+const API = '/api/chat';
+let history = [
+  { role: 'assistant', content: "Hey! I'm the readtheplan sales agent. How can I help you today?" }
+];
+
+function ask(text) {
+  document.getElementById('userInput').value = text;
+  send();
+}
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  if (role === 'agent') {
+    // Convert markdown-like formatting
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\n/g, '<br>');
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  }
+  div.innerHTML = text;
+  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+}
+
+function showTyping() {
+  const div = document.createElement('div');
+  div.className = 'typing';
+  div.id = 'typing-indicator';
+  div.textContent = '▋ thinking...';
+  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+}
+
+function hideTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+async function send() {
+  const input = document.getElementById('userInput');
+  const btn = document.getElementById('sendBtn');
+  const err = document.getElementById('error');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  btn.disabled = true;
+  err.style.display = 'none';
+  document.getElementById('suggestions').style.display = 'none';
+
+  addMsg('user', text);
+  history.push({ role: 'user', content: text });
+  showTyping();
+
+  try {
+    const resp = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history.slice(-10) })
+    });
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    const data = await resp.json();
+    hideTyping();
+    const reply = data.reply || "Sorry, I couldn't process that. Try rephrasing?";
+    addMsg('agent', reply);
+    history.push({ role: 'assistant', content: reply });
+  } catch (e) {
+    hideTyping();
+    err.textContent = 'Connection error — try again in a moment.';
+    err.style.display = 'block';
+    // Remove the user message from history so retry works
+    history.pop();
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
+</script>
+</body>
+</html>
