@@ -82,6 +82,21 @@ terraform plan -out=/dev/stdout | readtheplan
 - "Can it prevent bad deploys?" → "readtheplan is an analysis tool, not a policy engine. It tells you what's dangerous — you decide whether to proceed. Many teams use it in CI to flag risky changes before merge."
 - "I'm just looking around" → "Take your time! Try the playground at https://readtheplan.dev/playground — it has sample plans you can analyze instantly. Or ask me anything specific."`;
 
+// ── Rate limiting (in-memory, resets on cold start) ────────────
+const rateLimitMap = new Map();
+const RATE_LIMIT = 20;            // max requests per window
+const RATE_WINDOW_MS = 60_000;    // 1 minute
+const MAX_BODY_SIZE = 65_536;     // 64 KB
+
+function securityHeaders(extra = {}) {
+  return {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    ...extra,
+  };
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -105,9 +120,57 @@ export async function onRequest(context) {
     });
   }
 
+  // ── Body size limit (reject payloads > 64 KB) ─────────────────
+  const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10);
+  if (contentLength > MAX_BODY_SIZE) {
+    return new Response(JSON.stringify({ error: 'Payload too large' }), {
+      status: 413,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+
+  // ── Rate limiting (20 req/min per IP) ─────────────────────────
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  let entry = rateLimitMap.get(clientIP);
+  if (!entry || now - entry.windowStart > RATE_WINDOW_MS) {
+    entry = { windowStart: now, count: 1 };
+    rateLimitMap.set(clientIP, entry);
+  } else {
+    entry.count++;
+  }
+  if (entry.count > RATE_LIMIT) {
+    const retryAfter = Math.ceil((entry.windowStart + RATE_WINDOW_MS - now) / 1000);
+    return new Response(JSON.stringify({ error: 'Too many requests' }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Retry-After': String(retryAfter),
+      }
+    });
+  }
+
+  // ── Content-Type validation ──────────────────────────────────
+  const contentType = request.headers.get('Content-Type') || '';
+  if (!contentType.includes('application/json')) {
+    return new Response(JSON.stringify({ error: 'Unsupported Media Type' }), {
+      status: 415,
+      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+    });
+  }
+
   try {
     const body = await request.json();
     const rawMessages = body.messages || [];
+
+    // Missing messages is a client error
+    if (rawMessages.length === 0) {
+      return new Response(JSON.stringify({ error: 'Missing messages' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
     
     // ── Input validation & sanitization ─────────────────────────
     // Only allow user + assistant roles. Block system role injection.
@@ -124,6 +187,24 @@ export async function onRequest(context) {
         role: msg.role,
         content: msg.content.slice(0, MAX_CONTENT_LENGTH),
       });
+    }
+
+    // ── Harden assistant role ─────────────────────────────────
+    // Block fake-history poisoning: first message cannot be assistant
+    if (messages.length > 0 && messages[0].role === 'assistant') {
+      return new Response(JSON.stringify({ error: 'First message cannot be from assistant' }), {
+        status: 400,
+        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      });
+    }
+    // Block consecutive assistant messages
+    for (let i = 1; i < messages.length; i++) {
+      if (messages[i].role === 'assistant' && messages[i - 1].role === 'assistant') {
+        return new Response(JSON.stringify({ error: 'Consecutive assistant messages not allowed' }), {
+          status: 400,
+          headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+        });
+      }
     }
 
     // Get API key from environment (set in Cloudflare Pages dashboard)
@@ -188,11 +269,13 @@ export async function onRequest(context) {
 
   } catch (err) {
     console.error('Chat error:', err.message);
+    // Malformed JSON → 400, everything else → 500
+    const status = err instanceof SyntaxError ? 400 : 500;
     return new Response(JSON.stringify({ 
-      error: 'Internal error',
+      error: status === 400 ? 'Invalid JSON' : 'Internal error',
       reply: "Something went wrong on my end. Please try again or email info@readtheplan.dev."
     }), {
-      status: 500,
+      status,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
