@@ -1,214 +1,214 @@
-     1|<!doctype html>
-     2|<html lang="en">
-     3|  <head>
-     4|    <meta charset="utf-8" />
-     5|    <meta name="viewport" content="width=device-width, initial-scale=1" />
-     6|    <meta
-     7|      name="description"
-     8|      content="Estimate Terraform plan risk from manual counts for replacements, deletes, IAM, network, data, and logging changes. Raw Terraform plans stay local."
-     9|    />
-    10|    <title>Terraform Risk Calculator | readtheplan</title>
-    11|    <link rel="canonical" href="https://readtheplan.dev/tools/terraform-risk-calculator/" />
-    12|    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    13|    <meta name="theme-color" content="#000000" />
-    14|    <meta name="color-scheme" content="dark" />
-    15|    <meta property="og:type" content="website" />
-    16|    <meta property="og:title" content="Terraform Risk Calculator | readtheplan" />
-    17|    <meta
-    18|      property="og:description"
-    19|      content="A static Terraform risk estimator for manual counts. No raw plan file is needed."
-    20|    />
-    21|    <meta property="og:url" content="https://readtheplan.dev/tools/terraform-risk-calculator/" />
-    22|    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
-    23|    <meta name="twitter:card" content="summary_large_image" />
-    24|    <link rel="stylesheet" href="../../matrix.css" />
-    25|  </head>
-    26|  <body>
-    27|    <div class="noise" aria-hidden="true"></div>
-    28|
-    29|    <header class="topbar g" aria-label="Primary">
-    30|      <a class="brand gc" href="/#workspace" aria-label="readtheplan home">
-    31|        <span class="brand-mark" aria-hidden="true">rtp</span>
-    32|        <span>readtheplan</span>
-    33|      </a>
-    34|      <nav class="navlinks gc" aria-label="Project links">
-    35|        <a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a>
-    36|      </nav>
-    37|      <nav class="navlinks gc" aria-label="Page links">
-    38|        <a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a>
-    39|        <a href="/#pilot">Pilot</a>
-    40|      </nav>
-    41|      <div class="version-cell gc">static tool</div>
-    42|    </header>
-    43|
-    44|    <main id="workspace" class="workspace">
-    45|      <section class="hero g utility-hero" aria-labelledby="tool-title">
-    46|        <div class="gc hero-content">
-    47|          <p class="eyebrow">Terraform risk calculator</p>
-    48|          <h1 id="tool-title">Estimate plan risk from manual counts.</h1>
-    49|          <p class="intro-copy">
-    50|            Use this static calculator before a review meeting when you know the shape
-    51|            of a Terraform change but do not want to share plan contents. Raw Terraform
-    52|            plans stay local in your workstation or CI.
-    53|          </p>
-    54|        </div>
-    55|        <div class="gc trust-strip" aria-label="Privacy boundaries">
-    56|          <span>Manual counts only</span>
-    57|          <span>No plan upload</span>
-    58|          <span>No accounts</span>
-    59|          <span>No billing</span>
-    60|        </div>
-    61|        <div class="gc utility-copy">
-    62|          <p>
-    63|            The score is a planning aid, not a replacement for analyzing the real
-    64|            Terraform JSON plan with readtheplan. Counts can miss attribute-level
-    65|            changes such as public access blocks, deny statement removal, or retention
-    66|            decreases.
-    67|          </p>
-    68|        </div>
-    69|        <div class="gc mini-nav" aria-label="Related resources">
-    70|          <a href="/resources/terraform-s3-bucket-risk/">S3 risk</a>
-    71|          <a href="/resources/terraform-iam-policy-risk/">IAM risk</a>
-    72|          <a href="/resources/terraform-security-group-0-0-0-0-risk/">0.0.0.0/0 risk</a>
-    73|          <a href="/resources/terraform-cloudwatch-log-retention-risk/">Log retention risk</a>
-    74|        </div>
-    75|      </section>
-    76|
-    77|      <section class="g" aria-label="Manual Terraform risk estimate">
-    78|        <form class="panel gc utility-panel" id="riskCalculator">
-    79|          <div class="panel-heading">
-    80|            <p class="eyebrow">Manual inputs</p>
-    81|            <h2>Risk signals</h2>
-    82|          </div>
-    83|          <div class="utility-grid">
-    84|            <div class="metric-card">
-    85|              <label>
-    86|                Replacements
-    87|                <input name="replacements" type="number" min="0" value="0" inputmode="numeric" />
-    88|              </label>
-    89|              <p>Delete/create changes, especially identity-bearing resources.</p>
-    90|            </div>
-    91|            <div class="metric-card">
-    92|              <label>
-    93|                Delete actions
-    94|                <input name="deletes" type="number" min="0" value="0" inputmode="numeric" />
-    95|              </label>
-    96|              <p>Resources that Terraform plans to remove.</p>
-    97|            </div>
-    98|            <div class="metric-card">
-    99|              <label>
-   100|                IAM changes
-   101|                <input name="iam" type="number" min="0" value="0" inputmode="numeric" />
-   102|              </label>
-   103|              <p>Policies, roles, trust relationships, or permission boundaries.</p>
-   104|            </div>
-   105|            <div class="metric-card">
-   106|              <label>
-   107|                Public network changes
-   108|                <input name="publicNetwork" type="number" min="0" value="0" inputmode="numeric" />
-   109|              </label>
-   110|              <p>Security groups, routes, listeners, or ingress that broaden exposure.</p>
-   111|            </div>
-   112|            <div class="metric-card">
-   113|              <label>
-   114|                Data or key changes
-   115|                <input name="dataStores" type="number" min="0" value="0" inputmode="numeric" />
-   116|              </label>
-   117|              <p>S3, RDS, KMS, backups, encryption, or lifecycle settings.</p>
-   118|            </div>
-   119|            <div class="metric-card">
-   120|              <label>
-   121|                Logging changes
-   122|                <input name="logging" type="number" min="0" value="0" inputmode="numeric" />
-   123|              </label>
-   124|              <p>CloudWatch retention, audit trails, alarms, or delivery paths.</p>
-   125|            </div>
-   126|          </div>
-   127|
-   128|          <fieldset class="control-group">
-   129|            <legend>Context</legend>
-   130|            <div class="segmented" role="radiogroup" aria-label="Production context">
-   131|              <label>
-   132|                <input type="radio" name="production" value="yes" />
-   133|                <span>Production</span>
-   134|              </label>
-   135|              <label>
-   136|                <input type="radio" name="production" value="no" checked />
-   137|                <span>Non-prod</span>
-   138|              </label>
-   139|            </div>
-   140|          </fieldset>
-   141|
-   142|          <fieldset class="control-group">
-   143|            <legend>Audit pressure</legend>
-   144|            <div class="segmented" role="radiogroup" aria-label="Regulated context">
-   145|              <label>
-   146|                <input type="radio" name="regulated" value="yes" />
-   147|                <span>SOC 2 / ISO / HIPAA</span>
-   148|              </label>
-   149|              <label>
-   150|                <input type="radio" name="regulated" value="no" checked />
-   151|                <span>None selected</span>
-   152|              </label>
-   153|            </div>
-   154|          </fieldset>
-   155|
-   156|          <button class="primary-action" type="submit">Calculate risk</button>
-   157|        </form>
-   158|
-   159|        <section class="panel gc utility-panel" aria-labelledby="risk-result-title">
-   160|          <div class="panel-heading">
-   161|            <p class="eyebrow">Estimate</p>
-   162|            <h2 id="risk-result-title">Risk result</h2>
-   163|          </div>
-   164|          <div class="result-card" aria-live="polite">
-   165|            <div class="result-score" id="riskScore">0</div>
-   166|            <p class="recommendation" id="riskLabel">Lower apparent risk</p>
-   167|            <p class="utility-copy" id="riskAdvice"></p>
-   168|          </div>
-   169|          <p class="privacy-note">
-   170|            This form has no submission destination and no file picker. Use the pilot
-   171|            setup flow when you want help wiring readtheplan into CI without sending a
-   172|            raw Terraform plan.
-   173|          </p>
-   174|          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20pilot%20setup">
-   175|            Request pilot setup
-   176|          </a>
-   177|          <p class="handoff-note">
-   178|            Placeholder inbox: info@readtheplan.dev. Replace the configured pilot
-   179|            handoff address before production use.
-   180|          </p>
-   181|        </section>
-   182|      </section>
-   183|
-   184|      <section class="g" aria-labelledby="faq-title" itemscope itemtype="https://schema.org/FAQPage">
-   185|        <div class="gc utility-panel-wide faq-list">
-   186|          <p class="eyebrow">FAQ</p>
-   187|          <h2 id="faq-title">Terraform risk calculator questions</h2>
-   188|          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-   189|            <summary itemprop="name">Does this page analyze my Terraform plan?</summary>
-   190|            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-   191|              <p itemprop="text">
-   192|                No. It estimates risk from counts you type manually. Run readtheplan
-   193|                locally or in CI when you need plan-specific analysis and evidence.
-   194|              </p>
-   195|            </div>
-   196|          </details>
-   197|          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-   198|            <summary itemprop="name">Which Terraform changes should increase review priority?</summary>
-   199|            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-   200|              <p itemprop="text">
-   201|                Replacements, deletes, IAM policy edits, public network exposure, data
-   202|                protection changes, and logging retention changes usually deserve a
-   203|                closer review.
-   204|              </p>
-   205|            </div>
-   206|          </details>
-   207|        </div>
-   208|      </section>
-   209|    </main>
-   210|
-   211|    <script src="../tools.js" type="module"></script>
-   212|  </body>
-   213|</html>
-   214|
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Estimate Terraform plan risk from manual counts for replacements, deletes, IAM, network, data, and logging changes. Raw Terraform plans stay local."
+    />
+    <title>Terraform Risk Calculator | readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/tools/terraform-risk-calculator/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Terraform Risk Calculator | readtheplan" />
+    <meta
+      property="og:description"
+      content="A static Terraform risk estimator for manual counts. No raw plan file is needed."
+    />
+    <meta property="og:url" content="https://readtheplan.dev/tools/terraform-risk-calculator/" />
+    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="../../matrix.css" />
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/#workspace" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a>
+        <a href="/#pilot">Pilot</a>
+      </nav>
+      <div class="version-cell gc">static tool</div>
+    </header>
+
+    <main id="workspace" class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="tool-title">
+        <div class="gc hero-content">
+          <p class="eyebrow">Terraform risk calculator</p>
+          <h1 id="tool-title">Estimate plan risk from manual counts.</h1>
+          <p class="intro-copy">
+            Use this static calculator before a review meeting when you know the shape
+            of a Terraform change but do not want to share plan contents. Raw Terraform
+            plans stay local in your workstation or CI.
+          </p>
+        </div>
+        <div class="gc trust-strip" aria-label="Privacy boundaries">
+          <span>Manual counts only</span>
+          <span>No plan upload</span>
+          <span>No accounts</span>
+          <span>No billing</span>
+        </div>
+        <div class="gc utility-copy">
+          <p>
+            The score is a planning aid, not a replacement for analyzing the real
+            Terraform JSON plan with readtheplan. Counts can miss attribute-level
+            changes such as public access blocks, deny statement removal, or retention
+            decreases.
+          </p>
+        </div>
+        <div class="gc mini-nav" aria-label="Related resources">
+          <a href="/resources/terraform-s3-bucket-risk/">S3 risk</a>
+          <a href="/resources/terraform-iam-policy-risk/">IAM risk</a>
+          <a href="/resources/terraform-security-group-0-0-0-0-risk/">0.0.0.0/0 risk</a>
+          <a href="/resources/terraform-cloudwatch-log-retention-risk/">Log retention risk</a>
+        </div>
+      </section>
+
+      <section class="g" aria-label="Manual Terraform risk estimate">
+        <form class="panel gc utility-panel" id="riskCalculator">
+          <div class="panel-heading">
+            <p class="eyebrow">Manual inputs</p>
+            <h2>Risk signals</h2>
+          </div>
+          <div class="utility-grid">
+            <div class="metric-card">
+              <label>
+                Replacements
+                <input name="replacements" type="number" min="0" value="0" inputmode="numeric" />
+              </label>
+              <p>Delete/create changes, especially identity-bearing resources.</p>
+            </div>
+            <div class="metric-card">
+              <label>
+                Delete actions
+                <input name="deletes" type="number" min="0" value="0" inputmode="numeric" />
+              </label>
+              <p>Resources that Terraform plans to remove.</p>
+            </div>
+            <div class="metric-card">
+              <label>
+                IAM changes
+                <input name="iam" type="number" min="0" value="0" inputmode="numeric" />
+              </label>
+              <p>Policies, roles, trust relationships, or permission boundaries.</p>
+            </div>
+            <div class="metric-card">
+              <label>
+                Public network changes
+                <input name="publicNetwork" type="number" min="0" value="0" inputmode="numeric" />
+              </label>
+              <p>Security groups, routes, listeners, or ingress that broaden exposure.</p>
+            </div>
+            <div class="metric-card">
+              <label>
+                Data or key changes
+                <input name="dataStores" type="number" min="0" value="0" inputmode="numeric" />
+              </label>
+              <p>S3, RDS, KMS, backups, encryption, or lifecycle settings.</p>
+            </div>
+            <div class="metric-card">
+              <label>
+                Logging changes
+                <input name="logging" type="number" min="0" value="0" inputmode="numeric" />
+              </label>
+              <p>CloudWatch retention, audit trails, alarms, or delivery paths.</p>
+            </div>
+          </div>
+
+          <fieldset class="control-group">
+            <legend>Context</legend>
+            <div class="segmented" role="radiogroup" aria-label="Production context">
+              <label>
+                <input type="radio" name="production" value="yes" />
+                <span>Production</span>
+              </label>
+              <label>
+                <input type="radio" name="production" value="no" checked />
+                <span>Non-prod</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="control-group">
+            <legend>Audit pressure</legend>
+            <div class="segmented" role="radiogroup" aria-label="Regulated context">
+              <label>
+                <input type="radio" name="regulated" value="yes" />
+                <span>SOC 2 / ISO / HIPAA</span>
+              </label>
+              <label>
+                <input type="radio" name="regulated" value="no" checked />
+                <span>None selected</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <button class="primary-action" type="submit">Calculate risk</button>
+        </form>
+
+        <section class="panel gc utility-panel" aria-labelledby="risk-result-title">
+          <div class="panel-heading">
+            <p class="eyebrow">Estimate</p>
+            <h2 id="risk-result-title">Risk result</h2>
+          </div>
+          <div class="result-card" aria-live="polite">
+            <div class="result-score" id="riskScore">0</div>
+            <p class="recommendation" id="riskLabel">Lower apparent risk</p>
+            <p class="utility-copy" id="riskAdvice"></p>
+          </div>
+          <p class="privacy-note">
+            This form has no submission destination and no file picker. Use the pilot
+            setup flow when you want help wiring readtheplan into CI without sending a
+            raw Terraform plan.
+          </p>
+          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20pilot%20setup">
+            Request pilot setup
+          </a>
+          <p class="handoff-note">
+            Placeholder inbox: info@readtheplan.dev. Replace the configured pilot
+            handoff address before production use.
+          </p>
+        </section>
+      </section>
+
+      <section class="g" aria-labelledby="faq-title" itemscope itemtype="https://schema.org/FAQPage">
+        <div class="gc utility-panel-wide faq-list">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="faq-title">Terraform risk calculator questions</h2>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary itemprop="name">Does this page analyze my Terraform plan?</summary>
+            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <p itemprop="text">
+                No. It estimates risk from counts you type manually. Run readtheplan
+                locally or in CI when you need plan-specific analysis and evidence.
+              </p>
+            </div>
+          </details>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary itemprop="name">Which Terraform changes should increase review priority?</summary>
+            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <p itemprop="text">
+                Replacements, deletes, IAM policy edits, public network exposure, data
+                protection changes, and logging retention changes usually deserve a
+                closer review.
+              </p>
+            </div>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <script src="../tools.js" type="module"></script>
+  </body>
+</html>
