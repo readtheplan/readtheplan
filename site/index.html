@@ -35,14 +35,12 @@
         <span class="nav-version">v0.3.0</span>
       </a>
       <div class="nav-links">
-        <a href="#how-it-works">How it works</a>
-        <a href="#setup">Setup</a>
-        <a href="#agent">Agent gate</a>
-        <a href="#community">Community</a>
-        <a href="https://readtheplan.dev/playground/">Playground</a>
+        <a href="#agent">Product</a>
         <a href="https://readtheplan.dev/docs/">Docs</a>
-        <a href="https://readtheplan.dev/chat/">💬 Chat</a>
-        <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
+        <a href="https://readtheplan.dev/playground/">Playground</a>
+        <a href="#community">Community</a>
+        <a class="nav-link-outline" href="https://github.com/readtheplan/readtheplan">GitHub</a>
+        <a class="nav-link-cta" href="#setup">Get started</a>
       </div>
     </div>
   </nav>
@@ -51,28 +49,26 @@
     <div class="container landing-shell">
       <section class="hero-grid" id="top">
         <div class="hero-copy">
-          <div class="eyebrow">Local-first Terraform review</div>
-          <h1>Know what your Terraform plan will actually do before it runs.</h1>
+          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Local-first Terraform &amp; OpenTofu review</div>
+          <h1>See what your plan does <span class="accent-word">before</span> it runs.</h1>
           <p class="hero-lead">Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC 2, ISO 27001, and HIPAA. Runs locally with no accounts, no backend, and <span class="gradient-text">No plan upload</span>.</p>
           <div class="hero-actions">
+            <div class="cta-row">
+              <a class="cta-btn" href="#setup">Generate your setup</a>
+              <a class="cta-btn outline" href="https://readtheplan.dev/playground/">Try the playground &rarr;</a>
+            </div>
             <div class="install-wrap">
               <span class="prompt-mark" aria-hidden="true">&gt;</span>
               <code id="install-cmd">pip install readtheplan &amp;&amp; readtheplan analyze plan.json</code>
               <button class="copy-btn" id="copy-install" onclick="copyInstall()">Copy</button>
             </div>
-            <div class="cta-row">
-              <a class="cta-btn" href="#setup">Generate setup</a>
-              <a class="cta-btn outline" href="https://readtheplan.dev/playground/">Try playground</a>
-              <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan">View GitHub Action</a>
-            </div>
           </div>
-          <div class="hero-badges">
-            <span class="badge">CLI-first</span>
-            <span class="badge">GitHub Action</span>
-            <span class="badge">No plan upload</span>
-            <span class="badge">Terraform + OpenTofu</span>
-            <span class="badge">SOC 2 · ISO 27001 · HIPAA</span>
-            <span class="badge">MIT license</span>
+          <div class="hero-trust">
+            <span>pip install readtheplan</span>
+            <span>CLI + GitHub Action</span>
+            <span>Terraform + OpenTofu</span>
+            <span>No plan upload</span>
+            <span>MIT licensed</span>
           </div>
         </div>
 
@@ -112,7 +108,7 @@
       <section class="section-shell" id="how-it-works">
         <div class="section-head">
           <div class="section-label">Risk tiers</div>
-          <h2>Turn noisy plan output into four clear risk tiers.</h2>
+          <h2>Four tiers. Zero noise.</h2>
           <p>readtheplan classifies the blast radius of every Terraform and OpenTofu change so reviewers can focus on what can actually break production.</p>
         </div>
 
@@ -224,13 +220,14 @@
 
       <section class="section-shell" id="agent">
         <div class="section-head">
-          <div class="section-label">Pipeline proof</div>
+          <div class="section-label">Integrations</div>
           <h2>Use the same decision contract in CI, agents, and editors.</h2>
           <p>Every integration returns stable risk output that can block unsafe applies, produce audit evidence, or guide an MCP-compatible coding agent.</p>
         </div>
 
         <div class="panel-grid">
           <article class="card">
+            <div class="feature-icon" aria-hidden="true">!</div>
             <h3>Block unsafe AI auto-approvals</h3>
             <p>Coding agents and agentic CI pipelines skip nuance. The agent-gate subcommand returns a stable proceed / warn / block result your pipeline can trust.</p>
             <div class="mini-terminal">
@@ -242,9 +239,11 @@
               <div class="t-danger">  "reason": "KMS key deletion scheduled"</div>
               <div class="t-danger">}</div>
             </div>
+            <a class="feature-link" href="#setup">Generate a CI gate &rarr;</a>
           </article>
 
           <article class="card">
+            <div class="feature-icon" aria-hidden="true">{}</div>
             <h3>MCP integration</h3>
             <p>Run readtheplan as a local MCP server and review plans inline from Claude, Cursor, or another MCP-compatible editor without leaving the repo.</p>
             <div class="mini-terminal">
@@ -253,11 +252,13 @@
               <div class="t-safe">Listening on stdio</div>
               <div class="t-dim">Tools: analyze_plan, agent_gate, list_frameworks</div>
             </div>
+            <a class="feature-link" href="https://readtheplan.dev/mcp/">Open MCP docs &rarr;</a>
           </article>
 
           <article class="card">
+            <div class="feature-icon" aria-hidden="true">#</div>
             <h3>Compliance evidence</h3>
-            <p>Emit control-mapped evidence envelopes without building a backend. The homepage should show this as proof, not bury it under ornament.</p>
+            <p>Emit control-mapped evidence envelopes without building a backend - signed and ready to attach to an audit.</p>
             <div class="mini-terminal">
               <button class="copy-mini" type="button" onclick="copyBlock(this)">Copy</button>
               <div><span class="t-dim">// rtp-evidence-soc2.json</span></div>
@@ -266,6 +267,7 @@
               <div><span class="json-key">"controls"</span>: <span class="json-value">["CC6.3", "CC6.1"]</span>,</div>
               <div><span class="json-key">"signed"</span>: <span class="t-safe">true</span></div>
             </div>
+            <a class="feature-link" href="#setup">Configure evidence &rarr;</a>
           </article>
         </div>
       </section>
@@ -373,20 +375,33 @@
           <a href="https://www.readtheplan.dev/tools/terraform-risk-calculator/" class="tool-link">
             <div class="tool-name">Terraform risk calculator</div>
             <div class="tool-desc">Estimate blast radius without uploading a plan.</div>
+            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
           </a>
           <a href="https://www.readtheplan.dev/tools/soc2-cloud-control-mapper/" class="tool-link">
             <div class="tool-name">SOC 2 cloud control mapper</div>
             <div class="tool-desc">Map AWS resources to CC Trust Service Criteria.</div>
+            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
           </a>
           <a href="https://www.readtheplan.dev/mcp/" class="tool-link">
             <div class="tool-name">Local MCP Terraform reviewer</div>
             <div class="tool-desc">Connect to Claude, Cursor, and other MCP clients.</div>
+            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
           </a>
           <a href="https://www.readtheplan.dev/brief/" class="tool-link">
             <div class="tool-name">Weekly Terraform / SOC 2 brief</div>
             <div class="tool-desc">Digest of changes that affect compliance posture.</div>
+            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
           </a>
         </div>
+      </section>
+
+      <section class="closing-cta" id="closing-cta">
+        <div>
+          <div class="section-label">Ready for CI</div>
+          <h2>Drop it into CI in under a minute.</h2>
+          <p>No hosted analyzer, no plan upload, no new approval queue. Just a deterministic gate where Terraform already runs.</p>
+        </div>
+        <a class="cta-btn" href="#setup">Generate your setup</a>
       </section>
     </div>
   </main>
