@@ -20,6 +20,8 @@ def test_action_uses_json_cli_contract() -> None:
     assert "deprecationMessage" in action
     assert "risk_counts=" in action
     assert "threshold_reached" in action
+    assert "FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}" in action
+    assert 'FAIL_ON_CHANGES="${{ inputs.fail-on-changes }}"' not in action
     assert "resource_change_count" in parser
     assert "### Changes" in parser
     assert "_markdown_cell" in parser

@@ -462,10 +462,45 @@ def _minimize_resource_change(item: dict[str, Any]) -> dict[str, Any]:
         out["change"] = {}
         actions = change.get("actions")
         out["change"]["actions"] = actions if isinstance(actions, list) else ["unknown"]
-        for key in ("before", "after", "after_unknown", "replace_paths"):
+        sensitive_masks = {
+            "before": change.get("before_sensitive"),
+            "after": change.get("after_sensitive"),
+        }
+        for key in ("before", "after"):
+            if key in change:
+                out["change"][key] = _redact_with_sensitive_mask(
+                    change[key],
+                    sensitive_masks.get(key),
+                )
+        for key in ("after_unknown", "replace_paths"):
             if key in change:
                 out["change"][key] = _redact(change[key])
     return out
+
+
+def _redact_with_sensitive_mask(value: Any, mask: Any) -> Any:
+    if mask is True:
+        return "<redacted>"
+    if isinstance(value, dict):
+        mask_dict = mask if isinstance(mask, dict) else {}
+        redacted: dict[str, Any] = {}
+        for key, raw in value.items():
+            key_text = str(key)
+            redacted[key_text] = _redact_with_sensitive_mask(
+                raw,
+                mask_dict.get(key_text, mask_dict.get(key)),
+            )
+        return _redact(redacted)
+    if isinstance(value, list):
+        mask_list = mask if isinstance(mask, list) else []
+        return [
+            _redact_with_sensitive_mask(
+                item,
+                mask_list[idx] if idx < len(mask_list) else None,
+            )
+            for idx, item in enumerate(value)
+        ]
+    return _redact(value)
 
 
 def _redact(value: Any) -> Any:

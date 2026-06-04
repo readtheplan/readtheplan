@@ -16,6 +16,7 @@ from readtheplan.mcp_server import (
     _validate_path,
     _working_root,
     agent_gate,
+    agent_gate_cloudformation,
     analyze_plan,
     create_server,
 )
@@ -277,6 +278,18 @@ def test_agent_gate_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
 
     with pytest.raises(MCPToolInputError) as exc_info:
         agent_gate(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    """CloudFormation MCP tool must enforce the same MCP_ROOT boundary."""
+    monkeypatch.setenv("MCP_ROOT", str(tmp_path))
+    outside = tmp_path.parent / "cfn.json"
+    outside.write_text((FIXTURES / "cfn_change_set_mixed.json").read_text())
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_cloudformation(str(outside))
 
     assert exc_info.value.code == "PATH_TRAVERSAL"
 

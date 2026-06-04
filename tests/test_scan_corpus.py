@@ -127,6 +127,41 @@ def test_redact_writes_minimized_plan_without_raw_copy(tmp_path: Path) -> None:
     assert "<redacted>" in redacted_text
 
 
+def test_redact_applies_terraform_sensitive_masks(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.json"
+    plan.write_text(
+        json.dumps(
+            {
+                "terraform_version": "1.8.0",
+                "resource_changes": [
+                    {
+                        "address": "example.masked",
+                        "type": "example_resource",
+                        "name": "masked",
+                        "change": {
+                            "actions": ["update"],
+                            "before": {"value": "old-secret", "nested": {"safe": "keep"}},
+                            "after": {"value": "new-secret", "nested": {"token": "secret"}},
+                            "before_sensitive": {"value": True},
+                            "after_sensitive": {"value": True, "nested": {"token": True}},
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = scan_corpus.write_bundle(plan, output_dir=tmp_path / "out", redact=True)
+    redacted_text = (bundle / "plan.redacted.json").read_text(encoding="utf-8")
+
+    assert "old-secret" not in redacted_text
+    assert "new-secret" not in redacted_text
+    assert "secret" not in redacted_text
+    assert "keep" in redacted_text
+    assert "<redacted>" in redacted_text
+
+
 def test_include_raw_plan_requires_explicit_flag(tmp_path: Path) -> None:
     source = FIXTURES / "valid_plan.json"
     bundle = scan_corpus.write_bundle(

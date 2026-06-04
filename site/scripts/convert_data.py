@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Convert YAML compliance catalogs to JSON for Pages Functions bundling."""
-import json, yaml, sys
+
+import json
 from pathlib import Path
+
+import yaml
 
 SRC = Path("src/readtheplan/data/controls")
 OUT = Path("site/data")
 OUT.mkdir(parents=True, exist_ok=True)
 
-# Convert each framework
+# Convert each framework.
 frameworks = {}
 for yf in sorted(SRC.glob("*.yaml")):
     name = yf.stem
@@ -19,11 +22,11 @@ for yf in sorted(SRC.glob("*.yaml")):
     frameworks[name] = {
         "id": name,
         "file": f"{name}.json",
-        "control_count": len(data.get("controls", data.get("mappings", [])))
+        "control_count": len(data.get("controls", data.get("mappings", []))),
     }
-    print(f"  {name}: {frameworks[name]['control_count']} mappings → {out_file}")
+    print(f"  {name}: {frameworks[name]['control_count']} mappings -> {out_file}")
 
-# Write framework index
+# Write framework index.
 index = {
     "version": "0.3.0",
     "frameworks": frameworks,
@@ -31,25 +34,27 @@ index = {
         "list": "/api/v1/controls",
         "get": "/api/v1/controls/{framework}",
         "demo": "/api/v1/demo/{plan}",
-        "version": "/api/v1/version"
-    }
+        "version": "/api/v1/version",
+    },
 }
 with open(OUT / "index.json", "w", encoding="utf-8") as f:
     json.dump(index, f, indent=2)
-print(f"\n  index: {len(frameworks)} frameworks → {OUT / 'index.json'}")
+print(f"\n  index: {len(frameworks)} frameworks -> {OUT / 'index.json'}")
 
-# Copy demo plans from playground
+# Copy demo plans from playground.
 PLAYGROUND = Path("site/playground")
 DEMO_OUT = OUT / "demos"
 DEMO_OUT.mkdir(exist_ok=True)
+for stale_demo in DEMO_OUT.glob("*.json"):
+    stale_demo.unlink()
 demos = []
 for jf in sorted(PLAYGROUND.glob("*.json")):
     dest = DEMO_OUT / jf.name
     dest.write_text(jf.read_text(encoding="utf-8"), encoding="utf-8")
     demos.append(jf.stem)
-    print(f"  demo: {jf.stem} → {dest}")
+    print(f"  demo: {jf.stem} -> {dest}")
 with open(DEMO_OUT / "index.json", "w", encoding="utf-8") as f:
     json.dump({"demos": demos}, f)
 print(f"  demos: {len(demos)} plans")
 
-print("\nDone — data bundle ready for Pages Functions.")
+print("\nDone - data bundle ready for Pages Functions.")

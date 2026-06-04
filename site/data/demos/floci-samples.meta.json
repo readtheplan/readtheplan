@@ -1,7 +1,9 @@
 {
-  "generated_at_utc": "2026-05-13T00:00:00Z",
-  "source": "site/playground/floci-demo.tf",
-  "generator": "site/scripts/regenerate_floci_samples.py",
-  "terraform_version": "unknown",
-  "floci_endpoint": "http://localhost:4566"
+  "generated_at_utc": "2026-06-02T21:00:00Z",
+  "source": "floci-moto-spike (Pure-Python Moto + boto3)",
+  "generator": "floci API — POST https://floci.readtheplan.dev/create?scenario=full",
+  "floci_endpoint": "https://floci.readtheplan.dev",
+  "scenario": "full",
+  "resource_types": 11,
+  "tests": 51
 }
