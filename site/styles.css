@@ -458,6 +458,10 @@ label {
 .segmented input,
 .stacked-options input,
 .checks input {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
   accent-color: var(--accent);
 }
 
@@ -519,6 +523,7 @@ select {
 
 input[type="text"],
 input[type="email"],
+input[type="number"],
 input:not([type]),
 textarea {
   width: 100%;
@@ -1192,6 +1197,7 @@ pre,
 select,
 input[type="text"],
 input[type="email"],
+input[type="number"],
 input:not([type]),
 textarea {
   border-color: var(--line);
