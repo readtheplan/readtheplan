@@ -38,7 +38,11 @@ def test_sign_then_verify_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_sigstore(monkeypatch)
     signed = sign_envelope(_build_fixture_evidence())
 
-    result = verify_envelope(json.dumps(signed).encode("utf-8"))
+    result = verify_envelope(
+        json.dumps(signed).encode("utf-8"),
+        certificate_identity=FIXTURE_IDENTITY,
+        certificate_oidc_issuer=FIXTURE_ISSUER,
+    )
 
     assert result.ok is True
     assert result.identity == FIXTURE_IDENTITY
@@ -56,7 +60,11 @@ def test_verify_unsigned_envelope_fails() -> None:
 def test_verify_tampered_envelope_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_sigstore(monkeypatch)
 
-    result = verify_envelope(TAMPERED_ENVELOPE.read_bytes())
+    result = verify_envelope(
+        TAMPERED_ENVELOPE.read_bytes(),
+        certificate_identity=FIXTURE_IDENTITY,
+        certificate_oidc_issuer=FIXTURE_ISSUER,
+    )
 
     assert result.ok is False
     assert result.reason is not None
@@ -90,8 +98,16 @@ def test_canonical_payload_order_invariant(monkeypatch: pytest.MonkeyPatch) -> N
         first["agent_attestation"]["signature"]
         == second["agent_attestation"]["signature"]
     )
-    assert verify_envelope(json.dumps(first).encode("utf-8")).ok is True
-    assert verify_envelope(json.dumps(second).encode("utf-8")).ok is True
+    assert verify_envelope(
+        json.dumps(first).encode("utf-8"),
+        certificate_identity=FIXTURE_IDENTITY,
+        certificate_oidc_issuer=FIXTURE_ISSUER,
+    ).ok is True
+    assert verify_envelope(
+        json.dumps(second).encode("utf-8"),
+        certificate_identity=FIXTURE_IDENTITY,
+        certificate_oidc_issuer=FIXTURE_ISSUER,
+    ).ok is True
 
 
 def test_canonicalization_nulls_signature_and_cert() -> None:
@@ -167,7 +183,11 @@ def test_cli_sign_writes_signed_envelope(
             str(EVIDENCE_PLAN),
         ]
     )
-    result = verify_envelope(evidence_path.read_bytes())
+    result = verify_envelope(
+        evidence_path.read_bytes(),
+        certificate_identity=FIXTURE_IDENTITY,
+        certificate_oidc_issuer=FIXTURE_ISSUER,
+    )
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -181,7 +201,16 @@ def test_cli_verify_signed_envelope(
 ) -> None:
     _patch_sigstore(monkeypatch)
 
-    exit_code = main(["verify", str(SIGNED_ENVELOPE)])
+    exit_code = main(
+        [
+            "verify",
+            "--certificate-identity",
+            FIXTURE_IDENTITY,
+            "--certificate-oidc-issuer",
+            FIXTURE_ISSUER,
+            str(SIGNED_ENVELOPE),
+        ]
+    )
 
     captured = capsys.readouterr()
     assert exit_code == 0
@@ -192,7 +221,16 @@ def test_cli_verify_signed_envelope(
 
 
 def test_cli_verify_unsigned_envelope(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["verify", str(UNSIGNED_ENVELOPE)])
+    exit_code = main(
+        [
+            "verify",
+            "--certificate-identity",
+            FIXTURE_IDENTITY,
+            "--certificate-oidc-issuer",
+            FIXTURE_ISSUER,
+            str(UNSIGNED_ENVELOPE),
+        ]
+    )
 
     captured = capsys.readouterr()
     assert exit_code == 1
@@ -202,12 +240,45 @@ def test_cli_verify_unsigned_envelope(capsys: pytest.CaptureFixture[str]) -> Non
 
 
 def test_cli_verify_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["verify", str(FIXTURES / "missing-envelope.json")])
+    exit_code = main(
+        [
+            "verify",
+            "--certificate-identity",
+            FIXTURE_IDENTITY,
+            "--certificate-oidc-issuer",
+            FIXTURE_ISSUER,
+            str(FIXTURES / "missing-envelope.json"),
+        ]
+    )
 
     captured = capsys.readouterr()
     assert exit_code == 1
     assert captured.out == ""
     assert "Error: cannot read envelope file" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_verify_envelope_without_identity_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_sigstore(monkeypatch)
+    signed = sign_envelope(_build_fixture_evidence())
+
+    result = verify_envelope(json.dumps(signed).encode("utf-8"))
+
+    assert result.ok is False
+    assert result.reason is not None
+    assert "identity verification required" in result.reason
+
+
+def test_cli_verify_missing_identity_flags(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(["verify", str(SIGNED_ENVELOPE)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "--certificate-identity" in captured.err
+    assert "--certificate-oidc-issuer" in captured.err
     assert "Traceback" not in captured.err
 
 
@@ -298,8 +369,18 @@ def _fake_verify_payload(
     signature: str,
     bundle_json: str,
     rekor_url: str | None,
-    **_kwargs: object,
+    certificate_identity: str | None = None,
+    certificate_oidc_issuer: str | None = None,
 ) -> VerificationResult:
+    if not certificate_identity or not certificate_oidc_issuer:
+        return VerificationResult(
+            ok=False,
+            identity="",
+            oidc_issuer="",
+            rekor_uuid="",
+            reason="identity verification required "
+            "(--certificate-identity and --certificate-oidc-issuer)",
+        )
     bundle = _loads_json(bundle_json)
     inner = _mapping(bundle["readtheplan_test_bundle_v1"])
     expected = _fixture_signature(payload)

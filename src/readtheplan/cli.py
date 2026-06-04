@@ -387,15 +387,10 @@ def _verify(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if args.certificate_identity and not args.certificate_oidc_issuer:
+    if not args.certificate_identity or not args.certificate_oidc_issuer:
         print(
-            "Error: --certificate-oidc-issuer is required when --certificate-identity is set",
-            file=sys.stderr,
-        )
-        return 1
-    if args.certificate_oidc_issuer and not args.certificate_identity:
-        print(
-            "Error: --certificate-identity is required when --certificate-oidc-issuer is set",
+            "Error: --certificate-identity and --certificate-oidc-issuer are both required "
+            "for identity verification.",
             file=sys.stderr,
         )
         return 1

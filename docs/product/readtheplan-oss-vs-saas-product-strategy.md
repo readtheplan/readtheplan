@@ -9,6 +9,7 @@ readtheplan should operate as two complementary products:
 - Open-source CLI, GitHub Action, and MCP toolchain.
 - Local plan analysis with no forced raw-plan upload.
 - Transparent rules engine + compliance mappings + evidence artifacts.
+- Mandatory Sigstore keyless signing with identity verification.
 
 ## SaaS scope
 - Authentication, organizations, teams, project workspaces.
@@ -27,16 +28,26 @@ readtheplan should operate as two complementary products:
 - Signed local analysis summaries/evidence envelopes.
 - Audit metadata for workflow traceability.
 
-## Pricing hypothesis
-- **Free OSS:** self-serve local toolchain.
-- **Paid Managed:** monthly maintenance for onboarding, policy tuning, evidence/report workflows, and support SLA.
-- **Enterprise:** private connector / stricter controls / contract support.
+## Pricing tiers (concrete, 2026-06-04)
+
+| Tier | Price | Target | Key Features |
+|------|-------|--------|-------------|
+| **Free OSS** | $0 / forever | Individual developers | Local CLI, public frameworks, client-side playground, zero plan uploads |
+| **Paid Managed** | $49 / org / month | Growth & security teams | Custom policy profiles, signed evidence timeline, policy-tuned playground, compliance reports (PDF/JSON), Slack/GitHub integrations, standard SLA |
+| **Enterprise** | Custom / contract | Regulated organizations | Private connector (VPC/agent), SAML/SSO, unlimited audit trails, continuous drift checks, premium 1hr SLA |
+
+### Feature gating
+- `require_org_tier(BillingTier.PAID_MANAGED)` middleware gates stateful endpoints.
+- Free tier: no cloud storage, no attestation tracking, no reports.
+- Stripe integration: Checkout + Customer Portal + Webhook sync.
+- Full design: `docs/product/paid-tier-feature-gating-design.md`
 
 ## v1 architecture
 - Frontend app for org/policy/reporting UX.
 - API for authz/policy/evidence/audit operations.
-- Postgres-backed metadata store.
+- SQLite (transitional) or Postgres-backed metadata store.
 - Evidence ingestion from signed local outputs (not raw plans by default).
+- Stripe billing with tier-based feature gating.
 
 ## v2 hosted analyzer gates
 Do not enable hosted raw-plan analysis until:
@@ -45,6 +56,13 @@ Do not enable hosted raw-plan analysis until:
 3. Redaction pipeline validated.
 4. Encryption + key management finalized.
 5. Tenant isolation + audit logging verified.
+
+## Evidence artifact lifecycle
+1. **Generate:** `readtheplan analyze --evidence out.json --sign` produces signed `rtp-evidence-v1` envelope.
+2. **Verify:** `readtheplan verify --certificate-identity <id> --certificate-oidc-issuer <issuer> evidence.json` (identity required).
+3. **Ingest:** Signed envelope uploaded via REST API (future).
+4. **Retain:** Paid Managed: 30 days. Enterprise: custom/unlimited.
+5. **Report:** Compliance reports from stored evidence — audit-ready export.
 
 ## 30/60/90
 ### 30

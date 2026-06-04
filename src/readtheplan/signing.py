@@ -186,13 +186,19 @@ def _verify_payload_with_sigstore(
                 reason="signature mismatch",
             )
         verifier = _verifier(rekor_url=rekor_url)
-        if certificate_identity and certificate_oidc_issuer:
-            verifier.verify_artifact(
-                payload, bundle,
-                policy.Identity(identity=certificate_identity, issuer=certificate_oidc_issuer),
+        if not certificate_identity or not certificate_oidc_issuer:
+            return VerificationResult(
+                ok=False,
+                identity="",
+                oidc_issuer="",
+                rekor_uuid="",
+                reason="identity verification required "
+                "(--certificate-identity and --certificate-oidc-issuer)",
             )
-        else:
-            verifier.verify_artifact(payload, bundle, policy.UnsafeNoOp())
+        verifier.verify_artifact(
+            payload, bundle,
+            policy.Identity(identity=certificate_identity, issuer=certificate_oidc_issuer),
+        )
     except SigstoreVerificationError as exc:
         return VerificationResult(
             ok=False,
