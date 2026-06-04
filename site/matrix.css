@@ -1176,7 +1176,7 @@ body {
   background: var(--app-bg);
 }
 
-body {
+.page {
   color: var(--app-text);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -1202,42 +1202,42 @@ body::after {
     linear-gradient(180deg, rgba(11, 14, 18, 0.28), rgba(11, 14, 18, 0.88));
 }
 
-a {
+.page a {
   color: var(--app-text);
 }
 
-a:hover {
+.page a:hover {
   color: var(--app-green-strong);
 }
 
-h1,
-h2,
-h3 {
+.page h1,
+.page h2,
+.page h3 {
   color: var(--app-text);
   font-family: var(--font-sans);
   font-weight: 720;
   text-shadow: none;
 }
 
-p {
+.page p {
   color: var(--app-muted-strong);
 }
 
-code,
-pre,
-.brand,
-.eyebrow,
-.section-label,
-.aside-label,
-.meta-title,
-.terminal-box,
-.mini-terminal,
-.hero-trust,
-.copy-btn,
-.btn,
-.cta-btn,
-.nav-link-outline,
-.nav-link-cta {
+.page code,
+.page pre,
+.page .brand,
+.page .eyebrow,
+.page .section-label,
+.page .aside-label,
+.page .meta-title,
+.page .terminal-box,
+.page .mini-terminal,
+.page .hero-trust,
+.page .copy-btn,
+.page .btn,
+.page .cta-btn,
+.page .nav-link-outline,
+.page .nav-link-cta {
   font-family: var(--font-mono);
 }
 
@@ -1357,10 +1357,10 @@ pre,
   font-size: 1.08rem;
 }
 
-.eyebrow,
-.section-label,
-.aside-label,
-.meta-title {
+.page .eyebrow,
+.page .section-label,
+.page .aside-label,
+.page .meta-title {
   min-height: 30px;
   border-color: rgba(52, 211, 153, 0.24);
   background: rgba(52, 211, 153, 0.08);
@@ -1688,7 +1688,7 @@ button.cta-btn {
   line-height: 1;
 }
 
-footer {
+.page footer {
   color: var(--app-muted);
 }
 
