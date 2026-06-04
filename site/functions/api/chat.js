@@ -129,7 +129,12 @@ export async function onRequest(context) {
     // Get API key from environment (set in Cloudflare Pages dashboard)
     const apiKey = env.DEEPSEEK_API_KEY;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'API key not configured' }), {
+      // Debug: show available env keys
+      const envKeys = Object.keys(env).filter(k => !k.startsWith('__'));
+      return new Response(JSON.stringify({ 
+        error: 'API key not configured',
+        debug: { envKeys, hasDeepseek: 'DEEPSEEK_API_KEY' in env, totalKeys: Object.keys(env).length }
+      }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
