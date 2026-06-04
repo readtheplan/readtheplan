@@ -25,6 +25,7 @@ const files = [
   "index.html",
   "styles.css",
   "matrix.css",
+  "home.css",
   "matrix.js",
   "app.js",
   "404.html",

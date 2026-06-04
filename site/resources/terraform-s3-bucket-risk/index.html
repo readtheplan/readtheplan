@@ -1,90 +1,90 @@
-     1|<!doctype html>
-     2|<html lang="en">
-     3|  <head>
-     4|    <meta charset="utf-8" />
-     5|    <meta name="viewport" content="width=device-width, initial-scale=1" />
-     6|    <meta
-     7|      name="description"
-     8|      content="Review Terraform S3 bucket risk signals for public access, encryption, versioning, lifecycle, and SOC 2 evidence planning."
-     9|    />
-    10|    <title>Terraform S3 Bucket Risk | readtheplan</title>
-    11|    <link rel="canonical" href="https://readtheplan.dev/resources/terraform-s3-bucket-risk/" />
-    12|    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    13|    <meta name="theme-color" content="#000000" />
-    14|    <meta name="color-scheme" content="dark" />
-    15|    <meta property="og:type" content="article" />
-    16|    <meta property="og:title" content="Terraform S3 Bucket Risk | readtheplan" />
-    17|    <meta property="og:description" content="High-intent Terraform S3 risk review guide for cloud changes." />
-    18|    <meta property="og:url" content="https://readtheplan.dev/resources/terraform-s3-bucket-risk/" />
-    19|    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
-    20|    <meta name="twitter:card" content="summary_large_image" />
-    21|    <link rel="stylesheet" href="../../matrix.css" />
-    22|  </head>
-    23|  <body>
-    24|    <div class="noise" aria-hidden="true"></div>
-    25|    <header class="topbar g" aria-label="Primary">
-    26|      <a class="brand gc" href="/#workspace" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span></a>
-    27|      <nav class="navlinks gc" aria-label="Project links"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></nav>
-    28|      <nav class="navlinks gc" aria-label="Page links"><a href="/tools/terraform-risk-calculator/">Risk calculator</a><a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a></nav>
-    29|      <div class="version-cell gc">resource</div>
-    30|    </header>
-    31|    <main id="workspace" class="workspace">
-    32|      <section class="hero g utility-hero" aria-labelledby="resource-title">
-    33|        <div class="gc hero-content">
-    34|          <p class="eyebrow">Terraform S3 bucket risk</p>
-    35|          <h1 id="resource-title">Review S3 changes before apply.</h1>
-    36|          <p class="intro-copy">
-    37|            S3 bucket changes can affect confidentiality, recovery, audit evidence, and
-    38|            customer data exposure. This page is static guidance; raw Terraform plans
-    39|            stay local in your workstation or CI.
-    40|          </p>
-    41|        </div>
-    42|        <div class="gc trust-strip" aria-label="Privacy boundaries">
-    43|          <span>No plan upload</span><span>Manual review guide</span><span>SOC 2 evidence</span>
-    44|        </div>
-    45|        <div class="gc utility-copy">
-    46|          <p>High-risk signals include public access block removal, bucket policy broadening, encryption changes, versioning disablement, lifecycle deletion, and bucket replacement.</p>
-    47|        </div>
-    48|        <div class="gc"><a class="primary-link" href="/#pilot">Request pilot setup</a></div>
-    49|      </section>
-    50|      <section class="g" aria-labelledby="checks-title">
-    51|        <div class="gc utility-panel">
-    52|          <p class="eyebrow">Review checklist</p>
-    53|          <h2 id="checks-title">S3 signals</h2>
-    54|          <ul class="checklist">
-    55|            <li>Public access block or bucket policy changes that broaden access.</li>
-    56|            <li>Server-side encryption, KMS key, replication, or ownership controls changed.</li>
-    57|            <li>Versioning, object lock, lifecycle, backup, or retention settings weakened.</li>
-    58|            <li>Delete/create replacement on a bucket that stores production or customer data.</li>
-    59|          </ul>
-    60|        </div>
-    61|        <div class="gc utility-panel">
-    62|          <p class="eyebrow">SOC 2 angle</p>
-    63|          <h2>Evidence to keep</h2>
-    64|          <p class="utility-copy">
-    65|            Map S3 changes to CC6 access controls, C1 confidentiality, A1 recovery, and
-    66|            CC8 change management. readtheplan can generate control-mapped evidence
-    67|            locally or in CI after you export Terraform JSON.
-    68|          </p>
-    69|          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20S3%20risk%20pilot">Request pilot setup</a>
-    70|          <p class="handoff-note">Placeholder inbox: info@readtheplan.dev.</p>
-    71|        </div>
-    72|      </section>
-    73|      <section class="g" aria-labelledby="faq-title" itemscope itemtype="https://schema.org/FAQPage">
-    74|        <div class="gc utility-panel-wide faq-list">
-    75|          <p class="eyebrow">FAQ</p>
-    76|          <h2 id="faq-title">S3 risk questions</h2>
-    77|          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-    78|            <summary itemprop="name">Why is Terraform S3 bucket policy risk high?</summary>
-    79|            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">A bucket policy can expose data, break service access, or bypass expected account boundaries, so it should be reviewed with the exact diff.</p></div>
-    80|          </details>
-    81|          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-    82|            <summary itemprop="name">Should I email a Terraform plan for review?</summary>
-    83|            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">No. Keep the raw Terraform plan local and share review notes or generated evidence instead.</p></div>
-    84|          </details>
-    85|        </div>
-    86|      </section>
-    87|    </main>
-    88|  </body>
-    89|</html>
-    90|
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Review Terraform S3 bucket risk signals for public access, encryption, versioning, lifecycle, and SOC 2 evidence planning."
+    />
+    <title>Terraform S3 Bucket Risk | readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/resources/terraform-s3-bucket-risk/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Terraform S3 Bucket Risk | readtheplan" />
+    <meta property="og:description" content="High-intent Terraform S3 risk review guide for cloud changes." />
+    <meta property="og:url" content="https://readtheplan.dev/resources/terraform-s3-bucket-risk/" />
+    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="../../matrix.css" />
+    <link rel="stylesheet" href="../../styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/#workspace" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span></a>
+      <nav class="navlinks gc" aria-label="Project links"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></nav>
+      <nav class="navlinks gc" aria-label="Page links"><a href="/tools/terraform-risk-calculator/">Risk calculator</a><a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a></nav>
+      <div class="version-cell gc">resource</div>
+    </header>
+    <main id="workspace" class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="resource-title">
+        <div class="gc hero-content">
+          <p class="eyebrow">Terraform S3 bucket risk</p>
+          <h1 id="resource-title">Review S3 changes before apply.</h1>
+          <p class="intro-copy">
+            S3 bucket changes can affect confidentiality, recovery, audit evidence, and
+            customer data exposure. This page is static guidance; raw Terraform plans
+            stay local in your workstation or CI.
+          </p>
+        </div>
+        <div class="gc trust-strip" aria-label="Privacy boundaries">
+          <span>No plan upload</span><span>Manual review guide</span><span>SOC 2 evidence</span>
+        </div>
+        <div class="gc utility-copy">
+          <p>High-risk signals include public access block removal, bucket policy broadening, encryption changes, versioning disablement, lifecycle deletion, and bucket replacement.</p>
+        </div>
+        <div class="gc"><a class="primary-link" href="/#pilot">Request pilot setup</a></div>
+      </section>
+      <section class="g" aria-labelledby="checks-title">
+        <div class="gc utility-panel">
+          <p class="eyebrow">Review checklist</p>
+          <h2 id="checks-title">S3 signals</h2>
+          <ul class="checklist">
+            <li>Public access block or bucket policy changes that broaden access.</li>
+            <li>Server-side encryption, KMS key, replication, or ownership controls changed.</li>
+            <li>Versioning, object lock, lifecycle, backup, or retention settings weakened.</li>
+            <li>Delete/create replacement on a bucket that stores production or customer data.</li>
+          </ul>
+        </div>
+        <div class="gc utility-panel">
+          <p class="eyebrow">SOC 2 angle</p>
+          <h2>Evidence to keep</h2>
+          <p class="utility-copy">
+            Map S3 changes to CC6 access controls, C1 confidentiality, A1 recovery, and
+            CC8 change management. readtheplan can generate control-mapped evidence
+            locally or in CI after you export Terraform JSON.
+          </p>
+          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20S3%20risk%20pilot">Request pilot setup</a>
+          <p class="handoff-note">Placeholder inbox: info@readtheplan.dev.</p>
+        </div>
+      </section>
+      <section class="g" aria-labelledby="faq-title" itemscope itemtype="https://schema.org/FAQPage">
+        <div class="gc utility-panel-wide faq-list">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="faq-title">S3 risk questions</h2>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary itemprop="name">Why is Terraform S3 bucket policy risk high?</summary>
+            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">A bucket policy can expose data, break service access, or bypass expected account boundaries, so it should be reviewed with the exact diff.</p></div>
+          </details>
+          <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary itemprop="name">Should I email a Terraform plan for review?</summary>
+            <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">No. Keep the raw Terraform plan local and share review notes or generated evidence instead.</p></div>
+          </details>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
