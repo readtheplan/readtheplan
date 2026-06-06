@@ -61,7 +61,7 @@ def test_readme_mentions_agent_gate_ci() -> None:
     assert "### GitHub Action" in content
     assert "readtheplan agent-gate plan.json" in content
     assert "Full GitHub Actions workflow" in content
-    assert "uses: readtheplan/readtheplan@v1" in content
+    assert "uses: readtheplan/readtheplan@v0.3.0" in content
 
 
 def test_examples_readme_mentions_agent_gate_ci() -> None:

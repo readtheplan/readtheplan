@@ -61,7 +61,23 @@
       ],
       "risk": "safe",
       "explanation": "Terraform will create a new resource without changing existing state.",
-      "controls": []
+      "controls": [
+        {
+          "id": "CC7.1",
+          "title": "System Operations \u2014 Detection of Configuration Changes",
+          "rationale": "Log groups retain evidence used for operations review."
+        },
+        {
+          "id": "CC7.2",
+          "title": "System Monitoring",
+          "rationale": "Retention, encryption, and subscriptions affect monitoring data."
+        },
+        {
+          "id": "CC8.1",
+          "title": "Change Management",
+          "rationale": "CloudWatch log group change."
+        }
+      ]
     }
   ],
   "framework": {

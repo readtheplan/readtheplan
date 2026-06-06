@@ -41,6 +41,16 @@ Requires Python 3.10+.
 
 ---
 
+## Who it's for
+
+- **Individual Terraform / OpenTofu users** — see the blast radius of an apply before you run it: `readtheplan analyze plan.json`.
+- **Platform / DevOps teams** — standardize risk tiers and org-specific escalations across repos with rule overlays (no forks, no code changes).
+- **CI maintainers** — drop the GitHub Action into any pipeline to gate pull requests on `dangerous` / `irreversible` changes.
+- **Security & compliance reviewers** — SOC 2 / ISO 27001 / HIPAA control mappings plus signed, auditable evidence envelopes for every change.
+- **AI-agent workflows** — a deterministic `proceed` / `warn` / `block` gate that stops an agent from auto-applying unsafe infrastructure.
+
+---
+
 ## Why this exists
 
 Terraform's plan/apply separation exists so a human reviews changes before they hit prod. In practice, nobody reads the 4,000-line text blob. Code diffs ≠ plan diffs. AI agents skip review. Compliance reviewers drown.
@@ -62,67 +72,62 @@ It applies **resource-aware rules** (30+ AWS resource types), **compliance frame
 
 ## How it looks
 
-Here's readtheplan analyzing a plan that replaces a security group and creates a new S3 bucket:
+Here's readtheplan analyzing one of the bundled example plans. Reproduce it after cloning with `readtheplan analyze examples/01-small-create/plan.json`:
 
-<details>
+<details open>
 <summary><b>Terminal output (click to expand)</b></summary>
 
-```
-$ readtheplan analyze plan.json
+```text
+$ readtheplan analyze examples/01-small-create/plan.json
+# readtheplan summary: examples/01-small-create/plan.json
+Terraform version: 1.8.5
+Resource changes: 3
 
-Resource changes: 2
-  aws_security_group.web  –  update  ⚠️  review
-  aws_s3_bucket.logs      –  create  ✅  safe
+## Actions
+- create: 2
+- update: 1
 
-── Risk Summary ──
-  safe ................ 1
-  review .............. 1
-  dangerous ........... 0
-  irreversible ........ 0
+## Risk
+- review: 1
+- safe: 2
+
+## Changes
+| Risk | Actions | Resource | Type | Explanation |
+| --- | --- | --- | --- | --- |
+| safe | create | aws_kms_key.app_config | aws_kms_key | Terraform will create a new resource without changing existing state. |
+| review | update | aws_iam_role.deploy | aws_iam_role | Terraform will update IAM authorization. Review trust policies, permission boundaries, and deny statements for lockout or escalation risk. |
+| safe | create | aws_cloudwatch_log_group.api | aws_cloudwatch_log_group | Terraform will create a new resource without changing existing state. |
 ```
 </details>
+
+The default output is Markdown by design — paste it straight into a PR comment or an audit ticket.
 
 And with a compliance framework:
 
 <details>
 <summary><b>With SOC 2 controls (click to expand)</b></summary>
 
-```
-$ readtheplan analyze --framework soc2 plan.json
-
-Resource changes: 2
-  aws_security_group.web  –  update  ⚠️  review
-    SOC 2: CC6.6 Boundary Protection, CC8.1 Change Management
-  aws_s3_bucket.logs      –  create  ✅  safe
-    SOC 2: CC8.1 Change Management
+```text
+$ readtheplan analyze --framework soc2 examples/01-small-create/plan.json
+...
+## Changes
+| Risk | Actions | Resource | Type | Explanation | Controls |
+| --- | --- | --- | --- | --- | --- |
+| safe | create | aws_kms_key.app_config | aws_kms_key | Terraform will create a new resource without changing existing state. | CC6.1, CC8.1 |
+| review | update | aws_iam_role.deploy | aws_iam_role | Terraform will update IAM authorization. Review trust policies, permission boundaries, and deny statements for lockout or escalation risk. | CC6.1, CC8.1 |
+| safe | create | aws_cloudwatch_log_group.api | aws_cloudwatch_log_group | Terraform will create a new resource without changing existing state. | CC7.1, CC7.2, CC8.1 |
 ```
 </details>
 
-### Example: EKS cluster plan
+### Example: an EKS node group replacement
 
-An EKS node group change triggers danger-level classification:
+Replacing an EKS node group forces pod evictions, so readtheplan classifies it `dangerous` (an in-place update is `review`). This change ships in [`examples/03-multi-resource`](examples/03-multi-resource/) — reproduce it with `readtheplan analyze --framework soc2 examples/03-multi-resource/plan.json`:
 
-```hcl
-# terraform plan for EKS node group scaling
-resource "aws_eks_node_group" "workers" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "prod-workers"
-  scaling_config {
-    desired_size = 6  # was 4
-    max_size     = 10
-    min_size     = 4
-  }
-}
-```
-
-```bash
-$ terraform plan -out=tfplan && terraform show -json tfplan > plan.json
-$ readtheplan analyze plan.json
-
-Resource changes: 1
-  aws_eks_node_group.workers  –  update  🟡 review
-    Terraform will update an EKS node group. Review rollout settings,
-    surge capacity, labels, taints, and workload disruption budgets.
+```text
+| Risk      | Actions       | Resource                   | Type               | Explanation                                                                                                     |
+| --------- | ------------- | -------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| review    | update        | aws_eks_cluster.platform   | aws_eks_cluster    | Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.  |
+| dangerous | delete/create | aws_eks_node_group.workers | aws_eks_node_group | Terraform will replace an EKS node group. Expect pod evictions, capacity churn, and possible cluster disruption. |
 ```
 
 Try the [interactive playground](https://readtheplan.dev/playground/) to see readtheplan analyze sample plans in your browser — no install required.
@@ -134,6 +139,9 @@ Try the [interactive playground](https://readtheplan.dev/playground/) to see rea
 ```bash
 # Install
 pip install readtheplan
+
+# No Terraform handy? After cloning the repo, analyze a bundled example:
+#   readtheplan analyze examples/01-small-create/plan.json
 
 # Generate a plan (Terraform or OpenTofu)
 terraform plan -out=tfplan -input=false
@@ -184,11 +192,12 @@ readtheplan analyze --framework soc2 plan.json
 
 ### Docker
 
-```bash
-docker run --rm -v $(pwd):/workspace readtheplan/readtheplan analyze plan.json
-```
+Build the bundled `Dockerfile` and run locally — your plan JSON stays on the mounted workspace and never leaves the container:
 
-[![Docker](https://img.shields.io/badge/docker-readtheplan%2Freadtheplan-blue)](https://github.com/readtheplan/readtheplan/pkgs/container/readtheplan)
+```bash
+docker build -t readtheplan .
+docker run --rm -v "$(pwd):/workspace" readtheplan analyze plan.json
+```
 
 ### Sample CLI output
 
@@ -214,11 +223,13 @@ Resource changes: 3
 ```yaml
 - name: Analyze Terraform plan
   id: rtp
-  uses: readtheplan/readtheplan@v1
+  uses: readtheplan/readtheplan@v0.3.0   # pin to a released tag or a full commit SHA
   with:
     plan-file: plan.json
-    fail-on-threshold: dangerous
+    fail-on-threshold: dangerous          # gate on dangerous / irreversible changes
 ```
+
+**By default the action only reports — it never fails your build.** Add `fail-on-threshold` (`safe` | `review` | `dangerous` | `irreversible`) to turn findings into a gate, or `fail-on-any-change: true` for strict zero-diff policies.
 
 Downstream steps can consume compact outputs directly:
 
@@ -237,7 +248,7 @@ Downstream steps can consume compact outputs directly:
 readtheplan agent-gate plan.json
 ```
 
-Example JSON contract:
+Example JSON contract (abbreviated — the real command also emits `reason`, a ready-to-post `pr_comment`, an `evidence_checklist`, and an `auditor_summary`):
 
 ```json
 {
@@ -276,6 +287,15 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 }
 ```
 
+## Troubleshooting
+
+- **`readtheplan: command not found`** — the entry point installed to a directory not on your `PATH` (common with `pip install --user`). Run `python -m readtheplan.cli analyze plan.json`, or add the reported scripts directory to your `PATH`.
+- **`Error: invalid JSON in plan.json`** — you passed the binary plan or the human-readable `terraform plan` text. readtheplan reads the JSON from `terraform show -json tfplan > plan.json` (run `terraform plan -out=tfplan` first).
+- **`Error: plan file does not exist`** — the plan JSON is the last argument: `readtheplan analyze <path-to-plan.json>`.
+- **`--evidence requires --framework` / `--sign requires --evidence`** — evidence envelopes are framework-scoped and signing operates on an envelope. Add `--framework soc2` (and `--evidence out.json`) accordingly.
+- **No `Controls` column** — pass `--framework <name>` (`soc2`, `iso27001`, `hipaa`, …); without it readtheplan only classifies risk.
+- **Python version** — requires Python 3.10+ (`python --version`).
+
 ## Features
 
 - **CLI-first** — single `pip install`, runs anywhere Python runs
@@ -301,6 +321,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - [Website](https://readtheplan.dev) — setup generator, example output, intake
 - [Docs](https://readtheplan.dev/docs/) — tutorials, API reference, examples
 - [`examples/`](examples/) — sample plans with rendered output
+- [Authoring rules & overlays](docs/authoring-rules.md) — add resource rules, control mappings, overlays, and adapters
 - [`docs/adr/`](docs/adr/) — architecture decision records
 - [Corpus feedback loop](docs/corpus/README.md) — scan real plans, improve rules
 

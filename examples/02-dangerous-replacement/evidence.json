@@ -16,8 +16,8 @@
     "plan_sha256": "873ecb53f02309675f0ac046b1c0cbe4c7d46cf44ca6816f119aa8d7b32f9f82",
     "source": "terraform-show-json",
     "run_id": "examples/02-dangerous-replacement",
-    "signature": "U+lWENyh271YUzff+WKYI2tPxznQokiumJTWVdfUhj8=",
-    "cert": "{\"readtheplan_examples_fixture_v1\":{\"identity\":\"examples-fixture@readtheplan.dev\",\"oidc_issuer\":\"https://issuer.example.test\",\"rekor_uuid\":\"examples-fixture-rekor-0001\",\"signature\":\"U+lWENyh271YUzff+WKYI2tPxznQokiumJTWVdfUhj8=\"}}"
+    "signature": "ELfyp/YdKFiDnz84ErMssGit7xH4a08zkh1NXzPZBvk=",
+    "cert": "{\"readtheplan_examples_fixture_v1\":{\"identity\":\"examples-fixture@readtheplan.dev\",\"oidc_issuer\":\"https://issuer.example.test\",\"rekor_uuid\":\"examples-fixture-rekor-0001\",\"signature\":\"ELfyp/YdKFiDnz84ErMssGit7xH4a08zkh1NXzPZBvk=\"}}"
   },
   "reviewer": null,
   "summary": {
@@ -38,6 +38,7 @@
       "CC6.7",
       "CC7.1",
       "CC7.2",
+      "CC7.5",
       "CC8.1"
     ]
   },
@@ -103,6 +104,11 @@
           "id": "A1.2",
           "title": "Availability \u2014 Recovery",
           "rationale": "Endpoint changes affect application connectivity and recovery procedures.\n"
+        },
+        {
+          "id": "CC7.5",
+          "title": "Recovery Testing",
+          "rationale": "Backup, snapshot, and maintenance-window changes affect recovery-testing scope and RPO/RTO."
         }
       ]
     },
@@ -134,7 +140,7 @@
         "update"
       ],
       "risk": "review",
-      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "explanation": "Terraform will change security group rules. Review ports, protocols, and source/destination boundaries before applying.",
       "controls": [
         {
           "id": "CC6.6",

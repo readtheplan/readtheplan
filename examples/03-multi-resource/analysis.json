@@ -9,8 +9,8 @@
   },
   "risks": {
     "dangerous": 2,
-    "review": 8,
-    "safe": 2
+    "review": 9,
+    "safe": 1
   },
   "changes": [
     {
@@ -84,6 +84,11 @@
           "id": "CC8.1",
           "title": "Change Management",
           "rationale": "Database configuration update."
+        },
+        {
+          "id": "CC7.5",
+          "title": "Recovery Testing",
+          "rationale": "Backup, snapshot, and maintenance-window changes affect recovery-testing scope and RPO/RTO."
         }
       ]
     },
@@ -110,6 +115,11 @@
           "id": "A1.2",
           "title": "Availability \u2014 Recovery",
           "rationale": "Cluster topology change affects recovery posture."
+        },
+        {
+          "id": "CC7.5",
+          "title": "Recovery Testing",
+          "rationale": "Cluster-level backup and backtrack changes affect recovery-testing procedures."
         }
       ]
     },
@@ -214,7 +224,7 @@
         "update"
       ],
       "risk": "review",
-      "explanation": "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.",
+      "explanation": "Terraform will change security group rules. Review ports, protocols, and source/destination boundaries before applying.",
       "controls": [
         {
           "id": "CC6.6",
@@ -234,8 +244,8 @@
       "actions": [
         "create"
       ],
-      "risk": "safe",
-      "explanation": "Terraform will create a new resource without changing existing state.",
+      "risk": "review",
+      "explanation": "Terraform will change security group rules. Review ports, protocols, and source/destination boundaries before applying.",
       "controls": [
         {
           "id": "CC6.6",

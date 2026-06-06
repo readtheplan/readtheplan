@@ -55,7 +55,7 @@
           <p style="color:var(--muted);margin:8px 0 16px">Add this step to any GitHub Actions workflow that has a Terraform plan:</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Analyze Terraform plan
   id: rtp
-  uses: readtheplan/readtheplan@v1
+  uses: readtheplan/readtheplan@v0.3.0
   with:
     plan-file: plan.json
     fail-on-threshold: dangerous</code></pre>
@@ -94,7 +94,7 @@ jobs:
 
       - name: Analyze plan
         id: rtp
-        uses: readtheplan/readtheplan@v1
+        uses: readtheplan/readtheplan@v0.3.0
         with:
           plan-file: plan.json
           fail-on-threshold: dangerous
