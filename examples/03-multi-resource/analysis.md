@@ -9,8 +9,8 @@ Resource changes: 12
 
 ## Risk
 - dangerous: 2
-- review: 8
-- safe: 2
+- review: 9
+- safe: 1
 
 ## Changes
 | Risk | Actions | Resource | Type | Explanation |
@@ -23,7 +23,7 @@ Resource changes: 12
 | review | update | aws_s3_bucket_public_access_block.audit_logs | aws_s3_bucket_public_access_block | Terraform will update this resource in place. Review the changed attributes and rollout timing before applying. |
 | review | update | aws_iam_policy.readonly | aws_iam_policy | Terraform will update IAM authorization. Review trust policies, permission boundaries, and deny statements for lockout or escalation risk. |
 | safe | create | aws_iam_role.worker | aws_iam_role | Terraform will create a new resource without changing existing state. |
-| review | update | aws_security_group.cluster | aws_security_group | Terraform will update this resource in place. Review the changed attributes and rollout timing before applying. |
-| safe | create | aws_vpc_security_group_ingress_rule.api | aws_vpc_security_group_ingress_rule | Terraform will create a new resource without changing existing state. |
+| review | update | aws_security_group.cluster | aws_security_group | Terraform will change security group rules. Review ports, protocols, and source/destination boundaries before applying. |
+| review | create | aws_vpc_security_group_ingress_rule.api | aws_vpc_security_group_ingress_rule | Terraform will change security group rules. Review ports, protocols, and source/destination boundaries before applying. |
 | review | update | aws_cloudtrail.org | aws_cloudtrail | Terraform will update this resource in place. Review the changed attributes and rollout timing before applying. |
 | review | update | aws_route53_record.app | aws_route53_record | Terraform will update this resource in place. Review the changed attributes and rollout timing before applying. |

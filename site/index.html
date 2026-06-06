@@ -90,7 +90,7 @@
               <div class="cli-line"><span class="t-review">review</span> <span class="t-addr">aws_security_group.web</span> <span class="t-dim">ingress rule change · CC6.6</span></div>
               <div class="cli-line"><span class="t-danger">dangerous</span> <span class="t-addr">aws_iam_role_policy.app</span> <span class="t-dim">policy replaced · CC6.3</span></div>
               <div class="cli-line"><span class="t-irrev">irreversible</span> <span class="t-addr">aws_kms_key.primary</span> <span class="t-dim">key deletion scheduled · CC6.7</span></div>
-              <div class="cli-line t-summary">5 changes · evidence written to ./rtp-evidence-soc2.json</div>
+              <div class="cli-line t-summary">4 changes · add --evidence to emit rtp-evidence-soc2.json</div>
             </div>
           </div>
 
@@ -250,9 +250,9 @@
             <p>Run readtheplan as a local MCP server and review plans inline from Claude, Cursor, or another MCP-compatible editor without leaving the repo.</p>
             <div class="mini-terminal">
               <button class="copy-mini" type="button" onclick="copyBlock(this)">Copy</button>
-              <div><span class="t-prompt">$</span> readtheplan mcp --stdio</div>
+              <div><span class="t-prompt">$</span> readtheplan mcp</div>
               <div class="t-safe">Listening on stdio</div>
-              <div class="t-dim">Tools: analyze_plan, agent_gate, list_frameworks</div>
+              <div class="t-dim">Tools: analyze_plan, agent_gate, agent_gate_cloudformation</div>
             </div>
             <a class="feature-link" href="https://readtheplan.dev/mcp/">Open MCP docs &rarr;</a>
           </article>
@@ -299,7 +299,7 @@
                 <td>Plan diff</td>
                 <td class="c-yes">4 tiers</td>
                 <td class="c-yes">SOC2/ISO/HIPAA</td>
-                <td class="c-yes">block/warn/ok</td>
+                <td class="c-yes">proceed/warn/block</td>
                 <td class="c-yes">yes</td>
               </tr>
               <tr>
@@ -497,7 +497,7 @@
         '# .github/workflows/terraform-review.yml',
         '- name: Analyze Terraform plan',
         '  id: readtheplan',
-        '  uses: readtheplan/readtheplan@v1',
+        '  uses: readtheplan/readtheplan@v0.3.0',
         '  with:',
         '    plan-file: plan.json'
       ];
