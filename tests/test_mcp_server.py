@@ -314,9 +314,15 @@ def _importable(name: str) -> bool:
         return False
 
 
+def _cli_on_path() -> bool:
+    import shutil
+
+    return shutil.which("readtheplan") is not None
+
+
 pytestmark_stdio = pytest.mark.skipif(
-    not _importable("mcp.server.fastmcp"),
-    reason="mcp optional dependency not installed (pip install readtheplan[mcp])",
+    not (_importable("mcp.server.fastmcp") and _cli_on_path()),
+    reason="mcp optional dep or readtheplan CLI not on PATH (pip install -e .[mcp])",
 )
 
 
