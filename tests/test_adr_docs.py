@@ -6,6 +6,42 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_architecture_review_findings_references_real_files() -> None:
+    """Codex peer review finding X1: doc references must point to real files."""
+    findings = (ROOT / "docs" / "architecture-review-findings-2026-06-07.md").read_text(
+        encoding="utf-8"
+    )
+    # Extract all file references (paths in backticks or parenthesized)
+    import re
+
+    refs = re.findall(r"(?:`([^`]+)`|\(([^)]+)\))", findings)
+    for a, b in refs:
+        path_str = (a or b).strip()
+        # Skip URLs, markdown links, status labels, numbers
+        if any(
+            kw in path_str
+            for kw in ["http://", "https://", "github.com", "#", "✅", "📌", "—"]
+        ):
+            continue
+        # Skip values that look like numbers, percentages, or inline data
+        if re.match(r"^\d", path_str) or "%" in path_str or "—" in path_str:
+            continue
+        # Only check things that look like file paths
+        # Must either: have a known file extension, or look like a Unix/Windows path
+        has_file_ext = any(path_str.endswith(ext) for ext in [".md", ".py", ".yml", ".yaml", ".json", ".toml", ".sh", ".js", ".html", ".css"])
+        # Unix path: starts with / or ./ or contains ../ or path/to/file pattern
+        looks_like_unix_path = path_str.startswith("/") or path_str.startswith("./") or "../" in path_str
+        # Windows path: contains \ or starts with drive letter like C:\
+        looks_like_win_path = "\\" in path_str or re.match(r"^[A-Za-z]:\\\\", path_str)
+        if not (has_file_ext or looks_like_unix_path or looks_like_win_path):
+            continue
+        resolved = ROOT / path_str
+        assert resolved.exists(), (
+            f"Architecture review doc references '{path_str}' "
+            f"but file does not exist at {resolved}"
+        )
+
+
 def test_explainer_engine_adr_documents_rules_first_decision() -> None:
     adr = (ROOT / "docs" / "adr" / "0001-explainer-engine.md").read_text(
         encoding="utf-8"
