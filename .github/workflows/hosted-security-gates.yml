@@ -51,7 +51,7 @@ jobs:
 
       - name: Run hosted security gate tests
         run: |
-          pytest tests/hosted_security -q
+          pytest tests/hosted_security -q --no-cov
 
       - name: Generate hosted security gate report
         run: |

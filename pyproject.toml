@@ -56,7 +56,7 @@ source = ["src/readtheplan"]
 omit = ["*/tests/*"]
 
 [tool.coverage.report]
-fail_under = 77
+fail_under = 78
 show_missing = true
 
 [tool.pytest.ini_options]
