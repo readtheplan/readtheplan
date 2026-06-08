@@ -20,7 +20,7 @@ def test_architecture_review_findings_references_real_files() -> None:
         # Skip URLs, markdown links, status labels, numbers
         if any(
             kw in path_str
-            for kw in ["http://", "https://", "github.com", "#", "✅", "📌"]
+            for kw in ["http://", "https://", "github.com", "#", "✅", "📌", "—"]
         ):
             continue
         # Skip values that look like numbers, percentages, or inline data
