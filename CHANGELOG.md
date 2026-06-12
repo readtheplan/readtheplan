@@ -5,6 +5,7 @@
 ### Added
 - Repository issue templates, pull request template, CODEOWNERS, Dependabot config, and PyPI trusted-publisher workflow scaffolding.
 - GitHub Action parser tests and oversized `summary-json` output guardrail.
+- CLI `analyze --fail-on <tier>` gating with distinct exit codes: `0` for success, `1` for hard errors, and `2` when the risk threshold is met.
 
 ### Changed
 - Sigstore is now a true optional `sign` extra with a clear install hint when signing is requested without it.

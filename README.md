@@ -156,6 +156,9 @@ readtheplan analyze --framework soc2 plan.json
 # Machine-readable JSON
 readtheplan analyze --format json plan.json
 
+# Print the report, then exit 2 when dangerous or irreversible changes exist
+readtheplan analyze --fail-on dangerous plan.json
+
 # Optional signed evidence support
 pip install "readtheplan[sign]"
 
@@ -184,7 +187,19 @@ readtheplan analyze --format json plan.json \
   | jq '.changes[] | select(.risk == "dangerous" or .risk == "irreversible")'
 ```
 
-### 4) Framework-annotated review for audits
+### 4) Gate any CI system by risk tier
+
+```bash
+readtheplan analyze --fail-on dangerous plan.json
+```
+
+`--fail-on` accepts `safe`, `review`, `dangerous`, or `irreversible`. It always
+prints the selected text or JSON report first, then exits `2` if any change is
+at or above the threshold. Exit `1` remains reserved for invalid input, I/O,
+and other hard errors; exit `0` means analysis succeeded without tripping the
+threshold.
+
+### 5) Framework-annotated review for audits
 
 ```bash
 readtheplan analyze --framework soc2 plan.json
@@ -293,6 +308,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - **`Error: invalid JSON in plan.json`** — you passed the binary plan or the human-readable `terraform plan` text. readtheplan reads the JSON from `terraform show -json tfplan > plan.json` (run `terraform plan -out=tfplan` first).
 - **`Error: plan file does not exist`** — the plan JSON is the last argument: `readtheplan analyze <path-to-plan.json>`.
 - **`--evidence requires --framework` / `--sign requires --evidence`** — evidence envelopes are framework-scoped and signing operates on an envelope. Add `--framework soc2` (and `--evidence out.json`) accordingly.
+- **CI exit codes** — `analyze --fail-on <tier>` returns `0` when the threshold is clear, `2` when one or more changes meet or exceed it, and `1` for hard errors such as invalid JSON or unreadable input. The normal report is printed before exit `2`.
 - **No `Controls` column** — pass `--framework <name>` (`soc2`, `iso27001`, `hipaa`, …); without it readtheplan only classifies risk.
 - **Python version** — requires Python 3.10+ (`python --version`).
 
