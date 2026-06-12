@@ -272,6 +272,14 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"Error: cannot read plan file {args.plan_file}: {exc}", file=sys.stderr)
         return 1
 
+    if not isinstance(plan_data, dict):
+        print(
+            f"Error: Terraform plan JSON must be an object (top-level dict), "
+            f"got {type(plan_data).__name__}: {args.plan_file}",
+            file=sys.stderr,
+        )
+        return 1
+
     try:
         summary = analyze_plan_file(
             plan_data,
