@@ -313,8 +313,8 @@ def test_lambda_runtime_major_change_is_review(tmp_path: Path) -> None:
         _change(
             "aws_lambda_function",
             ["update"],
-            before={"runtime": "nodejs18.x"},
-            after={"runtime": "nodejs20.x"},
+            before={"runtime": "nodejs20.x"},
+            after={"runtime": "nodejs22.x"},
         ),
     )
 
