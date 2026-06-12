@@ -530,3 +530,64 @@ def test_resource_rules_can_be_disabled(tmp_path: Path) -> None:
 
     assert summary.resource_changes[0].risk == "review"
     assert "update this resource in place" in summary.resource_changes[0].explanation
+
+from datetime import date
+
+from readtheplan.rules import _DEPRECATED_RUNTIMES
+
+
+# AWS Lambda runtime end-of-life dates, sourced from
+# https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html
+# Update this table whenever AWS announces new EOL dates.
+_RUNTIME_EOL_DATES: dict[str, date] = {
+    "nodejs12.x": date(2023, 4, 30),
+    "nodejs14.x": date(2023, 12, 4),
+    "nodejs16.x": date(2024, 6, 12),
+    "python3.6": date(2022, 7, 18),
+    "python3.7": date(2023, 11, 27),
+    "python3.8": date(2024, 10, 14),
+    "dotnetcore3.1": date(2023, 4, 3),
+    "dotnet5.0": date(2023, 5, 8),
+    "dotnet6": date(2024, 11, 12),
+    "ruby2.5": date(2021, 7, 30),
+    "ruby2.7": date(2023, 12, 7),
+    "java8": date(2023, 12, 31),
+    "java8.al2": date(2025, 12, 31),
+    "go1.x": date(2023, 12, 31),
+    "provided": date(2023, 12, 31),
+}
+
+
+def test_deprecated_runtimes_have_known_eol_dates() -> None:
+    """Every runtime in _DEPRECATED_RUNTIMES must have a documented EOL date,
+    and that EOL date must already be in the past (otherwise it should not
+    yet be classified as deprecated)."""
+    today = date.today()
+    missing = sorted(_DEPRECATED_RUNTIMES - set(_RUNTIME_EOL_DATES))
+    assert not missing, (
+        f"Runtime(s) {missing} are in _DEPRECATED_RUNTIMES but have no "
+        f"EOL date recorded in _RUNTIME_EOL_DATES. Add their AWS Lambda "
+        f"end-of-life date to the table."
+    )
+
+    not_yet_eol = sorted(
+        runtime
+        for runtime in _DEPRECATED_RUNTIMES
+        if _RUNTIME_EOL_DATES[runtime] > today
+    )
+    assert not not_yet_eol, (
+        f"Runtime(s) {not_yet_eol} are marked deprecated but their "
+        f"recorded EOL date is in the future. Check AWS docs and update "
+        f"_RUNTIME_EOL_DATES or remove from _DEPRECATED_RUNTIMES if premature."
+    )
+
+
+def test_runtime_eol_table_has_no_stale_unused_entries() -> None:
+    """Every entry in _RUNTIME_EOL_DATES should correspond to a runtime
+    that is actually marked deprecated (catches typos / orphaned entries)."""
+    extra = sorted(set(_RUNTIME_EOL_DATES) - _DEPRECATED_RUNTIMES)
+    assert not extra, (
+        f"_RUNTIME_EOL_DATES has entries {extra} that are not in "
+        f"_DEPRECATED_RUNTIMES. Remove stale entries or add the runtime "
+        f"to _DEPRECATED_RUNTIMES if it should be flagged."
+    )
