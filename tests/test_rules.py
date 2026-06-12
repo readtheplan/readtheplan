@@ -851,6 +851,17 @@ def test_k8s_secret_update_is_dangerous(tmp_path: Path) -> None:
     assert "change this Secret" in summary.resource_changes[0].explanation
 
 
+def test_k8s_secret_create_is_dangerous(tmp_path: Path) -> None:
+    """K8s Secret create should risk 'dangerous' with 'create this'."""
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_secret", ["create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "create this Secret" in summary.resource_changes[0].explanation
+
+
 def test_k8s_namespace_delete_is_irreversible(tmp_path: Path) -> None:
     plan = _write_plan(
         tmp_path,
