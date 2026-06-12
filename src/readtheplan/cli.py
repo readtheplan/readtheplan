@@ -242,13 +242,13 @@ def _analyze(args: argparse.Namespace) -> int:
     try:
         plan_bytes = Path(args.plan_file).read_bytes()
         plan_data = json.loads(plan_bytes)
-        if not isinstance(plan_data, dict):
-            print(
-                f"Error: Terraform plan JSON must be an object (top-level dict), "
-                f"got {type(plan_data).__name__}: {args.plan_file}",
-                file=sys.stderr,
-            )
-            return 1
+    except UnicodeDecodeError:
+        print(
+            f"Error: {args.plan_file} is not UTF-8 JSON. If this is a binary plan, "
+            "run: terraform show -json tfplan > plan.json",
+            file=sys.stderr,
+        )
+        return 1
     except json.JSONDecodeError as exc:
         print(
             f"Error: invalid JSON in {args.plan_file}:"
@@ -263,7 +263,24 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"Error: cannot read plan file {args.plan_file}: {exc}", file=sys.stderr)
         return 1
 
-    summary = analyze_plan_file(plan_data, use_rules=not args.no_rules, _original_path=Path(args.plan_file))
+    if not isinstance(plan_data, dict):
+        print(
+            f"Error: Terraform plan JSON must be an object (top-level dict), "
+            f"got {type(plan_data).__name__}: {args.plan_file}",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        summary = analyze_plan_file(
+            plan_data,
+            use_rules=not args.no_rules,
+            _original_path=Path(args.plan_file),
+        )
+    except PlanError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
     try:
         if overlay_items:
             summary = _apply_overlays_to_summary(
