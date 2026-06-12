@@ -25,6 +25,7 @@ from readtheplan.overlays import (
     load_overlay,
 )
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file, load_plan
+from readtheplan.rules import RISK_ORDER
 from readtheplan.signing import (
     SigningError,
     VerificationError,
@@ -67,6 +68,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-rules",
         action="store_true",
         help="Disable resource-aware rules and use the action-only classifier.",
+    )
+    analyze.add_argument(
+        "--fail-on",
+        choices=tuple(RISK_ORDER),
+        help=(
+            "After printing the normal report, exit 2 if any change is at or "
+            "above this risk tier. Independent of output format."
+        ),
     )
     analyze.add_argument(
         "--rules-file",
@@ -242,6 +251,13 @@ def _analyze(args: argparse.Namespace) -> int:
     try:
         plan_bytes = Path(args.plan_file).read_bytes()
         plan_data = json.loads(plan_bytes)
+    except UnicodeDecodeError:
+        print(
+            f"Error: {args.plan_file} is not UTF-8 JSON. If this is a binary plan, "
+            "run: terraform show -json tfplan > plan.json",
+            file=sys.stderr,
+        )
+        return 1
     except json.JSONDecodeError as exc:
         print(
             f"Error: invalid JSON in {args.plan_file}:"
@@ -256,7 +272,24 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"Error: cannot read plan file {args.plan_file}: {exc}", file=sys.stderr)
         return 1
 
-    summary = analyze_plan_file(plan_data, use_rules=not args.no_rules, _original_path=Path(args.plan_file))
+    if not isinstance(plan_data, dict):
+        print(
+            f"Error: Terraform plan JSON must be an object (top-level dict), "
+            f"got {type(plan_data).__name__}: {args.plan_file}",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        summary = analyze_plan_file(
+            plan_data,
+            use_rules=not args.no_rules,
+            _original_path=Path(args.plan_file),
+        )
+    except PlanError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
     try:
         if overlay_items:
             summary = _apply_overlays_to_summary(
@@ -302,7 +335,7 @@ def _analyze(args: argparse.Namespace) -> int:
         if args.evidence == "-":
             json.dump(evidence_payload, sys.stdout, indent=2)
             print()
-            return 0
+            return _fail_on_exit_code(summary, args.fail_on)
 
         try:
             Path(args.evidence).write_text(
@@ -321,7 +354,26 @@ def _analyze(args: argparse.Namespace) -> int:
         print()
     else:
         _print_summary(summary, sys.stdout, catalog=catalog)
-    return 0
+    return _fail_on_exit_code(summary, args.fail_on)
+
+
+def _fail_on_exit_code(summary: PlanSummary, threshold: str | None) -> int:
+    if threshold is None:
+        return 0
+
+    threshold_rank = RISK_ORDER[threshold]
+    count = sum(
+        RISK_ORDER[change.risk] >= threshold_rank
+        for change in summary.resource_changes
+    )
+    if count == 0:
+        return 0
+
+    print(
+        f"fail-on: {count} change(s) at or above {threshold}",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def _agent_gate(args: argparse.Namespace) -> int:

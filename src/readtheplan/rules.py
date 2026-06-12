@@ -137,6 +137,81 @@ def _rule_candidates(
         "aws_cloudwatch_log_group",
     }:
         return _observability_candidates(resource_type, action_set, change)
+
+    # --- google_* (GCP) resources ---
+    if resource_type in {
+        "google_compute_instance",
+    }:
+        return _gcp_compute_instance_candidates(action_set, change)
+    if resource_type in {
+        "google_container_cluster",
+    }:
+        return _gcp_container_cluster_candidates(action_set, change)
+    if resource_type in {
+        "google_sql_database_instance",
+    }:
+        return _gcp_sql_database_instance_candidates(action_set, change)
+    if resource_type in {
+        "google_storage_bucket",
+    }:
+        return _gcp_storage_bucket_candidates(action_set, change)
+    if resource_type in {
+        "google_compute_firewall",
+    }:
+        return _gcp_compute_firewall_candidates(action_set, change)
+
+    # --- azurerm_* (Azure) resources ---
+    if resource_type in {
+        "azurerm_virtual_machine",
+    }:
+        return _azurerm_virtual_machine_candidates(action_set, change)
+    if resource_type in {
+        "azurerm_kubernetes_cluster",
+    }:
+        return _azurerm_kubernetes_cluster_candidates(action_set, change)
+    if resource_type in {
+        "azurerm_storage_account",
+    }:
+        return _azurerm_storage_account_candidates(action_set, change)
+    if resource_type in {
+        "azurerm_role_assignment",
+    }:
+        return _azurerm_role_assignment_candidates(action_set)
+    if resource_type in {
+        "azurerm_network_security_group",
+        "azurerm_network_security_rule",
+    }:
+        return _azurerm_network_security_candidates(resource_type, action_set, change)
+
+    # --- kubernetes_* (K8s) resources ---
+    if resource_type in {
+        "kubernetes_deployment",
+    }:
+        return _k8s_deployment_candidates(action_set)
+    if resource_type in {
+        "kubernetes_service",
+        "kubernetes_ingress",
+    }:
+        return _k8s_service_candidates(resource_type, action_set)
+    if resource_type in {
+        "kubernetes_secret",
+    }:
+        return _k8s_secret_candidates(action_set)
+    if resource_type in {
+        "kubernetes_namespace",
+    }:
+        return _k8s_namespace_candidates(action_set)
+    if resource_type in {
+        "kubernetes_cluster_role",
+        "kubernetes_cluster_role_binding",
+        "kubernetes_role_binding",
+    }:
+        return _k8s_rbac_candidates(resource_type, action_set)
+    if resource_type in {
+        "kubernetes_network_policy",
+    }:
+        return _k8s_network_policy_candidates(action_set)
+
     return []
 
 
@@ -1296,6 +1371,749 @@ def _observability_candidates(
     return candidates
 
 
+# ---------------------------------------------------------------------------
+# google_* (GCP) provider rules
+# ---------------------------------------------------------------------------
+
+
+def _gcp_compute_instance_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this Compute Engine instance. "
+                    "Ephemeral disks, instance metadata, and internal IP "
+                    "assignments will be recreated."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Compute Engine instance. "
+                    "Confirm boot disk retention policy, snapshots, and "
+                    "attached persistent disks before applying."
+                ),
+            )
+        )
+    elif "update" in action_set:
+        # Check for destructive attribute changes
+        if any(
+            _attribute_changed(change, key)
+            for key in ("machine_type", "zone", "can_ip_forward")
+        ):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Compute Engine instance machine_type, zone, or "
+                        "can_ip_forward is changing. Some of these changes "
+                        "may force instance restart or replacement."
+                    ),
+                )
+            )
+        if _attribute_changed(change, "tags"):
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "Compute Engine instance tags are changing. "
+                        "Network firewall rules depend on tag matching."
+                    ),
+                )
+            )
+        if not candidates:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "__TOOL__ will update this Compute Engine instance. "
+                        "Review metadata, disk config, and network interface changes."
+                    ),
+                )
+            )
+
+    return candidates
+
+
+def _gcp_container_cluster_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this GKE cluster. Expect "
+                    "kubeconfig, node pools, and workload disruption "
+                    "during the replacement process."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this GKE cluster. All workloads, "
+                    "PVs, and cluster-scoped resources are removed. "
+                    "Ensure backups and workload migration are complete."
+                ),
+            )
+        )
+    elif "update" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will update this GKE cluster. Review "
+                    "version upgrades, node pool changes, networking, "
+                    "and maintenance window settings."
+                ),
+            )
+        )
+
+    return candidates
+
+
+def _gcp_sql_database_instance_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this Cloud SQL instance. "
+                    "Connection name, IP addresses, and SSL certs "
+                    "will change; applications must reconnect."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Cloud SQL instance. "
+                    "Database contents are lost unless backups or "
+                    "point-in-time recovery is configured."
+                ),
+            )
+        )
+    elif "update" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will update this Cloud SQL instance. "
+                    "Review tier, disk size, backup config, SSL mode, "
+                    "and maintenance window changes."
+                ),
+            )
+        )
+
+    if _major_version_changed(change, "database_version"):
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "Cloud SQL database_version appears to cross a major "
+                    "version. Major version upgrades can be disruptive "
+                    "and may not be reversible."
+                ),
+            )
+        )
+
+    return candidates
+
+
+def _gcp_storage_bucket_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set:
+        # GCS buckets can be deleted with force_destroy
+        force_destroy = bool(_before_value(change, "force_destroy"))
+        if force_destroy:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "__TOOL__ will delete a GCS bucket with "
+                        "force_destroy enabled. All objects in the "
+                        "bucket will be irretrievably removed."
+                    ),
+                )
+            )
+        else:
+            candidates.append(
+                RuleResult(
+                    "irreversible",
+                    (
+                        "__TOOL__ will delete a GCS bucket. "
+                        "Confirm object versioning, lifecycle rules, "
+                        "and replication settings before proceeding."
+                    ),
+                )
+            )
+    elif "update" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will update a GCS bucket. Review IAM, "
+                    "public access prevention, uniform bucket-level "
+                    "access, retention, and encryption settings."
+                ),
+            )
+        )
+    elif "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "safe",
+                (
+                    "__TOOL__ will create a GCS bucket. Confirm "
+                    "public access prevention, location, and "
+                    "data classification before storing sensitive data."
+                ),
+            )
+        )
+
+    return candidates
+
+
+def _gcp_compute_firewall_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace a Compute Engine firewall "
+                    "rule. Traffic matching this rule will be disrupted "
+                    "during the transition."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete a Compute Engine firewall "
+                    "rule. Workloads that depend on this rule may "
+                    "lose expected connectivity immediately."
+                ),
+            )
+        )
+    elif "update" in action_set or "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will change a Compute Engine firewall "
+                    "rule. Review source ranges, target tags, "
+                    "protocols, and ports before applying."
+                ),
+            )
+        )
+
+    return candidates
+
+
+# ---------------------------------------------------------------------------
+# azurerm_* (Azure) provider rules
+# ---------------------------------------------------------------------------
+
+
+def _azurerm_virtual_machine_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this Azure VM. OS disk, "
+                    "data disks, NIC, and public IP may be recreated, "
+                    "causing workload downtime."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Azure VM. Confirm OS "
+                    "disk deletion policy, backup config, and any "
+                    "attached managed disks before applying."
+                ),
+            )
+        )
+    elif "update" in action_set:
+        if any(
+            _attribute_changed(change, key)
+            for key in ("vm_size", "zone", "license_type")
+        ):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "Azure VM size, zone, or license_type is "
+                        "changing. This may force a restart or "
+                        "replacement of the VM."
+                    ),
+                )
+            )
+        else:
+            candidates.append(
+                RuleResult(
+                    "review",
+                    (
+                        "__TOOL__ will update this Azure VM. Review "
+                        "OS profile, disk config, and NIC changes."
+                    ),
+                )
+            )
+
+    return candidates
+
+
+def _azurerm_kubernetes_cluster_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this AKS cluster. kubeconfig, "
+                    "node pools, and all workloads will be recreated."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this AKS cluster. All "
+                    "workloads, PVs, and cluster-scoped resources "
+                    "are removed. Confirm backup and migration."
+                ),
+            )
+        )
+    elif "update" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will update this AKS cluster. Review "
+                    "Kubernetes version upgrades, node pool scaling, "
+                    "network profile, and maintenance settings."
+                ),
+            )
+        )
+
+    return candidates
+
+
+def _azurerm_storage_account_candidates(
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this storage account. "
+                    "Primary and secondary endpoints, access keys, "
+                    "and SAS tokens will change."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this storage account. "
+                    "All blobs, tables, queues, files, and share "
+                    "snapshots will be removed."
+                ),
+            )
+        )
+    elif "update" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will update this storage account. "
+                    "Review network rules, encryption, blob soft "
+                    "delete, and replication settings."
+                ),
+            )
+        )
+
+    return candidates
+
+
+def _azurerm_role_assignment_candidates(
+    action_set: set[str],
+) -> list[RuleResult]:
+    if "delete" in action_set and "create" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace a role assignment. "
+                    "Permissions for the assigned principal will "
+                    "be removed and re-granted; verify scope and "
+                    "role definition are correct."
+                ),
+            )
+        ]
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete a role assignment. "
+                    "The assigned principal will lose access to "
+                    "the scope; confirm no workloads depend on it."
+                ),
+            )
+        ]
+    if "create" in action_set or "update" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will change a role assignment. "
+                    "Review role definition, scope, and principal "
+                    "for privilege escalation or lockout risk."
+                ),
+            )
+        ]
+    return []
+
+
+def _azurerm_network_security_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    candidates: list[RuleResult] = []
+    label = "NSG" if resource_type == "azurerm_network_security_group" else "NSG rule"
+
+    if "delete" in action_set and "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    f"__TOOL__ will replace a {label}. Network "
+                    "access for associated subnets or NICs may "
+                    "be disrupted."
+                ),
+            )
+        )
+    elif "delete" in action_set:
+        candidates.append(
+            RuleResult(
+                "irreversible",
+                (
+                    f"__TOOL__ will delete a {label}. Workloads "
+                    "relying on this security rule may lose "
+                    "expected network access."
+                ),
+            )
+        )
+    elif "update" in action_set or "create" in action_set:
+        candidates.append(
+            RuleResult(
+                "review",
+                (
+                    f"__TOOL__ will change a {label}. Review "
+                    "source/destination prefixes, port ranges, "
+                    "and protocol before applying."
+                ),
+            )
+        )
+
+    return candidates
+
+
+# ---------------------------------------------------------------------------
+# kubernetes_* (K8s) provider rules
+# ---------------------------------------------------------------------------
+
+
+def _k8s_deployment_candidates(
+    action_set: set[str],
+) -> list[RuleResult]:
+    if "delete" in action_set and "create" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this Deployment. A "
+                    "rolling replacement will drain old pods and "
+                    "create new ones; review the new spec for "
+                    "configuration drift."
+                ),
+            )
+        ]
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Deployment. All "
+                    "pods managed by this Deployment will be "
+                    "terminated and their endpoints removed."
+                ),
+            )
+        ]
+    if "update" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will update this Deployment. Review "
+                    "image tag, replicas, container resources, "
+                    "probes, and selector changes."
+                ),
+            )
+        ]
+    return []
+
+
+def _k8s_service_candidates(
+    resource_type: str,
+    action_set: set[str],
+) -> list[RuleResult]:
+    label = "Ingress" if resource_type == "kubernetes_ingress" else "Service"
+
+    if "delete" in action_set and "create" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"__TOOL__ will replace this {label}. Endpoints "
+                    "and DNS records may change, causing transient "
+                    "connectivity loss."
+                ),
+            )
+        ]
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    f"__TOOL__ will delete this {label}. Traffic "
+                    "routing to this service will stop immediately."
+                ),
+            )
+        ]
+    if "update" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    f"__TOOL__ will update this {label}. Review "
+                    "port mapping, selector, type (ClusterIP / "
+                    "NodePort / LoadBalancer), and annotations."
+                ),
+            )
+        ]
+    return []
+
+
+def _k8s_secret_candidates(
+    action_set: set[str],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Secret. Credentials, "
+                    "tokens, or certs stored in this Secret will "
+                    "be lost; pods mounting it must be recreated."
+                ),
+            )
+        ]
+    if "update" in action_set or "create" in action_set:
+        is_create = "delete" not in action_set and "create" in action_set and "update" not in action_set
+        verb = "create this" if is_create else "change this"
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"__TOOL__ will {verb} Secret. Secrets contain "
+                    "sensitive data; verify the new values and ensure "
+                    "pods are configured to pick up the change."
+                ),
+            )
+        ]
+    return []
+
+
+def _k8s_namespace_candidates(
+    action_set: set[str],
+) -> list[RuleResult]:
+    if "delete" in action_set and "create" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace this Namespace. All "
+                    "resources in the old namespace will be "
+                    "destroyed and recreated."
+                ),
+            )
+        ]
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Namespace. All "
+                    "pods, services, and RBAC resources inside "
+                    "it will be removed."
+                ),
+            )
+        ]
+    if "update" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will update this Namespace. Review "
+                    "labels, annotations, and resource quotas."
+                ),
+            )
+        ]
+    return []
+
+
+def _k8s_rbac_candidates(
+    resource_type: str,
+    action_set: set[str],
+) -> list[RuleResult]:
+    if resource_type == "kubernetes_cluster_role":
+        label = "ClusterRole"
+    elif resource_type == "kubernetes_cluster_role_binding":
+        label = "ClusterRoleBinding"
+    else:
+        label = "RoleBinding"
+
+    if "delete" in action_set and "create" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"__TOOL__ will replace a {label}. RBAC "
+                    "permissions will be removed and re-granted; "
+                    "subjects may temporarily lose access."
+                ),
+            )
+        ]
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    f"__TOOL__ will delete a {label}. Subjects "
+                    "bound by this RBAC resource will lose "
+                    "permissions immediately."
+                ),
+            )
+        ]
+    if "update" in action_set or "create" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    f"__TOOL__ will change a {label}. Review "
+                    "rules, subjects, and roleRef for privilege "
+                    "escalation or lockout risk."
+                ),
+            )
+        ]
+    return []
+
+
+def _k8s_network_policy_candidates(
+    action_set: set[str],
+) -> list[RuleResult]:
+    if "delete" in action_set and "create" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "__TOOL__ will replace a NetworkPolicy. "
+                    "Pod-to-pod traffic isolation will briefly "
+                    "reset during the transition."
+                ),
+            )
+        ]
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete a NetworkPolicy. Pod "
+                    "isolation rules will be removed; traffic "
+                    "that was blocked may become allowed."
+                ),
+            )
+        ]
+    if "update" in action_set or "create" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will change a NetworkPolicy. Review "
+                    "podSelector, ingress/egress rules, and "
+                    "namespace isolation before applying."
+                ),
+            )
+        ]
+    return []
+
+
 def _policy_resource_candidates(
     action_set: set[str],
     change: dict[str, Any],
@@ -1377,9 +2195,11 @@ _DEPRECATED_RUNTIMES: set[str] = {
     "nodejs12.x",
     "nodejs14.x",
     "nodejs16.x",
+    "nodejs18.x",
     "python3.6",
     "python3.7",
     "python3.8",
+    "python3.9",
     "dotnetcore3.1",
     "dotnet5.0",
     "dotnet6",
