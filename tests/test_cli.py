@@ -174,3 +174,34 @@ def test_analyze_malformed_json_exits_one(tmp_path: Path, capsys) -> None:
     assert exit_code == 1
     assert captured.out == ""
     assert "Error" in captured.err
+
+
+def test_analyze_non_utf8_plan_exits_one_without_traceback(
+    tmp_path: Path, capsys
+) -> None:
+    plan = tmp_path / "binary.tfplan"
+    plan.write_bytes(b"\x00\xa6\xff")
+
+    exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "not UTF-8 JSON" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_analyze_invalid_resource_changes_exits_one_without_traceback(
+    tmp_path: Path, capsys
+) -> None:
+    plan = tmp_path / "invalid-resource-changes.json"
+    plan.write_text('{"resource_changes": "foo"}', encoding="utf-8")
+
+    exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "Traceback" not in captured.err
