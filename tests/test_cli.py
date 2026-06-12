@@ -11,6 +11,19 @@ from readtheplan.cli import main
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def test_cli_rejects_json_array_as_invalid_plan(tmp_path: Path, capsys) -> None:
+    """CLI fast path must reject top-level JSON arrays with a clean error
+    instead of a raw TypeError. Found by Codex Desktop peer review,
+    confirmed by Claude Desktop."""
+    bad = tmp_path / "array.json"
+    bad.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+    exit_code = main(["analyze", str(bad)])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "must be an object" in captured.err
+    assert "TypeError" not in captured.err
+
+
 def test_version_flag_prints_package_version(capsys) -> None:
     with pytest.raises(SystemExit) as exc_info:
         main(["--version"])
