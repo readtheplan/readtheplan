@@ -68,6 +68,7 @@
             <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px 12px;color:var(--muted)">Flag</th><th style="padding:8px 12px;color:var(--muted)">Description</th></tr></thead>
             <tbody>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--format text|json</td><td style="padding:8px 12px;color:var(--muted)">Output format. Default: text.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--fail-on safe|review|dangerous|irreversible</td><td style="padding:8px 12px;color:var(--muted)">Print the normal report, then exit 2 if any change is at or above the selected risk tier. Works with text and JSON output.</td></tr>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--no-rules</td><td style="padding:8px 12px;color:var(--muted)">Disable resource-aware rules. Use action-only classifier.</td></tr>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--rules-file PATH</td><td style="padding:8px 12px;color:var(--muted)">Apply overlay YAML on top of built-in rules. Repeatable.</td></tr>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--framework soc2|iso27001|hipaa</td><td style="padding:8px 12px;color:var(--muted)">Annotate with control IDs from named framework.</td></tr>
@@ -78,6 +79,8 @@
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--reviewer-kind human|agent</td><td style="padding:8px 12px;color:var(--muted)">Reviewer kind. Default: human.</td></tr>
             </tbody>
           </table>
+          <h3 style="margin-top:24px;color:var(--accent)">Exit codes</h3>
+          <p style="color:var(--muted);margin-top:12px"><code>0</code> means analysis succeeded without tripping <code>--fail-on</code>; <code>1</code> means a hard error such as invalid input or an I/O failure; <code>2</code> means analysis succeeded and one or more changes met or exceeded the configured threshold.</p>
         </div>
       </section>
 
