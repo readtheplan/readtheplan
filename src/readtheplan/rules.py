@@ -1975,12 +1975,13 @@ def _k8s_secret_candidates(
             )
         ]
     if "update" in action_set or "create" in action_set:
-        # Secrets are always sensitive — by default we mark changes
+        is_create = "delete" not in action_set and "create" in action_set and "update" not in action_set
+        verb = "create this" if is_create else "change this"
         return [
             RuleResult(
                 "dangerous",
                 (
-                    "__TOOL__ will change this Secret. Secrets contain "
+                    f"__TOOL__ will {verb} Secret. Secrets contain "
                     "sensitive data; verify the new values and ensure "
                     "pods are configured to pick up the change."
                 ),
