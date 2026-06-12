@@ -11,6 +11,19 @@ from readtheplan.cli import main
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def test_cli_rejects_json_array_as_invalid_plan(tmp_path: Path, capsys) -> None:
+    """CLI fast path must reject top-level JSON arrays with a clean error
+    instead of a raw TypeError. Found by Codex Desktop peer review,
+    confirmed by Claude Desktop."""
+    bad = tmp_path / "array.json"
+    bad.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+    exit_code = main(["analyze", str(bad)])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "must be an object" in captured.err
+    assert "TypeError" not in captured.err
+
+
 def test_version_flag_prints_package_version(capsys) -> None:
     with pytest.raises(SystemExit) as exc_info:
         main(["--version"])
@@ -174,3 +187,183 @@ def test_analyze_malformed_json_exits_one(tmp_path: Path, capsys) -> None:
     assert exit_code == 1
     assert captured.out == ""
     assert "Error" in captured.err
+
+
+def test_analyze_non_utf8_plan_exits_one_without_traceback(
+    tmp_path: Path, capsys
+) -> None:
+    plan = tmp_path / "binary.tfplan"
+    plan.write_bytes(b"\x00\xa6\xff")
+
+    exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "not UTF-8 JSON" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_analyze_invalid_resource_changes_exits_one_without_traceback(
+    tmp_path: Path, capsys
+) -> None:
+    plan = tmp_path / "invalid-resource-changes.json"
+    plan.write_text('{"resource_changes": "foo"}', encoding="utf-8")
+
+    exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "Traceback" not in captured.err
+
+def test_analyze_fail_on_dangerous_exits_two_after_report(capsys) -> None:
+    exit_code = main(
+        [
+            "analyze",
+            "--fail-on",
+            "dangerous",
+            str(FIXTURES / "valid_plan.json"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "Resource changes: 3" in captured.out
+    assert captured.err == "fail-on: 1 change(s) at or above dangerous\n"
+
+
+def test_analyze_fail_on_dangerous_preserves_json_output(capsys) -> None:
+    exit_code = main(
+        [
+            "analyze",
+            "--format",
+            "json",
+            "--fail-on",
+            "dangerous",
+            str(FIXTURES / "valid_plan.json"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 2
+    assert payload["resource_change_count"] == 3
+    assert captured.err == "fail-on: 1 change(s) at or above dangerous\n"
+
+
+def test_analyze_fail_on_irreversible_allows_dangerous_plan(capsys) -> None:
+    exit_code = main(
+        [
+            "analyze",
+            "--fail-on",
+            "irreversible",
+            str(FIXTURES / "valid_plan.json"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Resource changes: 3" in captured.out
+    assert captured.err == ""
+
+
+def test_analyze_fail_on_review_allows_safe_plan(tmp_path: Path, capsys) -> None:
+    plan = tmp_path / "safe-plan.json"
+    plan.write_text(
+        json.dumps(
+            {
+                "resource_changes": [
+                    {
+                        "address": "aws_s3_bucket.logs",
+                        "type": "aws_s3_bucket",
+                        "change": {"actions": ["create"]},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["analyze", "--fail-on", "review", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "safe" in captured.out
+    assert captured.err == ""
+
+
+def test_analyze_fail_on_keeps_malformed_input_at_exit_one(
+    tmp_path: Path, capsys
+) -> None:
+    plan = tmp_path / "malformed-plan.json"
+    plan.write_text('{"resource_changes": "foo"}', encoding="utf-8")
+
+    exit_code = main(["analyze", "--fail-on", "safe", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "fail-on:" not in captured.err
+
+
+# ── CloudFormation gate --framework ────────────────────────────────────
+
+def test_cfn_gate_without_framework_has_no_control_checks() -> None:
+    """cloudformation gate without --framework emits no control check IDs."""
+    exit_code = main(
+        ["cloudformation", str(FIXTURES / "cfn_change_set_mixed.json")]
+    )
+    assert exit_code == 0
+
+
+def test_cfn_gate_with_framework_emits_control_checks() -> None:
+    """cloudformation gate with --framework soc2 emits control check IDs."""
+    exit_code = main(
+        [
+            "cloudformation",
+            "--framework",
+            "soc2",
+            str(FIXTURES / "cfn_change_set_mixed.json"),
+        ]
+    )
+    assert exit_code == 0
+
+
+def test_cfn_gate_with_framework_includes_control_ids(capsys) -> None:
+    """cloudformation gate with --framework includes rtp.control.* in output."""
+    exit_code = main(
+        [
+            "cloudformation",
+            "--framework",
+            "soc2",
+            str(FIXTURES / "cfn_change_set_mixed.json"),
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    checks = payload.get("required_checks", [])
+    control_checks = [c for c in checks if "rtp.control.soc2" in c]
+    assert len(control_checks) > 0, (
+        f"Expected SOC2 control check IDs in required_checks, got: {checks}"
+    )
+
+
+def test_cfn_gate_without_framework_omits_control_ids(capsys) -> None:
+    """cloudformation gate without --framework has no rtp.control.* checks."""
+    exit_code = main(
+        ["cloudformation", str(FIXTURES / "cfn_change_set_mixed.json")]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    checks = payload.get("required_checks", [])
+    control_checks = [c for c in checks if "rtp.control" in c]
+    assert len(control_checks) == 0, (
+        f"Expected no control check IDs without --framework, got: {control_checks}"
+    )
+
