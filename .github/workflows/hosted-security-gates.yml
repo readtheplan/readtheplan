@@ -73,7 +73,7 @@ jobs:
           PY
 
       - name: Upload hosted security gate artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: hosted-security-gate-report
           path: hosted-security-gate-report.json
