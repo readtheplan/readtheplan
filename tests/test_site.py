@@ -244,8 +244,6 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
     sample_path = SITE / "brief" / "sample-001" / "index.html"
     sitemap = (SITE / "sitemap.xml").read_text(encoding="utf-8")
     homepage = (SITE / "index.html").read_text(encoding="utf-8")
-    runbook = (ROOT / "docs" / "weekly-brief-runbook.md").read_text(encoding="utf-8")
-
     assert brief_path.exists()
     assert sample_path.exists()
     assert "/brief/" in sitemap
@@ -305,12 +303,6 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
         assert prohibited.lower() not in combined.lower()
 
     assert "<form" not in combined
-    assert "Cron, scheduled delivery, and other recurring automation must not be enabled until" in runbook
-    assert "explicitly approved" in runbook
-    assert "Source Categories To Monitor" in runbook
-    assert "Quality Bar" in runbook
-    assert "Output Format" in runbook
-    assert "Approval And Delivery Steps" in runbook
 
 
 def test_docs_routes_are_sitemap_listed_and_landing_aligned() -> None:

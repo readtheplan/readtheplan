@@ -1,7 +1,10 @@
-## Task ops SOP (must read)
+# Agent / AI-assistant notes
 
-Before modifying task state, read: `~/Documents/coding/TASK-OPS-SOP.md`
+This is a pure-Python package (3.10+). Source in `src/readtheplan/`, tests in `tests/`.
 
-- Notion is the single source of truth.
-- Hermes Kanban is execution/dispatch only (optional), not canonical state.
-- If Notion and any mirror disagree, Notion wins.
+- Setup: `pip install -e ".[dev]"`
+- Test: `pytest` (coverage gate: fail_under=78)
+- Lint: `ruff check .`
+- After changing rules: `scripts/regenerate-examples.sh`
+- Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- If you used AI assistance in a PR, note it in the PR body (project norm).
