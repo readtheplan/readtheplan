@@ -15,8 +15,10 @@ When a new Lambda runtime is deprecated:
 
 from __future__ import annotations
 
-import pytest
+import warnings
 from datetime import date
+
+import pytest
 
 from readtheplan.rules import _DEPRECATED_RUNTIMES
 
@@ -92,7 +94,6 @@ def test_known_eol_dates_are_in_the_past() -> None:
             f"Remove them from _DEPRECATED_RUNTIMES until AWS actually deprecates them."
         )
     if future_only:
-        import warnings
         warnings.warn(
             f"Runtime(s) {sorted(future_only)} have known EOL dates "
             f"in the future ({_fmt(still_alive, future_only)}). "
