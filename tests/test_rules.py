@@ -530,3 +530,392 @@ def test_resource_rules_can_be_disabled(tmp_path: Path) -> None:
 
     assert summary.resource_changes[0].risk == "review"
     assert "update this resource in place" in summary.resource_changes[0].explanation
+
+
+# ---------------------------------------------------------------------------
+# google_* (GCP) provider tests
+# ---------------------------------------------------------------------------
+
+
+def test_gcp_compute_instance_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_compute_instance", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this Compute Engine instance" in summary.resource_changes[0].explanation
+
+
+def test_gcp_compute_instance_replace_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_compute_instance", ["delete", "create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "replace" in summary.resource_changes[0].explanation
+
+
+def test_gcp_compute_instance_machine_type_change_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "google_compute_instance",
+            ["update"],
+            before={"machine_type": "n1-standard-1"},
+            after={"machine_type": "n1-standard-4"},
+        ),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "machine_type" in summary.resource_changes[0].explanation
+
+
+def test_gcp_compute_instance_tags_change_is_safe(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "google_compute_instance",
+            ["update"],
+            before={"tags": ["http-server"]},
+            after={"tags": ["http-server", "https-server"]},
+        ),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "review"
+    assert "tags" in summary.resource_changes[0].explanation
+
+
+def test_gcp_container_cluster_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_container_cluster", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this GKE cluster" in summary.resource_changes[0].explanation
+
+
+def test_gcp_container_cluster_replace_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_container_cluster", ["delete", "create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "replace" in summary.resource_changes[0].explanation
+
+
+def test_gcp_sql_database_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_sql_database_instance", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this Cloud SQL instance" in summary.resource_changes[0].explanation
+
+
+def test_gcp_sql_database_version_major_change_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "google_sql_database_instance",
+            ["update"],
+            before={"database_version": "13"},
+            after={"database_version": "15"},
+        ),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "database_version" in summary.resource_changes[0].explanation
+
+
+def test_gcp_storage_bucket_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_storage_bucket", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete a GCS bucket" in summary.resource_changes[0].explanation
+
+
+def test_gcp_storage_bucket_delete_with_force_destroy_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "google_storage_bucket",
+            ["delete"],
+            before={"force_destroy": True},
+        ),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "force_destroy" in summary.resource_changes[0].explanation
+
+
+def test_gcp_storage_bucket_create_is_safe(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_storage_bucket", ["create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "safe"
+    assert "create a GCS bucket" in summary.resource_changes[0].explanation
+
+
+def test_gcp_compute_firewall_delete_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("google_compute_firewall", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "firewall" in summary.resource_changes[0].explanation
+
+
+# ---------------------------------------------------------------------------
+# azurerm_* (Azure) provider tests
+# ---------------------------------------------------------------------------
+
+
+def test_azurerm_virtual_machine_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_virtual_machine", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this Azure VM" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_virtual_machine_size_change_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change(
+            "azurerm_virtual_machine",
+            ["update"],
+            before={"vm_size": "Standard_DS1_v2"},
+            after={"vm_size": "Standard_DS3_v2"},
+        ),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "size" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_kubernetes_cluster_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_kubernetes_cluster", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this AKS cluster" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_storage_account_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_storage_account", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this storage account" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_storage_account_update_is_review(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_storage_account", ["update"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "review"
+    assert "update this storage account" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_role_assignment_delete_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_role_assignment", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete a role assignment" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_role_assignment_replace_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_role_assignment", ["delete", "create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "replace a role assignment" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_network_security_group_delete_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_network_security_group", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "NSG" in summary.resource_changes[0].explanation
+
+
+def test_azurerm_network_security_rule_update_is_review(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("azurerm_network_security_rule", ["update"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "review"
+    assert "change a NSG rule" in summary.resource_changes[0].explanation
+
+
+# ---------------------------------------------------------------------------
+# kubernetes_* (K8s) provider tests
+# ---------------------------------------------------------------------------
+
+
+def test_k8s_deployment_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_deployment", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this Deployment" in summary.resource_changes[0].explanation
+
+
+def test_k8s_deployment_replace_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_deployment", ["delete", "create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "replace this Deployment" in summary.resource_changes[0].explanation
+
+
+def test_k8s_deployment_update_is_review(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_deployment", ["update"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "review"
+    assert "update this Deployment" in summary.resource_changes[0].explanation
+
+
+def test_k8s_service_delete_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_service", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "Traffic routing" in summary.resource_changes[0].explanation
+
+
+def test_k8s_ingress_delete_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_ingress", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this Ingress" in summary.resource_changes[0].explanation
+
+
+def test_k8s_secret_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_secret", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this Secret" in summary.resource_changes[0].explanation
+
+
+def test_k8s_secret_update_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_secret", ["update"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "change this Secret" in summary.resource_changes[0].explanation
+
+
+def test_k8s_namespace_delete_is_irreversible(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_namespace", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete this Namespace" in summary.resource_changes[0].explanation
+
+
+def test_k8s_namespace_replace_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_namespace", ["delete", "create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "dangerous"
+    assert "replace this Namespace" in summary.resource_changes[0].explanation
+
+
+def test_k8s_cluster_role_delete_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_cluster_role", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete a ClusterRole" in summary.resource_changes[0].explanation
+
+
+def test_k8s_cluster_role_binding_update_is_review(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_cluster_role_binding", ["update"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "review"
+    assert "change a ClusterRoleBinding" in summary.resource_changes[0].explanation
+
+
+def test_k8s_role_binding_create_is_review(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_role_binding", ["create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "review"
+    assert "change a RoleBinding" in summary.resource_changes[0].explanation
+
+
+def test_k8s_network_policy_delete_is_dangerous(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_network_policy", ["delete"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "irreversible"
+    assert "delete a NetworkPolicy" in summary.resource_changes[0].explanation
+
+
+def test_k8s_network_policy_create_is_review(tmp_path: Path) -> None:
+    plan = _write_plan(
+        tmp_path,
+        _change("kubernetes_network_policy", ["create"]),
+    )
+    summary = analyze_plan_file(plan)
+    assert summary.resource_changes[0].risk == "review"
+    assert "change a NetworkPolicy" in summary.resource_changes[0].explanation
