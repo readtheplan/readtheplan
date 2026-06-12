@@ -15,6 +15,7 @@ When a new Lambda runtime is deprecated:
 
 from __future__ import annotations
 
+import pytest
 from datetime import date
 
 from readtheplan.rules import _DEPRECATED_RUNTIMES
@@ -23,6 +24,9 @@ from readtheplan.rules import _DEPRECATED_RUNTIMES
 # Known end-of-life dates for AWS Lambda runtimes.
 #
 # Source: https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html
+# References:
+#   nodejs18.x EOL 2025-04-30: https://docs.aws.amazon.com/lambda/latest/dg/runtime-support-policy.html
+#   python3.9  EOL 2025-04-30: https://docs.aws.amazon.com/lambda/latest/dg/runtime-support-policy.html
 # ---------------------------------------------------------------------------
 # A runtime belongs here when its phase-out / deprecation date has passed.
 # This is the *deprecation* date, not the optional second-phase "no more
@@ -45,6 +49,8 @@ _KNOWN_EOL: dict[str, date] = {
     "java8.al2": date(2023, 12, 31),
     "go1.x": date(2023, 12, 31),
     "provided": date(2023, 12, 31),
+    "nodejs18.x": date(2025, 4, 30),
+    "python3.9": date(2025, 4, 30),
 }
 
 # ---------------------------------------------------------------------------
@@ -78,25 +84,21 @@ def test_known_eol_dates_are_in_the_past() -> None:
     # allowed but we should remind maintainers.
     premature = still_alive.keys() & _DEPRECATED_RUNTIMES
     future_only = still_alive.keys() - _DEPRECATED_RUNTIMES
-
-    messages: list[str] = []
     if premature:
-        messages.append(
+        pytest.fail(
             f"Runtime(s) {sorted(premature)} are in _DEPRECATED_RUNTIMES "
             f"but their EOL dates ({_fmt(still_alive, premature)}) "
             f"are still in the future (today={today}). "
             f"Remove them from _DEPRECATED_RUNTIMES until AWS actually deprecates them."
         )
     if future_only:
-        messages.append(
+        import warnings
+        warnings.warn(
             f"Runtime(s) {sorted(future_only)} have known EOL dates "
             f"in the future ({_fmt(still_alive, future_only)}). "
             f"That's fine — they are placeholders in _KNOWN_EOL for "
             f"planned deprecations."
         )
-
-    if messages:
-        pytest_fail("\n\n".join(messages))
 
 
 def test_no_missing_deprecated_runtimes() -> None:
@@ -126,12 +128,3 @@ def _fmt(
 ) -> str:
     parts = (f"{k}={mapping[k]}" for k in sorted(keys))
     return ", ".join(parts)
-
-
-# Alias so ruff doesn't complain about a missing import, but keeps the
-# intent of the assertion calls above explicit.
-def pytest_fail(msg: str) -> None:
-    """Fail the current test."""
-    import pytest as _pytest
-
-    _pytest.fail(msg)
