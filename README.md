@@ -5,7 +5,7 @@
 > [![Version](https://img.shields.io/pypi/v/readtheplan?color=blue)](https://pypi.org/project/readtheplan/)
 > [![Python](https://img.shields.io/pypi/pyversions/readtheplan)](https://pypi.org/project/readtheplan/)
 > [![CI](https://github.com/readtheplan/readtheplan/actions/workflows/test-action.yml/badge.svg)](https://github.com/readtheplan/readtheplan/actions)
-> [![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](https://github.com/readtheplan/readtheplan/actions)
+> [![Coverage](https://img.shields.io/badge/coverage-78%25-brightgreen)](https://github.com/readtheplan/readtheplan/actions)
 > [![License](https://img.shields.io/github/license/readtheplan/readtheplan)](./LICENSE)
 > [![Downloads](https://img.shields.io/pypi/dm/readtheplan)](https://pypi.org/project/readtheplan/)
 > [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
@@ -68,7 +68,7 @@ readtheplan reads `terraform plan` JSON (Terraform and OpenTofu) and classifies 
 🟠 **dangerous** — instance replacement, IAM policy change, database modification
 🔴 **irreversible** — data deletion, KMS key destruction, RDS instance termination
 
-It applies **resource-aware rules** (30+ AWS resource types), **compliance framework mappings** (SOC 2, ISO 27001, HIPAA), and produces **auditable evidence envelopes** with sigstore-backed signed attestations.
+It applies **resource-aware rules** (40+ AWS resource types), **compliance framework mappings** (SOC 2, ISO 27001, HIPAA), and produces **auditable evidence envelopes** with sigstore-backed signed attestations.
 
 ## How it looks
 
@@ -316,7 +316,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 
 - **CLI-first** — single `pip install`, runs anywhere Python runs
 - **GitHub Action** — copy-paste into any workflow
-- **Resource-aware rules** — 30+ AWS resource types: KMS, IAM, RDS, S3, EKS, Lambda, networking, etc.
+- **Resource-aware rules** — 40+ AWS resource types: KMS, IAM, RDS, S3, EKS, Lambda, networking, etc.
 - **Compliance evidence** — SOC 2, ISO 27001, HIPAA control mappings with signed JSON envelopes
 - **Agent gate** — deterministic proceed/warn/block decisions for CI and AI agents
 - **Customer rule overlays** — org-specific risk escalations via YAML, no code changes needed
@@ -333,6 +333,13 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - Competing with Spacelift/env0 on overlapping features
 
 ## Documentation
+
+### Repository layout
+
+The product is `src/readtheplan/` (CLI, rules engine, adapters) plus `action.yml`
+(GitHub Action). The `site/` directory is the readtheplan.dev website — it has its
+own build and is not part of the PyPI package. `benchmarks/` and `demo/` are
+evaluation/demo material, not runtime code.
 
 - [Website](https://readtheplan.dev) — setup generator, example output, intake
 - [Docs](https://readtheplan.dev/docs/) — tutorials, API reference, examples

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // classifier-parity.test.js — Parity test for classifier.js vs rules.py
-// Run: node analysis/classifier-parity.test.js
+// Run: node site/analysis/classifier-parity.test.js
 // Requires Node >= 18
 
 "use strict";
@@ -13,7 +13,7 @@ const {
   classifyChange,
   baselineRisk,
   baselineExplanation,
-} = require("../site/playground/classifier.js");
+} = require("../playground/classifier.js");
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -747,7 +747,7 @@ console.log("--- Fixture Plan Tests ---");
 
 function loadPlan(filename) {
   const raw = fs.readFileSync(
-    path.join(__dirname, "..", "site", "playground", filename),
+    path.join(__dirname, "..", "playground", filename),
     "utf8"
   );
   return JSON.parse(raw);
