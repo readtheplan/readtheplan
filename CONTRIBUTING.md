@@ -26,7 +26,7 @@ pip install -e ".[mcp]"    # local MCP stdio server
 ## Everyday commands
 
 ```bash
-pytest                      # run the test suite (with coverage; gate is fail_under=77)
+pytest                      # run the test suite (with coverage; gate is fail_under=78)
 ruff check .                # lint
 make check                  # ruff + pytest in one go
 scripts/regenerate-examples.sh   # rebuild examples/*/analysis.{md,json} after a rule change
