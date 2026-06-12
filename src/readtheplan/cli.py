@@ -242,6 +242,13 @@ def _analyze(args: argparse.Namespace) -> int:
     try:
         plan_bytes = Path(args.plan_file).read_bytes()
         plan_data = json.loads(plan_bytes)
+        if not isinstance(plan_data, dict):
+            print(
+                f"Error: Terraform plan JSON must be an object (top-level dict), "
+                f"got {type(plan_data).__name__}: {args.plan_file}",
+                file=sys.stderr,
+            )
+            return 1
     except json.JSONDecodeError as exc:
         print(
             f"Error: invalid JSON in {args.plan_file}:"
