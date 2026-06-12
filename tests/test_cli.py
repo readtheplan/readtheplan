@@ -309,3 +309,61 @@ def test_analyze_fail_on_keeps_malformed_input_at_exit_one(
     assert "Error:" in captured.err
     assert "fail-on:" not in captured.err
 
+
+# ── CloudFormation gate --framework ────────────────────────────────────
+
+def test_cfn_gate_without_framework_has_no_control_checks() -> None:
+    """cloudformation gate without --framework emits no control check IDs."""
+    exit_code = main(
+        ["cloudformation", str(FIXTURES / "cfn_change_set_mixed.json")]
+    )
+    assert exit_code == 0
+
+
+def test_cfn_gate_with_framework_emits_control_checks() -> None:
+    """cloudformation gate with --framework soc2 emits control check IDs."""
+    exit_code = main(
+        [
+            "cloudformation",
+            "--framework",
+            "soc2",
+            str(FIXTURES / "cfn_change_set_mixed.json"),
+        ]
+    )
+    assert exit_code == 0
+
+
+def test_cfn_gate_with_framework_includes_control_ids(capsys) -> None:
+    """cloudformation gate with --framework includes rtp.control.* in output."""
+    exit_code = main(
+        [
+            "cloudformation",
+            "--framework",
+            "soc2",
+            str(FIXTURES / "cfn_change_set_mixed.json"),
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    checks = payload.get("required_checks", [])
+    control_checks = [c for c in checks if "rtp.control.soc2" in c]
+    assert len(control_checks) > 0, (
+        f"Expected SOC2 control check IDs in required_checks, got: {checks}"
+    )
+
+
+def test_cfn_gate_without_framework_omits_control_ids(capsys) -> None:
+    """cloudformation gate without --framework has no rtp.control.* checks."""
+    exit_code = main(
+        ["cloudformation", str(FIXTURES / "cfn_change_set_mixed.json")]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    checks = payload.get("required_checks", [])
+    control_checks = [c for c in checks if "rtp.control" in c]
+    assert len(control_checks) == 0, (
+        f"Expected no control check IDs without --framework, got: {control_checks}"
+    )
+
