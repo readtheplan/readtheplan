@@ -265,6 +265,13 @@ def _analyze(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    except RecursionError:
+        print(
+            f"Error: {args.plan_file} contains deeply nested JSON that cannot be parsed. "
+            "If this is a valid Terraform plan, consider reporting the issue.",
+            file=sys.stderr,
+        )
+        return 1
     except FileNotFoundError:
         print(f"Error: plan file does not exist: {args.plan_file}", file=sys.stderr)
         return 1
@@ -391,8 +398,14 @@ def _agent_gate(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    json.dump(agent_gate_to_dict(summary, catalog), sys.stdout, indent=2)
+    gate = agent_gate_to_dict(summary, catalog)
+    json.dump(gate, sys.stdout, indent=2)
     print()
+    decision = gate.get("decision", "warn")
+    if decision == "block":
+        return 2
+    if decision == "warn":
+        return 1
     return 0
 
 
@@ -427,6 +440,11 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
     gate = analyze_cloudformation(data, catalog=catalog)
     json.dump(gate, sys.stdout, indent=2)
     print()
+    decision = gate.get("decision", "warn")
+    if decision == "block":
+        return 2
+    if decision == "warn":
+        return 1
     return 0
 
 

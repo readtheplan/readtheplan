@@ -94,3 +94,27 @@ def test_agent_gate_can_include_framework_control_checks(tmp_path: Path) -> None
         check.startswith("rtp.control.soc2.")
         for check in gate["required_checks"]
     )
+
+
+def test_pr_comment_shows_truncation_indicator(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.json"
+    plan.write_text(
+        json.dumps(
+            {
+                "resource_changes": [
+                    {
+                        "address": f"aws_s3_bucket.example{i}",
+                        "type": "aws_s3_bucket",
+                        "change": {"actions": ["delete"]},
+                    }
+                    for i in range(10)
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    summary = analyze_plan_file(plan)
+    gate = agent_gate_to_dict(summary)
+    comment = gate["pr_comment"]
+    assert comment.count("aws_s3_bucket.example") == 5
+    assert "...and 5 more" in comment
