@@ -80,7 +80,7 @@ def test_agent_gate_prints_json_contract(capsys) -> None:
 
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
-    assert exit_code == 0
+    assert exit_code == 2
     assert captured.err == ""
     assert payload["schema"] == "rtp-agent-gate-v1"
     assert payload["decision"] == "block"
@@ -102,7 +102,7 @@ def test_agent_gate_can_include_framework_check_ids(capsys) -> None:
 
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
-    assert exit_code == 0
+    assert exit_code == 2
     assert captured.err == ""
     assert any(
         check.startswith("rtp.control.soc2.")
@@ -317,7 +317,7 @@ def test_cfn_gate_without_framework_has_no_control_checks() -> None:
     exit_code = main(
         ["cloudformation", str(FIXTURES / "cfn_change_set_mixed.json")]
     )
-    assert exit_code == 0
+    assert exit_code == 2
 
 
 def test_cfn_gate_with_framework_emits_control_checks() -> None:
@@ -330,7 +330,7 @@ def test_cfn_gate_with_framework_emits_control_checks() -> None:
             str(FIXTURES / "cfn_change_set_mixed.json"),
         ]
     )
-    assert exit_code == 0
+    assert exit_code == 2
 
 
 def test_cfn_gate_with_framework_includes_control_ids(capsys) -> None:
@@ -343,7 +343,7 @@ def test_cfn_gate_with_framework_includes_control_ids(capsys) -> None:
             str(FIXTURES / "cfn_change_set_mixed.json"),
         ]
     )
-    assert exit_code == 0
+    assert exit_code == 2
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     checks = payload.get("required_checks", [])
@@ -358,7 +358,7 @@ def test_cfn_gate_without_framework_omits_control_ids(capsys) -> None:
     exit_code = main(
         ["cloudformation", str(FIXTURES / "cfn_change_set_mixed.json")]
     )
-    assert exit_code == 0
+    assert exit_code == 2
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     checks = payload.get("required_checks", [])
@@ -367,3 +367,49 @@ def test_cfn_gate_without_framework_omits_control_ids(capsys) -> None:
         f"Expected no control check IDs without --framework, got: {control_checks}"
     )
 
+
+
+# ── Agent-gate exit codes ─────────────────────────────────────────────
+
+def test_agent_gate_safe_plan_exits_zero(capsys) -> None:
+    exit_code = main(["agent-gate", "demo/scenarios/01-safe-add-s3-bucket.json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["decision"] == "proceed"
+
+
+def test_agent_gate_warn_plan_exits_one(capsys) -> None:
+    exit_code = main(["agent-gate", "demo/scenarios/02-review-update-s3-tags.json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 1
+    assert payload["decision"] == "warn"
+
+
+def test_agent_gate_block_plan_exits_two(capsys) -> None:
+    exit_code = main(["agent-gate", "demo/scenarios/03-dangerous-replace-ec2.json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 2
+    assert payload["decision"] == "block"
+
+
+# ── RecursionError hardening ──────────────────────────────────────────
+
+def test_analyze_deeply_nested_json_exits_one_without_traceback(
+    tmp_path: Path, capsys
+) -> None:
+    plan = tmp_path / "nested.json"
+    # Build a deeply nested valid JSON dict that triggers RecursionError in json.loads
+    depth = 3000
+    plan.write_text('{"a":' * depth + 'null' + '}' * depth, encoding="utf-8")
+
+    exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "deeply nested" in captured.err
+    assert "Traceback" not in captured.err
