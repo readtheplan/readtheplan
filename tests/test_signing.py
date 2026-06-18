@@ -441,3 +441,214 @@ def _mapping(value: Any) -> Mapping[str, Any]:
     if not isinstance(value, dict):
         raise AssertionError("expected mapping")
     return cast(Mapping[str, Any], value)
+
+# ── Internal helper coverage ─────────────────────────────────────────
+
+
+def test_load_envelope_rejects_non_object_json() -> None:
+    """JSON arrays/numbers are not valid evidence envelopes."""
+    with pytest.raises(VerificationError, match="must be a JSON object"):
+        verify_envelope(b"[1, 2, 3]")
+
+
+def test_load_envelope_rejects_invalid_json_bytes() -> None:
+    with pytest.raises(VerificationError, match="invalid evidence JSON"):
+        verify_envelope(bytes([0x00, 0x01]))
+
+
+def test_agent_attestation_missing_raises() -> None:
+    """Envelope without agent_attestation dict should raise."""
+    payload = {"schema": "rtp-evidence-v1"}
+    with pytest.raises(VerificationError, match="missing agent_attestation"):
+        verify_envelope(json.dumps(payload).encode("utf-8"))
+
+
+def test_verify_unsigned_envelope_signature_but_no_cert() -> None:
+    """Envelope with signature but missing cert should fail as unsigned."""
+    payload = _loads_json(UNSIGNED_ENVELOPE.read_text(encoding="utf-8"))
+    payload["agent_attestation"]["signature"] = "some-signature"
+    # cert is intentionally absent
+    result = verify_envelope(json.dumps(payload).encode("utf-8"))
+    assert result.ok is False
+    assert result.reason == "unsigned envelope"
+
+
+def test_verify_unsigned_envelope_cert_but_no_signature() -> None:
+    """Envelope with cert but missing signature should fail as unsigned."""
+    payload = _loads_json(UNSIGNED_ENVELOPE.read_text(encoding="utf-8"))
+    payload["agent_attestation"]["cert"] = "some-cert"
+    result = verify_envelope(json.dumps(payload).encode("utf-8"))
+    assert result.ok is False
+    assert result.reason == "unsigned envelope"
+
+
+def test_sign_envelope_wraps_sigstore_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Errors from _sign_payload_with_sigstore become SigningError."""
+
+    def boom(*a, **kw):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(signing, "_sign_payload_with_sigstore", boom)
+    with pytest.raises(SigningError, match="network down"):
+        sign_envelope(_build_fixture_evidence())
+
+
+# ── _decode_der_string ───────────────────────────────────────────────
+
+
+def test_decode_der_string_utf8_string() -> None:
+    """DER UTF8String (tag 0x0C) should decode correctly."""
+    text = "https://accounts.google.com"
+    encoded = bytes([0x0C, len(text)]) + text.encode("utf-8")
+    assert signing._decode_der_string(encoded) == text
+
+
+def test_decode_der_string_ia5_string() -> None:
+    """DER IA5String (tag 0x16) should decode correctly."""
+    text = "issuer@example.com"
+    encoded = bytes([0x16, len(text)]) + text.encode("utf-8")
+    assert signing._decode_der_string(encoded) == text
+
+
+def test_decode_der_string_raw_fallback() -> None:
+    """Bytes without a DER tag should fall back to raw UTF-8 decode."""
+    raw = "not-der".encode("utf-8")
+    assert signing._decode_der_string(raw) == "not-der"
+
+
+def test_decode_der_string_truncated_length() -> None:
+    """If the DER length header claims more than available, decode what we have."""
+    encoded = bytes([0x0C, 99]) + b"short"
+    # length says 99 but only 5 bytes available — should still return something
+    result = signing._decode_der_string(encoded)
+    assert "short" in result
+
+
+# ── _rekor_uuid ──────────────────────────────────────────────────────
+
+
+def test_rekor_uuid_extracts_uuid() -> None:
+    """_rekor_uuid should extract the UUID from the bundle log entry."""
+
+    class FakeInner:
+        uuid = "abc-123-def"
+
+    class FakeEntry:
+        _inner = FakeInner()
+
+    class FakeBundle:
+        log_entry = FakeEntry()
+
+    assert signing._rekor_uuid(FakeBundle()) == "abc-123-def"
+
+
+def test_rekor_uuid_falls_back_to_log_index() -> None:
+    class FakeInner:
+        uuid = None
+        log_index = 42
+
+    class FakeEntry:
+        _inner = FakeInner()
+
+    class FakeBundle:
+        log_entry = FakeEntry()
+
+    assert signing._rekor_uuid(FakeBundle()) == "42"
+
+
+def test_rekor_uuid_returns_empty_on_missing() -> None:
+    class FakeInner:
+        uuid = None
+        log_index = None
+
+    class FakeEntry:
+        _inner = FakeInner()
+
+    class FakeBundle:
+        log_entry = FakeEntry()
+
+    assert signing._rekor_uuid(FakeBundle()) == ""
+
+
+def test_rekor_uuid_no_inner() -> None:
+    class FakeEntry:
+        _inner = None
+
+    class FakeBundle:
+        log_entry = FakeEntry()
+
+    assert signing._rekor_uuid(FakeBundle()) == ""
+
+
+# ── _canonical_payload ───────────────────────────────────────────────
+
+
+def test_canonical_payload_is_sorted_and_compact() -> None:
+    """Canonical payload should be deterministic regardless of key order."""
+    evidence = _build_fixture_evidence()
+    payload = evidence.to_dict()
+
+    canonical = signing._canonical_payload(payload)
+    decoded = json.loads(canonical)
+
+    # signature and cert must be nulled
+    assert decoded["agent_attestation"]["signature"] is None
+    assert decoded["agent_attestation"]["cert"] is None
+
+    # Verify it's sorted and compact (no extra whitespace)
+    re_encoded = json.dumps(decoded, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    assert canonical == re_encoded
+
+
+# ── MissingSigningDependencyError paths ──────────────────────────────
+
+
+def test_sign_without_sigstore_raises_missing_dep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sign_envelope should raise SigningError when sigstore is missing."""
+    real_import = builtins.__import__
+
+    def block_sigstore(name, *args, **kwargs):
+        if name.startswith("sigstore"):
+            raise ImportError("no sigstore")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", block_sigstore)
+
+    with pytest.raises(SigningError):
+        sign_envelope(_build_fixture_evidence())
+
+
+# ── VerificationError on malformed envelope structure ────────────────
+
+
+def test_verify_envelope_with_non_dict_attestation() -> None:
+    """agent_attestation as a string should raise VerificationError."""
+    payload = {
+        "schema": "rtp-evidence-v1",
+        "agent_attestation": "not-a-dict",
+    }
+    with pytest.raises(VerificationError, match="missing agent_attestation"):
+        verify_envelope(json.dumps(payload).encode("utf-8"))
+
+
+# ── SigningError wrapping ────────────────────────────────────────────
+
+
+def test_sign_envelope_wraps_missing_dep_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MissingSigningDependencyError from sigstore import should be
+    wrapped as SigningError by sign_envelope."""
+    from readtheplan.signing import MissingSigningDependencyError
+
+    def raise_missing_dep(*a, **kw):
+        raise MissingSigningDependencyError("install sigstore")
+
+    monkeypatch.setattr(signing, "_sign_payload_with_sigstore", raise_missing_dep)
+    with pytest.raises(SigningError, match="install sigstore"):
+        sign_envelope(_build_fixture_evidence())
+
