@@ -36,13 +36,13 @@ It also maps changes to compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS,
 3. **Enterprise** — Signed attestations, audit trail, custom rules, SSO. Contact for pricing.
 
 ### Key Differentiators
-- Runs offline — no plan data sent anywhere (privacy-first)
+- Runs offline — plan JSON is processed locally and never uploaded (this chat agent is the exception: it sends chat messages to an AI API)
 - Works with existing Terraform workflow — just pipe \`terraform plan -out=/dev/stdout\` to readtheplan
 - Evidence envelopes — cryptographically verifiable analysis outputs for auditors
 - Agent gate — coding agents (Claude Code, Codex, etc.) can use readtheplan to validate their own Terraform changes before applying
 
 ### Limitations (be honest)
-- Currently Terraform-only (CloudFormation adapter in beta)
+- Currently Terraform-first (CloudFormation adapter available)
 - Reads plan JSON — can't detect issues in modules without running plan
 - Enterprise tier is in development — features may change
 
@@ -83,9 +83,14 @@ terraform plan -out=/dev/stdout | readtheplan
 - "I'm just looking around" → "Take your time! Try the playground at https://readtheplan.dev/playground — it has sample plans you can analyze instantly. Or ask me anything specific."`;
 
 // ── Rate limiting (in-memory, resets on cold start) ────────────
+// NOTE: This is a best-effort limiter. Cloudflare may recycle the
+// isolate at any time, resetting all counters. For production-grade
+// rate limiting, bind a KV namespace or Durable Object and check
+// that instead. See: https://developers.cloudflare.com/pages/functions/bindings/
 const rateLimitMap = new Map();
-const RATE_LIMIT = 20;            // max requests per window
+const RATE_LIMIT = 15;            // max requests per window
 const RATE_WINDOW_MS = 60_000;    // 1 minute
+const MAX_MAP_SIZE = 10_000;      // prevent unbounded growth
 const MAX_BODY_SIZE = 65_536;     // 64 KB
 
 function securityHeaders(extra = {}) {
@@ -149,6 +154,13 @@ export async function onRequest(context) {
         'Retry-After': String(retryAfter),
       })
     });
+  }
+
+  // Prune stale entries to prevent unbounded Map growth
+  if (rateLimitMap.size > MAX_MAP_SIZE) {
+    for (const [ip, ent] of rateLimitMap) {
+      if (now - ent.windowStart > RATE_WINDOW_MS) rateLimitMap.delete(ip);
+    }
   }
 
   // ── Content-Type validation ──────────────────────────────────
@@ -258,7 +270,11 @@ export async function onRequest(context) {
     reply = reply.replace(/javascript:/gi, '');
     reply = reply.replace(/on\w+\s*=/gi, '');
 
-    return new Response(JSON.stringify({ reply }), {
+    return new Response(JSON.stringify({
+      reply,
+      // Disclose that messages are sent to a third-party AI API
+      privacy_notice: 'Messages are processed by a third-party AI (DeepSeek). Do not share sensitive data.',
+    }), {
       status: 200,
       headers: securityHeaders({
         'Content-Type': 'application/json',
