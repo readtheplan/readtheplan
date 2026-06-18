@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -397,15 +398,18 @@ def test_agent_gate_block_plan_exits_two(capsys) -> None:
 
 # ── RecursionError hardening ──────────────────────────────────────────
 
-def test_analyze_deeply_nested_json_exits_one_without_traceback(
+def test_analyze_recursion_error_exits_one_without_traceback(
     tmp_path: Path, capsys
 ) -> None:
+    """The RecursionError handler prints a friendly message, not a traceback."""
     plan = tmp_path / "nested.json"
-    # Build a deeply nested valid JSON dict that triggers RecursionError in json.loads
-    depth = 3000
-    plan.write_text('{"a":' * depth + 'null' + '}' * depth, encoding="utf-8")
+    plan.write_text('{"valid": "json"}', encoding="utf-8")
 
-    exit_code = main(["analyze", str(plan)])
+    # Python 3.12+ uses an iterative C JSON parser that never raises
+    # RecursionError from deeply nested input.  Mock json.loads so the
+    # production handler is exercised on every supported Python version.
+    with patch("readtheplan.cli.json.loads", side_effect=RecursionError):
+        exit_code = main(["analyze", str(plan)])
 
     captured = capsys.readouterr()
     assert exit_code == 1
