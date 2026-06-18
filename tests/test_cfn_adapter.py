@@ -216,3 +216,55 @@ def test_analyze_cloudformation_required_checks():
     assert gate["adapter"] == "cloudformation"
     assert gate["total_changes"] == 1
     assert "rtp.check.human_approval" in gate["required_checks"]
+
+
+def test_security_group_maps_correctly() -> None:
+    """AWS::EC2::SecurityGroup must map to aws_security_group, not the
+    naive fallback aws_ec2_securitygroup that bypasses security rules."""
+    adapter = CloudFormationAdapter()
+    assert adapter._normalize_resource_type("AWS::EC2::SecurityGroup") == "aws_security_group"
+    assert adapter._normalize_resource_type("AWS::EC2::SecurityGroupIngress") == "aws_security_group_rule"
+    assert adapter._normalize_resource_type("AWS::EC2::SecurityGroupEgress") == "aws_security_group_rule"
+
+
+def test_all_type_map_values_match_rules_engine() -> None:
+    """Every _TYPE_MAP value should be a key the rules engine recognises.
+
+    Regression test for the original bug where unmapped CFN types fell
+    through to the naive ``::`` -> ``_`` lower transform and produced
+    type names that rules.py did not match (e.g. aws_ec2_securitygroup).
+    """
+    # Resource types the rules engine knows about (extracted from rules.py)
+    rules_engine_types = {
+        "aws_cloudwatch_event_rule", "aws_cloudwatch_event_target",
+        "aws_cloudwatch_log_group", "aws_cloudwatch_metric_alarm",
+        "aws_db_instance", "aws_ecr_lifecycle_policy",
+        "aws_ecr_repository", "aws_ecr_repository_policy",
+        "aws_ecs_service", "aws_eks_node_group",
+        "aws_glue_catalog_database", "aws_glue_catalog_table",
+        "aws_glue_job", "aws_iam_policy", "aws_iam_role",
+        "aws_iam_role_policy", "aws_internet_gateway", "aws_kms_key",
+        "aws_lambda_alias", "aws_lambda_event_source_mapping",
+        "aws_lambda_function", "aws_lb", "aws_lb_listener",
+        "aws_lb_listener_rule", "aws_lb_target_group",
+        "aws_lb_target_group_attachment", "aws_nat_gateway",
+        "aws_rds_cluster", "aws_route", "aws_route_table",
+        "aws_route_table_association", "aws_security_group",
+        "aws_security_group_rule", "aws_sqs_queue",
+        "aws_sqs_queue_policy", "aws_subnet",
+        "aws_vpc_security_group_egress_rule",
+        "aws_vpc_security_group_ingress_rule",
+    }
+    # S3 and Route53 are in _TYPE_MAP but intentionally have no rules-engine
+    # entry yet — they are handled as generic safe/create resources.
+    intentionally_unmapped = {"aws_s3_bucket", "aws_route53_zone"}
+
+    adapter = CloudFormationAdapter()
+    for cfn_type, tf_type in adapter._TYPE_MAP.items():
+        if tf_type in intentionally_unmapped:
+            continue
+        assert tf_type in rules_engine_types, (
+            f"{cfn_type} -> {tf_type} is not a rules-engine type. "
+            "This means the resource will bypass all security rules."
+        )
+
