@@ -161,6 +161,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cloudformation.set_defaults(func=_cloudformation_gate)
 
+    kubernetes = subparsers.add_parser(
+        "kubernetes",
+        help="Emit the agent-gate decision for a Kubernetes manifest diff.",
+    )
+    kubernetes.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    kubernetes.add_argument(
+        "input_file", help="Path to Kubernetes manifest diff JSON (old_manifests/new_manifests or resources)."
+    )
+    kubernetes.set_defaults(func=_kubernetes_gate)
+
     verify = subparsers.add_parser(
         "verify",
         help="Verify a signed rtp-evidence-v1 envelope.",
@@ -438,6 +454,45 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
             return 1
 
     gate = analyze_cloudformation(data, catalog=catalog)
+    json.dump(gate, sys.stdout, indent=2)
+    print()
+    decision = gate.get("decision", "warn")
+    if decision == "block":
+        return 2
+    if decision == "warn":
+        return 1
+    return 0
+
+
+def _kubernetes_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Kubernetes manifest diff."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.kubernetes import analyze_kubernetes
+
+    try:
+        data = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+
+    if not isinstance(data, dict):
+        print("Error: input must be a JSON object", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "kubernetes":
+        print(f"Error: input not recognized as a supported IaC format (detected: {adapter.adapter_name if adapter else 'none'})", file=sys.stderr)
+        return 1
+
+    catalog: ControlCatalog | None = None
+    if args.framework:
+        try:
+            catalog = load_catalog(args.framework)
+        except (CatalogSchemaError, FrameworkNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    gate = analyze_kubernetes(data, catalog=catalog)
     json.dump(gate, sys.stdout, indent=2)
     print()
     decision = gate.get("decision", "warn")

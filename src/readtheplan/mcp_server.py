@@ -145,6 +145,45 @@ def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
     return analyze_cloudformation(data)
 
 
+def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
+    """Return the agent-gate decision for a Kubernetes manifest diff.
+
+    Accepts a JSON file with either:
+      - {"old_manifests": [...], "new_manifests": [...]} — diff format
+      - {"resources": [...]} — single manifest format
+    """
+    import json
+
+    from readtheplan.adapters.kubernetes import analyze_kubernetes
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+
+    try:
+        data = json.loads(Path(input_path).read_bytes())
+    except FileNotFoundError:
+        raise MCPToolInputError(
+            code="FILE_NOT_FOUND",
+            message=f"File not found: {input_path}",
+        )
+    except json.JSONDecodeError as exc:
+        raise MCPToolInputError(
+            code="INVALID_JSON",
+            message=f"Invalid JSON in {input_path}: {exc}",
+        )
+
+    if not isinstance(data, dict):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input must be a JSON object",
+        )
+
+    return analyze_kubernetes(data)
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -182,6 +221,7 @@ def create_server() -> Any:
     analyze_plan_handler = analyze_plan
     agent_gate_handler = agent_gate
     agent_gate_cfn_handler = agent_gate_cloudformation
+    agent_gate_k8s_handler = agent_gate_kubernetes
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -214,6 +254,17 @@ def create_server() -> Any:
     def _agent_gate_cfn_tool(input_path: str) -> dict[str, object]:
         """Return the agent-gate decision for a CloudFormation Change Set / template diff."""
         return agent_gate_cfn_handler(input_path)
+
+    @mcp.tool(name="agent_gate_kubernetes")
+    def _agent_gate_k8s_tool(input_path: str) -> dict[str, object]:
+        """Return the agent-gate decision for a Kubernetes manifest diff.
+
+        Args:
+            input_path: Path to a JSON file. Supports two formats:
+                - {"old_manifests": [...], "new_manifests": [...]} — diff format
+                - {"resources": [...]} — single manifest format
+        """
+        return agent_gate_k8s_handler(input_path)
 
     return mcp
 

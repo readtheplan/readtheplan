@@ -4,6 +4,7 @@ from typing import Any
 
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
+from readtheplan.adapters.kubernetes import KubernetesAdapter
 
 _registry: dict[str, BaseAdapter] = {}
 
@@ -19,12 +20,14 @@ def detect_adapter(input_data: dict[str, Any]) -> BaseAdapter | None:
             return adapter
     return None
 
-# Auto-register CloudFormationAdapter
+# Auto-register adapters
 register_adapter(CloudFormationAdapter())
+register_adapter(KubernetesAdapter())
 
 __all__ = [
     "BaseAdapter",
     "CloudFormationAdapter",
+    "KubernetesAdapter",
     "register_adapter",
     "get_adapter",
     "detect_adapter",
