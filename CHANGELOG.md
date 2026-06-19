@@ -6,6 +6,11 @@
 - Repository issue templates, pull request template, CODEOWNERS, Dependabot config, and PyPI trusted-publisher workflow scaffolding.
 - GitHub Action parser tests and oversized `summary-json` output guardrail.
 - CLI `analyze --fail-on <tier>` gating with distinct exit codes: `0` for success, `1` for hard errors, and `2` when the risk threshold is met.
+- `agent-gate` and `cloudformation` subcommands now return meaningful exit codes: `0` for `proceed`, `1` for `warn`, `2` for `block`.
+- PR comment truncation indicator: when more than 5 resources are flagged, the comment now shows "...and N more".
+
+### Fixed
+- CLI `analyze` now catches `RecursionError` on deeply nested JSON and prints a friendly error instead of a traceback.
 
 ### Changed
 - Sigstore is now a true optional `sign` extra with a clear install hint when signing is requested without it.

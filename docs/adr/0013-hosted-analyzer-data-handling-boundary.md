@@ -136,5 +136,5 @@ Before any hosted analyzer beta/GA:
 - `SECURITY.md` (local-first security model)
 - `docs/adr/0011-site-framework-rebuild.md`
 - `docs/adr/0012-mcp-preview-adapter.md`
-- `docs/weekly-brief-runbook.md`
+- Weekly brief runbook (internal — moved to Notion, 2026-06-10)
 - `site/README.md`

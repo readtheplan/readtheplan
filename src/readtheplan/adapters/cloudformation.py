@@ -35,6 +35,19 @@ class CloudFormationAdapter(BaseAdapter):
         "AWS::CloudWatch::Alarm": "aws_cloudwatch_metric_alarm",
         "AWS::Events::Rule": "aws_cloudwatch_event_rule",
         "AWS::CloudWatch::LogGroup": "aws_cloudwatch_log_group",
+        # Security-sensitive resources that must map exactly to rules.py keys
+        "AWS::EC2::SecurityGroup": "aws_security_group",
+        "AWS::EC2::SecurityGroupIngress": "aws_security_group_rule",
+        "AWS::EC2::SecurityGroupEgress": "aws_security_group_rule",
+        "AWS::IAM::RolePolicy": "aws_iam_role_policy",
+        "AWS::ECR::RepositoryPolicy": "aws_ecr_repository_policy",
+        "AWS::ECR::LifecyclePolicy": "aws_ecr_lifecycle_policy",
+        "AWS::SQS::QueuePolicy": "aws_sqs_queue_policy",
+        "AWS::ECS::Service": "aws_ecs_service",
+        "AWS::Lambda::EventSourceMapping": "aws_lambda_event_source_mapping",
+        "AWS::ElasticLoadBalancingV2::TargetGroupAttachment": "aws_lb_target_group_attachment",
+        "AWS::Events::Target": "aws_cloudwatch_event_target",
+        "AWS::EC2::SubnetRouteTableAssociation": "aws_route_table_association",
     }
 
     @property

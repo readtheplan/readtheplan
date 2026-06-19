@@ -43,7 +43,7 @@ def test_agent_gate_matches_cli_json(capsys) -> None:
     exit_code = main(["agent-gate", str(plan)])
     captured = capsys.readouterr()
 
-    assert exit_code == 0
+    assert exit_code == 2
     assert agent_gate(str(plan)) == json.loads(captured.out)
 
 

@@ -38,7 +38,7 @@ jobs:
         run: npm --prefix site test
 
       - name: Check classifier.js parity with Python rules
-        run: node analysis/classifier-parity.test.js
+        run: node site/analysis/classifier-parity.test.js
 
       - name: Build static site
         run: npm --prefix site run build

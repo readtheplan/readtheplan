@@ -189,8 +189,11 @@ def _pr_comment(
         lines.append("- Flagged resources:")
         lines.extend(
             f"  - `{change.address}` `{change.risk}`: {change.explanation}"
-            for change in flagged
+            for change in flagged[:5]
         )
+        remaining = len(flagged) - 5
+        if remaining > 0:
+            lines.append(f"  - ...and {remaining} more")
     return "\n".join(lines)
 
 
@@ -252,7 +255,7 @@ def _flagged_changes(summary: PlanSummary) -> list[ResourceChange]:
         change
         for change in summary.resource_changes
         if change.risk in {"review", "dangerous", "irreversible"}
-    ][:5]
+    ]
 
 
 def _dedupe_sorted(values: list[str]) -> list[str]:
