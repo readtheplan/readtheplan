@@ -9,10 +9,11 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
@@ -155,7 +156,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--run-terraform",
         action="store_true",
-        help="For Terraform module directories without plan.json files, run terraform init/plan/show locally.",
+        help="For Terraform module directories without plan.json files, run terraform init/plan/show locally.",  # noqa: E501
     )
     parser.add_argument(
         "--refresh",

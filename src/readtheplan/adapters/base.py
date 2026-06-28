@@ -39,7 +39,7 @@ class BaseAdapter(ABC):
         """Maps one adapter change dict to a ResourceChange dataclass instance."""
         pass
 
-    def analyze(self, input_data: dict[str, Any], *, use_rules: bool = True, tool_name: str = "Terraform") -> list[ResourceChange]:
+    def analyze(self, input_data: dict[str, Any], *, use_rules: bool = True, tool_name: str = "Terraform") -> list[ResourceChange]:  # noqa: E501
         """Template method: extract -> normalize -> apply rules."""
         changes = []
         for raw in self.extract_changes(input_data):
@@ -49,16 +49,16 @@ class BaseAdapter(ABC):
             changes.append(rc)
         return changes
 
-    def _apply_resource_rules(self, rc: ResourceChange, raw: dict[str, Any], *, tool_name: str = "Terraform") -> ResourceChange:
+    def _apply_resource_rules(self, rc: ResourceChange, raw: dict[str, Any], *, tool_name: str = "Terraform") -> ResourceChange:  # noqa: E501
         """Hooks into the shared rules engine for resource-specific risk escalation."""
         # Baseline result from the adapter's normalization
         baseline = RuleResult(risk=rc.risk, explanation=rc.explanation)
-        
+
         # CFN adapters might store extra metadata in 'raw' to help rules.
         # For now, we pass an empty or minimal 'change' dict to rules.
         # Rules.py expects 'before' and 'after' keys for some deep checks.
         change_metadata = raw.get("_metadata", {})
-        
+
         result = apply_resource_rules(
             resource_type=rc.resource_type,
             actions=rc.actions,
@@ -66,11 +66,12 @@ class BaseAdapter(ABC):
             baseline=baseline,
             tool_name=tool_name,
         )
-        
+
         return ResourceChange(
             address=rc.address,
             resource_type=rc.resource_type,
             actions=rc.actions,
             risk=result.risk,
             explanation=result.explanation,
+            source=result.source,
         )

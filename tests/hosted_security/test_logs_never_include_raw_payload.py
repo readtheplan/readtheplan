@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 SECRET_PATTERNS = [
     re.compile(r"AKIA[0-9A-Z]{16}"),
     re.compile(r"(?i)aws_secret_access_key\s*[:=]\s*[^\s]+"),

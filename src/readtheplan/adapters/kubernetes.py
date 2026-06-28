@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.plan import ResourceChange
-
 
 _K8S_KIND_MAP: dict[str, str] = {
     "Deployment": "kubernetes_deployment",
@@ -88,7 +86,7 @@ class KubernetesAdapter(BaseAdapter):
     def can_handle(self, input_data: dict[str, Any]) -> bool:
         # Format 1: old_manifests / new_manifests diff
         if "old_manifests" in input_data and "new_manifests" in input_data:
-            if isinstance(input_data["old_manifests"], list) or isinstance(input_data["new_manifests"], list):
+            if isinstance(input_data["old_manifests"], list) or isinstance(input_data["new_manifests"], list):  # noqa: E501
                 return True
         # Format 2: single resources array
         if "resources" in input_data and isinstance(input_data["resources"], list):
@@ -222,11 +220,11 @@ class KubernetesAdapter(BaseAdapter):
             if replacement == "True":
                 risk = "dangerous"
                 actions = ("delete", "create")
-                explanation = f"Kubernetes will replace {kind} '{logical_id}' (destroy and recreate)."
+                explanation = f"Kubernetes will replace {kind} '{logical_id}' (destroy and recreate)."  # noqa: E501
             elif replacement == "Conditional":
                 risk = "review"
                 actions = ("update",)
-                explanation = f"Kubernetes will update {kind} '{logical_id}'. Review the spec changes before applying."
+                explanation = f"Kubernetes will update {kind} '{logical_id}'. Review the spec changes before applying."  # noqa: E501
             else:
                 risk = "review"
                 actions = ("update",)

@@ -14,8 +14,8 @@ Prereqs:
 from __future__ import annotations
 
 import json
-import shutil
 import os
+import shutil
 import subprocess
 import tempfile
 import urllib.request
@@ -42,7 +42,7 @@ def assert_floci_up() -> None:
     except Exception as exc:
         raise SystemExit(
             "Floci is not reachable at http://localhost:4566. "
-            "Start it first: docker run -d --rm -p 4566:4566 -v /var/run/docker.sock:/var/run/docker.sock floci/floci:latest"
+            "Start it first: docker run -d --rm -p 4566:4566 -v /var/run/docker.sock:/var/run/docker.sock floci/floci:latest"  # noqa: E501
         ) from exc
 
 
@@ -74,7 +74,7 @@ def main() -> None:
         def run_env(cmd: list[str]) -> subprocess.CompletedProcess:
             full_env = os.environ.copy()
             full_env.update(env)
-            return subprocess.run(cmd, cwd=work, check=True, text=True, capture_output=True, env=full_env)
+            return subprocess.run(cmd, cwd=work, check=True, text=True, capture_output=True, env=full_env)  # noqa: E501
 
         run_env(["terraform", "init", "-input=false"])
 

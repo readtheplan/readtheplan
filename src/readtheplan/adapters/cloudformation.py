@@ -149,7 +149,7 @@ class CloudFormationAdapter(BaseAdapter):
             elif replacement == "Conditional":
                 risk = "review"
                 actions = ("update",)
-                explanation = "CloudFormation may replace this resource depending on runtime evaluation. Review replacement conditions before applying."
+                explanation = "CloudFormation may replace this resource depending on runtime evaluation. Review replacement conditions before applying."  # noqa: E501
             else:
                 risk = "review"
                 actions = ("update",)

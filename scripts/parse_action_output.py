@@ -9,13 +9,12 @@ Inputs:
     sys.argv[2] — path to GITHUB_OUTPUT file
     sys.argv[3] — path to GITHUB_STEP_SUMMARY file
     sys.argv[4] — path to write resource_change_count
-"""
+"""  # noqa: E501
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
-
 
 MAX_GITHUB_OUTPUT_BYTES = 900 * 1024
 

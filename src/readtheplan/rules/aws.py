@@ -18,9 +18,12 @@ from readtheplan.rules._shared import (
     _runtime_major_changed,
     _s3_public_exposure,
     _security_group_opens_to_internet,
+    register_cross_cutting,
+    register_rule,
 )
 
 
+@register_rule("aws_db_instance", "aws_rds_cluster")
 def _rds_candidates(
     resource_type: str,
     action_set: set[str],
@@ -74,6 +77,7 @@ def _rds_candidates(
 
 
 
+@register_rule("aws_s3_bucket", "aws_s3_bucket_acl", "aws_s3_bucket_policy")
 def _s3_candidates(
     resource_type: str,
     action_set: set[str],
@@ -139,7 +143,12 @@ def _s3_candidates(
 
 
 
-def _kms_candidates(action_set: set[str]) -> list[RuleResult]:
+@register_rule("aws_kms_key")
+def _kms_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
     if "create" in action_set and "delete" in action_set:
         return [
             RuleResult(
@@ -175,6 +184,7 @@ def _kms_candidates(action_set: set[str]) -> list[RuleResult]:
 
 
 
+@register_rule("aws_iam_role", "aws_iam_policy", "aws_iam_role_policy")
 def _iam_candidates(
     resource_type: str,
     action_set: set[str],
@@ -225,7 +235,7 @@ def _iam_candidates(
                     "dangerous",
                     (
                         "This IAM policy change appears to remove deny statements. "
-                        "Removing explicit denies can widen access even when allow rules look unchanged."
+                        "Removing explicit denies can widen access even when allow rules look unchanged."  # noqa: E501
                     ),
                 )
             )
@@ -235,7 +245,12 @@ def _iam_candidates(
 
 
 
-def _route53_candidates(action_set: set[str]) -> list[RuleResult]:
+@register_rule("aws_route53_zone")
+def _route53_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
     if "create" in action_set and "delete" in action_set:
         return [
             RuleResult(
@@ -271,7 +286,12 @@ def _route53_candidates(action_set: set[str]) -> list[RuleResult]:
 
 
 
-def _eks_node_group_candidates(action_set: set[str]) -> list[RuleResult]:
+@register_rule("aws_eks_node_group")
+def _eks_node_group_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
     if "create" in action_set and "delete" in action_set:
         return [
             RuleResult(
@@ -307,7 +327,9 @@ def _eks_node_group_candidates(action_set: set[str]) -> list[RuleResult]:
 
 
 
+@register_rule("aws_ecs_service")
 def _ecs_service_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -373,6 +395,7 @@ def _ecs_service_candidates(
 
 
 
+@register_rule("aws_lb", "aws_elb", "aws_alb", "aws_lb_listener", "aws_lb_listener_rule", "aws_lb_target_group", "aws_lb_target_group_attachment")  # noqa: E501
 def _lb_candidates(
     resource_type: str,
     action_set: set[str],
@@ -536,6 +559,7 @@ def _lb_candidates(
 
 
 
+@register_rule("aws_lambda_function", "aws_lambda_alias", "aws_lambda_event_source_mapping")
 def _lambda_candidates(
     resource_type: str,
     action_set: set[str],
@@ -617,6 +641,7 @@ def _lambda_candidates(
 
 
 
+@register_cross_cutting
 def _platform_service_candidates(
     resource_type: str,
     action_set: set[str],
@@ -831,6 +856,7 @@ def _platform_service_candidates(
 
 
 
+@register_rule("aws_security_group", "aws_security_group_rule", "aws_vpc_security_group_ingress_rule", "aws_vpc_security_group_egress_rule")  # noqa: E501
 def _security_group_candidates(
     resource_type: str,
     action_set: set[str],
@@ -885,6 +911,7 @@ def _security_group_candidates(
 
 
 
+@register_cross_cutting
 def _network_topology_candidates(
     resource_type: str,
     action_set: set[str],
@@ -1077,6 +1104,7 @@ def _network_topology_candidates(
 
 
 
+@register_cross_cutting
 def _observability_candidates(
     resource_type: str,
     action_set: set[str],

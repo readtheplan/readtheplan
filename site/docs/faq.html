@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Frequently asked questions and troubleshooting guide for readtheplan — installation, CLI flags, GitHub Action, MCP, and common errors." />
+    <title>FAQ & Troubleshooting — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/docs/faq/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — FAQ & Troubleshooting" />
+    <meta property="og:description" content="Answers to common questions and solutions for frequent issues with readtheplan." />
+    <meta property="og:url" content="https://readtheplan.dev/docs/faq/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan — FAQ & Troubleshooting" />
+    <meta name="twitter:description" content="Answers to common questions and solutions for frequent issues with readtheplan." />
+    <link rel="stylesheet" href="/matrix.css" />
+  </head>
+  <body>
+    <div class="progress-bar" id="progress-bar"></div>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/#resources">Tools</a>
+        <a href="/docs/">Docs</a>
+        <a href="/demo/">Demo</a>
+        <a href="/playground/">Playground</a>
+        <a href="/#setup">Setup</a>
+      </nav>
+      <div class="version-cell gc">v0.3.0</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / FAQ &amp; Troubleshooting</p>
+          <h1 id="title">Frequently asked questions.</h1>
+          <p class="intro-copy">Quick answers to common questions and solutions for the issues users run into most.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="install-faq-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="install-faq-title" style="margin-bottom:24px">Installation &amp; setup</h2>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">readtheplan: command not found</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              The entry point installed to a directory not on your <code>PATH</code>. This is common with <code>pip install --user</code>.
+              Run <code>python -m readtheplan.cli analyze plan.json</code> as a workaround, or add the reported scripts directory to your <code>PATH</code>.
+              On Linux/macOS this is typically <code>~/.local/bin</code>; on Windows it's <code>%APPDATA%\Python\Scripts</code>.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">Python version requirements</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              readtheplan requires <strong>Python 3.10 or higher</strong>. Check your version with <code>python --version</code>.
+              If you're running 3.9 or earlier, upgrade Python or use a version manager like <code>pyenv</code> (Linux/macOS)
+              or the official Python installer (Windows). You can install readtheplan in a venv with any supported Python version:
+              <code>python3.10 -m venv .venv && source .venv/bin/activate && pip install readtheplan</code>.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">pip install fails or takes forever</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              readtheplan is a pure-Python package with minimal dependencies (just PyYAML). If install is slow, try upgrading pip first:
+              <code>pip install --upgrade pip</code>. If you get permission errors, use a virtual environment or <code>pip install --user</code>.
+              On some platforms you may need <code>pip3</code> instead of <code>pip</code>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="cli-faq-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="cli-faq-title" style="margin-bottom:24px">CLI usage</h2>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">"Error: invalid JSON in plan.json" — I passed the binary plan!</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              This is the most common newbie mistake. readtheplan reads the <strong>JSON</strong> output of <code>terraform show -json</code>,
+              not the binary <code>tfplan</code> file or the human-readable text output. The correct workflow is:
+              <code>terraform plan -out=tfplan && terraform show -json tfplan &gt; plan.json</code>.
+              Then run <code>readtheplan analyze plan.json</code>. The binary <code>tfplan</code> file and the wall of text from
+              <code>terraform plan</code> (without <code>-out</code>) are both invalid inputs.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">"Error: plan file does not exist"</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              The plan JSON path is the last (positional) argument: <code>readtheplan analyze &lt;path-to-plan.json&gt;</code>.
+              Make sure the file exists at that path and that you're running the command from the correct directory.
+              Use an absolute path if needed: <code>readtheplan analyze /full/path/to/plan.json</code>.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">"--evidence requires --framework" / "--sign requires --evidence"</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              These flags have a required dependency chain:
+            </p>
+            <ul style="margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.8;padding-left:20px">
+              <li><code>--evidence</code> produces a compliance evidence envelope, but it needs a framework to map controls against. Add <code>--framework soc2</code> (or <code>iso27001</code>, <code>hipaa</code>).</li>
+              <li><code>--sign</code> signs the evidence envelope with sigstore, but it needs an envelope to sign. Add <code>--evidence out.json</code>.</li>
+            </ul>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.6">
+              Full example: <code>readtheplan analyze --framework soc2 --evidence evidence.json --sign plan.json</code>.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">No "Controls" column in output</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              The Controls column only appears when you pass a compliance framework flag. Without it, readtheplan only classifies
+              risk (safe / review / dangerous / irreversible). Add <code>--framework soc2</code>, <code>--framework iso27001</code>,
+              or <code>--framework hipaa</code> to see the control mappings.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="gha-faq-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="gha-faq-title" style="margin-bottom:24px">GitHub Action</h2>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">GitHub Action is not working / failing unexpectedly</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              Common causes:
+            </p>
+            <ul style="margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.8;padding-left:20px">
+              <li>The <code>plan-file</code> input points to a binary <code>tfplan</code> instead of JSON. Make sure your workflow generates JSON with <code>terraform show -json tfplan &gt; plan.json</code>.</li>
+              <li>The action is set to fail on <code>fail-on-threshold: dangerous</code> and your plan contains dangerous or irreversible changes. Set a higher threshold or leave it empty for report-only mode.</li>
+              <li>Missing <code>actions/checkout@v4</code> step before the analysis step.</li>
+              <li>The Terraform plan step hasn't run yet — verify job step order.</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">How do I use compliance frameworks in the GitHub Action?</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              The composite action itself doesn't expose a <code>--framework</code> input directly. To use frameworks,
+              run the CLI directly in a workflow step instead of the action:
+              <code>python -m pip install readtheplan && readtheplan analyze --framework soc2 --format json plan.json</code>.
+              See the <a href="/docs/github-action/" style="color:var(--accent)">GitHub Action guide</a> for examples.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="platform-faq-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="platform-faq-title" style="margin-bottom:24px">Platform &amp; compatibility</h2>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">Does readtheplan work on Windows?</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              Yes. readtheplan is pure Python and runs anywhere Python 3.10+ runs, including Windows.
+              Install with <code>pip install readtheplan</code> (or <code>py -m pip install readtheplan</code> if you're using the Python launcher).
+              If <code>readtheplan</code> isn't found after install, use <code>python -m readtheplan.cli analyze plan.json</code> or
+              add <code>%APPDATA%\Python\Scripts</code> to your <code>PATH</code>. All CLI flags and features are fully supported.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">Does it work with OpenTofu?</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              Yes. OpenTofu produces the same JSON plan format as Terraform. Generate the plan with
+              <code>tofu plan -out=tfplan && tofu show -json tfplan &gt; plan.json</code> and analyze it
+              the same way: <code>readtheplan analyze plan.json</code>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="mcp-faq-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="mcp-faq-title" style="margin-bottom:24px">MCP server</h2>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">How do I set up the MCP server?</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              The MCP server is an experimental local stdio-based server for agent and IDE integrations.
+              Install the optional MCP extra and run:
+            </p>
+            <pre style="background:var(--surface);padding:12px 16px;border-radius:6px;border:1px solid var(--border);overflow-x:auto;font-size:13px;margin-top:8px"><code>pip install "readtheplan[mcp]"
+readtheplan mcp</code></pre>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.6">
+              The server communicates over stdio using the Model Context Protocol. Add it to your
+              MCP client config (e.g. Claude Desktop, VS Code extensions) as a stdio endpoint.
+              Requires Python 3.10+.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">MCP server gives "missing dependency" errors</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              The MCP dependencies are optional extras that are not installed by default.
+              Make sure you installed with the <code>[mcp]</code> extra:
+              <code>pip install "readtheplan[mcp]"</code>. This pulls in the required MCP protocol library.
+              If you already have the base package installed, upgrade with the extra:
+              <code>pip install --upgrade "readtheplan[mcp]"</code>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="testing-faq-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="testing-faq-title" style="margin-bottom:24px">Development &amp; testing</h2>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">Coverage below threshold when running tests locally</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              The test suite has a coverage gate set to <code>fail_under=77</code> in <code>pyproject.toml</code>.
+              If you're seeing a coverage failure, check that you're running the full suite and not a subset:
+              <code>pytest</code> (with no file arguments). If adding new code, write corresponding tests.
+              You can check current coverage with <code>pytest --cov --cov-report=term</code>.
+              See the <a href="https://github.com/readtheplan/readtheplan/blob/main/CONTRIBUTING.md" style="color:var(--accent)">Contributing guide</a>
+              for the full dev workflow.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">How do I set up a dev environment?</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              Clone the repo and install in editable mode with dev dependencies:
+            </p>
+            <pre style="background:var(--surface);padding:12px 16px;border-radius:6px;border:1px solid var(--border);overflow-x:auto;font-size:13px;margin-top:8px"><code>git clone https://github.com/readtheplan/readtheplan
+cd readtheplan
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"</code></pre>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.6">
+              This gives you pytest, ruff, and all runtime deps. Optional extras: <code>[sign]</code> for sigstore,
+              <code>[mcp]</code> for the MCP server.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="support-faq-title" style="padding-bottom:80px">
+        <div class="gc utility-panel-wide">
+          <h2 id="support-faq-title" style="margin-bottom:24px">Getting help &amp; updates</h2>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">How do I update readtheplan?</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              Upgrade with pip:
+              <code>pip install --upgrade readtheplan</code>.
+              If you installed optional extras, include them:
+              <code>pip install --upgrade "readtheplan[sign,mcp]"</code>.
+              Check the installed version with <code>readtheplan --version</code> (or <code>pip show readtheplan</code>).
+              Release notes are published on the <a href="https://github.com/readtheplan/readtheplan/releases" style="color:var(--accent)">GitHub Releases page</a>.
+            </p>
+          </div>
+
+          <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">How do I get help or report a bug?</h3>
+            <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
+              There are several ways to reach the maintainers and community:
+            </p>
+            <ul style="margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.8;padding-left:20px">
+              <li><strong><a href="https://github.com/readtheplan/readtheplan/discussions" style="color:var(--accent)">GitHub Discussions</a></strong> — ask questions, share ideas, show off your workflow.</li>
+              <li><strong><a href="https://github.com/readtheplan/readtheplan/issues" style="color:var(--accent)">GitHub Issues</a></strong> — report bugs or request features. Please check existing issues first.</li>
+              <li><strong><a href="https://github.com/readtheplan/readtheplan/labels/good%20first%20issue" style="color:var(--accent)">Good first issues</a></strong> — if you want to contribute, start here.</li>
+              <li><strong><a href="https://github.com/readtheplan/readtheplan/blob/main/SECURITY.md" style="color:var(--accent)">Security policy</a></strong> — report vulnerabilities privately.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

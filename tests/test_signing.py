@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import base64
-import re
-import sys
-import sys
 import builtins
 import hashlib
 import json
+import re
+import sys
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, cast
 
 import pytest
 
@@ -600,7 +600,7 @@ def test_decode_der_string_ia5_string() -> None:
 
 def test_decode_der_string_raw_fallback() -> None:
     """Bytes without a DER tag should fall back to raw UTF-8 decode."""
-    raw = "not-der".encode("utf-8")
+    raw = b"not-der"
     assert signing._decode_der_string(raw) == "not-der"
 
 
@@ -747,7 +747,8 @@ def test_certificate_identity_extracts_email_san(monkeypatch: pytest.MonkeyPatch
     x509 = _fake_x509_module(monkeypatch)
 
     class FakeSubject:
-        rfc4514_string = lambda self: "CN=fallback"
+        def rfc4514_string(self):
+            return "CN=fallback"
 
     class FakeSAN:
         def get_values_for_type(self, typ):
@@ -776,7 +777,8 @@ def test_certificate_identity_extracts_uri_san(monkeypatch: pytest.MonkeyPatch) 
     x509 = _fake_x509_module(monkeypatch)
 
     class FakeSubject:
-        rfc4514_string = lambda self: "CN=fallback"
+        def rfc4514_string(self):
+            return "CN=fallback"
 
     class FakeSAN:
         def get_values_for_type(self, typ):
@@ -819,9 +821,9 @@ def test_certificate_identity_falls_back_to_subject(monkeypatch: pytest.MonkeyPa
     assert signing._certificate_identity(FakeCert()) == "CN=subject-fallback,O=Test"
 
 
-def test_certificate_identity_falls_back_when_san_has_no_email_or_uri(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_certificate_identity_falls_back_when_san_has_no_email_or_uri(monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: E501
     """SAN present but empty still falls back to subject."""
-    x509 = _fake_x509_module(monkeypatch)
+    _fake_x509_module(monkeypatch)
 
     class FakeSubject:
         def rfc4514_string(self):
@@ -844,7 +846,7 @@ def test_certificate_identity_falls_back_when_san_has_no_email_or_uri(monkeypatc
     assert signing._certificate_identity(FakeCert()) == "CN=no-values"
 
 
-def test_certificate_oidc_issuer_extracts_first_matching_oid(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_certificate_oidc_issuer_extracts_first_matching_oid(monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: E501
     """_certificate_oidc_issuer prefers the 1.8 OID, then 1.1."""
     x509 = _fake_x509_module(monkeypatch)
     ObjectIdentifier = x509.oid.ObjectIdentifier
@@ -1129,13 +1131,12 @@ def test_sign_payload_with_sigstore_uses_default_oidc_issuer(
 
     # Capture the Issuer URL passed in
     captured = {}
-    original_issuer = FakeIssuer
     class CapturingIssuer:
         def __init__(self, url):
             captured["url"] = url
         def identity_token(self):
             return "token"
-    monkeypatch.setitem(sys.modules, "sigstore.oidc", type("mod", (), {"Issuer": CapturingIssuer})())
+    monkeypatch.setitem(sys.modules, "sigstore.oidc", type("mod", (), {"Issuer": CapturingIssuer})())  # noqa: E501
 
     signing._sign_payload_with_sigstore(payload, oidc_issuer=None, rekor_url=None)
     assert captured["url"] == "https://default.oidc"
@@ -1380,7 +1381,7 @@ def test_sign_payload_with_sigstore_without_sigstore_raises(
 
     monkeypatch.setattr(builtins, "__import__", block_sigstore)
 
-    with pytest.raises(signing.MissingSigningDependencyError, match=re.escape(SIGNING_INSTALL_HINT)):
+    with pytest.raises(signing.MissingSigningDependencyError, match=re.escape(SIGNING_INSTALL_HINT)):  # noqa: E501
         signing._sign_payload_with_sigstore(b"payload", oidc_issuer=None, rekor_url=None)
 
 
@@ -1397,7 +1398,7 @@ def test_signing_context_without_sigstore_raises(
 
     monkeypatch.setattr(builtins, "__import__", block_sigstore_sign)
 
-    with pytest.raises(signing.MissingSigningDependencyError, match=re.escape(SIGNING_INSTALL_HINT)):
+    with pytest.raises(signing.MissingSigningDependencyError, match=re.escape(SIGNING_INSTALL_HINT)):  # noqa: E501
         signing._signing_context("trust-config", rekor_url=None)
 
 
@@ -1414,7 +1415,7 @@ def test_signing_context_without_rekor_client_raises(
 
     monkeypatch.setattr(builtins, "__import__", block_rekor)
 
-    with pytest.raises(signing.MissingSigningDependencyError, match=re.escape(SIGNING_INSTALL_HINT)):
+    with pytest.raises(signing.MissingSigningDependencyError, match=re.escape(SIGNING_INSTALL_HINT)):  # noqa: E501
         signing._signing_context("trust-config", rekor_url="https://rekor.local")
 
 

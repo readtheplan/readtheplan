@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from readtheplan.rules._shared import RuleResult
+from readtheplan.rules._shared import (
+    RuleResult,
+    register_rule,
+)
 
 
+@register_rule("kubernetes_deployment")
 def _k8s_deployment_candidates(
+    resource_type: str,
     action_set: set[str],
+    change: dict[str, Any],
 ) -> list[RuleResult]:
     if "delete" in action_set and "create" in action_set:
         return [
@@ -47,9 +53,11 @@ def _k8s_deployment_candidates(
 
 
 
+@register_rule("kubernetes_service", "kubernetes_ingress")
 def _k8s_service_candidates(
     resource_type: str,
     action_set: set[str],
+    change: dict[str, Any],
 ) -> list[RuleResult]:
     label = "Ingress" if resource_type == "kubernetes_ingress" else "Service"
 
@@ -90,8 +98,11 @@ def _k8s_service_candidates(
 
 
 
+@register_rule("kubernetes_secret")
 def _k8s_secret_candidates(
+    resource_type: str,
     action_set: set[str],
+    change: dict[str, Any],
 ) -> list[RuleResult]:
     if "delete" in action_set:
         return [
@@ -105,7 +116,7 @@ def _k8s_secret_candidates(
             )
         ]
     if "update" in action_set or "create" in action_set:
-        is_create = "delete" not in action_set and "create" in action_set and "update" not in action_set
+        is_create = "delete" not in action_set and "create" in action_set and "update" not in action_set  # noqa: E501
         verb = "create this" if is_create else "change this"
         return [
             RuleResult(
@@ -122,8 +133,11 @@ def _k8s_secret_candidates(
 
 
 
+@register_rule("kubernetes_namespace")
 def _k8s_namespace_candidates(
+    resource_type: str,
     action_set: set[str],
+    change: dict[str, Any],
 ) -> list[RuleResult]:
     if "delete" in action_set and "create" in action_set:
         return [
@@ -162,9 +176,11 @@ def _k8s_namespace_candidates(
 
 
 
+@register_rule("kubernetes_cluster_role", "kubernetes_cluster_role_binding", "kubernetes_role_binding")  # noqa: E501
 def _k8s_rbac_candidates(
     resource_type: str,
     action_set: set[str],
+    change: dict[str, Any],
 ) -> list[RuleResult]:
     if resource_type == "kubernetes_cluster_role":
         label = "ClusterRole"
@@ -211,8 +227,11 @@ def _k8s_rbac_candidates(
 
 
 
+@register_rule("kubernetes_network_policy")
 def _k8s_network_policy_candidates(
+    resource_type: str,
     action_set: set[str],
+    change: dict[str, Any],
 ) -> list[RuleResult]:
     if "delete" in action_set and "create" in action_set:
         return [

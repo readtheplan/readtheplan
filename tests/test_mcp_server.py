@@ -12,7 +12,6 @@ from readtheplan.cli import _build_parser, main
 from readtheplan.mcp_server import (
     MCPToolInputError,
     MissingMCPDependencyError,
-    _resolve_path,
     _validate_path,
     _working_root,
     agent_gate,
@@ -20,8 +19,6 @@ from readtheplan.mcp_server import (
     analyze_plan,
     create_server,
 )
-from readtheplan.controls import ControlCatalog, FrameworkNotFoundError, load_catalog
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -143,7 +140,7 @@ def test_cli_mcp_subcommand_runs_mcp_main(monkeypatch, capsys) -> None:
 def test_cli_mcp_subcommand_reports_missing_extra(monkeypatch, capsys) -> None:
     def fake_main() -> None:
         raise MissingMCPDependencyError(
-            'MCP preview requires the optional dependency. Install it with: pip install "readtheplan[mcp]"'
+            'MCP preview requires the optional dependency. Install it with: pip install "readtheplan[mcp]"'  # noqa: E501
         )
 
     monkeypatch.setattr("readtheplan.mcp_server.main", fake_main)

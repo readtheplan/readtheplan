@@ -7,7 +7,6 @@ from readtheplan.controls import ControlCatalog
 from readtheplan.plan import PlanSummary, ResourceChange
 from readtheplan.rules import RISK_ORDER
 
-
 SCHEMA = "rtp-agent-gate-v1"
 
 _RISK_TIERS = ("safe", "review", "dangerous", "irreversible")

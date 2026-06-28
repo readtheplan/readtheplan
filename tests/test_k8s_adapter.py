@@ -11,7 +11,6 @@ import pytest
 
 from readtheplan.adapters.kubernetes import KubernetesAdapter, analyze_kubernetes
 
-
 # ---------------------------------------------------------------------------
 # Fixture data
 # ---------------------------------------------------------------------------
@@ -21,14 +20,14 @@ DEPLOYMENT_CREATE = {
         {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
-            "metadata": {"name": "web-frontend", "namespace": "production", "labels": {"app": "web"}},
+            "metadata": {"name": "web-frontend", "namespace": "production", "labels": {"app": "web"}},  # noqa: E501
             "spec": {
                 "replicas": 3,
                 "selector": {"matchLabels": {"app": "web"}},
                 "template": {
                     "metadata": {"labels": {"app": "web"}},
                     "spec": {
-                        "containers": [{"name": "nginx", "image": "nginx:1.25", "ports": [{"containerPort": 80}]}],
+                        "containers": [{"name": "nginx", "image": "nginx:1.25", "ports": [{"containerPort": 80}]}],  # noqa: E501
                     },
                 },
             },
@@ -97,7 +96,7 @@ DEPLOYMENT_WITH_LIVENESS = {
         "template": {
             "metadata": {"labels": {"app": "worker"}},
             "spec": {
-                "containers": [{"name": "worker", "image": "worker:v1", "livenessProbe": {"httpGet": {"path": "/health", "port": 8080}}}],
+                "containers": [{"name": "worker", "image": "worker:v1", "livenessProbe": {"httpGet": {"path": "/health", "port": 8080}}}],  # noqa: E501
             },
         },
     },
@@ -115,7 +114,7 @@ class TestKubernetesAdapter:
 
     def test_can_handle_diff_format(self):
         adapter = KubernetesAdapter()
-        data = {"old_manifests": [DEPLOYMENT_WITH_LIVENESS], "new_manifests": [DEPLOYMENT_WITH_LIVENESS]}
+        data = {"old_manifests": [DEPLOYMENT_WITH_LIVENESS], "new_manifests": [DEPLOYMENT_WITH_LIVENESS]}  # noqa: E501
         assert adapter.can_handle(data) is True
 
     def test_can_handle_single_format(self):
@@ -276,8 +275,6 @@ def test_analyze_secret_create_uses_rules():
     assert gate["total_changes"] == 1
     # The adapter normalize says "safe" for Add, but the rules engine
     # in _apply_resource_rules may escalate to "dangerous" for secrets.
-    risk_counts = gate["risk_counts"]
-    total = sum(risk_counts.values())
 
 
 def test_analyze_namespace_replace_via_diff():
@@ -316,7 +313,7 @@ def test_analyze_cluster_role_diff():
 
 def test_cli_kubernetes_subcommand():
     """Verify the CLI has a working 'kubernetes' subcommand."""
-    import subprocess, sys
+    import subprocess
 
     repo_root = Path(__file__).resolve().parent.parent
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -357,14 +354,14 @@ def test_mcp_tool_kubernetes():
 
 
 def test_mcp_tool_invalid_path():
-    from readtheplan.mcp_server import agent_gate_kubernetes, MCPToolInputError
+    from readtheplan.mcp_server import MCPToolInputError, agent_gate_kubernetes
 
     with pytest.raises(MCPToolInputError):
         agent_gate_kubernetes("")
 
 
 def test_mcp_tool_file_not_found():
-    from readtheplan.mcp_server import agent_gate_kubernetes, MCPToolInputError
+    from readtheplan.mcp_server import MCPToolInputError, agent_gate_kubernetes
 
     with pytest.raises(MCPToolInputError, match="File not found"):
         agent_gate_kubernetes("/nonexistent/path.json")

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Mapping
 from urllib.parse import quote, unquote
-
 
 ATTESTATION_HEADER = "x-readtheplan-agent-read"
 ATTESTATION_VERSION = "rtp-attest-v1"
@@ -23,6 +22,9 @@ class PlanReadAttestation:
     source: str = "terraform-show-json"
     run_id: str | None = None
     signature: str | None = None
+    #: Provenance — names of non-builtin plugins that contributed rule results
+    #: to the analysis this attestation accompanies.
+    provenance: tuple[str, ...] = ()
 
     def to_header_value(self) -> str:
         fields = {
@@ -33,6 +35,8 @@ class PlanReadAttestation:
         }
         if self.run_id:
             fields["run_id"] = self.run_id
+        if self.provenance:
+            fields["provenance"] = ",".join(self.provenance)
         if self.signature:
             fields["sig"] = self.signature
         return serialize_attestation_fields(fields)
@@ -51,6 +55,7 @@ def build_plan_read_attestation(
     source: str = "terraform-show-json",
     run_id: str | None = None,
     signature: str | None = None,
+    plugins: tuple[str, ...] = (),
 ) -> PlanReadAttestation:
     timestamp = (read_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     return PlanReadAttestation(
@@ -60,6 +65,7 @@ def build_plan_read_attestation(
         source=_validate_token("source", source),
         run_id=_validate_optional_token("run_id", run_id),
         signature=_validate_optional_token("signature", signature),
+        provenance=tuple(_validate_token("provenance", p) for p in plugins),
     )
 
 
@@ -74,6 +80,13 @@ def parse_attestation_header(value: str) -> PlanReadAttestation:
     if not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise ValueError("attestation plan_sha256 must be a lowercase sha256 hex digest")
 
+    provenance_raw = fields.get("provenance")
+    provenance = (
+        tuple(_validate_token("provenance", p) for p in provenance_raw.split(","))
+        if provenance_raw
+        else ()
+    )
+
     return PlanReadAttestation(
         agent_id=_validate_token("agent", fields["agent"]),
         read_at=fields["read_at"],
@@ -81,6 +94,7 @@ def parse_attestation_header(value: str) -> PlanReadAttestation:
         source=_validate_token("source", fields["source"]),
         run_id=_validate_optional_token("run_id", fields.get("run_id")),
         signature=_validate_optional_token("signature", fields.get("sig")),
+        provenance=provenance,
     )
 
 
