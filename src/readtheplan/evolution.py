@@ -878,7 +878,11 @@ Score: {data.get('score')}
     <thead><tr><th>Resource Type</th><th>Risk</th>
     <th>Incidents</th><th>Status</th><th>Score</th></tr></thead>
     <tbody>
-      {pattern_rows if pattern_rows else '<tr><td colspan="5" style="text-align:center;color:#555;">No patterns yet.</td></tr>'}
+      {
+        pattern_rows
+        if pattern_rows
+        else '<tr><td colspan="5" style="text-align:center;">No patterns yet.</td></tr>'
+      }
     </tbody>
   </table>
 
