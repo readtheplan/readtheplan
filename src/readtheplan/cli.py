@@ -9,7 +9,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TextIO, cast
 
-from readtheplan.agent_gate import SCHEMA, agent_gate_to_dict
+from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.controls import (
     CatalogSchemaError,
     ControlCatalog,
@@ -17,8 +17,8 @@ from readtheplan.controls import (
     available_frameworks,
     load_catalog,
 )
-from readtheplan.evolution import EvolutionEngine
 from readtheplan.evidence import EvidenceError, Reviewer, build_evidence
+from readtheplan.evolution import EvolutionEngine
 from readtheplan.overlays import (
     Overlay,
     OverlayError,

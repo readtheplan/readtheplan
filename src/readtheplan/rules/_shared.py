@@ -537,11 +537,11 @@ try:
             auto_pkg = importlib.import_module(package_name)
             for _, module_name, _ in pkgutil.iter_modules(auto_pkg.__path__):
                 importlib.import_module(f"{package_name}.{module_name}")
-        except Exception:
+        except Exception:  # auto-rule package may not exist yet; safe to skip
             pass
 
     _load_auto_rules()
-except Exception:
+except Exception:  # auto-rule directory setup is best-effort; never block startup
     pass
 
 

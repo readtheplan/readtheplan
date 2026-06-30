@@ -9,13 +9,13 @@ Visualizes the self-improving loop:
 - Natural language evolution log
 """
 
-import streamlit as st
-import sqlite3
 import json
+import sqlite3
 from pathlib import Path
-from datetime import datetime
+
 import pandas as pd
 import plotly.express as px
+import streamlit as st
 
 st.set_page_config(page_title="readtheplan Evolution", layout="wide")
 st.title("🧠 readtheplan Evolution Dashboard")
@@ -105,7 +105,7 @@ for idx, run in df_runs.iloc[::-1].iterrows():
         summary_dict = json.loads(run["plan_summary"] or "{}")
         if "change_count" in summary_dict:
             st.caption(f"• Changes: {summary_dict['change_count']} | path: {summary_dict.get('path', '')}")
-    except Exception:
+    except Exception:  # plan_summary may be missing or malformed JSON; display is optional
         pass
 
 st.caption("All data stays private in ~/.readtheplan/evolution.db. No external services used.")

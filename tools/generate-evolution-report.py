@@ -5,10 +5,10 @@ No external dependencies. Everything stays in ~/.readtheplan/
 """
 
 import json
-from pathlib import Path
-from datetime import datetime
 import sqlite3
 import sys
+from pathlib import Path
+
 
 def generate_report():
     db_file = Path.home() / ".readtheplan" / "evolution.db"

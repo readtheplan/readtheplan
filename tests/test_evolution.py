@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
-from readtheplan.evolution import EvolutionEngine
 from readtheplan.agent_gate import agent_gate_to_dict
+from readtheplan.evolution import EvolutionEngine
 from readtheplan.plan import analyze_plan_file
-
 
 # ── Helpers ───────────────────────────────────────────────────────
 
@@ -403,8 +401,9 @@ def test_evolution_real_multi_agent_pipeline(tmp_path: Path):
 
 def test_cli_evolution_console(capsys):
     """Test evolution console subcommand output."""
-    from readtheplan.cli import main
     import sys
+
+    from readtheplan.cli import main
     
     sys.argv = ["readtheplan", "evolution", "console"]
     try:
@@ -420,8 +419,9 @@ def test_cli_evolution_console(capsys):
 
 def test_cli_evolution_dispatch(capsys):
     """Test evolution dispatch subcommand."""
-    from readtheplan.cli import main
     import sys
+
+    from readtheplan.cli import main
     
     sys.argv = ["readtheplan", "evolution", "dispatch"]
     try:
