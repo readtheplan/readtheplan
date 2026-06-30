@@ -491,7 +491,9 @@ def test_html_dashboard_escapes_plan_derived_fields(tmp_path: Path):
     assert "&lt;script&gt;" in html, "XSS payload must be HTML-escaped in the dashboard"
 
 
-def test_standalone_report_escapes_plan_derived_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_standalone_report_escapes_plan_derived_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
     """The standalone generate-report tool must also escape DB-sourced data."""
     import importlib.util
     repo_root = Path(__file__).parent.parent

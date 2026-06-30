@@ -515,14 +515,14 @@ def _contains_public_principal(value: Any) -> bool:
 # ── Import provider modules to trigger @register_rule decorators ──────
 # Placed at the end so ALL symbols (RuleResult, _after_value, etc.) are
 # defined before provider modules try to import them.
-from readtheplan.rules import aws, azure, gcp, k8s  # noqa: E402, F401
+from readtheplan.rules import aws, azure, gcp, k8s  # noqa: E402, F401, I001
 
 
 # Dynamically load auto-generated rules
 try:
-    from pathlib import Path
-    import importlib
-    import pkgutil
+    from pathlib import Path  # noqa: I001
+    import importlib  # noqa: I001
+    import pkgutil  # noqa: I001
 
     def _load_auto_rules() -> None:
         auto_dir = Path(__file__).parent / "auto"

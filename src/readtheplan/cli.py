@@ -40,7 +40,9 @@ from readtheplan.summary import summary_to_dict
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    func = getattr(args, "evolution_func", None) or cast("Callable[[argparse.Namespace], int]", args.func)
+    func = getattr(args, "evolution_func", None) or cast(
+        "Callable[[argparse.Namespace], int]", args.func
+    )
     return func(args)
 
 
@@ -134,7 +136,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=("kernel", "self-improving"),
         default="kernel",
-        help='Gate mode. "kernel" (default): basic gate. "self-improving": gate + evolution recording + rule suggestion.',
+        help='Gate mode. "kernel": basic gate. '
+        '"self-improving": gate + evolution recording + rule suggestion.',
     )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
@@ -154,7 +157,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=("kernel", "self-improving"),
         default="kernel",
-        help='Gate mode. "kernel" (default): basic gate. "self-improving": gate + evolution recording + rule suggestion.',
+        help='Gate mode. "kernel": basic gate. '
+        '"self-improving": gate + evolution recording + rule suggestion.',
     )
     agent_gate.add_argument("plan_file", help="Path to Terraform plan JSON.")
     agent_gate.set_defaults(func=_agent_gate)
@@ -747,7 +751,7 @@ def _evolution_patterns(args: argparse.Namespace) -> int:
     engine = EvolutionEngine()
     patterns = engine.get_all_patterns()
     if not patterns:
-        print("No patterns detected yet. Run the gate with --mode self-improving on some plans first.")
+        print("No patterns yet. Run the gate with --mode self-improving on some plans first.")
         return 0
     print(json.dumps(patterns, indent=2))
     return 0
@@ -787,9 +791,12 @@ def _evolution_console(args: argparse.Namespace) -> int:
     print("=" * 60)
     print("      ⚡ READTHEPLAN EVOLUTION CONSOLE DASHBOARD ⚡")
     print("=" * 60)
-    print(f" Total Runs: {stats['total_runs']:<8} | Avg Compliance Score: {stats['avg_compliance_score']:.1f}%")
+    avg = stats['avg_compliance_score']
+    print(f" Total Runs: {stats['total_runs']:<8} "
+          f"| Avg Compliance Score: {avg:.1f}%")
     print(f" Blocked:    {stats['blocked']:<8} | Warned:               {stats['warned']}")
-    print(f" Incidents:  {stats['total_incidents']:<8} | Patterns:             {stats['total_patterns']}")
+    print(f" Incidents:  {stats['total_incidents']:<8} "
+          f"| Patterns: {stats['total_patterns']}")
     print(f" Auto-Merged Rules: {stats['auto_merged_rules']}")
     print("-" * 60)
     print(" DETECTED PATTERNS")
@@ -800,7 +807,8 @@ def _evolution_console(args: argparse.Namespace) -> int:
         print(f"  {'Resource Type':<25} {'Risk':<12} {'Count':<8} {'Status':<12}")
         print(f"  {'-'*25} {'-'*12} {'-'*8} {'-'*12}")
         for p in patterns[:10]:
-            print(f"  {p['resource_type']:<25} {p['risk']:<12} {p['incident_count']:<8} {p['rule_status']:<12}")
+            print(f"  {p['resource_type']:<25} {p['risk']:<12} "
+                  f"{p['incident_count']:<8} {p['rule_status']:<12}")
         if len(patterns) > 10:
             print(f"  ... and {len(patterns) - 10} more patterns.")
     print("-" * 60)

@@ -297,7 +297,12 @@ class EvolutionEngine:
             grok_available = shutil.which("grok.exe") or shutil.which("grok")
             grok_analysis = ""
             if grok_available:
-                cmd = ["grok", "--single", f"Explain the security risk and recurring pattern for resource type '{rt}' with risk level '{risk}' based on {cnt} incidents."]
+                groq_msg = (
+                    "Explain the security risk and recurring pattern "
+                    f"for resource type '{rt}' with risk level '{risk}' "
+                    f"based on {cnt} incidents."
+                )
+                cmd = ["grok", "--single", groq_msg]
                 if shutil.which("grok.exe"):
                     cmd[0] = "grok.exe"
                 try:
@@ -305,7 +310,11 @@ class EvolutionEngine:
                     if proc.returncode == 0:
                         grok_analysis = proc.stdout.strip()
                     else:
-                        print(f"grok.exe returned exit code {proc.returncode}. Output: {proc.stderr.strip() or proc.stdout.strip()}")
+                        print(
+                            f"grok.exe returned exit code "
+                            f"{proc.returncode}. Output: "
+                            f"{proc.stderr.strip() or proc.stdout.strip()}"
+                        )
                 except Exception as e:
                     print(f"Error calling grok.exe: {e}")
             
@@ -315,11 +324,16 @@ from typing import Any
 from readtheplan.rules._shared import RuleResult, register_rule
 
 @register_rule("{rt}")
-def _rule_{rt_clean}_{risk}(resource_type: str, action_set: set[str], change: dict[str, Any]) -> list[RuleResult]:
+def _rule_{rt_clean}_{risk}(
+    resource_type: str, action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
     candidates = []
     # Auto-generated check
     if "delete" in action_set or "update" in action_set or "create" in action_set:
-        candidates.append(RuleResult("{risk}", "Auto-generated rule flagged {rt} for {risk}"))
+        candidates.append(
+            RuleResult("{risk}", "Auto-generated rule flagged {rt} for {risk}")
+        )
     return candidates
 """
             test_code = f"""# Auto-generated test for {rt} ({risk})
@@ -340,13 +354,15 @@ def test_rule_{rt_clean}_{risk}():
             # 3. Verification Loop via temporary test execution
             temp_rule_dir = Path(__file__).parent / "rules" / "auto"
             temp_rule_dir.mkdir(parents=True, exist_ok=True)
-            (temp_rule_dir / "__init__.py").write_text('"""Auto-generated rules package."""\n', encoding="utf-8")
+            init_pkg = '"""Auto-generated rules package."""\n'
+            (temp_rule_dir / "__init__.py").write_text(init_pkg, encoding="utf-8")
             
             temp_rule_file = temp_rule_dir / "temp_candidate.py"
             
             temp_test_dir = Path(__file__).parent.parent.parent / "tests" / "test_rules_auto"
             temp_test_dir.mkdir(parents=True, exist_ok=True)
-            (temp_test_dir / "__init__.py").write_text('"""Auto-generated rules tests package."""\n', encoding="utf-8")
+            init_test = '"""Auto-generated rules tests package."""\n'
+            (temp_test_dir / "__init__.py").write_text(init_test, encoding="utf-8")
             
             temp_test_file = temp_test_dir / "test_temp_candidate.py"
             
@@ -361,11 +377,18 @@ def test_rule_{rt_clean}_{risk}():
             
             verification_success = False
             try:
-                proc = subprocess.run(pytest_cmd, env=env, capture_output=True, text=True, timeout=15)
+                proc = subprocess.run(
+                    pytest_cmd, env=env,
+                    capture_output=True, text=True,
+                    timeout=15,
+                )
                 if proc.returncode == 0:
                     verification_success = True
                 else:
-                    print(f"Verification pytest failed with exit code {proc.returncode}:\n{proc.stdout}\n{proc.stderr}")
+                    print(
+                        "Verification pytest failed with exit code "
+                        f"{proc.returncode}:\n{proc.stdout}\n{proc.stderr}"
+                    )
             except Exception as e:
                 print(f"Error running verification pytest: {e}")
 
@@ -379,7 +402,11 @@ def test_rule_{rt_clean}_{risk}():
             score = 0.0
             if verification_success:
                 base_score = 70.0
-                risk_bonus = {"safe": 5.0, "review": 10.0, "dangerous": 15.0, "irreversible": 20.0}.get(risk, 5.0)
+                risk_bonus_map = {
+                    "safe": 5.0, "review": 10.0,
+                    "dangerous": 15.0, "irreversible": 20.0,
+                }
+                risk_bonus = risk_bonus_map.get(risk, 5.0)
                 incident_bonus = 5.0 if cnt >= 3 else 0.0
                 if cnt >= 5:
                     incident_bonus = 10.0
@@ -408,11 +435,15 @@ def test_rule_{rt_clean}_{risk}():
                 print("=" * 60)
                 print(f"Title: feat(rules): Auto-generated rule for {rt} ({risk})")
                 print("\nDescription:")
-                print(f"This PR adds a self-evolved rule for resource type '{rt}' with risk '{risk}'.")
+                print(
+                    "This PR adds a self-evolved rule for resource type "
+                    f"'{rt}' with risk '{risk}'."
+                )
                 print(f"- Rule file: src/readtheplan/rules/auto/rule_{rt_clean}_{risk}.py")
                 print(f"- Test file: tests/test_rules_auto/test_rule_{rt_clean}_{risk}.py")
                 print(f"- Score: {score:.1f}")
-                print(f"- Analysis: {grok_analysis or 'No Grok analysis (heuristic fallback)'}")
+                grok_fallback = grok_analysis or "No Grok analysis (heuristic fallback)"
+                print(f"- Analysis: {grok_fallback}")
                 print("=" * 60)
 
             # 8. Write JSON Handoff to ~/.readtheplan/handoffs/ if score >= 70
@@ -422,7 +453,8 @@ def test_rule_{rt_clean}_{risk}():
                 handoff_file = handoffs_dir / f"handoff_{rt_clean}_{risk}.json"
                 
                 import uuid
-                handoff_id = f"handoff_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                handoff_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                handoff_id = f"handoff_{handoff_ts}_{uuid.uuid4().hex[:8]}"
                 
                 handoff_data = {
                     "handoff_id": handoff_id,
@@ -455,13 +487,21 @@ def test_rule_{rt_clean}_{risk}():
         risk = pattern["risk"]
         cnt = pattern["incident_count"]
 
+        action_label = (
+            "require human approval"
+            if risk in ("dangerous", "irreversible")
+            else "flag for review"
+        )
+        priority_label = (
+            "high" if cnt >= 5 else "medium" if cnt >= 3 else "low"
+        )
         return (
             f"auto-{rt.lower().replace('_', '-')}-{risk}\n"
             f"Resource type: {rt}\n"
             f"Detected risk: {risk}\n"
             f"Incident count: {cnt}\n"
-            f"Action: {'require human approval' if risk in ('dangerous', 'irreversible') else 'flag for review'}\n"
-            f"Priority: {'high' if cnt >= 5 else 'medium' if cnt >= 3 else 'low'}\n"
+            f"Action: {action_label}\n"
+            f"Priority: {priority_label}\n"
         )
 
     def _score_rule(self, rule: str, pattern: dict) -> float:
@@ -496,13 +536,19 @@ def test_rule_{rt_clean}_{risk}():
     def _save_evolved_rule(self, pattern_hash: str, rule: str, score: float, status: str):
         conn = sqlite3.connect(self.db_path)
         conn.execute(
-            "UPDATE patterns SET suggested_rule = ?, rule_score = ?, rule_status = ? WHERE pattern_hash = ?",
+            "UPDATE patterns SET suggested_rule = ?, rule_score = ?, "
+            "rule_status = ? WHERE pattern_hash = ?",
             (rule, score, status, pattern_hash),
         )
         conn.execute(
-            "INSERT INTO rules_catalog (pattern_id, rule_code, rule_description, score, status, created_at) "
+            "INSERT INTO rules_catalog "
+            "(pattern_id, rule_code, rule_description, "
+            "score, status, created_at) "
             "SELECT id, ?, ?, ?, ?, ? FROM patterns WHERE pattern_hash = ?",
-            (rule, f"Auto-generated rule for {pattern_hash}", score, status, datetime.now().isoformat(), pattern_hash),
+            (rule,
+             f"Auto-generated rule for {pattern_hash}",
+             score, status, datetime.now().isoformat(),
+             pattern_hash),
         )
         conn.commit()
         conn.close()
@@ -521,7 +567,7 @@ def test_rule_{rt_clean}_{risk}():
         return p
 
     def dispatch_handoffs(self) -> list[str]:
-        """Dispatch any pending JSON handoffs in ~/.readtheplan/handoffs/ to the shared handoff directory."""
+        """Dispatch pending handoffs from ~/.readtheplan/handoffs/ to shared dir."""
         handoffs_dir = self.data_dir / "handoffs"
         if not handoffs_dir.exists():
             return []
@@ -548,7 +594,14 @@ def test_rule_{rt_clean}_{risk}():
                     "updated_at": datetime.now().isoformat(timespec="seconds") + "Z",
                     "tags": ["readtheplan", "evolution", "rule-generation"],
                     "extracted_response": {
-                        "message_text": f"Suggested auto-rule for pattern: {data.get('pattern_hash')}\\n\\nRule details:\\n{data.get('suggested_rule')}\\n\\nIncident count: {data.get('incident_count')}\\nScore: {data.get('score')}"
+                        "message_text": (
+                            "Suggested auto-rule for pattern: "
+                            f"{data.get('pattern_hash')}\n\n"
+                            "Rule details:\n"
+                            f"{data.get('suggested_rule')}\n\n"
+                            f"Incident count: {data.get('incident_count')}\n"
+                            f"Score: {data.get('score')}"
+                        )
                     },
                     "policy": {
                         "routing_mode": "auto",
@@ -757,16 +810,30 @@ Score: {data.get('score')}
 <title>Evolution Dashboard - {datetime.now().strftime('%Y-%m-%d')}</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-  body {{ font-family: system-ui, -apple-system, sans-serif; background: #0f0f0f; color: #e0e0e0; margin: 0; padding: 20px; }}
+  body {{
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0f0f0f; color: #e0e0e0;
+    margin: 0; padding: 20px;
+  }}
   .container {{ max-width: 1000px; margin: 0 auto; }}
   h1 {{ color: #22c55e; font-size: 1.5rem; }}
-  .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 20px 0; }}
-  .stat-card {{ background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px; text-align: center; }}
+  .stats {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px; margin: 20px 0;
+  }}
+  .stat-card {{
+    background: #1a1a1a; border: 1px solid #2a2a2a;
+    border-radius: 8px; padding: 16px; text-align: center;
+  }}
   .stat-card .value {{ font-size: 1.8rem; font-weight: bold; color: #22c55e; }}
   .stat-card .label {{ font-size: 0.75rem; color: #888; margin-top: 4px; }}
   canvas {{ background: #1a1a1a; border-radius: 8px; padding: 12px; margin: 20px 0; }}
   table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-  th, td {{ text-align: left; padding: 8px 12px; border-bottom: 1px solid #2a2a2a; font-size: 0.85rem; }}
+  th, td {{
+    text-align: left; padding: 8px 12px;
+    border-bottom: 1px solid #2a2a2a; font-size: 0.85rem;
+  }}
   th {{ color: #22c55e; font-weight: 600; }}
   tr:hover {{ background: #1a1a1a; }}
   .footer {{ text-align: center; color: #555; font-size: 0.75rem; margin-top: 40px; }}
@@ -778,21 +845,40 @@ Score: {data.get('score')}
   <p style="color: #888; font-size: 0.85rem;">All data stays local — {self.db_path}</p>
 
   <div class="stats">
-    <div class="stat-card"><div class="value">{stats['total_runs']}</div><div class="label">Total Runs</div></div>
-    <div class="stat-card"><div class="value">{stats['avg_compliance_score']}</div><div class="label">Avg Compliance Score</div></div>
-    <div class="stat-card"><div class="value">{stats['blocked']}</div><div class="label">Blocked</div></div>
-    <div class="stat-card"><div class="value">{stats['total_incidents']}</div><div class="label">Incidents</div></div>
-    <div class="stat-card"><div class="value">{stats['total_patterns']}</div><div class="label">Patterns</div></div>
-    <div class="stat-card"><div class="value">{stats['auto_merged_rules']}</div><div class="label">Auto-Merged Rules</div></div>
+    <div class="stat-card">
+      <div class="value">{stats['total_runs']}</div>
+      <div class="label">Total Runs</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{stats['avg_compliance_score']}</div>
+      <div class="label">Avg Compliance Score</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{stats['blocked']}</div>
+      <div class="label">Blocked</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{stats['total_incidents']}</div>
+      <div class="label">Incidents</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{stats['total_patterns']}</div>
+      <div class="label">Patterns</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">{stats['auto_merged_rules']}</div>
+      <div class="label">Auto-Merged Rules</div>
+    </div>
   </div>
 
   <canvas id="scoreChart" width="800" height="300"></canvas>
 
   <h2 style="color: #22c55e; font-size: 1.1rem;">Detected Patterns</h2>
   <table>
-    <thead><tr><th>Resource Type</th><th>Risk</th><th>Incidents</th><th>Status</th><th>Score</th></tr></thead>
+    <thead><tr><th>Resource Type</th><th>Risk</th>
+    <th>Incidents</th><th>Status</th><th>Score</th></tr></thead>
     <tbody>
-      {pattern_rows if pattern_rows else '<tr><td colspan="5" style="text-align:center;color:#555;">No patterns detected yet. Run the gate on some plans first.</td></tr>'}
+      {pattern_rows if pattern_rows else '<tr><td colspan="5" style="text-align:center;color:#555;">No patterns yet. Run the gate on some plans first.</td></tr>'}
     </tbody>
   </table>
 
