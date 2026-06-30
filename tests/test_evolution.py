@@ -451,6 +451,13 @@ def test_sanitize_rejects_unknown_risk():
         _sanitize_for_codegen("aws_s3_bucket", "critical_unknown")
 
 
+def test_sanitize_rejects_trailing_newline():
+    """A trailing newline on an otherwise-valid name must NOT bypass the regex."""
+    # re.match() with $ allows trailing \n to pass; .fullmatch() blocks it.
+    with pytest.raises(ValueError, match="not a safe Python identifier"):
+        _sanitize_for_codegen("aws_s3_bucket\n", "irreversible")
+
+
 def test_html_dashboard_escapes_plan_derived_fields(tmp_path: Path):
     """HTML-injectable patterns must be escaped in the generated dashboard."""
     engine = _make_engine(tmp_path)

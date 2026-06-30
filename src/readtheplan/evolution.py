@@ -41,7 +41,7 @@ def _sanitize_for_codegen(resource_type: str, risk: str) -> tuple[str, str]:
     unknown risk levels, stopping code generation before exec() is reached.
     """
     rt_clean = resource_type.replace("::", "_").replace("-", "_").replace(".", "_").lower()
-    if not _RESOURCE_TYPE_RE.match(rt_clean):
+    if not _RESOURCE_TYPE_RE.fullmatch(rt_clean):
         raise ValueError(
             f"resource_type {resource_type!r} normalises to {rt_clean!r} which is not "
             "a safe Python identifier (allowed: [a-z][a-z0-9_]{{0,127}})"
