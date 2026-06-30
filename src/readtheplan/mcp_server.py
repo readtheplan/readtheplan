@@ -14,6 +14,7 @@ from readtheplan.controls import (
 )
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
 from readtheplan.summary import summary_to_dict
+from readtheplan.evolution import EvolutionEngine
 
 
 class MissingMCPDependencyError(RuntimeError):
@@ -214,6 +215,22 @@ def create_server() -> Any:
     def _agent_gate_cfn_tool(input_path: str) -> dict[str, object]:
         """Return the agent-gate decision for a CloudFormation Change Set / template diff."""
         return agent_gate_cfn_handler(input_path)
+
+    @mcp.tool(name="evolution_status")
+    def _evolution_status_tool() -> dict[str, object]:
+        """Return evolution engine statistics and recent run data."""
+        return EvolutionEngine().get_stats()
+
+    @mcp.tool(name="evolution_dashboard")
+    def _evolution_dashboard_tool() -> dict[str, object]:
+        """Generate the HTML evolution dashboard and return its file path."""
+        path = EvolutionEngine().generate_html_dashboard()
+        return {"dashboard_path": str(path)}
+
+    @mcp.tool(name="evolution_patterns")
+    def _evolution_patterns_tool() -> list[dict[str, object]]:
+        """Return all detected patterns and their evolution status."""
+        return EvolutionEngine().get_all_patterns()
 
     return mcp
 

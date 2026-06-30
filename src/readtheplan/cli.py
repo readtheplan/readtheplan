@@ -8,7 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Callable, Sequence, TextIO, cast
 
-from readtheplan.agent_gate import agent_gate_to_dict
+from readtheplan.agent_gate import SCHEMA, agent_gate_to_dict
 from readtheplan.controls import (
     CatalogSchemaError,
     ControlCatalog,
@@ -16,6 +16,7 @@ from readtheplan.controls import (
     available_frameworks,
     load_catalog,
 )
+from readtheplan.evolution import EvolutionEngine
 from readtheplan.evidence import EvidenceError, Reviewer, build_evidence
 from readtheplan.overlays import (
     Overlay,
@@ -38,7 +39,7 @@ from readtheplan.summary import summary_to_dict
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    func = cast("Callable[[argparse.Namespace], int]", args.func)
+    func = getattr(args, "evolution_func", None) or cast("Callable[[argparse.Namespace], int]", args.func)
     return func(args)
 
 
@@ -128,6 +129,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--rekor-url",
         help="Rekor transparency log URL. Defaults to sigstore public.",
     )
+    analyze.add_argument(
+        "--mode",
+        choices=("kernel", "self-improving"),
+        default="kernel",
+        help='Gate mode. "kernel" (default): basic gate. "self-improving": gate + evolution recording + rule suggestion.',
+    )
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
 
@@ -141,6 +148,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "Include required check IDs from the named framework catalog. "
             f"Currently available: {_framework_help_list()}."
         ),
+    )
+    agent_gate.add_argument(
+        "--mode",
+        choices=("kernel", "self-improving"),
+        default="kernel",
+        help='Gate mode. "kernel" (default): basic gate. "self-improving": gate + evolution recording + rule suggestion.',
     )
     agent_gate.add_argument("plan_file", help="Path to Terraform plan JSON.")
     agent_gate.set_defaults(func=_agent_gate)
@@ -185,6 +198,37 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Start the experimental local MCP stdio server.",
     )
     mcp.set_defaults(func=_mcp)
+
+    evolution_parser = subparsers.add_parser(
+        "evolution",
+        help="Manage the self-improving evolution engine.",
+    )
+    evolution_sub = evolution_parser.add_subparsers(dest="evolution_action", required=True)
+
+    evolution_sub.add_parser(
+        "status",
+        help="Show evolution engine statistics and recent runs.",
+    ).set_defaults(evolution_func=_evolution_status)
+
+    evolution_sub.add_parser(
+        "dashboard",
+        help="Generate and open the HTML evolution dashboard.",
+    ).set_defaults(evolution_func=_evolution_dashboard)
+
+    evolution_sub.add_parser(
+        "voice",
+        help="Generate a voice brief summary of evolution status.",
+    ).set_defaults(evolution_func=_evolution_voice)
+
+    evolution_sub.add_parser(
+        "patterns",
+        help="List all detected patterns and their status.",
+    ).set_defaults(evolution_func=_evolution_patterns)
+
+    evolution_sub.add_parser(
+        "runs",
+        help="Show recent evolution run history.",
+    ).set_defaults(evolution_func=_evolution_runs)
 
     return parser
 
@@ -398,7 +442,14 @@ def _agent_gate(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    gate = agent_gate_to_dict(summary, catalog)
+    evolution_engine = EvolutionEngine() if args.mode == "self-improving" else None
+
+    gate = agent_gate_to_dict(
+        summary,
+        catalog,
+        mode=args.mode,
+        evolution_engine=evolution_engine,
+    )
     json.dump(gate, sys.stdout, indent=2)
     print()
     decision = gate.get("decision", "warn")
@@ -595,6 +646,55 @@ def _print_summary(
             )
             row = f"{row} | {', '.join(control.id for control in controls)}"
         print(f"{row} |", file=stream)
+
+
+# ── Evolution handlers ────────────────────────────────────────────
+
+
+def _evolution_status(args: argparse.Namespace) -> int:
+    """Show evolution engine statistics."""
+    engine = EvolutionEngine()
+    stats = engine.get_stats()
+    print(json.dumps(stats, indent=2))
+    return 0
+
+
+def _evolution_dashboard(args: argparse.Namespace) -> int:
+    """Generate and report the dashboard path."""
+    engine = EvolutionEngine()
+    path = engine.generate_html_dashboard()
+    print(f"Dashboard generated: {path}")
+    return 0
+
+
+def _evolution_voice(args: argparse.Namespace) -> int:
+    """Generate a voice brief (text output)."""
+    engine = EvolutionEngine()
+    brief = engine.generate_voice_brief(style="concise")
+    print(brief)
+    return 0
+
+
+def _evolution_patterns(args: argparse.Namespace) -> int:
+    """List all detected patterns."""
+    engine = EvolutionEngine()
+    patterns = engine.get_all_patterns()
+    if not patterns:
+        print("No patterns detected yet. Run the gate with --mode self-improving on some plans first.")
+        return 0
+    print(json.dumps(patterns, indent=2))
+    return 0
+
+
+def _evolution_runs(args: argparse.Namespace) -> int:
+    """Show recent runs."""
+    engine = EvolutionEngine()
+    runs = engine.get_recent_runs()
+    if not runs:
+        print("No runs recorded yet.")
+        return 0
+    print(json.dumps(runs, indent=2))
+    return 0
 
 
 if __name__ == "__main__":
