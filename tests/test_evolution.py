@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
+import pytest
+
 from readtheplan.agent_gate import agent_gate_to_dict
-from readtheplan.evolution import EvolutionEngine
+from readtheplan.evolution import EvolutionEngine, _sanitize_for_codegen
 from readtheplan.plan import analyze_plan_file
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -422,13 +425,61 @@ def test_cli_evolution_dispatch(capsys):
     import sys
 
     from readtheplan.cli import main
-    
+
     sys.argv = ["readtheplan", "evolution", "dispatch"]
     try:
         main()
     except SystemExit as e:
         assert e.code == 0
-        
+
     captured = capsys.readouterr()
     assert "No pending handoffs" in captured.out or "Successfully dispatched" in captured.out
+
+
+# ── Security regression tests ─────────────────────────────────────
+
+
+def test_sanitize_rejects_shell_metacharacters():
+    """resource_type containing shell/Python metacharacters must be rejected."""
+    with pytest.raises(ValueError, match="not a safe Python identifier"):
+        _sanitize_for_codegen("aws_s3_bucket\npass\nimport os", "irreversible")
+
+
+def test_sanitize_rejects_unknown_risk():
+    """An unrecognised risk level must be rejected before code generation."""
+    with pytest.raises(ValueError, match="not a known risk level"):
+        _sanitize_for_codegen("aws_s3_bucket", "critical_unknown")
+
+
+def test_html_dashboard_escapes_plan_derived_fields(tmp_path: Path):
+    """HTML-injectable patterns must be escaped in the generated dashboard."""
+    engine = _make_engine(tmp_path)
+
+    # Seed 3 incidents so analyze_incidents() writes a row to the patterns table.
+    for i in range(3):
+        run_id = engine.record_run(
+            plan_hash=f"xss-{i}",
+            decision="block",
+            compliance_score=20.0,
+            mode="self-improving",
+            incident_flag=True,
+        )
+        engine.record_incident(
+            run_id=run_id,
+            resource_type="aws_s3_bucket",
+            risk="irreversible",
+            address=f"aws_s3_bucket.xss-{i}",
+            actions=["delete"],
+        )
+    engine.analyze_incidents(min_incidents=3)  # materialises the patterns table row
+
+    # Tamper: overwrite resource_type with an XSS payload directly in the DB,
+    # simulating a crafted plan.json that bypassed earlier validation.
+    xss_payload = '<script>alert("xss")</script>'
+    with sqlite3.connect(engine.db_path) as conn:
+        conn.execute("UPDATE patterns SET resource_type = ?", (xss_payload,))
+
+    html = Path(engine.generate_html_dashboard()).read_text(encoding="utf-8")
+    assert xss_payload not in html, "Raw XSS payload must not appear in dashboard HTML"
+    assert "&lt;script&gt;" in html, "XSS payload must be HTML-escaped in the dashboard"
 

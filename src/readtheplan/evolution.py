@@ -16,8 +16,10 @@ Multi-agent coordination (optional, via provider CLI):
 
 from __future__ import annotations
 
+import html as _html
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -25,6 +27,30 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Valid risk values — must match RISK_ORDER in rules/_shared.py
+_VALID_RISKS = frozenset({"safe", "review", "dangerous", "irreversible"})
+# Resource type after normalisation must be an identifier-safe token
+_RESOURCE_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
+
+
+def _sanitize_for_codegen(resource_type: str, risk: str) -> tuple[str, str]:
+    """Validate and normalise inputs before they touch any code-generation path.
+
+    Raises ValueError for inputs that would produce unsafe identifiers or
+    unknown risk levels, stopping code generation before exec() is reached.
+    """
+    rt_clean = resource_type.replace("::", "_").replace("-", "_").replace(".", "_").lower()
+    if not _RESOURCE_TYPE_RE.match(rt_clean):
+        raise ValueError(
+            f"resource_type {resource_type!r} normalises to {rt_clean!r} which is not "
+            "a safe Python identifier (allowed: [a-z][a-z0-9_]{{0,127}})"
+        )
+    if risk not in _VALID_RISKS:
+        raise ValueError(
+            f"risk {risk!r} is not a known risk level (allowed: {sorted(_VALID_RISKS)})"
+        )
+    return rt_clean, risk
 
 
 class EvolutionEngine:
@@ -251,8 +277,12 @@ class EvolutionEngine:
             rt = pattern["resource_type"]
             risk = pattern["risk"]
             cnt = pattern["incident_count"]
-            rt_clean = rt.replace("::", "_").replace("-", "_").lower()
             pattern_hash = pattern["pattern_hash"]
+            try:
+                rt_clean, risk = _sanitize_for_codegen(rt, risk)
+            except ValueError as exc:
+                print(f"Skipping pattern {pattern_hash!r}: {exc}")
+                continue
 
             # 1. Grok pattern analysis (when grok.exe is available)
             grok_available = shutil.which("grok.exe") or shutil.which("grok")
@@ -701,14 +731,15 @@ Score: {data.get('score')}
                 "disabled": "🔴",
                 "pending": "⚪",
             }.get(p["rule_status"], "⚪")
-            pattern_rows += f"""
-            <tr>
-                <td>{p['resource_type']}</td>
-                <td>{p['risk']}</td>
-                <td>{p['incident_count']}</td>
-                <td>{status_badge} {p['rule_status']}</td>
-                <td>{p['rule_score'] or '-'}</td>
-            </tr>"""
+            pattern_rows += (
+                f"\n            <tr>"
+                f"<td>{_html.escape(str(p['resource_type']))}</td>"
+                f"<td>{_html.escape(str(p['risk']))}</td>"
+                f"<td>{_html.escape(str(p['incident_count']))}</td>"
+                f"<td>{status_badge} {_html.escape(str(p['rule_status']))}</td>"
+                f"<td>{_html.escape(str(p['rule_score'] or '-'))}</td>"
+                f"</tr>"
+            )
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
