@@ -8,7 +8,6 @@ import pytest
 
 from readtheplan.cli import main
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 

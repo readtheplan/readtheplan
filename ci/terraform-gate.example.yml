@@ -1,0 +1,89 @@
+# Example: end-to-end Terraform gate using readtheplan v0.3.0 (as published on PyPI)
+# Validated 2026-06-11 by replaying the action.yml analyze-step logic locally against
+# the released wheel. Two gating styles shown — pick one.
+#
+# Style A uses the official composite action (report-only by default, threshold gate).
+# Style B uses ci/readtheplan-gate.sh — the agent-gate contract with exit codes
+#   (0=proceed, 2=warn, 1=block) — portable to GitLab/Jenkins/Buildkite as-is.
+
+name: terraform-gate
+on:
+  pull_request:
+    paths: ["infra/**"]
+
+permissions:
+  contents: read
+  pull-requests: write   # only needed for the PR comment step
+
+jobs:
+  plan-and-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run: { working-directory: infra }
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v3   # or opentofu/setup-opentofu@v1
+
+      - name: Produce plan JSON
+        run: |
+          terraform init -input=false
+          terraform plan -out=tfplan -input=false
+          terraform show -json tfplan > plan.json
+
+      # ---- Style A: official action, threshold gate -------------------------
+      - name: readtheplan (threshold gate)
+        uses: readtheplan/readtheplan@v0.3.0   # no v1 tag exists — pin the release tag or a SHA
+        with:
+          plan-file: infra/plan.json
+          fail-on-threshold: dangerous
+
+      # ---- Style B: agent-gate contract + PR comment ------------------------
+      - name: readtheplan (agent gate)
+        id: gate
+        if: always()
+        run: |
+          pip install readtheplan==0.3.0
+          bash ../ci/readtheplan-gate.sh plan.json soc2 || code=$?
+          echo "decision-exit=${code:-0}" >> "$GITHUB_OUTPUT"
+          # warn (2) passes here but still posts the comment; block (1) fails the job
+          [ "${code:-0}" -ne 1 ]
+
+      - name: Post gate comment on PR
+        if: always() && hashFiles('infra/gate-comment.md') != ''
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('infra/gate-comment.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      - name: Evidence envelope (audit artifact)
+        if: always()
+        run: |
+          readtheplan analyze --framework soc2 \
+            --evidence evidence.json \
+            --run-id "${{ github.run_id }}" \
+            --reviewer-id "${{ github.actor }}" \
+            plan.json > /dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: readtheplan-evidence
+          path: |
+            infra/evidence.json
+            infra/gate.json
+
+# Notes from the field test (see FIELD_TEST-2026-06-11.md):
+# - v0.3.0 ships only soc2 / iso27001 / hipaa catalogs. pci_dss, hitrust,
+#   fedramp_moderate exist on main but are NOT in the published wheel.
+# - Don't pass the binary tfplan file: v0.3.0 stack-traces on non-UTF-8 input.
+#   The gate script pre-checks this. Always `terraform show -json` first.
+# - `readtheplan verify` on v0.3.0 does NOT support --certificate-identity /
+#   --certificate-oidc-issuer (docs describe unreleased main).

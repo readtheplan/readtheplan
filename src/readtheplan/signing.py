@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass
-from typing import Any, Mapping, Protocol, cast
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+from typing import Any, Protocol, cast
 
 from readtheplan.evidence import EVIDENCE_SCHEMA, EvidenceEnvelope
-
 
 SIGNING_INSTALL_HINT = (
     "Signing requires sigstore. Install with: pip install readtheplan[sign]"
@@ -32,6 +32,9 @@ class VerificationResult:
     oidc_issuer: str
     rekor_uuid: str
     reason: str | None = None
+    #: Provenance — non-builtin plugins recorded in the signed envelope's
+    #: agent_attestation. Populated only on successful verification.
+    provenance: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -114,7 +117,7 @@ def verify_envelope(
         )
 
     canonical_payload = _canonical_payload(payload)
-    return _verify_payload_with_sigstore(
+    result = _verify_payload_with_sigstore(
         canonical_payload,
         signature=signature,
         bundle_json=bundle_json,
@@ -122,6 +125,13 @@ def verify_envelope(
         certificate_identity=certificate_identity,
         certificate_oidc_issuer=certificate_oidc_issuer,
     )
+    # Surface signed provenance metadata (which plugins contributed rules) on a
+    # successful verification.
+    if result.ok:
+        provenance = _attestation_provenance(payload)
+        if provenance:
+            result = replace(result, provenance=provenance)
+    return result
 
 
 def _canonical_payload(payload: Mapping[str, Any]) -> bytes:
@@ -292,6 +302,18 @@ def _agent_attestation(payload: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(raw_attestation, dict):
         raise VerificationError("evidence envelope missing agent_attestation object")
     return cast(dict[str, Any], raw_attestation)
+
+
+def _attestation_provenance(payload: Mapping[str, Any]) -> tuple[str, ...]:
+    """Extract the list of provenance plugin names from a payload's
+    agent_attestation, tolerating absence/older envelopes."""
+    attestation = payload.get("agent_attestation")
+    if not isinstance(attestation, dict):
+        return ()
+    raw = attestation.get("provenance")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(str(item) for item in raw)
 
 
 def _json_copy(payload: Mapping[str, Any]) -> dict[str, Any]:

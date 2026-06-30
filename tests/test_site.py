@@ -250,7 +250,7 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
     assert "/brief/sample-001/" in sitemap
     assert "/brief/" in homepage
 
-    combined = brief_path.read_text(encoding="utf-8") + "\n" + sample_path.read_text(encoding="utf-8")
+    combined = brief_path.read_text(encoding="utf-8") + "\n" + sample_path.read_text(encoding="utf-8")  # noqa: E501
 
     for expected in [
         "Weekly Terraform/SOC 2 change intelligence for platform teams",

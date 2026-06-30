@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 ALLOWED_TOP_LEVEL_KEYS = {
     "run_id",
     "tenant_id",

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 FORBIDDEN_KEYS = {
     "raw_plan_json",
     "plan_json",

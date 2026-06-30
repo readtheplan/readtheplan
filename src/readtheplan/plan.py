@@ -20,6 +20,9 @@ class ResourceChange:
     actions: tuple[str, ...]
     risk: str
     explanation: str
+    #: Provenance of the winning rule — "builtin" or the plugin name that
+    #: produced this change's risk classification.
+    source: str = "builtin"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -88,7 +91,7 @@ def load_plan(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def analyze_plan_file(path: str | Path | dict, *, use_rules: bool = True, _original_path: Path | None = None) -> PlanSummary:
+def analyze_plan_file(path: str | Path | dict, *, use_rules: bool = True, _original_path: Path | None = None) -> PlanSummary:  # noqa: E501
     if isinstance(path, dict):
         data = path
         plan_path = _original_path or Path("<inline>")
@@ -113,6 +116,39 @@ def analyze_plan_file(path: str | Path | dict, *, use_rules: bool = True, _origi
         terraform_version=terraform_version,
         resource_changes=changes,
     )
+
+
+def analyze(
+    plan: str | Path | dict[str, Any],
+    *,
+    use_rules: bool = True,
+) -> PlanSummary:
+    """Analyze a Terraform plan and return typed results.
+
+    This is the primary public API. Accepts either a file path (string or
+    ``Path``) or a pre-parsed plan dictionary (e.g. from ``json.loads``).
+
+    Args:
+        plan: Path to a ``terraform show -json`` output file, or a
+            pre-parsed plan JSON dictionary.
+        use_rules: When True (default), applies the built-in resource-aware
+            risk rules in addition to the action-based baseline.
+
+    Returns:
+        A :class:`PlanSummary` with full typed access to resource changes,
+        action counts, and risk counts.
+
+    Example:
+        >>> from readtheplan import analyze
+        >>> summary = analyze("plan.json")
+        >>> summary.risk_counts
+        Counter({'safe': 1, 'review': 2, 'dangerous': 1})
+
+        >>> changes = summary.resource_changes
+        >>> for c in changes:
+        ...     print(f"{c.address}: {c.risk}")
+    """
+    return analyze_plan_file(plan, use_rules=use_rules)
 
 
 def _resource_change(item: Any, *, use_rules: bool = True) -> ResourceChange:
@@ -155,6 +191,7 @@ def _resource_change(item: Any, *, use_rules: bool = True) -> ResourceChange:
         actions=action_tuple,
         risk=result.risk,
         explanation=result.explanation,
+        source=result.source,
     )
 
 

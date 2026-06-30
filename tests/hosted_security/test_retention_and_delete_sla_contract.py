@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-
 MAX_RETENTION_DAYS = 30
 MAX_DELETE_SLA_HOURS = 24
 

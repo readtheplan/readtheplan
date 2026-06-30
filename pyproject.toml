@@ -35,6 +35,20 @@ Issues = "https://github.com/readtheplan/readtheplan/issues"
 [project.scripts]
 readtheplan = "readtheplan.cli:main"
 
+# Plugin entry point groups. External packages can contribute adapters and
+# rules by declaring entry points in these groups; readtheplan discovers them at
+# import via importlib.metadata. The builtins below are wired here as the
+# canonical examples (discovery is idempotent).
+[project.entry-points."readtheplan.adapters"]
+cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
+kubernetes = "readtheplan.adapters.kubernetes:KubernetesAdapter"
+
+[project.entry-points."readtheplan.rules"]
+aws = "readtheplan.rules.aws"
+gcp = "readtheplan.rules.gcp"
+azure = "readtheplan.rules.azure"
+k8s = "readtheplan.rules.k8s"
+
 [project.optional-dependencies]
 mcp = ["mcp>=1.0.0,<2.0.0; python_version >= '3.10'"]
 sign = ["sigstore>=4.0,<5"]
@@ -68,7 +82,7 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-# Conservative start so the gate is green on the current tree.
-# Ratchet up (add "E","F","I","UP") after clearing the unused-import backlog
-# with `ruff check --fix` (11 of 13 existing nits are auto-fixable).
-select = ["E9", "F63", "F7", "F82"]
+# Broadened lint surface: pycodestyle errors (E), pyflakes (F), import sorting
+# (I), and pyupgrade (UP). The previous unused-import / sorting backlog has been
+# cleared with `ruff check --fix` plus manual fixes.
+select = ["E", "F", "I", "UP"]

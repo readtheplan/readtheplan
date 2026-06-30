@@ -1,5 +1,12 @@
 """Terraform plan risk explainer."""
 
-__all__ = ["__version__"]
+from readtheplan.plan import PlanSummary, ResourceChange, analyze
+
+__all__ = [
+    "__version__",
+    "PlanSummary",
+    "ResourceChange",
+    "analyze",
+]
 
 __version__ = "0.3.0"

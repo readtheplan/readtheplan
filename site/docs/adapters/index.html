@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Developer guide for writing new IaC adapters for readtheplan — BaseAdapter interface, step-by-step Pulumi example, registration, and testing." />
+    <title>Adapters — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/docs/adapters/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — IaC adapters developer guide" />
+    <meta property="og:description" content="How to write a new IaC adapter for Pulumi, CDK, or any other infrastructure-as-code tool." />
+    <meta property="og:url" content="https://readtheplan.dev/docs/adapters/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="readtheplan — adapters developer guide" />
+    <meta name="twitter:description" content="Write a new IaC adapter for readtheplan. Covers BaseAdapter, detection, testing, and PR submission." />
+    <link rel="stylesheet" href="/matrix.css" />
+  </head>
+  <body>
+    <div class="progress-bar" id="progress-bar"></div>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home">
+        <span class="brand-mark" aria-hidden="true">rtp</span>
+        <span>readtheplan</span>
+      </a>
+      <nav class="navlinks gc" aria-label="Project links">
+        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
+      </nav>
+      <nav class="navlinks gc" aria-label="Page links">
+        <a href="/#resources">Tools</a>
+        <a href="/docs/">Docs</a>
+        <a href="/demo/">Demo</a>
+        <a href="/playground/">Playground</a>
+        <a href="/#setup">Setup</a>
+      </nav>
+      <div class="version-cell gc">v0.3.0</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / Adapters</p>
+          <h1 id="title">Adding a new IaC adapter.</h1>
+          <p class="intro-copy">
+            readtheplan's adapter system lets you plug in support for any infrastructure-as-code tool — Pulumi, CDK,
+            Crossplane, or custom in-house tooling. This guide walks through the full process, from the
+            <code>BaseAdapter</code> interface to an end-to-end worked example.
+          </p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="what-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="what-title">What are adapters?</h2>
+          <p style="color:var(--muted);margin:12px 0 0">
+            An adapter translates a specific IaC tool's plan output into readtheplan's internal
+            <code>ResourceChange</code> representation so the rest of the engine — risk classification, compliance
+            mapping, agent gating, evidence envelopes — works identically regardless of the source tool.
+          </p>
+          <p style="color:var(--muted);margin:12px 0 0">
+            Today readtheplan ships with <strong>CloudFormation</strong> and <strong>Kubernetes</strong> adapters. Adding a new adapter means
+            Terraform and OpenTofu already work natively through <code>terraform show -json</code> output, but tools like Pulumi, AWS CDK, Crossplane, or Terragrunt need an adapter.
+          </p>
+
+          <h3 style="margin-top:28px;color:var(--accent)">Why write one?</h3>
+          <ul style="color:var(--muted);margin:8px 0 0;padding-left:20px">
+            <li style="margin-bottom:6px">You use Pulumi or CDK and want readtheplan's risk analysis on your plans.</li>
+            <li style="margin-bottom:6px">You have a custom IaC tool and want compliance gates and audit evidence.</li>
+            <li style="margin-bottom:6px">You want to extend the type-map for CloudFormation or Kubernetes resources not yet covered.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="interface-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="interface-title">The BaseAdapter interface</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Every adapter extends the abstract <code>BaseAdapter</code> class from
+            <code>src/readtheplan/adapters/base.py</code>. Four members are required:
+          </p>
+
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>class BaseAdapter(ABC):
+
+    @property
+    @abstractmethod
+    def adapter_name(self) -> str:
+        """Unique name, e.g. 'pulumi' or 'cdk'."""
+        pass
+
+    @abstractmethod
+    def can_handle(self, input_data: dict) -> bool:
+        """Return True if input_data matches this tool's format."""
+        pass
+
+    @abstractmethod
+    def extract_changes(self, input_data: dict) -> list[dict]:
+        """Flatten the plan into a list of per-resource dicts."""
+        pass
+
+    @abstractmethod
+    def normalize_change(self, raw_change: dict) -> ResourceChange:
+        """Map one raw change dict to a ResourceChange dataclass."""
+        pass</code></pre>
+
+          <h3 style="margin-top:24px;color:var(--accent)"><code>adapter_name</code></h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            A short, kebab-case identifier unique to your adapter. Used as the registration key and
+            surfaced in agent-gate output under the <code>adapter</code> field. Example: <code>"pulumi"</code>,
+            <code>"aws-cdk"</code>, <code>"crossplane"</code>.
+          </p>
+
+          <h3 style="margin-top:24px;color:var(--accent)"><code>can_handle(input_data) -> bool</code></h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            Probe the raw plan dictionary for format-specific signatures. Be strict enough that you
+            don't false-positive on other tools' JSON. CloudFormation checks for a <code>"Changes"</code> list or <code>"old_template"</code> and <code>"new_template"</code>; Kubernetes checks for <code>"old_manifests"</code> and <code>"new_manifests"</code>, or a <code>"resources"</code> array with manifest kinds.
+          </p>
+
+          <h3 style="margin-top:24px;color:var(--accent)"><code>extract_changes(input_data) -> list[dict]</code></h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            Extract a flat list of per-resource change dictionaries from the raw plan JSON. Each element
+            is an <strong>adapter-normalized</strong> dict — it doesn't have to be a <code>ResourceChange</code>
+            yet, but it should contain all the fields <code>normalize_change</code> needs (action, resource type,
+            address, replacement metadata, etc.).
+          </p>
+          <p style="color:var(--muted);margin:8px 0 0">
+            You can also attach an optional <code>"_metadata"</code> dict (containing
+            <code>"before"</code> and <code>"after"</code> properties) that the rules engine uses for
+            deep resource-specific escalation (e.g., IAM policy diff, S3 public access check, RDS version bump).
+          </p>
+
+          <h3 style="margin-top:24px;color:var(--accent)"><code>normalize_change(raw_change) -> ResourceChange</code></h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            Convert one extracted change dict into a <code>ResourceChange</code> dataclass:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>@dataclass(frozen=True)
+class ResourceChange:
+    address: str        # Logical or physical resource identifier
+    resource_type: str  # Normalized type, e.g. "aws_s3_bucket"
+    actions: tuple      # One or more of ("create", "update", "delete")
+    risk: str           # "safe" | "review" | "dangerous" | "irreversible"
+    explanation: str    # Human-readable reason for the risk level</code></pre>
+          <p style="color:var(--muted);margin:12px 0 0">
+            The <code>actions</code> tuple drives the risk taxonomy:
+          </p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;margin-top:12px">
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #34d399">
+              <strong style="color:#34d399;font-size:13px">("create",)</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:13px">→ <strong>safe</strong></p>
+            </div>
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #fbbf24">
+              <strong style="color:#fbbf24;font-size:13px">("update",)</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:13px">→ <strong>review</strong></p>
+            </div>
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #f97316">
+              <strong style="color:#f97316;font-size:13px">("delete", "create")</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:13px">→ <strong>dangerous</strong></p>
+            </div>
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;border-left:3px solid #ef4444">
+              <strong style="color:#ef4444;font-size:13px">("delete",)</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:13px">→ <strong>irreversible</strong></p>
+            </div>
+          </div>
+          <p style="color:var(--muted);margin:12px 0 0">
+            The <code>analyze()</code> template method on <code>BaseAdapter</code> calls
+            <code>extract_changes</code> → iterates → <code>normalize_change</code> → optionally
+            <code>_apply_resource_rules</code> for deep risk escalation. You generally don't override
+            <code>analyze()</code> — just provide the four abstract members.
+          </p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="stepbystep-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="stepbystep-title">Worked example: Pulumi adapter</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Pulumi exports plan data as JSON via <code>pulumi preview --show-secrets --json</code>.
+            The output has a <code>"steps"</code> array where each step describes a resource change.
+            Below is a complete adapter implementation.
+          </p>
+
+          <h3 style="margin-top:24px;color:var(--accent)">1. Create the file</h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            Add a new file at <code>src/readtheplan/adapters/pulumi.py</code>:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:12px"><code>from __future__ import annotations
+
+from typing import Any
+
+from readtheplan.adapters.base import BaseAdapter
+from readtheplan.plan import ResourceChange
+
+
+class PulumiAdapter(BaseAdapter):
+
+    _TYPE_MAP = {
+        "aws:s3/bucket:Bucket":                "aws_s3_bucket",
+        "aws:rds/instance:Instance":           "aws_db_instance",
+        "aws:rds/cluster:Cluster":             "aws_rds_cluster",
+        "aws:iam/role:Role":                   "aws_iam_role",
+        "aws:iam/policy:Policy":               "aws_iam_policy",
+        "aws:kms/key:Key":                     "aws_kms_key",
+        "aws:lambda/function:Function":        "aws_lambda_function",
+        "aws:ecs/service:Service":             "aws_ecs_service",
+        "aws:ec2/securityGroup:SecurityGroup": "aws_security_group",
+    }
+
+    @property
+    def adapter_name(self) -> str:
+        return "pulumi"
+
+    def can_handle(self, input_data: dict[str, Any]) -> bool:
+        # Pulumi deployments always have a "steps" key with resource ops
+        if "steps" in input_data and isinstance(input_data["steps"], list):
+            return len(input_data["steps"]) > 0
+        return False
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        changes = []
+        for step in input_data.get("steps", []):
+            op = step.get("op", "").upper()
+            urn = step.get("urn", "")
+            # URN format: urn:pulumi:stack::project::type::name
+            parts = urn.split("::")
+            resource_type = parts[3] if len(parts) >= 4 else "Unknown"
+            logical_id = parts[-1] if parts else urn
+
+            # Extract before/after properties from detailed diff
+            metadata = {}
+            if "diffs" in step and "detailedDiff" in step.get("detailedDiff", {}):
+                metadata = {
+                    "before": step.get("oldState", {}).get("inputs", {}),
+                    "after": step.get("newState", {}).get("inputs", {}),
+                }
+
+            changes.append({
+                "Action": op,
+                "LogicalResourceId": logical_id,
+                "ResourceType": resource_type,
+                "urn": urn,
+                "_metadata": metadata if metadata else None,
+            })
+        return changes
+
+    def normalize_change(self, raw: dict[str, Any]) -> ResourceChange:
+        action = raw.get("Action", "UNKNOWN")
+        resource_type = raw.get("ResourceType", "Unknown")
+        logical_id = raw.get("LogicalResourceId", "&lt;unknown&gt;")
+        urn = raw.get("urn", "")
+
+        # Map Pulumi op codes to risk/actions
+        risk = "review"
+        actions = ("unknown",)
+        explanation = f"Pulumi action '{action}' requires review."
+
+        if action == "CREATE":
+            risk = "safe"
+            actions = ("create",)
+            explanation = "Pulumi will create this resource."
+        elif action == "UPDATE":
+            risk = "review"
+            actions = ("update",)
+            explanation = "Pulumi will update this resource in place."
+        elif action == "DELETE":
+            risk = "irreversible"
+            actions = ("delete",)
+            explanation = "Pulumi will delete this resource."
+        elif action == "DELETE-REPLACE":
+            risk = "dangerous"
+            actions = ("delete", "create")
+            explanation = "Pulumi will replace this resource (destroy and recreate)."
+        elif action == "CREATE-REPLACE":
+            risk = "dangerous"
+            actions = ("delete", "create")
+            explanation = "Pulumi will replace this resource (create then destroy)."
+        elif action == "READ":
+            risk = "safe"
+            actions = ("read",)
+            explanation = "Pulumi will read an existing resource."
+
+        normalized_type = self._normalize_resource_type(resource_type)
+        address = urn if urn else logical_id
+
+        return ResourceChange(
+            address=address,
+            resource_type=normalized_type,
+            actions=actions,
+            risk=risk,
+            explanation=explanation,
+        )
+
+    def _normalize_resource_type(self, pulumi_type: str) -> str:
+        if pulumi_type in self._TYPE_MAP:
+            return self._TYPE_MAP[pulumi_type]
+        if not pulumi_type or not isinstance(pulumi_type, str):
+            return "unknown"
+        # Fallback: aws:s3/bucket:Bucket -> aws_s3_bucket
+        return pulumi_type.replace(":", "_").rsplit("/", 1)[-1].lower()</code></pre>
+
+          <h3 style="margin-top:28px;color:var(--accent)">2. Register the adapter</h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            Open <code>src/readtheplan/adapters/__init__.py</code> and add your import and registration call:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:12px"><code>from readtheplan.adapters.pulumi import PulumiAdapter
+
+# ... existing registry code ...
+
+register_adapter(PulumiAdapter())</code></pre>
+          <p style="color:var(--muted);margin:8px 0 0">
+            The <code>register_adapter()</code> call makes the adapter available to
+            <code>detect_adapter()</code>, which iterates the registry and returns the first adapter
+            whose <code>can_handle()</code> returns <code>True</code>.
+          </p>
+
+          <h3 style="margin-top:28px;color:var(--accent)">3. Wire the CLI (optional but recommended)</h3>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            If your adapter should have its own CLI subcommand (like <code>readtheplan cloudformation</code> or <code>readtheplan kubernetes</code>),
+            add it to the CLI entry point. The dedicated handler should load the JSON, call <code>detect_adapter()</code>, verify the adapter type, and invoke its analyzer. The general <code>analyze</code> and <code>agent-gate</code> commands remain Terraform/OpenTofu-specific.
+          </p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="detection-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="detection-title">How adapters register &amp; auto-detect</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            The module <code>src/readtheplan/adapters/__init__.py</code> maintains an in-memory
+            registry — a <code>dict[str, BaseAdapter]</code> keyed by <code>adapter_name</code>.
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>_registry: dict[str, BaseAdapter] = {}
+
+def register_adapter(adapter: BaseAdapter) -> None:
+    _registry[adapter.adapter_name] = adapter
+
+def get_adapter(name: str) -&gt; BaseAdapter:
+    return _registry[name]
+
+def detect_adapter(input_data: dict) -&gt; BaseAdapter | None:
+    for adapter in _registry.values():
+        if adapter.can_handle(input_data):
+            return adapter
+    return None</code></pre>
+          <p style="color:var(--muted);margin:12px 0 0">
+            The flow works as follows:
+          </p>
+          <ol style="color:var(--muted);margin:8px 0 0;padding-left:20px">
+            <li style="margin-bottom:6px">At import time, each adapter module is loaded and calls <code>register_adapter(MyAdapter())</code>.</li>
+            <li style="margin-bottom:6px">When a dedicated adapter command runs, its handler loads the JSON and calls <code>detect_adapter(data)</code>.</li>
+            <li style="margin-bottom:6px"><code>detect_adapter</code> iterates every registered adapter, calling <code>can_handle(data)</code> on each.</li>
+            <li style="margin-bottom:6px">The handler verifies the detected adapter type, then calls that adapter's analyzer. The first registry match wins, so order matters if two adapters claim the same input.</li>
+          </ol>
+          <p style="color:var(--muted);margin:12px 0 0">
+            <strong>Important:</strong> Make your <code>can_handle()</code> check precise enough that it
+            won't accidentally claim Terraform, CloudFormation, or Kubernetes output. When in doubt, check for
+            multiple format-specific keys. Order of registration in <code>__init__.py</code> determines
+            priority.
+          </p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="testing-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="testing-title">Testing your adapter</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Follow the test patterns in <code>tests/test_cfn_adapter.py</code> and <code>tests/test_k8s_adapter.py</code>. Create a new
+            file <code>tests/test_pulumi_adapter.py</code>. Every adapter should cover:
+          </p>
+
+          <h3 style="margin-top:20px;color:var(--accent)">Unit tests for <code>can_handle</code></h3>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>from readtheplan.adapters.pulumi import PulumiAdapter
+from readtheplan.adapters import detect_adapter
+
+def test_pulumi_can_handle():
+    adapter = PulumiAdapter()
+    data = {"steps": [{"op": "CREATE", "urn": "urn:pulumi:..."}]}
+    assert adapter.can_handle(data) is True
+
+def test_pulumi_rejects_cfn():
+    adapter = PulumiAdapter()
+    assert adapter.can_handle({"Changes": []}) is False
+    assert adapter.can_handle({}) is False</code></pre>
+
+          <h3 style="margin-top:24px;color:var(--accent)">Unit tests for <code>normalize_change</code></h3>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>def test_pulumi_normalize_create():
+    adapter = PulumiAdapter()
+    raw = {
+        "Action": "CREATE",
+        "LogicalResourceId": "my-bucket",
+        "ResourceType": "aws:s3/bucket:Bucket"
+    }
+    rc = adapter.normalize_change(raw)
+    assert rc.actions == ("create",)
+    assert rc.risk == "safe"
+    assert rc.resource_type == "aws_s3_bucket"
+
+def test_pulumi_normalize_delete_replace():
+    adapter = PulumiAdapter()
+    raw = {
+        "Action": "DELETE-REPLACE",
+        "LogicalResourceId": "my-role",
+        "ResourceType": "aws:iam/role:Role"
+    }
+    rc = adapter.normalize_change(raw)
+    assert rc.actions == ("delete", "create")
+    assert rc.risk == "dangerous"</code></pre>
+
+          <h3 style="margin-top:24px;color:var(--accent)">Integration test with <code>extract_changes</code> + <code>analyze</code></h3>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>def test_pulumi_analyze_rules_escalation():
+    adapter = PulumiAdapter()
+    data = {
+        "steps": [
+            {
+                "op": "DELETE",
+                "urn": "urn:pulumi:prod::app::aws:rds/instance:Instance::my-db",
+            }
+        ]
+    }
+    changes = adapter.analyze(data, tool_name="Pulumi")
+    rc = changes[0]
+    # The rules engine should escalate RDS deletion to irreversible
+    assert rc.risk == "irreversible"
+    assert "RDS" in rc.explanation</code></pre>
+
+          <h3 style="margin-top:24px;color:var(--accent)">Fixture-based tests</h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            Save a sample Pulumi preview JSON to <code>tests/fixtures/pulumi_preview_mixed.json</code>
+            and write a test that validates the full agent-gate contract:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>import json
+from pathlib import Path
+
+def test_pulumi_fixture_gate_contract():
+    fixture = Path("tests/fixtures/pulumi_preview_mixed.json")
+    data = json.loads(fixture.read_text())
+    adapter = PulumiAdapter()
+    changes = adapter.analyze(data, tool_name="Pulumi")
+    assert len(changes) &gt; 0
+    # Verify risk classifications on each change
+    for c in changes:
+        assert c.risk in ("safe", "review", "dangerous", "irreversible")</code></pre>
+
+          <h3 style="margin-top:24px;color:var(--accent)">Detection registration test</h3>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>def test_detect_pulumi_adapter():
+    data = {"steps": [{"op": "CREATE", "urn": "..."}]}
+    adapter = detect_adapter(data)
+    from readtheplan.adapters.pulumi import PulumiAdapter
+    assert isinstance(adapter, PulumiAdapter)</code></pre>
+
+          <p style="color:var(--muted);margin:16px 0 0">
+            Run all adapter tests with:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pytest tests/test_pulumi_adapter.py -v</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="pr-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="pr-title">Submitting an adapter as a PR</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Once your adapter is implemented and tested, open a pull request against the
+            <a href="https://github.com/readtheplan/readtheplan" style="color:var(--accent)">readtheplan repo</a>.
+            Follow these guidelines:
+          </p>
+
+          <h3 style="margin-top:20px;color:var(--accent)">Checklist</h3>
+          <ul style="color:var(--muted);margin:8px 0 0;padding-left:20px">
+            <li style="margin-bottom:6px">
+              <strong>One adapter per PR.</strong> If you're adding multiple adapters, submit them
+              separately for focused review.
+            </li>
+            <li style="margin-bottom:6px">
+              <strong>Include tests.</strong> All unit tests for <code>can_handle</code>,
+              <code>normalize_change</code>, and at least one integration test with
+              <code>extract_changes</code> + <code>analyze</code>.
+            </li>
+            <li style="margin-bottom:6px">
+              <strong>Include a fixture.</strong> A small, anonymized plan JSON in
+              <code>tests/fixtures/</code> for your tool, with a test that validates the
+              agent-gate contract.
+            </li>
+            <li style="margin-bottom:6px">
+              <strong>Update <code>__init__.py</code>.</strong> Import and register your adapter.
+              Add it to <code>__all__</code>.
+            </li>
+            <li style="margin-bottom:6px">
+              <strong>Update the type map.</strong> If your adapter maps resource types, include
+              coverage for the most common resources in your tool.
+            </li>
+            <li style="margin-bottom:6px">
+              <strong>No regressions.</strong> Run the full test suite before opening the PR:
+              <code>pytest</code>.
+            </li>
+          </ul>
+
+          <h3 style="margin-top:24px;color:var(--accent)">PR description template</h3>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>## Summary
+
+Adds a new adapter for [Tool Name] — [one-line description].
+
+## Changes
+
+- `src/readtheplan/adapters/[tool].py` — new adapter file
+- `src/readtheplan/adapters/__init__.py` — registration and export
+- `tests/test_[tool]_adapter.py` — unit and integration tests
+- `tests/fixtures/[tool]_sample.json` — example plan fixture
+
+## Testing
+
+- `pytest tests/test_[tool]_adapter.py -v` — all tests pass
+- `pytest` — full suite passes, no regressions
+
+## Adapter detail
+
+| Field          | Value            |
+|----------------|------------------|
+| `adapter_name` | `[tool]`         |
+| Input format   | `[tool] plan`    |
+| CLI command    | `detect` / custom |
+
+## Type map coverage
+
+Lists the resource types currently mapped in the adapter.</code></pre>
+
+          <h3 style="margin-top:24px;color:var(--accent)">Review expectations</h3>
+          <p style="color:var(--muted);margin:8px 0 0">
+            Maintainers will review:
+          </p>
+          <ul style="color:var(--muted);margin:8px 0 0;padding-left:20px">
+            <li style="margin-bottom:6px"><strong>Detection accuracy</strong> — does <code>can_handle</code> correctly identify your tool's format without false-positives?</li>
+            <li style="margin-bottom:6px"><strong>Risk correctness</strong> — are create/update/delete/replace mapped to the right risk tiers?</li>
+            <li style="margin-bottom:6px"><strong>Type normalization</strong> — are resource types mapped to the canonical <code>aws_*</code> naming convention?</li>
+            <li style="margin-bottom:6px"><strong>Test coverage</strong> — are edge cases (unknown actions, missing fields, empty plans) covered?</li>
+            <li style="margin-bottom:6px"><strong>Fixture quality</strong> — is the fixture realistic and representative?</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="ref-title" style="padding-bottom:80px">
+        <div class="gc utility-panel-wide">
+          <h2 id="ref-title">Reference</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px;margin-top:16px">
+            <a href="https://github.com/readtheplan/readtheplan/blob/main/src/readtheplan/adapters/base.py" class="card" style="display:block;padding:20px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+              <strong style="color:var(--accent)">BaseAdapter source →</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Abstract base class with full docstrings.</p>
+            </a>
+            <a href="https://github.com/readtheplan/readtheplan/blob/main/src/readtheplan/adapters/cloudformation.py" class="card" style="display:block;padding:20px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+              <strong style="color:var(--accent)">CloudFormation adapter →</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Reference implementation to study.</p>
+            </a>
+            <a href="https://github.com/readtheplan/readtheplan/blob/main/src/readtheplan/adapters/kubernetes.py" class="card" style="display:block;padding:20px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+              <strong style="color:var(--accent)">Kubernetes adapter</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Manifest diff implementation and kind mapping.</p>
+            </a>
+            <a href="/docs/cli/" class="card" style="display:block;padding:20px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+              <strong style="color:var(--accent)">CLI Reference →</strong>
+              <p style="margin:4px 0 0;color:var(--muted);font-size:14px">Every command and flag explained.</p>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
