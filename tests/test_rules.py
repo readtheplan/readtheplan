@@ -5,6 +5,74 @@ from pathlib import Path
 from typing import Any
 
 from readtheplan.plan import analyze_plan_file
+from readtheplan.rules import aws as aws_rules
+from readtheplan.rules._shared import _CROSS_CUTTING, _RULE_REGISTRY
+
+_EXPECTED_RULE_FUNCTIONS = {
+    "aws_db_instance": "_rds_candidates",
+    "aws_rds_cluster": "_rds_candidates",
+    "aws_s3_bucket": "_s3_candidates",
+    "aws_s3_bucket_acl": "_s3_candidates",
+    "aws_s3_bucket_policy": "_s3_candidates",
+    "aws_kms_key": "_kms_candidates",
+    "aws_iam_role": "_iam_candidates",
+    "aws_iam_policy": "_iam_candidates",
+    "aws_iam_role_policy": "_iam_candidates",
+    "aws_route53_zone": "_route53_candidates",
+    "aws_eks_node_group": "_eks_node_group_candidates",
+    "aws_ecs_service": "_ecs_service_candidates",
+    "aws_lb": "_lb_candidates",
+    "aws_elb": "_lb_candidates",
+    "aws_alb": "_lb_candidates",
+    "aws_lb_listener": "_lb_candidates",
+    "aws_lb_listener_rule": "_lb_candidates",
+    "aws_lb_target_group": "_lb_candidates",
+    "aws_lb_target_group_attachment": "_lb_candidates",
+    "aws_lambda_function": "_lambda_candidates",
+    "aws_lambda_alias": "_lambda_candidates",
+    "aws_lambda_event_source_mapping": "_lambda_candidates",
+    "aws_security_group": "_security_group_candidates",
+    "aws_security_group_rule": "_security_group_candidates",
+    "aws_vpc_security_group_ingress_rule": "_security_group_candidates",
+    "aws_vpc_security_group_egress_rule": "_security_group_candidates",
+    "google_compute_instance": "_gcp_compute_instance_candidates",
+    "google_container_cluster": "_gcp_container_cluster_candidates",
+    "google_sql_database_instance": "_gcp_sql_database_instance_candidates",
+    "google_storage_bucket": "_gcp_storage_bucket_candidates",
+    "google_compute_firewall": "_gcp_compute_firewall_candidates",
+    "azurerm_virtual_machine": "_azurerm_virtual_machine_candidates",
+    "azurerm_kubernetes_cluster": "_azurerm_kubernetes_cluster_candidates",
+    "azurerm_storage_account": "_azurerm_storage_account_candidates",
+    "azurerm_role_assignment": "_azurerm_role_assignment_candidates",
+    "azurerm_network_security_group": "_azurerm_network_security_candidates",
+    "azurerm_network_security_rule": "_azurerm_network_security_candidates",
+    "kubernetes_deployment": "_k8s_deployment_candidates",
+    "kubernetes_service": "_k8s_service_candidates",
+    "kubernetes_ingress": "_k8s_service_candidates",
+    "kubernetes_secret": "_k8s_secret_candidates",
+    "kubernetes_namespace": "_k8s_namespace_candidates",
+    "kubernetes_cluster_role": "_k8s_rbac_candidates",
+    "kubernetes_cluster_role_binding": "_k8s_rbac_candidates",
+    "kubernetes_role_binding": "_k8s_rbac_candidates",
+    "kubernetes_network_policy": "_k8s_network_policy_candidates",
+}
+
+
+def test_rule_registry_has_complete_provider_coverage() -> None:
+    """The registry contains every covered, real IaC provider resource type."""
+    assert set(_RULE_REGISTRY) == set(_EXPECTED_RULE_FUNCTIONS)
+
+    for resource_type, expected_function in _EXPECTED_RULE_FUNCTIONS.items():
+        registered = _RULE_REGISTRY[resource_type]
+        assert registered, f"{resource_type} has no registered rule functions"
+        assert expected_function in {function.__name__ for function in registered}
+
+    expected_cross_cutting = {
+        aws_rules._platform_service_candidates,
+        aws_rules._network_topology_candidates,
+        aws_rules._observability_candidates,
+    }
+    assert expected_cross_cutting <= set(_CROSS_CUTTING)
 
 
 def _write_plan(tmp_path: Path, resource_change: dict[str, Any]) -> Path:
@@ -930,3 +998,29 @@ def test_k8s_network_policy_create_is_review(tmp_path: Path) -> None:
     summary = analyze_plan_file(plan)
     assert summary.resource_changes[0].risk == "review"
     assert "change a NetworkPolicy" in summary.resource_changes[0].explanation
+
+
+def test_registry_all_expected_rules_registered() -> None:
+    """Verify every expected resource type has a registered rule function."""
+    for rt, expected_func in _EXPECTED_RULE_FUNCTIONS.items():
+        assert rt in _RULE_REGISTRY, (
+            f"Resource type {rt!r} expected rule function {expected_func} "
+            f"but is missing from _RULE_REGISTRY"
+        )
+        funcs = _RULE_REGISTRY[rt]
+        names = [f.__name__ for f in funcs]
+        assert expected_func in names, (
+            f"Resource type {rt!r} has {names} but expected {expected_func}"
+        )
+
+
+def test_cross_cutting_rules_registered() -> None:
+    """Verify the three cross-cutting rule functions are in _CROSS_CUTTING."""
+    expected = {
+        "_platform_service_candidates",
+        "_network_topology_candidates",
+        "_observability_candidates",
+    }
+    actual = {f.__name__ for f in _CROSS_CUTTING}
+    missing = expected - actual
+    assert not missing, f"Cross-cutting rules missing from _CROSS_CUTTING: {missing}"

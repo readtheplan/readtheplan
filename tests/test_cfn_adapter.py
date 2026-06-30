@@ -1,8 +1,9 @@
 import json
-import pytest
 from pathlib import Path
-from readtheplan.adapters.cloudformation import CloudFormationAdapter, analyze_cloudformation
+
 from readtheplan.adapters import detect_adapter
+from readtheplan.adapters.cloudformation import CloudFormationAdapter, analyze_cloudformation
+
 
 def test_cfn_adapter_can_handle_change_set():
     adapter = CloudFormationAdapter()
@@ -223,8 +224,8 @@ def test_security_group_maps_correctly() -> None:
     naive fallback aws_ec2_securitygroup that bypasses security rules."""
     adapter = CloudFormationAdapter()
     assert adapter._normalize_resource_type("AWS::EC2::SecurityGroup") == "aws_security_group"
-    assert adapter._normalize_resource_type("AWS::EC2::SecurityGroupIngress") == "aws_security_group_rule"
-    assert adapter._normalize_resource_type("AWS::EC2::SecurityGroupEgress") == "aws_security_group_rule"
+    assert adapter._normalize_resource_type("AWS::EC2::SecurityGroupIngress") == "aws_security_group_rule"  # noqa: E501
+    assert adapter._normalize_resource_type("AWS::EC2::SecurityGroupEgress") == "aws_security_group_rule"  # noqa: E501
 
 
 def test_all_type_map_values_match_rules_engine() -> None:

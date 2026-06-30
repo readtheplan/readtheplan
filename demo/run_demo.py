@@ -21,7 +21,7 @@ def risk_icon(risk: str) -> str:
 
 
 def gate_label(risk: str) -> str:
-    return {"safe": "PROCEED", "review": "WARN", "dangerous": "WARN", "irreversible": "BLOCK"}.get(risk, "UNKNOWN")
+    return {"safe": "PROCEED", "review": "WARN", "dangerous": "WARN", "irreversible": "BLOCK"}.get(risk, "UNKNOWN")  # noqa: E501
 
 
 def main() -> int:

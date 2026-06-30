@@ -5,10 +5,13 @@ from typing import Any
 from readtheplan.rules._shared import (
     RuleResult,
     _attribute_changed,
+    register_rule,
 )
 
 
+@register_rule("azurerm_virtual_machine")
 def _azurerm_virtual_machine_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -67,7 +70,9 @@ def _azurerm_virtual_machine_candidates(
 
 
 
+@register_rule("azurerm_kubernetes_cluster")
 def _azurerm_kubernetes_cluster_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -111,7 +116,9 @@ def _azurerm_kubernetes_cluster_candidates(
 
 
 
+@register_rule("azurerm_storage_account")
 def _azurerm_storage_account_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -156,8 +163,11 @@ def _azurerm_storage_account_candidates(
 
 
 
+@register_rule("azurerm_role_assignment")
 def _azurerm_role_assignment_candidates(
+    resource_type: str,
     action_set: set[str],
+    change: dict[str, Any],
 ) -> list[RuleResult]:
     if "delete" in action_set and "create" in action_set:
         return [
@@ -198,6 +208,7 @@ def _azurerm_role_assignment_candidates(
 
 
 
+@register_rule("azurerm_network_security_group", "azurerm_network_security_rule")
 def _azurerm_network_security_candidates(
     resource_type: str,
     action_set: set[str],

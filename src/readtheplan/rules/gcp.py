@@ -7,10 +7,13 @@ from readtheplan.rules._shared import (
     _attribute_changed,
     _before_value,
     _major_version_changed,
+    register_rule,
 )
 
 
+@register_rule("google_compute_instance")
 def _gcp_compute_instance_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -80,7 +83,9 @@ def _gcp_compute_instance_candidates(
 
 
 
+@register_rule("google_container_cluster")
 def _gcp_container_cluster_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -125,7 +130,9 @@ def _gcp_container_cluster_candidates(
 
 
 
+@register_rule("google_sql_database_instance")
 def _gcp_sql_database_instance_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -182,7 +189,9 @@ def _gcp_sql_database_instance_candidates(
 
 
 
+@register_rule("google_storage_bucket")
 def _gcp_storage_bucket_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
@@ -241,7 +250,9 @@ def _gcp_storage_bucket_candidates(
 
 
 
+@register_rule("google_compute_firewall")
 def _gcp_compute_firewall_candidates(
+    resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:

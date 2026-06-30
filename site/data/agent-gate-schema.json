@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://readtheplan.dev/data/agent-gate-schema.json",
+  "title": "readtheplan Agent Gate Contract",
+  "description": "The deterministic agent-gate contract emitted by readtheplan. Coding agents parse this JSON to decide whether to proceed, warn, or block an IaC operation.",
+  "type": "object",
+  "required": [
+    "schema",
+    "decision",
+    "risk",
+    "required_checks",
+    "allowed_next_actions",
+    "prohibited_next_actions",
+    "reason",
+    "pr_comment",
+    "evidence_checklist",
+    "auditor_summary",
+    "risk_counts"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "rtp-agent-gate-v1",
+      "description": "Schema version identifier. Always 'rtp-agent-gate-v1'. Consumers MUST verify this value before parsing any other field."
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "proceed",
+        "warn",
+        "block"
+      ],
+      "description": "The gate decision. This is the ONLY field an agent may branch on. 'proceed' means no review required, 'warn' means peer review + evidence required, 'block' means human approval + security review + evidence required before merge or apply."
+    },
+    "risk": {
+      "type": "string",
+      "enum": [
+        "safe",
+        "review",
+        "dangerous",
+        "irreversible"
+      ],
+      "description": "The highest risk tier found across all resource changes in the plan."
+    },
+    "required_checks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^rtp\\.(check|control)\\.[A-Za-z0-9_.]+$"
+      },
+      "description": "Ordered list of check IDs that must be completed before apply. Prefix 'rtp.check.' indicates built-in checks; 'rtp.control.<framework>.' indicates framework-specific controls.",
+      "uniqueItems": true
+    },
+    "allowed_next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Actions the agent is permitted to take next, based on the decision. Varies by decision tier."
+    },
+    "prohibited_next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Actions the agent MUST NOT take, based on the decision. If a prohibited action is attempted, the agent must stop and request human intervention."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable explanation of the decision, including which changes triggered it and why."
+    },
+    "pr_comment": {
+      "type": "string",
+      "description": "Pre-formatted Markdown string suitable for posting as a pull-request comment. Contains decision, reason, risk tier, change count, required checks, and up to 5 flagged resource addresses with explanations."
+    },
+    "evidence_checklist": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Audit-evidence checklist items that must be satisfied for compliance. The checklist is decision-aware \u2014 block decisions include more items than safe decisions.",
+      "uniqueItems": true
+    },
+    "auditor_summary": {
+      "type": "string",
+      "description": "One-line summary suitable for audit logs. Contains total resource-change count, decision, max risk, and per-tier risk counts."
+    },
+    "risk_counts": {
+      "type": "object",
+      "properties": {
+        "safe": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of resource changes classified as safe."
+        },
+        "review": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of resource changes classified as review-tier."
+        },
+        "dangerous": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of resource changes classified as dangerous."
+        },
+        "irreversible": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of resource changes classified as irreversible."
+        }
+      },
+      "required": [
+        "safe",
+        "review",
+        "dangerous",
+        "irreversible"
+      ],
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Unknown-risk tier counts, present only when the rules engine encounters an unrecognized risk label."
+      },
+      "description": "Per-tier counts of all resource changes in the analyzed plan."
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema": "rtp-agent-gate-v1",
+      "decision": "block",
+      "risk": "dangerous",
+      "required_checks": [
+        "rtp.check.change_record",
+        "rtp.check.evidence_packet",
+        "rtp.check.human_approval",
+        "rtp.check.security_review"
+      ],
+      "allowed_next_actions": [
+        "post_pr_comment",
+        "request_human_review",
+        "collect_evidence",
+        "open_change_record"
+      ],
+      "prohibited_next_actions": [
+        "merge",
+        "apply",
+        "auto_approve",
+        "auto_apply"
+      ],
+      "reason": "Block because 1 Terraform change(s) are dangerous or irreversible; human approval, change evidence, and security review are required before merge or apply.",
+      "pr_comment": "**readtheplan agent gate:** BLOCK\n\nBlock because 1 Terraform change(s) are dangerous or irreversible; human approval, change evidence, and security review are required before merge or apply.\n\n- Highest risk: `dangerous`\n- Resource changes: `3`\n- Required checks: `rtp.check.change_record, rtp.check.evidence_packet, rtp.check.human_approval, rtp.check.security_review`\n- Flagged resources:\n  - `aws_db_instance.main` `dangerous`: Terraform will replace this RDS instance. Confirm snapshots, restore path, endpoint changes, and maintenance-window impact.",
+      "evidence_checklist": [
+        "Record the local Terraform plan JSON path or CI artifact reference.",
+        "Attach the readtheplan JSON summary or PR comment to the change record.",
+        "Record reviewer identity, timestamp, and approval decision.",
+        "Document mitigation or rollback notes for review-tier changes.",
+        "Capture explicit human approval before merge, apply, or auto-approval.",
+        "Document recovery, backup, or restore evidence for dangerous or irreversible changes."
+      ],
+      "auditor_summary": "readtheplan evaluated 3 Terraform resource change(s). The agent gate decision is block with maximum risk dangerous. Risk counts: safe=1, review=1, dangerous=1, irreversible=0.",
+      "risk_counts": {
+        "safe": 1,
+        "review": 1,
+        "dangerous": 1,
+        "irreversible": 0
+      }
+    }
+  ]
+}

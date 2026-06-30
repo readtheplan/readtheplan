@@ -8,7 +8,6 @@ from readtheplan.evolution import EvolutionEngine
 from readtheplan.plan import PlanSummary, ResourceChange
 from readtheplan.rules import RISK_ORDER
 
-
 SCHEMA = "rtp-agent-gate-v1"
 SCHEMA_KERNEL = "rtp-kernel-v1"
 

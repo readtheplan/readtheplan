@@ -2,9 +2,95 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from importlib.metadata import entry_points
 from typing import Any
 
+# ── Rule registry ──────────────────────────────────────────────────────
+# Plugin authors can import `register_rule` from `readtheplan.rules` and
+# register their own candidate functions.  Each function must have the
+# signature: ``(resource_type: str, action_set: set[str], change: dict)
+# -> list[RuleResult]``.
+
+_RULE_REGISTRY: dict[str, list[Callable[..., list[RuleResult]]]] = {}
+"""Exact resource-type → list of rule functions.  All registered functions
+accumulate (no short-circuit).  See also ``_CROSS_CUTTING``."""
+
+_CROSS_CUTTING: list[Callable[..., list[RuleResult]]] = []
+"""Functions that run **for every resource type**.  They self-filter
+internally by checking the ``resource_type`` prefix.  Currently holds the
+AWS platform/network/observability candidate functions."""
+
+
+# ── Plugin provenance ──────────────────────────────────────────────────
+# Tracks the "current" provenance source while a plugin's entry point is being
+# loaded, so any rules it registers are attributed to that plugin rather than to
+# the default "builtin".  Builtin rules register at import time, when the source
+# is still the default, so they remain "builtin".
+RULES_ENTRY_POINT_GROUP = "readtheplan.rules"
+
+_current_source: str = "builtin"
+
+
+@contextmanager
+def _source_context(source: str):
+    """Temporarily set the provenance source applied to rules registered inside
+    the ``with`` block (used by entry-point discovery)."""
+    global _current_source
+    previous = _current_source
+    _current_source = source
+    try:
+        yield
+    finally:
+        _current_source = previous
+
+
+def register_rule(*resource_types: str, source: str | None = None) -> Callable:
+    """Decorator that registers a candidate function for exact resource types.
+
+    Example::
+
+        @register_rule("aws_kms_key")
+        def _kms_candidates(
+            resource_type: str, action_set: set[str], change: dict,
+        ) -> list[RuleResult]:
+            ...
+
+    The registered function **must** accept ``(resource_type, action_set,
+    change)`` and return ``list[RuleResult]``.  If the underlying
+    implementation doesn't need the ``resource_type`` or ``change``
+    parameters, accept them and ignore them — the caller always passes
+    all three.
+    """
+    src = source if source is not None else _current_source
+
+    def decorator(func: Callable) -> Callable:
+        if not hasattr(func, "__rtp_source__"):
+            func.__rtp_source__ = src
+        for rt in resource_types:
+            bucket = _RULE_REGISTRY.setdefault(rt, [])
+            if func not in bucket:  # idempotent: re-discovery must not duplicate
+                bucket.append(func)
+        return func
+    return decorator
+
+
+def register_cross_cutting(func: Callable, *, source: str | None = None) -> Callable:
+    """Register a function that runs for every resource type.
+
+    The function self-filters by inspecting ``resource_type`` internally
+    (e.g. checking ``resource_type.startswith(\"aws_\")``).
+    """
+    if not hasattr(func, "__rtp_source__"):
+        func.__rtp_source__ = source if source is not None else _current_source
+    if func not in _CROSS_CUTTING:  # idempotent: re-discovery must not duplicate
+        _CROSS_CUTTING.append(func)
+    return func
+
+
+# ── Risk classification primitives ─────────────────────────────────────
 
 RISK_ORDER = {
     "safe": 0,
@@ -15,11 +101,12 @@ RISK_ORDER = {
 
 
 @dataclass(frozen=True)
-
-
 class RuleResult:
     risk: str
     explanation: str
+    #: Provenance — "builtin" for core rules, else the plugin (entry point) name
+    #: that registered the rule that produced this result.
+    source: str = "builtin"
 
 
 
@@ -70,6 +157,7 @@ def apply_resource_rules(
         result = RuleResult(
             risk=result.risk,
             explanation=result.explanation.replace("__TOOL__", tool_name),
+            source=result.source,
         )
     return result
 
@@ -81,96 +169,30 @@ def _rule_candidates(
     actions: tuple[str, ...],
     change: dict[str, Any],
 ) -> list[RuleResult]:
-    # Lazy imports to avoid circular dependency.
-    from readtheplan.rules import aws as _aws
-    from readtheplan.rules import gcp as _gcp
-    from readtheplan.rules import azure as _azure
-    from readtheplan.rules import k8s as _k8s
-
+    """Look up registered rule functions from the decorator-based registry."""
     action_set = set(actions)
-
-    # ── AWS: specific resource types ─────────────────────────────────
-    if resource_type in {"aws_db_instance", "aws_rds_cluster"}:
-        return _aws._rds_candidates(resource_type, action_set, change)
-    if resource_type in {"aws_s3_bucket", "aws_s3_bucket_acl", "aws_s3_bucket_policy"}:
-        return _aws._s3_candidates(resource_type, action_set, change)
-    if resource_type == "aws_kms_key":
-        return _aws._kms_candidates(action_set)
-    if resource_type in {"aws_iam_role", "aws_iam_policy", "aws_iam_role_policy"}:
-        return _aws._iam_candidates(resource_type, action_set, change)
-    if resource_type == "aws_route53_zone":
-        return _aws._route53_candidates(action_set)
-    if resource_type in {"aws_eks_node_group", "aws_eks_nodegroup"}:
-        return _aws._eks_node_group_candidates(action_set)
-    if resource_type == "aws_ecs_service":
-        return _aws._ecs_service_candidates(action_set, change)
-    if resource_type in {"aws_lb", "aws_elb", "aws_alb", "aws_nlb"}:
-        return _aws._lb_candidates(resource_type, action_set, change)
-    if resource_type in {"aws_lb_listener", "aws_lb_listener_rule"}:
-        return _aws._lb_candidates(resource_type, action_set, change)
-    if resource_type in {"aws_lb_target_group", "aws_lb_target_group_attachment"}:
-        return _aws._lb_candidates(resource_type, action_set, change)
-    if resource_type in {"aws_lambda_function", "aws_lambda_alias"}:
-        return _aws._lambda_candidates(resource_type, action_set, change)
-    if resource_type == "aws_lambda_event_source_mapping":
-        return _aws._lambda_candidates(resource_type, action_set, change)
-    if resource_type in {
-        "aws_security_group",
-        "aws_security_group_rule",
-        "aws_vpc_security_group_ingress_rule",
-        "aws_vpc_security_group_egress_rule",
-    }:
-        return _aws._security_group_candidates(resource_type, action_set, change)
-
-    # ── AWS: cross-cutting (broad type-prefix matching) ──────────────
     candidates: list[RuleResult] = []
-    candidates.extend(_aws._platform_service_candidates(resource_type, action_set, change))
-    candidates.extend(_aws._network_topology_candidates(resource_type, action_set, change))
-    candidates.extend(_aws._observability_candidates(resource_type, action_set, change))
 
-    # ── GCP: google_* resources ──────────────────────────────────────
-    if resource_type == "google_compute_instance":
-        candidates.extend(_gcp._gcp_compute_instance_candidates(action_set, change))
-    elif resource_type == "google_container_cluster":
-        candidates.extend(_gcp._gcp_container_cluster_candidates(action_set, change))
-    elif resource_type == "google_sql_database_instance":
-        candidates.extend(_gcp._gcp_sql_database_instance_candidates(action_set, change))
-    elif resource_type == "google_storage_bucket":
-        candidates.extend(_gcp._gcp_storage_bucket_candidates(action_set, change))
-    elif resource_type == "google_compute_firewall":
-        candidates.extend(_gcp._gcp_compute_firewall_candidates(action_set, change))
+    # Exact resource-type rules
+    for func in _RULE_REGISTRY.get(resource_type, []):
+        candidates.extend(_stamp_source(func, func(resource_type, action_set, change)))
 
-    # ── Azure: azurerm_* resources ───────────────────────────────────
-    if resource_type == "azurerm_virtual_machine":
-        candidates.extend(_azure._azurerm_virtual_machine_candidates(action_set, change))
-    elif resource_type == "azurerm_kubernetes_cluster":
-        candidates.extend(_azure._azurerm_kubernetes_cluster_candidates(action_set, change))
-    elif resource_type == "azurerm_storage_account":
-        candidates.extend(_azure._azurerm_storage_account_candidates(action_set, change))
-    elif resource_type == "azurerm_role_assignment":
-        candidates.extend(_azure._azurerm_role_assignment_candidates(action_set))
-    elif resource_type in {"azurerm_network_security_group", "azurerm_network_security_rule"}:
-        candidates.extend(_azure._azurerm_network_security_candidates(resource_type, action_set, change))
-
-    # ── Kubernetes: kubernetes_* resources ───────────────────────────
-    if resource_type == "kubernetes_deployment":
-        candidates.extend(_k8s._k8s_deployment_candidates(action_set))
-    elif resource_type in {"kubernetes_service", "kubernetes_ingress"}:
-        candidates.extend(_k8s._k8s_service_candidates(resource_type, action_set))
-    elif resource_type == "kubernetes_secret":
-        candidates.extend(_k8s._k8s_secret_candidates(action_set))
-    elif resource_type == "kubernetes_namespace":
-        candidates.extend(_k8s._k8s_namespace_candidates(action_set))
-    elif resource_type in {
-        "kubernetes_cluster_role",
-        "kubernetes_cluster_role_binding",
-        "kubernetes_role_binding",
-    }:
-        candidates.extend(_k8s._k8s_rbac_candidates(resource_type, action_set))
-    elif resource_type == "kubernetes_network_policy":
-        candidates.extend(_k8s._k8s_network_policy_candidates(action_set))
+    # Cross-cutting rules (run for every type, self-filter internally)
+    for func in _CROSS_CUTTING:
+        candidates.extend(_stamp_source(func, func(resource_type, action_set, change)))
 
     return candidates
+
+
+def _stamp_source(func: Callable, results: list[RuleResult]) -> list[RuleResult]:
+    """Tag each result with the registering function's provenance source unless
+    the result already declares a non-builtin source of its own."""
+    src = getattr(func, "__rtp_source__", "builtin")
+    if src == "builtin":
+        return results
+    return [r if r.source != "builtin" else replace(r, source=src) for r in results]
+
+
 
 
 
@@ -489,3 +511,44 @@ def _contains_public_principal(value: Any) -> bool:
     if isinstance(value, list):
         return any(item == "*" for item in value)
     return False
+
+# ── Import provider modules to trigger @register_rule decorators ──────
+# Placed at the end so ALL symbols (RuleResult, _after_value, etc.) are
+# defined before provider modules try to import them.
+from readtheplan.rules import aws, azure, gcp, k8s  # noqa: E402, F401
+
+
+def load_entry_point_rules() -> list[str]:
+    """Discover and register rules contributed by external packages via the
+    ``readtheplan.rules`` entry point group.
+
+    Each entry point is loaded with its provenance source set to the entry point
+    name, so any rules it registers are attributed to that plugin (see
+    :class:`RuleResult.source`). The entry point may be either a module (whose
+    ``@register_rule`` decorators fire on import) or a zero-arg callable hook.
+
+    Best-effort and idempotent: a failure in any single plugin is isolated and
+    never breaks import of the core package, and re-running never duplicates
+    registrations. Returns the list of discovered entry point names.
+    """
+    discovered: list[str] = []
+    try:
+        eps = entry_points(group=RULES_ENTRY_POINT_GROUP)
+    except Exception:
+        return discovered
+    for ep in eps:
+        try:
+            with _source_context(ep.name):
+                obj = ep.load()
+                if callable(obj):
+                    obj()
+            discovered.append(ep.name)
+        except Exception:
+            continue
+    return discovered
+
+
+# Discover external rule plugins (best-effort; idempotent). Builtins above are
+# already registered as "builtin"; entry points for them resolve to cached
+# modules and re-register nothing.
+load_entry_point_rules()
