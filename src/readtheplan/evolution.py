@@ -165,14 +165,23 @@ class EvolutionEngine:
         conn.close()
         return run_id
 
-    def record_incident(self, run_id: int, resource_type: str, risk: str, address: str, actions: list[str]) -> str:
+    def record_incident(
+        self,
+        run_id: int,
+        resource_type: str,
+        risk: str,
+        address: str,
+        actions: list[str],
+    ) -> str:
         """Record an individual incident and return its pattern hash."""
         pattern_hash = self._pattern_hash(resource_type, risk)
         conn = sqlite3.connect(self.db_path)
         conn.execute(
-            "INSERT INTO incidents (run_id, resource_type, risk, address, actions, pattern_hash) "
+            "INSERT INTO incidents (run_id, resource_type, risk, "
+            "address, actions, pattern_hash) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (run_id, resource_type, risk, address, json.dumps(actions), pattern_hash),
+            (run_id, resource_type, risk, address,
+             json.dumps(actions), pattern_hash),
         )
         conn.commit()
         conn.close()

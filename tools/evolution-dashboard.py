@@ -31,11 +31,13 @@ if not db_file.exists():
 conn = sqlite3.connect(db_file)
 try:
     df_runs = pd.read_sql_query(
-        "SELECT id, timestamp, decision, compliance_score, plan_summary, suggested_rules FROM runs ORDER BY id ASC", 
+        "SELECT id, timestamp, decision, compliance_score, "
+        "plan_summary, suggested_rules FROM runs ORDER BY id ASC",
         conn
     )
     df_patterns = pd.read_sql_query(
-        "SELECT resource_type, risk, incident_count, rule_status, rule_score, suggested_rule FROM patterns ORDER BY incident_count DESC", 
+        "SELECT resource_type, risk, incident_count, rule_status, "
+        "rule_score, suggested_rule FROM patterns ORDER BY incident_count DESC",
         conn
     )
 except Exception as e:
@@ -76,7 +78,10 @@ with col2:
     st.metric("Average Compliance", f"{df_runs['compliance_score'].mean():.1f}")
     blocked_count = len(df_runs[df_runs["decision"] == "block"])
     st.metric("Blocked Runs", blocked_count)
-    auto_merged = len(df_patterns[df_patterns["rule_status"] == "auto-merge"]) if not df_patterns.empty else 0
+    auto_merged = (
+        len(df_patterns[df_patterns["rule_status"] == "auto-merge"])
+        if not df_patterns.empty else 0
+    )
     st.metric("Auto-Merged Rules", auto_merged)
 
 st.subheader("Suggested Rules")
@@ -91,7 +96,10 @@ else:
             "pending": "⚪ pending",
         }.get(row["rule_status"], "⚪ pending")
         
-        with st.expander(f"Rule Suggestion: {row['resource_type']} ({row['risk']}) — {status_badge}"):
+        with st.expander(
+            f"Rule Suggestion: {row['resource_type']} ({row['risk']}) "
+            f"— {status_badge}"
+        ):
             st.write(f"**Incidents seen:** {row['incident_count']}")
             st.write(f"**Confidence / Rule Score:** {row['rule_score'] or 0.0:.1f}")
             st.code(row['suggested_rule'] or "", language="text")
@@ -100,11 +108,17 @@ else:
 
 st.subheader("Evolution Log")
 for idx, run in df_runs.iloc[::-1].iterrows():
-    st.write(f"**{run['timestamp'][:16]}** — Score: **{run['compliance_score']}** — {run['decision'].upper()}")
+    st.write(
+        f"**{run['timestamp'][:16]}** — Score: **{run['compliance_score']}** "
+        f"— {run['decision'].upper()}"
+    )
     try:
         summary_dict = json.loads(run["plan_summary"] or "{}")
         if "change_count" in summary_dict:
-            st.caption(f"• Changes: {summary_dict['change_count']} | path: {summary_dict.get('path', '')}")
+            st.caption(
+                f"• Changes: {summary_dict['change_count']} | "
+                f"path: {summary_dict.get('path', '')}"
+            )
     except Exception:  # plan_summary may be missing or malformed JSON; display is optional
         pass
 

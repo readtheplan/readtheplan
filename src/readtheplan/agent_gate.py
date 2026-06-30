@@ -61,8 +61,12 @@ def agent_gate_to_dict(
         "prohibited_next_actions": _prohibited_next_actions(decision),
         "reason": reason,
         "pr_comment": _pr_comment(summary, decision, risk, reason, required_checks),
-        "evidence_checklist": _evidence_checklist(summary, decision, catalog, tool_name=tool_name),
-        "auditor_summary": _auditor_summary(summary, decision, risk, counts, tool_name=tool_name),
+        "evidence_checklist": _evidence_checklist(
+            summary, decision, catalog, tool_name=tool_name
+        ),
+        "auditor_summary": _auditor_summary(
+            summary, decision, risk, counts, tool_name=tool_name
+        ),
         "risk_counts": counts,
         "mode": mode,
     }
@@ -156,11 +160,20 @@ def _handoff_protocol(evolution_result: dict) -> list[dict]:
     steps = []
     for r in rules:
         if r["status"] == "auto-merge":
-            steps.append({"action": "merge", "rule": r["pattern_hash"], "reason": "high confidence"})
+            steps.append({
+                "action": "merge", "rule": r["pattern_hash"],
+                "reason": "high confidence",
+            })
         elif r["status"] == "pr-ready":
-            steps.append({"action": "create_pr", "rule": r["pattern_hash"], "reason": "medium confidence"})
+            steps.append({
+                "action": "create_pr", "rule": r["pattern_hash"],
+                "reason": "medium confidence",
+            })
         else:
-            steps.append({"action": "review", "rule": r["pattern_hash"], "reason": "low confidence"})
+            steps.append({
+                "action": "review", "rule": r["pattern_hash"],
+                "reason": "low confidence",
+            })
     return steps
 
 

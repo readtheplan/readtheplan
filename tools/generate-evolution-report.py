@@ -4,10 +4,10 @@ Generates a beautiful private HTML dashboard for the self-improving Kernel Gate 
 No external dependencies. Everything stays in ~/.readtheplan/
 """
 
-from html import escape as h_escape
 import json
 import sqlite3
 import sys
+from html import escape as h_escape
 from pathlib import Path
 
 
@@ -23,7 +23,8 @@ def generate_report():
             "SELECT timestamp, decision, compliance_score, plan_summary FROM runs ORDER BY id ASC"
         ).fetchall()
         patterns = conn.execute(
-            "SELECT resource_type, risk, incident_count, rule_status, rule_score FROM patterns ORDER BY incident_count DESC"
+            "SELECT resource_type, risk, incident_count, rule_status, "
+            "rule_score FROM patterns ORDER BY incident_count DESC"
         ).fetchall()
     except Exception as e:
         print(f"Error querying database: {e}", file=sys.stderr)
@@ -45,7 +46,8 @@ def generate_report():
     <title>readtheplan Evolution Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {{ font-family: system-ui, sans-serif; background: #0f1117; color: #e0e0e0; margin: 0; padding: 20px; }}
+        body {{ font-family: system-ui, sans-serif; background: #0f1117; }}
+        body {{ color: #e0e0e0; margin: 0; padding: 20px; }}
         .header {{ text-align: center; margin-bottom: 30px; }}
         .card {{ background: #1a1f2e; border-radius: 12px; padding: 20px; margin-bottom: 20px; }}
         .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
@@ -114,8 +116,8 @@ def generate_report():
 
     for run in reversed(runs[-10:]):
         html += f"""
-        <p><strong>{run[0][:16]}</strong> — Score: <span class="positive">{run[2]}</span> — Decision: <strong>{h_escape(run[1].upper())}</strong></p>
-"""
+        <p><strong>{run[0][:16]}</strong> — Score: <span class="positive">{run[2]}</span>
+        — Decision: <strong>{h_escape(run[1].upper())}</strong></p>"""
 
     html += """
     </div>
