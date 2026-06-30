@@ -4,6 +4,7 @@ Generates a beautiful private HTML dashboard for the self-improving Kernel Gate 
 No external dependencies. Everything stays in ~/.readtheplan/
 """
 
+from html import escape as h_escape
 import json
 import sqlite3
 import sys
@@ -70,7 +71,7 @@ def generate_report():
             <h2>Summary</h2>
             <p><strong>Runs Analyzed:</strong> {len(runs)}</p>
             <p><strong>Average Compliance Score:</strong> {avg_score:.1f}</p>
-            <p><strong>Latest Decision:</strong> {latest_run[1].upper()}</p>
+            <p><strong>Latest Decision:</strong> {h_escape(latest_run[1].upper())}</p>
             <p><strong>Latest Score:</strong> {latest_run[2]}</p>
         </div>
     </div>
@@ -96,14 +97,13 @@ def generate_report():
         }.get(pat[3], "⚪ pending")
         html += f"""
             <tr>
-                <td><strong>{pat[0]}</strong></td>
-                <td>{pat[1]}</td>
+                <td><strong>{h_escape(str(pat[0]))}</strong></td>
+                <td>{h_escape(str(pat[1]))}</td>
                 <td>{pat[2]}</td>
-                <td>{status_badge}</td>
-                <td>{pat[4] or '-'}</td>
+                <td>{h_escape(str(status_badge))}</td>
+                <td>{h_escape(str(pat[4] or '-'))}</td>
             </tr>
 """
-
     html += """
         </table>
     </div>
@@ -114,7 +114,7 @@ def generate_report():
 
     for run in reversed(runs[-10:]):
         html += f"""
-        <p><strong>{run[0][:16]}</strong> — Score: <span class="positive">{run[2]}</span> — Decision: <strong>{run[1].upper()}</strong></p>
+        <p><strong>{run[0][:16]}</strong> — Score: <span class="positive">{run[2]}</span> — Decision: <strong>{h_escape(run[1].upper())}</strong></p>
 """
 
     html += """

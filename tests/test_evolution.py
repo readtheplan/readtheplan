@@ -490,3 +490,49 @@ def test_html_dashboard_escapes_plan_derived_fields(tmp_path: Path):
     assert xss_payload not in html, "Raw XSS payload must not appear in dashboard HTML"
     assert "&lt;script&gt;" in html, "XSS payload must be HTML-escaped in the dashboard"
 
+
+def test_standalone_report_escapes_plan_derived_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The standalone generate-report tool must also escape DB-sourced data."""
+    import importlib.util
+    repo_root = Path(__file__).parent.parent
+    spec = importlib.util.spec_from_file_location(
+        "generate_evolution_report",
+        repo_root / "tools" / "generate-evolution-report.py",
+    )
+    report_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(report_mod)
+
+    # Redirect report tool output: monkeypatch home() so it writes to tmp_path
+    readtheplan_dir = tmp_path / ".readtheplan"
+    readtheplan_dir.mkdir(exist_ok=True)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    # Make the engine write to .readtheplan/ so the standalone tool finds the DB
+    # _make_engine creates data_dir = tmp_path / ".readtheplan" internally
+    engine = _make_engine(tmp_path)
+
+    # Seed 3 incidents to produce a patterns row.
+    for i in range(3):
+        run_id = engine.record_run(
+            plan_hash=f"xss-{i}", decision="block",
+            compliance_score=20.0, mode="self-improving", incident_flag=True,
+        )
+        engine.record_incident(
+            run_id=run_id, resource_type="aws_s3_bucket",
+            risk="irreversible", address=f"aws_s3_bucket.xss-{i}",
+            actions=["delete"],
+        )
+    engine.analyze_incidents(min_incidents=3)
+
+    # Tamper: inject XSS into resource_type directly in the report DB.
+    xss_payload = '<script>alert("xss")</script>'
+    with sqlite3.connect(readtheplan_dir / "evolution.db") as conn:
+        conn.execute("UPDATE patterns SET resource_type = ?", (xss_payload,))
+
+    report_file = readtheplan_dir / "evolution-report.html"
+    report_mod.generate_report()
+
+    html = report_file.read_text(encoding="utf-8")
+    assert xss_payload not in html, "Raw XSS must NOT appear in standalone report"
+    assert "&lt;script&gt;" in html, "XSS must be HTML-escaped in standalone report"
+
