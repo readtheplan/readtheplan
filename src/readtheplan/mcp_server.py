@@ -18,7 +18,7 @@ from readtheplan.summary import summary_to_dict
 
 
 class MissingMCPDependencyError(RuntimeError):
-    """Raised when the ``mcp`` extra is not installed."""
+    """Raised when the optional MCP SDK is not installed."""
 
 
 @dataclass(frozen=True)
@@ -29,263 +29,283 @@ class MCPToolInputError(ValueError):
     def __str__(self) -> str:
         return f"{self.code}: {self.message}"
 
-
-def _ensure_deps() -> None:
-    try:
-        import mcp.types as _types  # noqa: F401
-    except ImportError:
-        raise MissingMCPDependencyError(
-            "The MCP server requires the ``mcp`` extra. "
-            "Install it with: ``pip install readtheplan[mcp]```"
-        )
+    def to_dict(self) -> dict[str, str]:
+        return {"code": self.code, "message": self.message}
 
 
-def _check_plan(path: str) -> None:
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"Plan file not found: {path}")
+def _working_root() -> Path | None:
+    """Return the allowed working root from MCP_ROOT env var, or None.
+
+    When set, all plan_path arguments are validated to be within this
+    directory tree.  Symlink traversal is resolved before comparison.
+    """
+    root = os.environ.get("MCP_ROOT", "").strip()
+    if not root:
+        return None
+    return Path(root).resolve()
 
 
-@dataclass
-class GateRequest:
-    plan_file: str
-    framework: str = "soc2"
-    catalog_path: str | None = None
-    max_resources: int = 100
+def _validate_path(plan_path: str) -> Path:
+    """Resolve *plan_path* and reject paths outside the allowed working root.
 
-
-def create_server() -> Any:
-    _ensure_deps()
-    import mcp.server as server
-    import mcp.server.stdio
-    import mcp.types as types
-    from mcp.server.models import InitializationOptions
-
-    app = server.Server("readtheplan")
-
-    @app.list_tools()
-    async def list_tools() -> list[types.Tool]:
-        return [
-            types.Tool(
-                name="agent_gate",
-                description=(
-                    "Evaluate an IaC plan and return the agent-gate decision "
-                    "(proceed / warn / block) with compliance score, required "
-                    "checks, evidence checklist, and auditor summary. "
-                    "Supports Terraform, CloudFormation, and Kubernetes."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "required": ["plan_file"],
-                    "properties": {
-                        "plan_file": {
-                            "type": "string",
-                            "description": "Path to the plan JSON file",
-                        },
-                        "framework": {
-                            "type": "string",
-                            "description": "Compliance framework (soc2, hipaa, pci_dss, cis)",
-                            "default": "soc2",
-                        },
-                        "catalog_path": {
-                            "type": "string",
-                            "description": "Path to a custom control catalog JSON",
-                        },
-                        "max_resources": {
-                            "type": "integer",
-                            "description": "Max resources to evaluate (default 100)",
-                            "default": 100,
-                        },
-                    },
-                },
-            ),
-            types.Tool(
-                name="agent_gate_summary",
-                description=(
-                    "Return a plain-text summary of the agent-gate decision "
-                    "suitable for PR comments."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "required": ["plan_file"],
-                    "properties": {
-                        "plan_file": {
-                            "type": "string",
-                            "description": "Path to the plan JSON file",
-                        },
-                        "framework": {
-                            "type": "string",
-                            "description": "Compliance framework",
-                            "default": "soc2",
-                        },
-                    },
-                },
-            ),
-            types.Tool(
-                name="agent_gate_cfn",
-                description=(
-                    "Return the agent-gate decision for a CloudFormation "
-                    "Change Set / template diff."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "required": ["input_path"],
-                    "properties": {
-                        "input_path": {
-                            "type": "string",
-                            "description": "Path to the CFN input JSON",
-                        },
-                    },
-                },
-            ),
-            types.Tool(
-                name="evolution_status",
-                description=(
-                    "Return evolution engine statistics and recent run data."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {},
-                },
-            ),
-            types.Tool(
-                name="evolution_dashboard",
-                description=(
-                    "Generate the HTML evolution dashboard "
-                    "and return its file path."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {},
-                },
-            ),
-            types.Tool(
-                name="evolution_patterns",
-                description=(
-                    "Return all detected patterns and their evolution status."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {},
-                },
-            ),
-            types.Tool(
-                name="agent_gate_kubernetes",
-                description=(
-                    "Return the agent-gate decision for a "
-                    "Kubernetes manifest diff."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "required": ["input_path"],
-                    "properties": {
-                        "input_path": {
-                            "type": "string",
-                            "description": "Path to the K8s input JSON",
-                        },
-                    },
-                },
-            ),
-        ]
-
-    @app.call_tool()
-    async def call_tool(
-        name: str, arguments: dict
-    ) -> list[types.TextContent]:
-        if name == "agent_gate":
-            return [types.TextContent(
-                type="text",
-                text=str(_agent_gate_handler(arguments)),
-            )]
-        elif name == "agent_gate_summary":
-            return [types.TextContent(
-                type="text",
-                text=str(summary_to_dict(
-                    _agent_gate_handler(arguments, summary_only=True)
-                )),
-            )]
-        elif name == "agent_gate_cfn":
-            return [types.TextContent(
-                type="text",
-                text=str(agent_gate_cfn_handler(arguments.get("input_path", ""))),
-            )]
-        elif name == "evolution_status":
-            return [types.TextContent(
-                type="text",
-                text=str(EvolutionEngine().get_stats()),
-            )]
-        elif name == "evolution_dashboard":
-            path = EvolutionEngine().generate_html_dashboard()
-            return [types.TextContent(
-                type="text",
-                text=str({"dashboard_path": str(path)}),
-            )]
-        elif name == "evolution_patterns":
-            return [types.TextContent(
-                type="text",
-                text=str(EvolutionEngine().get_all_patterns()),
-            )]
-        elif name == "agent_gate_kubernetes":
-            return [types.TextContent(
-                type="text",
-                text=str(agent_gate_k8s_handler(arguments.get("input_path", ""))),
-            )]
-        raise ValueError(f"Unknown tool: {name}")
-
-    return app
-
-
-def _agent_gate_handler(
-    arguments: dict,
-    summary_only: bool = False,
-) -> dict:
-    """Handle an agent_gate tool invocation."""
-    from readtheplan.plan import analyze_plan_file as analyze
-
-    plan_file = arguments.get("plan_file", "")
-    framework = arguments.get("framework", "soc2")
-    catalog_path = arguments.get("catalog_path")
-    max_resources = arguments.get("max_resources", 100)
-
-    _check_plan(plan_file)
-
-    catalog: ControlCatalog | None = None
-    if catalog_path:
-        catalog = load_catalog(catalog_path)
-    else:
+    Raises :class:`MCPToolInputError` with code ``PATH_TRAVERSAL`` when
+    ``MCP_ROOT`` is set and the resolved path falls outside it.
+    """
+    resolved = Path(plan_path).resolve()
+    root = _working_root()
+    if root is not None:
         try:
-            catalog = load_catalog(framework)
-        except (CatalogSchemaError, FrameworkNotFoundError):
-            catalog = None
+            resolved.relative_to(root)
+        except ValueError:
+            raise MCPToolInputError(
+                code="PATH_TRAVERSAL",
+                message=(
+                    f"plan_path {plan_path!r} resolves outside the allowed "
+                    f"working root {root}"
+                ),
+            ) from None
+    return resolved
 
-    summary = analyze(plan_file, max_resources=max_resources)
+
+def _resolve_path(plan_path: str) -> str:
+    """Validate *plan_path* against the working root and return the resolved
+    absolute path as a string."""
+    return str(_validate_path(plan_path))
+
+
+def analyze_plan(
+    plan_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Analyze a local Terraform plan JSON file for the MCP tool.
+
+    Args:
+        plan_path: Local path to ``terraform show -json`` output.
+        framework: Optional compliance framework name (e.g. ``soc2``,
+            ``hipaa``, ``iso27001``).  When set, each resource change in
+            the summary is annotated with the matching control IDs,
+            titles, and rationales from the framework catalog.
+
+    Returns:
+        The CLI JSON summary.  When *framework* is provided the payload
+        includes a top-level ``framework`` key and per-change ``controls``
+        lists.
+    """
+    _check_non_empty(plan_path)
+    plan_path = _resolve_path(plan_path)
+    catalog = _load_catalog_for_tool(framework)
+    summary = _summary_for_tool(plan_path)
+    return summary_to_dict(summary, catalog)
+
+
+def agent_gate(
+    plan_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the local coding-agent gate decision for a Terraform plan JSON file.
+
+    Args:
+        plan_path: Local path to ``terraform show -json`` output.
+        framework: Optional compliance framework name.  When set, the
+            required-checks list includes per-resource control identifiers
+            (``rtp.control.<framework>.<id>``) and the evidence checklist
+            references the framework.
+    """
+    _check_non_empty(plan_path)
+    plan_path = _resolve_path(plan_path)
+    catalog = _load_catalog_for_tool(framework)
+    summary = _summary_for_tool(plan_path)
     return agent_gate_to_dict(summary, catalog)
 
 
-def agent_gate_cfn_handler(input_path: str) -> dict:
-    """Handle CloudFormation gate request."""
-    from readtheplan.cfn import cfn_to_gate
+def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
+    """Return the agent-gate decision for a CloudFormation Change Set / template diff."""
+    from readtheplan.adapters.cloudformation import analyze_cloudformation
 
-    return cfn_to_gate(input_path)
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+
+    try:
+        import json
+
+        input_path = _resolve_path(input_path)
+        data = json.loads(Path(input_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read {input_path}: {exc}"
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input must be a JSON object"
+        )
+
+    return analyze_cloudformation(data)
 
 
-def agent_gate_k8s_handler(input_path: str) -> dict:
-    """Handle Kubernetes gate request."""
-    from readtheplan.k8s import k8s_to_gate
+def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
+    """Return the agent-gate decision for a Kubernetes manifest diff.
 
-    return k8s_to_gate(input_path)
+    Accepts a JSON file with either:
+      - {"old_manifests": [...], "new_manifests": [...]} — diff format
+      - {"resources": [...]} — single manifest format
+    """
+    import json
+
+    from readtheplan.adapters.kubernetes import analyze_kubernetes
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+
+    try:
+        data = json.loads(Path(input_path).read_bytes())
+    except FileNotFoundError:
+        raise MCPToolInputError(
+            code="FILE_NOT_FOUND",
+            message=f"File not found: {input_path}",
+        )
+    except json.JSONDecodeError as exc:
+        raise MCPToolInputError(
+            code="INVALID_JSON",
+            message=f"Invalid JSON in {input_path}: {exc}",
+        )
+
+    if not isinstance(data, dict):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input must be a JSON object",
+        )
+
+    return analyze_kubernetes(data)
+
+
+def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
+    """Load a compliance framework catalog, or return ``None``."""
+    if not framework:
+        return None
+    try:
+        return load_catalog(framework)
+    except FrameworkNotFoundError as exc:
+        raise MCPToolInputError(code="FRAMEWORK_NOT_FOUND", message=str(exc)) from exc
+    except CatalogSchemaError as exc:
+        raise MCPToolInputError(code="CATALOG_ERROR", message=str(exc)) from exc
+
+
+def _check_non_empty(plan_path: str) -> None:
+    """Reject empty or whitespace-only plan paths early."""
+    if not isinstance(plan_path, str) or not plan_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="plan_path must be a non-empty string",
+        )
+
+
+def _summary_for_tool(plan_path: str) -> PlanSummary:
+    try:
+        summary = analyze_plan_file(plan_path, use_rules=True)
+    except PlanError as exc:
+        raise MCPToolInputError(code="PLAN_ERROR", message=str(exc)) from exc
+
+    return summary
+
+
+def create_server() -> Any:
+    FastMCP = _load_fastmcp()
+    mcp = FastMCP("readtheplan")
+
+    analyze_plan_handler = analyze_plan
+    agent_gate_handler = agent_gate
+    agent_gate_cfn_handler = agent_gate_cloudformation
+    agent_gate_k8s_handler = agent_gate_kubernetes
+
+    @mcp.tool(name="analyze_plan")
+    def _analyze_plan_tool(
+        plan_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Analyze a local Terraform plan JSON file and return the CLI JSON summary.
+
+        Args:
+            plan_path: Local path to terraform show -json output.
+            framework: Optional compliance framework (e.g. soc2, hipaa, iso27001).
+                When set, returns per-change control annotations.
+        """
+        return analyze_plan_handler(plan_path, framework=framework)
+
+    @mcp.tool(name="agent_gate")
+    def _agent_gate_tool(
+        plan_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return proceed, warn, or block instructions for a local Terraform plan.
+
+        Args:
+            plan_path: Local path to terraform show -json output.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_handler(plan_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_cloudformation")
+    def _agent_gate_cfn_tool(input_path: str) -> dict[str, object]:
+        """Return the agent-gate decision for a CloudFormation Change Set / template diff."""
+        return agent_gate_cfn_handler(input_path)
+
+    @mcp.tool(name="agent_gate_kubernetes")
+    def _agent_gate_k8s_tool(input_path: str) -> dict[str, object]:
+        """Return the agent-gate decision for a Kubernetes manifest diff.
+
+        Args:
+            input_path: Path to a JSON file. Supports two formats:
+                - {"old_manifests": [...], "new_manifests": [...]} — diff format
+                - {"resources": [...]} — single manifest format
+        """
+        return agent_gate_k8s_handler(input_path)
+
+    @mcp.tool(name="evolution_status")
+    def _evolution_status_tool() -> dict[str, object]:
+        """Return evolution engine statistics and recent run data."""
+        return EvolutionEngine().get_stats()
+
+    @mcp.tool(name="evolution_dashboard")
+    def _evolution_dashboard_tool() -> dict[str, object]:
+        """Generate the HTML evolution dashboard and return its file path."""
+        path = EvolutionEngine().generate_html_dashboard()
+        return {"dashboard_path": str(path)}
+
+    @mcp.tool(name="evolution_patterns")
+    def _evolution_patterns_tool() -> list[dict[str, object]]:
+        """Return all detected patterns and their evolution status."""
+        return EvolutionEngine().get_all_patterns()
+
+    return mcp
 
 
 def main() -> None:
-    _ensure_deps()
-    import mcp.server.stdio
+    """Entry point for the stdio MCP server.
 
-    app = create_server()
-    with mcp.server.stdio.stdio_server() as (read, write):
-        import asyncio
-        asyncio.run(app.run(read, write, InitializationOptions(
-            server_name="readtheplan",
-            server_version="0.3.0",
-        )))
+    Any raw plan JSON is never logged — errors reference file paths only.
+    """
+    create_server().run(transport="stdio")
+
+
+def _load_fastmcp() -> Any:
+    try:
+        from mcp.server.fastmcp import FastMCP
+    except ModuleNotFoundError as exc:
+        if exc.name == "mcp":
+            raise MissingMCPDependencyError(
+                "MCP preview requires Python 3.10+ and the optional dependency. "
+                'Install it with: pip install "readtheplan[mcp]"'
+            ) from exc
+        raise
+
+    return FastMCP
 
 
 if __name__ == "__main__":
