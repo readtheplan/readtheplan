@@ -137,10 +137,18 @@ def test_analyze_with_agents_generates_rule(tmp_path: Path):
 
     assert len(evolved) == 1
     assert evolved[0]["suggested_rule"] is not None
-    assert "aws-iam-role" in evolved[0]["suggested_rule"]
+    assert "aws_iam_role" in evolved[0]["suggested_rule"]
     assert evolved[0]["rule_score"] > 0
     # Irreversible + 3 incidents = score >= 70, so should be at least "pr-ready"
     assert evolved[0]["rule_status"] in ("pr-ready", "auto-merge", "disabled")
+
+    # Cleanup permanently generated files from tests
+    auto_rule = Path("src/readtheplan/rules/auto/rule_aws_iam_role_irreversible.py")
+    auto_test = Path("tests/test_rules_auto/test_rule_aws_iam_role_irreversible.py")
+    if auto_rule.exists():
+        auto_rule.unlink()
+    if auto_test.exists():
+        auto_test.unlink()
 
 
 def test_full_evolution_loop(tmp_path: Path):
@@ -341,3 +349,86 @@ def test_different_risk_profiles_different_scores(tmp_path: Path):
     assert safe_gate["compliance_score"] > bad_gate["compliance_score"]
     assert safe_gate["decision"] == "proceed"
     assert bad_gate["decision"] == "block"
+
+
+def test_evolution_real_multi_agent_pipeline(tmp_path: Path):
+    """Test the real multi-agent pipeline verification loop and code generation."""
+    engine = _make_engine(tmp_path)
+    
+    patterns = [{
+        "pattern_hash": "aws_s3_bucket::irreversible",
+        "resource_type": "aws_s3_bucket",
+        "risk": "irreversible",
+        "incident_count": 10,
+    }]
+    
+    evolved = engine.analyze_with_agents(patterns)
+    assert len(evolved) == 1
+    assert evolved[0]["rule_score"] == 100.0
+    assert evolved[0]["rule_status"] == "pr-ready"
+    
+    handoffs_dir = engine.data_dir / "handoffs"
+    assert handoffs_dir.exists()
+    handoff_files = list(handoffs_dir.glob("*.json"))
+    assert len(handoff_files) == 1
+    
+    handoff_data = json.loads(handoff_files[0].read_text(encoding="utf-8"))
+    assert handoff_data["resource_type"] == "aws_s3_bucket"
+    assert handoff_data["risk"] == "irreversible"
+    
+    import os
+    temp_handoff_root = tmp_path / "shared_handoffs"
+    os.environ["AGENT_HANDOFF_ROOT"] = str(temp_handoff_root)
+    
+    dispatched = engine.dispatch_handoffs()
+    assert len(dispatched) == 1
+    assert not handoff_files[0].exists()
+    
+    assert temp_handoff_root.exists()
+    mcp_json_files = list(temp_handoff_root.glob("*.json"))
+    mcp_md_files = list(temp_handoff_root.glob("*.md"))
+    assert len(mcp_json_files) == 1
+    assert len(mcp_md_files) == 1
+    
+    from pathlib import Path
+    auto_rule = Path("src/readtheplan/rules/auto/rule_aws_s3_bucket_irreversible.py")
+    auto_test = Path("tests/test_rules_auto/test_rule_aws_s3_bucket_irreversible.py")
+    if auto_rule.exists():
+        auto_rule.unlink()
+    if auto_test.exists():
+        auto_test.unlink()
+        
+    del os.environ["AGENT_HANDOFF_ROOT"]
+
+
+def test_cli_evolution_console(capsys):
+    """Test evolution console subcommand output."""
+    from readtheplan.cli import main
+    import sys
+    
+    sys.argv = ["readtheplan", "evolution", "console"]
+    try:
+        main()
+    except SystemExit as e:
+        assert e.code == 0
+        
+    captured = capsys.readouterr()
+    assert "READTHEPLAN EVOLUTION CONSOLE DASHBOARD" in captured.out
+    assert "DETECTED PATTERNS" in captured.out
+    assert "RECENT RUNS" in captured.out
+
+
+def test_cli_evolution_dispatch(capsys):
+    """Test evolution dispatch subcommand."""
+    from readtheplan.cli import main
+    import sys
+    
+    sys.argv = ["readtheplan", "evolution", "dispatch"]
+    try:
+        main()
+    except SystemExit as e:
+        assert e.code == 0
+        
+    captured = capsys.readouterr()
+    assert "No pending handoffs" in captured.out or "Successfully dispatched" in captured.out
+

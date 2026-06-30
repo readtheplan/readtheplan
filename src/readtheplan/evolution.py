@@ -17,7 +17,11 @@ Multi-agent coordination (optional, via provider CLI):
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import sqlite3
+import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -244,23 +248,161 @@ class EvolutionEngine:
         """
         evolved = []
         for pattern in patterns:
-            rule = self._generate_rule_heuristic(pattern)
+            rt = pattern["resource_type"]
+            risk = pattern["risk"]
+            cnt = pattern["incident_count"]
+            rt_clean = rt.replace("::", "_").replace("-", "_").lower()
+            pattern_hash = pattern["pattern_hash"]
 
-            # Score the rule (0-100)
-            score = self._score_rule(rule, pattern)
+            # 1. Grok pattern analysis (when grok.exe is available)
+            grok_available = shutil.which("grok.exe") or shutil.which("grok")
+            grok_analysis = ""
+            if grok_available:
+                cmd = ["grok", "--single", f"Explain the security risk and recurring pattern for resource type '{rt}' with risk level '{risk}' based on {cnt} incidents."]
+                if shutil.which("grok.exe"):
+                    cmd[0] = "grok.exe"
+                try:
+                    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    if proc.returncode == 0:
+                        grok_analysis = proc.stdout.strip()
+                    else:
+                        print(f"grok.exe returned exit code {proc.returncode}. Output: {proc.stderr.strip() or proc.stdout.strip()}")
+                except Exception as e:
+                    print(f"Error calling grok.exe: {e}")
+            
+            # 2. Local template generation of candidate rule + test code
+            rule_code = f"""# Auto-generated rule for {rt} ({risk})
+from typing import Any
+from readtheplan.rules._shared import RuleResult, register_rule
 
-            # Decision: auto-merge, PR, or disable
-            decision = self._evolve_decision(score, pattern["risk"])
+@register_rule("{rt}")
+def _rule_{rt_clean}_{risk}(resource_type: str, action_set: set[str], change: dict[str, Any]) -> list[RuleResult]:
+    candidates = []
+    # Auto-generated check
+    if "delete" in action_set or "update" in action_set or "create" in action_set:
+        candidates.append(RuleResult("{risk}", "Auto-generated rule flagged {rt} for {risk}"))
+    return candidates
+"""
+            test_code = f"""# Auto-generated test for {rt} ({risk})
+from readtheplan.rules import RuleResult
+from readtheplan.rules._shared import apply_resource_rules
+
+def test_rule_{rt_clean}_{risk}():
+    change = {{"actions": ["delete"]}}
+    result = apply_resource_rules(
+        resource_type="{rt}",
+        actions=("delete",),
+        change=change,
+        baseline=RuleResult("safe", "baseline")
+    )
+    assert result.risk == "{risk}"
+"""
+
+            # 3. Verification Loop via temporary test execution
+            temp_rule_dir = Path(__file__).parent / "rules" / "auto"
+            temp_rule_dir.mkdir(parents=True, exist_ok=True)
+            (temp_rule_dir / "__init__.py").write_text('"""Auto-generated rules package."""\n', encoding="utf-8")
+            
+            temp_rule_file = temp_rule_dir / "temp_candidate.py"
+            
+            temp_test_dir = Path(__file__).parent.parent.parent / "tests" / "test_rules_auto"
+            temp_test_dir.mkdir(parents=True, exist_ok=True)
+            (temp_test_dir / "__init__.py").write_text('"""Auto-generated rules tests package."""\n', encoding="utf-8")
+            
+            temp_test_file = temp_test_dir / "test_temp_candidate.py"
+            
+            # Write temp candidate files
+            temp_rule_file.write_text(rule_code, encoding="utf-8")
+            temp_test_file.write_text(test_code, encoding="utf-8")
+
+            # Run pytest on the temp test
+            pytest_cmd = [sys.executable, "-m", "pytest", "--no-cov", str(temp_test_file)]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = "src"
+            
+            verification_success = False
+            try:
+                proc = subprocess.run(pytest_cmd, env=env, capture_output=True, text=True, timeout=15)
+                if proc.returncode == 0:
+                    verification_success = True
+                else:
+                    print(f"Verification pytest failed with exit code {proc.returncode}:\n{proc.stdout}\n{proc.stderr}")
+            except Exception as e:
+                print(f"Error running verification pytest: {e}")
+
+            # Clean up temp files immediately after test
+            if temp_rule_file.exists():
+                temp_rule_file.unlink()
+            if temp_test_file.exists():
+                temp_test_file.unlink()
+
+            # 4. Scoring logic
+            score = 0.0
+            if verification_success:
+                base_score = 70.0
+                risk_bonus = {"safe": 5.0, "review": 10.0, "dangerous": 15.0, "irreversible": 20.0}.get(risk, 5.0)
+                incident_bonus = 5.0 if cnt >= 3 else 0.0
+                if cnt >= 5:
+                    incident_bonus = 10.0
+                if cnt >= 10:
+                    incident_bonus = 20.0
+                score = base_score + risk_bonus + incident_bonus + 10.0 # +10 for test success
+                score = min(score, 100.0)
+
+            # 5. Evolve decision
+            decision = self._evolve_decision(score, risk)
+
+            # 6. Save evolved rule to SQLite
+            self._save_evolved_rule(pattern_hash, rule_code, score, decision)
+
+            # 7. Write permanent files if score >= 85
+            if score >= 85:
+                perm_rule_file = temp_rule_dir / f"rule_{rt_clean}_{risk}.py"
+                perm_test_file = temp_test_dir / f"test_rule_{rt_clean}_{risk}.py"
+                
+                perm_rule_file.write_text(rule_code, encoding="utf-8")
+                perm_test_file.write_text(test_code, encoding="utf-8")
+                
+                # Print PR Template
+                print("=" * 60)
+                print("PULL REQUEST TEMPLATE")
+                print("=" * 60)
+                print(f"Title: feat(rules): Auto-generated rule for {rt} ({risk})")
+                print("\nDescription:")
+                print(f"This PR adds a self-evolved rule for resource type '{rt}' with risk '{risk}'.")
+                print(f"- Rule file: src/readtheplan/rules/auto/rule_{rt_clean}_{risk}.py")
+                print(f"- Test file: tests/test_rules_auto/test_rule_{rt_clean}_{risk}.py")
+                print(f"- Score: {score:.1f}")
+                print(f"- Analysis: {grok_analysis or 'No Grok analysis (heuristic fallback)'}")
+                print("=" * 60)
+
+            # 8. Write JSON Handoff to ~/.readtheplan/handoffs/ if score >= 70
+            if score >= 70:
+                handoffs_dir = self.data_dir / "handoffs"
+                handoffs_dir.mkdir(parents=True, exist_ok=True)
+                handoff_file = handoffs_dir / f"handoff_{rt_clean}_{risk}.json"
+                
+                import uuid
+                handoff_id = f"handoff_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                
+                handoff_data = {
+                    "handoff_id": handoff_id,
+                    "pattern_hash": pattern_hash,
+                    "resource_type": rt,
+                    "risk": risk,
+                    "incident_count": cnt,
+                    "score": score,
+                    "suggested_rule": rule_code,
+                    "status": "pr-ready" if decision == "pr-ready" else "auto-merge"
+                }
+                handoff_file.write_text(json.dumps(handoff_data, indent=2), encoding="utf-8")
 
             evolved.append({
                 **pattern,
-                "suggested_rule": rule,
+                "suggested_rule": rule_code,
                 "rule_score": score,
                 "rule_status": decision,
             })
-
-            # Persist decision
-            self._save_evolved_rule(pattern["pattern_hash"], rule, score, decision)
 
         return evolved
 
@@ -325,6 +467,106 @@ class EvolutionEngine:
         )
         conn.commit()
         conn.close()
+
+    def _get_handoff_root(self) -> Path:
+        root = os.environ.get("AGENT_HANDOFF_ROOT")
+        if root:
+            p = Path(root)
+        else:
+            obsidian = Path.home() / "Documents" / "Obsidian Vault"
+            if obsidian.exists():
+                p = obsidian / "Agent Handoffs"
+            else:
+                p = Path.home() / "Documents" / "agent-handoffs"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    def dispatch_handoffs(self) -> list[str]:
+        """Dispatch any pending JSON handoffs in ~/.readtheplan/handoffs/ to the shared handoff directory."""
+        handoffs_dir = self.data_dir / "handoffs"
+        if not handoffs_dir.exists():
+            return []
+
+        dispatched = []
+        dest_dir = self._get_handoff_root()
+
+        for f in handoffs_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                hid = data.get("handoff_id")
+                if not hid:
+                    continue
+
+                # Generate the final handoff JSON for computer-use-mcp
+                mcp_handoff_data = {
+                    "id": hid,
+                    "title": f"Evolution Rule Handoff: {data.get('pattern_hash')}",
+                    "from_agent": "readtheplan",
+                    "to_agent": "computer-use-mcp",
+                    "status": "pending",
+                    "project": "readtheplan-evolution",
+                    "created_at": datetime.now().isoformat(timespec="seconds") + "Z",
+                    "updated_at": datetime.now().isoformat(timespec="seconds") + "Z",
+                    "tags": ["readtheplan", "evolution", "rule-generation"],
+                    "extracted_response": {
+                        "message_text": f"Suggested auto-rule for pattern: {data.get('pattern_hash')}\\n\\nRule details:\\n{data.get('suggested_rule')}\\n\\nIncident count: {data.get('incident_count')}\\nScore: {data.get('score')}"
+                    },
+                    "policy": {
+                        "routing_mode": "auto",
+                        "prefer_both": True
+                    }
+                }
+
+                # Write JSON handoff
+                dest_json = dest_dir / f"{hid}.json"
+                dest_json.write_text(json.dumps(mcp_handoff_data, indent=2), encoding="utf-8")
+
+                # Generate Obsidian-friendly Markdown handoff
+                dest_md = dest_dir / f"{hid}.md"
+                md_content = f"""---
+id: "{hid}"
+type: "handoff"
+cssclass: "agent-handoff"
+title: "Evolution Rule Handoff: {data.get('pattern_hash')}"
+from_agent: "readtheplan"
+to_agent: "computer-use-mcp"
+status: "pending"
+status_emoji: "📥"
+project: "readtheplan-evolution"
+date: "{mcp_handoff_data['created_at']}"
+tags:
+  - "readtheplan"
+  - "evolution"
+  - "rule-generation"
+  - "handoff"
+  - "agent-handoff"
+---
+
+# Evolution Rule Handoff: {data.get('pattern_hash')}
+
+**From:** readtheplan → **To:** computer-use-mcp  
+**Status:** 📥 pending  
+**Project/Context:** readtheplan-evolution
+
+Suggested auto-rule for pattern: {data.get('pattern_hash')}
+
+Rule details:
+```python
+{data.get('suggested_rule')}
+```
+
+Incident count: {data.get('incident_count')}
+Score: {data.get('score')}
+"""
+                dest_md.write_text(md_content, encoding="utf-8")
+
+                # Delete original handoff file
+                f.unlink()
+                dispatched.append(hid)
+            except Exception as e:
+                print(f"Error dispatching handoff {f.name}: {e}")
+
+        return dispatched
 
     # ── Stage 4: Evolve (full loop) ────────────────────────────────────
 

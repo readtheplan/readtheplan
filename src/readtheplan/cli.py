@@ -247,6 +247,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Show recent evolution run history.",
     ).set_defaults(evolution_func=_evolution_runs)
 
+    evolution_sub.add_parser(
+        "dispatch",
+        help="Dispatch pending handoffs to the shared handoff directory.",
+    ).set_defaults(evolution_func=_evolution_dispatch)
+
+    evolution_sub.add_parser(
+        "console",
+        help="Display a terminal-based console dashboard.",
+    ).set_defaults(evolution_func=_evolution_console)
+
     return parser
 
 
@@ -751,6 +761,60 @@ def _evolution_runs(args: argparse.Namespace) -> int:
         print("No runs recorded yet.")
         return 0
     print(json.dumps(runs, indent=2))
+    return 0
+
+
+def _evolution_dispatch(args: argparse.Namespace) -> int:
+    """Dispatch pending handoffs to the shared handoff directory."""
+    engine = EvolutionEngine()
+    dispatched = engine.dispatch_handoffs()
+    if not dispatched:
+        print("No pending handoffs to dispatch.")
+    else:
+        print(f"Successfully dispatched {len(dispatched)} handoff(s):")
+        for hid in dispatched:
+            print(f"  - {hid}")
+    return 0
+
+
+def _evolution_console(args: argparse.Namespace) -> int:
+    """Display a terminal-based console dashboard."""
+    engine = EvolutionEngine()
+    stats = engine.get_stats()
+    patterns = engine.get_all_patterns()
+    runs = engine.get_recent_runs(limit=5)
+
+    print("=" * 60)
+    print("      ⚡ READTHEPLAN EVOLUTION CONSOLE DASHBOARD ⚡")
+    print("=" * 60)
+    print(f" Total Runs: {stats['total_runs']:<8} | Avg Compliance Score: {stats['avg_compliance_score']:.1f}%")
+    print(f" Blocked:    {stats['blocked']:<8} | Warned:               {stats['warned']}")
+    print(f" Incidents:  {stats['total_incidents']:<8} | Patterns:             {stats['total_patterns']}")
+    print(f" Auto-Merged Rules: {stats['auto_merged_rules']}")
+    print("-" * 60)
+    print(" DETECTED PATTERNS")
+    print("-" * 60)
+    if not patterns:
+        print("  No patterns detected yet.")
+    else:
+        print(f"  {'Resource Type':<25} {'Risk':<12} {'Count':<8} {'Status':<12}")
+        print(f"  {'-'*25} {'-'*12} {'-'*8} {'-'*12}")
+        for p in patterns[:10]:
+            print(f"  {p['resource_type']:<25} {p['risk']:<12} {p['incident_count']:<8} {p['rule_status']:<12}")
+        if len(patterns) > 10:
+            print(f"  ... and {len(patterns) - 10} more patterns.")
+    print("-" * 60)
+    print(" RECENT RUNS")
+    print("-" * 60)
+    if not runs:
+        print("  No runs recorded yet.")
+    else:
+        print(f"  {'Timestamp':<22} {'Decision':<12} {'Score':<8} {'Outcome':<8}")
+        print(f"  {'-'*22} {'-'*12} {'-'*8} {'-'*8}")
+        for r in runs:
+            ts = r["timestamp"][:19].replace("T", " ")
+            print(f"  {ts:<22} {r['decision']:<12} {r['compliance_score']:<8.1f} {r['outcome']:<8}")
+    print("=" * 60)
     return 0
 
 

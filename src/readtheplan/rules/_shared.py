@@ -518,6 +518,34 @@ def _contains_public_principal(value: Any) -> bool:
 from readtheplan.rules import aws, azure, gcp, k8s  # noqa: E402, F401
 
 
+# Dynamically load auto-generated rules
+try:
+    from pathlib import Path
+    import importlib
+    import pkgutil
+
+    def _load_auto_rules() -> None:
+        auto_dir = Path(__file__).parent / "auto"
+        if not auto_dir.exists():
+            auto_dir.mkdir(parents=True, exist_ok=True)
+        init_file = auto_dir / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text('"""Auto-generated rules package."""\n', encoding="utf-8")
+        
+        package_name = "readtheplan.rules.auto"
+        try:
+            auto_pkg = importlib.import_module(package_name)
+            for _, module_name, _ in pkgutil.iter_modules(auto_pkg.__path__):
+                importlib.import_module(f"{package_name}.{module_name}")
+        except Exception:
+            pass
+
+    _load_auto_rules()
+except Exception:
+    pass
+
+
+
 def load_entry_point_rules() -> list[str]:
     """Discover and register rules contributed by external packages via the
     ``readtheplan.rules`` entry point group.
