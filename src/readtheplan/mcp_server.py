@@ -21,6 +21,15 @@ class MissingMCPDependencyError(RuntimeError):
     """Raised when the ``mcp`` extra is not installed."""
 
 
+@dataclass(frozen=True)
+class MCPToolInputError(ValueError):
+    code: str
+    message: str
+
+    def __str__(self) -> str:
+        return f"{self.code}: {self.message}"
+
+
 def _ensure_deps() -> None:
     try:
         import mcp.types as _types  # noqa: F401
