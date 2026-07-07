@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import subprocess
+import sys
+from collections.abc import Callable, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Callable, Sequence, TextIO, cast
+from typing import TextIO, cast
 
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.controls import (
@@ -161,6 +162,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cloudformation.set_defaults(func=_cloudformation_gate)
 
+    kubernetes = subparsers.add_parser(
+        "kubernetes",
+        help="Emit the agent-gate decision for a Kubernetes manifest diff.",
+    )
+    kubernetes.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    kubernetes.add_argument(
+        "input_file", help="Path to Kubernetes manifest diff JSON (old_manifests/new_manifests or resources)."  # noqa: E501
+    )
+    kubernetes.set_defaults(func=_kubernetes_gate)
+
     verify = subparsers.add_parser(
         "verify",
         help="Verify a signed rtp-evidence-v1 envelope.",
@@ -171,11 +188,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     verify.add_argument(
         "--certificate-identity",
-        help="Expected certificate identity (e.g., https://github.com/readtheplan/readtheplan/.github/workflows/release.yml@refs/tags/v0.3.0). When set, verification fails if the signer does not match.",
+        help="Expected certificate identity (e.g., https://github.com/readtheplan/readtheplan/.github/workflows/release.yml@refs/tags/v0.3.0). When set, verification fails if the signer does not match.",  # noqa: E501
     )
     verify.add_argument(
         "--certificate-oidc-issuer",
-        help="Expected OIDC issuer (e.g., https://token.actions.githubusercontent.com). Required when --certificate-identity is set.",
+        help="Expected OIDC issuer (e.g., https://token.actions.githubusercontent.com). Required when --certificate-identity is set.",  # noqa: E501
     )
     verify.add_argument("envelope", help="Path to evidence envelope JSON.")
     verify.set_defaults(func=_verify)
@@ -426,7 +443,7 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
 
     adapter = detect_adapter(data)
     if adapter is None or adapter.adapter_name != "cloudformation":
-        print(f"Error: input not recognized as a supported IaC format (detected: {adapter.adapter_name if adapter else 'none'})", file=sys.stderr)
+        print(f"Error: input not recognized as a supported IaC format (detected: {adapter.adapter_name if adapter else 'none'})", file=sys.stderr)  # noqa: E501
         return 1
 
     catalog: ControlCatalog | None = None
@@ -438,6 +455,45 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
             return 1
 
     gate = analyze_cloudformation(data, catalog=catalog)
+    json.dump(gate, sys.stdout, indent=2)
+    print()
+    decision = gate.get("decision", "warn")
+    if decision == "block":
+        return 2
+    if decision == "warn":
+        return 1
+    return 0
+
+
+def _kubernetes_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Kubernetes manifest diff."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.kubernetes import analyze_kubernetes
+
+    try:
+        data = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+
+    if not isinstance(data, dict):
+        print("Error: input must be a JSON object", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "kubernetes":
+        print(f"Error: input not recognized as a supported IaC format (detected: {adapter.adapter_name if adapter else 'none'})", file=sys.stderr)  # noqa: E501
+        return 1
+
+    catalog: ControlCatalog | None = None
+    if args.framework:
+        try:
+            catalog = load_catalog(args.framework)
+        except (CatalogSchemaError, FrameworkNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    gate = analyze_kubernetes(data, catalog=catalog)
     json.dump(gate, sys.stdout, indent=2)
     print()
     decision = gate.get("decision", "warn")
@@ -491,7 +547,8 @@ def _verify(args: argparse.Namespace) -> int:
 
 def _mcp(args: argparse.Namespace) -> int:
     try:
-        from readtheplan.mcp_server import MissingMCPDependencyError, main as mcp_main
+        from readtheplan.mcp_server import MissingMCPDependencyError
+        from readtheplan.mcp_server import main as mcp_main
 
         mcp_main()
     except MissingMCPDependencyError as exc:

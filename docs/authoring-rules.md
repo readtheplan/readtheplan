@@ -65,22 +65,26 @@ Use overlays when the policy is **org-specific**; use a built-in rule (below) wh
 
 ## Add a resource rule
 
-Built-in rules live in [`src/readtheplan/rules.py`](../src/readtheplan/rules.py). Each
-resource family has a `_<thing>_candidates()` function returning a list of `RuleResult`s,
-and a dispatch line in `_rule_candidates()`.
+Built-in rules live in provider modules under
+[`src/readtheplan/rules/`](../src/readtheplan/rules/). Register each candidate function
+with `@register_rule`; the registry in `rules/_shared.py` dispatches matching resource
+types automatically.
 
-**1. Register the resource type** in `_rule_candidates()`:
-
-```python
-if resource_type == "aws_efs_file_system":
-    return _efs_candidates(action_set)
-```
-
-**2. Write the candidate function.** Return the most severe applicable `RuleResult`;
-the engine takes the max against the baseline.
+**1. Write and register the candidate function.** Import `register_rule` from the public
+rules API and pass one or more exact provider resource type names to the decorator. Every
+registered function must accept `(resource_type, action_set, change)` and return a list of
+`RuleResult`s, even when it does not use every argument.
 
 ```python
-def _efs_candidates(action_set: set[str]) -> list[RuleResult]:
+from readtheplan.rules import RuleResult, register_rule
+
+
+@register_rule("aws_efs_file_system")
+def _efs_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict,
+) -> list[RuleResult]:
     if "delete" in action_set and "create" not in action_set:
         return [RuleResult(
             "irreversible",
@@ -94,11 +98,25 @@ def _efs_candidates(action_set: set[str]) -> list[RuleResult]:
     return []
 ```
 
-Guidance: prefer `__TOOL__` over hard-coding "Terraform"; keep explanations to one or
-two sentences of *what to check before applying*; only escalate when the resource type
-genuinely warrants it (an unmatched type falls back to the action baseline, which is fine).
+There is no central `if`/`elif` dispatch chain to edit. To share one implementation across
+several exact types, list them all in the decorator:
 
-**3. Add a test** in [`tests/test_rules.py`](../tests/test_rules.py):
+```python
+@register_rule("aws_efs_mount_target", "aws_efs_access_point")
+def _efs_attachment_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict,
+) -> list[RuleResult]:
+    ...
+```
+
+Guidance: use real provider resource type names; prefer `__TOOL__` over hard-coding
+"Terraform"; keep explanations to one or two sentences of *what to check before applying*;
+only escalate when the resource type genuinely warrants it (an unmatched type falls back to
+the action baseline, which is fine).
+
+**2. Add a test** in [`tests/test_rules.py`](../tests/test_rules.py):
 
 ```python
 def test_efs_delete_is_irreversible():

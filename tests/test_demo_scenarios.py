@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from readtheplan.plan import analyze_plan_file
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo" / "scenarios"

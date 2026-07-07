@@ -6,7 +6,6 @@ import pytest
 
 from readtheplan.plan import PlanError, analyze_plan_file, load_plan
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -83,3 +82,43 @@ def test_empty_action_list_requires_review(tmp_path: Path) -> None:
 
     assert summary.resource_changes[0].risk == "review"
     assert "missing or unknown" in summary.resource_changes[0].explanation
+
+
+def test_analyze_public_api_import() -> None:
+    """The public ``analyze`` function is importable from the package root."""
+    from readtheplan import PlanSummary, ResourceChange, analyze
+
+    # dict input (most common programmatic usage)
+    plan: dict = {
+        "resource_changes": [
+            {
+                "address": "aws_s3_bucket.logs",
+                "type": "aws_s3_bucket",
+                "change": {"actions": ["create"]},
+            }
+        ],
+    }
+    summary = analyze(plan)
+    assert isinstance(summary, PlanSummary)
+    assert len(summary.resource_changes) == 1
+    change = summary.resource_changes[0]
+    assert isinstance(change, ResourceChange)
+    assert change.address == "aws_s3_bucket.logs"
+    assert change.resource_type == "aws_s3_bucket"
+    assert change.actions == ("create",)
+    assert change.risk == "safe"
+
+
+def test_analyze_public_api_accepts_path(tmp_path: Path) -> None:
+    """The public ``analyze`` function also accepts file paths."""
+    from readtheplan import analyze
+
+    plan_file = tmp_path / "plan.json"
+    plan_file.write_text(
+        '{"resource_changes": [{"address": "x", "type": "x", '
+        '"change": {"actions": ["delete"]}}]}',
+        encoding="utf-8",
+    )
+    summary = analyze(plan_file)
+    assert len(summary.resource_changes) == 1
+    assert summary.resource_changes[0].risk == "irreversible"

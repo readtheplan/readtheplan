@@ -9,7 +9,6 @@ from typing import Any
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "parse_action_output.py"
 
@@ -23,7 +22,7 @@ def _load_parser() -> ModuleType:
     return module
 
 
-def _run_parser(tmp_path: Path, payload: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, Path]:
+def _run_parser(tmp_path: Path, payload: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, Path]:  # noqa: E501
     parser = _load_parser()
     output_json = tmp_path / "output.json"
     github_output = tmp_path / "github-output.txt"
@@ -72,7 +71,7 @@ def test_parse_action_output_writes_compact_outputs(
     assert "resource-change-count=1" in output
     assert 'action-counts={"update":1}' in output
     assert 'risk-counts={"review":1}' in output
-    assert "| review | update | aws_s3_bucket.logs | aws_s3_bucket |" in step_summary.read_text(encoding="utf-8")
+    assert "| review | update | aws_s3_bucket.logs | aws_s3_bucket |" in step_summary.read_text(encoding="utf-8")  # noqa: E501
     assert count_file.read_text(encoding="utf-8") == "1"
 
 

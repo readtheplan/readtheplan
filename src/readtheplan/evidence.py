@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from readtheplan.attestation import (
     PlanReadAttestation,
@@ -71,6 +72,18 @@ def build_evidence(
         raise EvidenceError("agent_id must be non-empty")
 
     timestamp = (generated_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+
+    # Provenance: which non-builtin plugins contributed a winning rule result.
+    plugin_sources = tuple(
+        sorted(
+            {
+                change.source
+                for change in plan_summary.resource_changes
+                if getattr(change, "source", "builtin") not in ("", "builtin")
+            }
+        )
+    )
+
     try:
         attestation = build_plan_read_attestation(
             agent_id=agent_id,
@@ -78,11 +91,13 @@ def build_evidence(
             read_at=timestamp,
             source=_PLAN_SOURCE,
             run_id=run_id,
+            plugins=plugin_sources,
         )
     except ValueError as exc:
         raise EvidenceError(str(exc)) from exc
 
     reviewer_payload = _reviewer_to_dict(reviewer)
+
     changes = tuple(
         _change_to_dict(change, catalog) for change in plan_summary.resource_changes
     )
@@ -129,6 +144,7 @@ def _attestation_to_dict(attestation: PlanReadAttestation) -> dict[str, Any]:
         "source": attestation.source,
         "run_id": attestation.run_id,
         "signature": attestation.signature,
+        "provenance": list(attestation.provenance),
     }
 
 
@@ -149,7 +165,7 @@ def _change_to_dict(
     change: ResourceChange,
     catalog: ControlCatalog,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "address": change.address,
         "type": change.resource_type,
         "actions": list(change.actions),
@@ -163,6 +179,9 @@ def _change_to_dict(
             )
         ],
     }
+    if getattr(change, "source", "builtin") not in ("", "builtin"):
+        payload["provenance"] = {"source": change.source}
+    return payload
 
 
 def _control_to_dict(control: ControlEntry) -> dict[str, str]:
