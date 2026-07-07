@@ -515,7 +515,35 @@ def _contains_public_principal(value: Any) -> bool:
 # ── Import provider modules to trigger @register_rule decorators ──────
 # Placed at the end so ALL symbols (RuleResult, _after_value, etc.) are
 # defined before provider modules try to import them.
-from readtheplan.rules import aws, azure, gcp, k8s  # noqa: E402, F401
+from readtheplan.rules import aws, azure, gcp, k8s  # noqa: E402, F401, I001
+
+
+# Dynamically load auto-generated rules
+try:
+    from pathlib import Path  # noqa: I001
+    import importlib  # noqa: I001
+    import pkgutil  # noqa: I001
+
+    def _load_auto_rules() -> None:
+        auto_dir = Path(__file__).parent / "auto"
+        if not auto_dir.exists():
+            auto_dir.mkdir(parents=True, exist_ok=True)
+        init_file = auto_dir / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text('"""Auto-generated rules package."""\n', encoding="utf-8")
+        
+        package_name = "readtheplan.rules.auto"
+        try:
+            auto_pkg = importlib.import_module(package_name)
+            for _, module_name, _ in pkgutil.iter_modules(auto_pkg.__path__):
+                importlib.import_module(f"{package_name}.{module_name}")
+        except Exception:  # auto-rule package may not exist yet; safe to skip
+            pass
+
+    _load_auto_rules()
+except Exception:  # auto-rule directory setup is best-effort; never block startup
+    pass
+
 
 
 def load_entry_point_rules() -> list[str]:

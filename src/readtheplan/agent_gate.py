@@ -4,10 +4,12 @@ from collections import Counter
 from typing import Any
 
 from readtheplan.controls import ControlCatalog
+from readtheplan.evolution import EvolutionEngine
 from readtheplan.plan import PlanSummary, ResourceChange
 from readtheplan.rules import RISK_ORDER
 
 SCHEMA = "rtp-agent-gate-v1"
+SCHEMA_KERNEL = "rtp-kernel-v1"
 
 _RISK_TIERS = ("safe", "review", "dangerous", "irreversible")
 
@@ -25,6 +27,8 @@ def agent_gate_to_dict(
     catalog: ControlCatalog | None = None,
     *,
     tool_name: str = "Terraform",
+    mode: str = "kernel",
+    evolution_engine: EvolutionEngine | None = None,
 ) -> dict[str, Any]:
     """Build the deterministic local agent gate contract.
 
@@ -32,6 +36,10 @@ def agent_gate_to_dict(
     auditor summaries, and evidence checklists.  Use ``"CloudFormation"``,
     ``"Pulumi"``, etc. for non-Terraform adapters so the output reads
     naturally for each IaC tool.
+
+    ``mode`` controls evolution behavior:
+      - ``"kernel"`` (default): basic gate, no evolution recording
+      - ``"self-improving"``: gate + evolution recording + rule suggestion
     """
 
     risk = _max_risk(summary)
@@ -40,19 +48,133 @@ def agent_gate_to_dict(
     counts = _risk_counts(summary.risk_counts)
     reason = _reason(summary, decision, risk, counts, tool_name=tool_name)
 
-    return {
-        "schema": SCHEMA,
+    # Compliance score: 100 - weighted penalties based on risk
+    compliance_score = _compute_compliance_score(summary, counts)
+
+    output: dict[str, Any] = {
+        "schema": SCHEMA_KERNEL if mode == "self-improving" else SCHEMA,
         "decision": decision,
         "risk": risk,
+        "compliance_score": compliance_score,
         "required_checks": required_checks,
         "allowed_next_actions": _allowed_next_actions(decision),
         "prohibited_next_actions": _prohibited_next_actions(decision),
         "reason": reason,
         "pr_comment": _pr_comment(summary, decision, risk, reason, required_checks),
-        "evidence_checklist": _evidence_checklist(summary, decision, catalog, tool_name=tool_name),
-        "auditor_summary": _auditor_summary(summary, decision, risk, counts, tool_name=tool_name),
+        "evidence_checklist": _evidence_checklist(
+            summary, decision, catalog, tool_name=tool_name
+        ),
+        "auditor_summary": _auditor_summary(
+            summary, decision, risk, counts, tool_name=tool_name
+        ),
         "risk_counts": counts,
+        "mode": mode,
     }
+
+    # Stage 2-4: Self-improving evolution loop
+    if mode == "self-improving" and evolution_engine is not None:
+        plan_hash = _compute_plan_hash(summary)
+        resource_changes = [
+            {
+                "address": c.address,
+                "resource_type": c.resource_type,
+                "actions": list(c.actions),
+                "risk": c.risk,
+                "explanation": c.explanation,
+            }
+            for c in summary.resource_changes
+        ]
+
+        evolution_result = evolution_engine.run_full_evolution_loop(
+            plan_hash=plan_hash,
+            decision=decision,
+            compliance_score=compliance_score,
+            mode=mode,
+            plan_summary={
+                "path": str(summary.path),
+                "terraform_version": summary.terraform_version,
+                "change_count": len(summary.resource_changes),
+            },
+            resource_changes=resource_changes,
+        )
+
+        output["evolution"] = {
+            "run_id": evolution_result["run_id"],
+            "patterns_detected": evolution_result["patterns_detected"],
+            "patterns": evolution_result["patterns"],
+            "suggested_rules": evolution_result["suggested_rules"],
+        }
+
+        if evolution_result["suggested_rules"]:
+            output["evolution"]["kernel_instruction"] = _kernel_instruction(
+                evolution_result
+            )
+            output["evolution"]["handoff_protocol"] = _handoff_protocol(
+                evolution_result
+            )
+
+    return output
+
+
+def _compute_compliance_score(
+    summary: PlanSummary,
+    counts: dict[str, int],
+) -> float:
+    """Compute a compliance score (0-100) based on resource risk profile.
+
+    Starts at 100 and deducts points for each risky resource:
+    - -5 per review-tier resource
+    - -15 per dangerous-tier resource
+    - -30 per irreversible-tier resource
+    """
+    score = 100.0
+    score -= counts.get("review", 0) * 5
+    score -= counts.get("dangerous", 0) * 15
+    score -= counts.get("irreversible", 0) * 30
+    return max(0.0, min(100.0, score))
+
+
+def _compute_plan_hash(summary: PlanSummary) -> str:
+    """Compute a stable hash for a plan summary."""
+    import hashlib
+
+    raw = f"{summary.path}:{len(summary.resource_changes)}:{summary.terraform_version}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _kernel_instruction(evolution_result: dict) -> str:
+    """Generate a concise instruction for downstream agents."""
+    rules = evolution_result.get("suggested_rules", [])
+    if not rules:
+        return "No rule suggestions. Gate decision stands."
+
+    parts = []
+    for r in rules:
+        parts.append(f"{r['status']}: {r['pattern_hash']} (score {r['score']:.0f})")
+    return "Suggested rules: " + "; ".join(parts)
+
+
+def _handoff_protocol(evolution_result: dict) -> list[dict]:
+    """Generate structured handoff protocol for multi-agent systems."""
+    rules = evolution_result.get("suggested_rules", [])
+    steps = []
+    for r in rules:
+        if r["status"] == "auto-merge":
+            steps.append({
+                "action": "merge", "rule": r["pattern_hash"],
+                "reason": "high confidence",
+            })
+        elif r["status"] == "pr-ready":
+            steps.append({
+                "action": "create_pr", "rule": r["pattern_hash"],
+                "reason": "medium confidence",
+            })
+        else:
+            steps.append({
+                "action": "review", "rule": r["pattern_hash"],
+                "reason": "low confidence",
+            })
+    return steps
 
 
 def _max_risk(summary: PlanSummary) -> str:
