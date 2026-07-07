@@ -12,6 +12,7 @@ from readtheplan.controls import (
     FrameworkNotFoundError,
     load_catalog,
 )
+from readtheplan.evolution import EvolutionEngine
 from readtheplan.plan import PlanError, PlanSummary, analyze_plan_file
 from readtheplan.summary import summary_to_dict
 
@@ -265,6 +266,22 @@ def create_server() -> Any:
                 - {"resources": [...]} — single manifest format
         """
         return agent_gate_k8s_handler(input_path)
+
+    @mcp.tool(name="evolution_status")
+    def _evolution_status_tool() -> dict[str, object]:
+        """Return evolution engine statistics and recent run data."""
+        return EvolutionEngine().get_stats()
+
+    @mcp.tool(name="evolution_dashboard")
+    def _evolution_dashboard_tool() -> dict[str, object]:
+        """Generate the HTML evolution dashboard and return its file path."""
+        path = EvolutionEngine().generate_html_dashboard()
+        return {"dashboard_path": str(path)}
+
+    @mcp.tool(name="evolution_patterns")
+    def _evolution_patterns_tool() -> list[dict[str, object]]:
+        """Return all detected patterns and their evolution status."""
+        return EvolutionEngine().get_all_patterns()
 
     return mcp
 
