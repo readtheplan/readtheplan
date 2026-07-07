@@ -1,1 +1,1 @@
-"""Repository-local helper scripts for readtheplan."""
+# Tools package
