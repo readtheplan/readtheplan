@@ -7,11 +7,8 @@ Self-Improving Evolution Engine for readtheplan.
   3. Analyze — detect recurring patterns across incidents
   4. Evolve — generate and score candidates for explicit approval
 
-Multi-agent coordination (optional, via provider CLI):
-  - Research Agent (Grok) — finds patterns in past incidents
-  - Coder Agent (DeepSeek) — generates rule code with tests
-  - Reviewer Agent (Codex) — audits for correctness + safety
-  - Signal Agent (Hermes) — decides whether a candidate is ready for review
+Evolution analysis is intentionally local and deterministic. External model
+review is delegated to tooling outside this library.
 """
 
 from __future__ import annotations
@@ -21,10 +18,8 @@ import html as _html
 import json
 import os
 import re
-import shutil
 import sqlite3
 import stat
-import subprocess
 import sys
 import tempfile
 import threading
@@ -442,15 +437,13 @@ class EvolutionEngine:
             for r in rows
         ]
 
-    # ── Stage 3b: Multi-Agent Analysis ────────────────────────────────
+    # ── Stage 3b: Local Candidate Analysis ───────────────────────────
 
     def analyze_with_agents(self, patterns: list[dict]) -> list[dict]:
-        """Coordinate multi-agent analysis of detected patterns.
+        """Generate candidates using the local deterministic evolution rules.
 
-        Uses the configurable provider CLIs (Grok, DeepSeek, Codex, Hermes)
-        to research, code, review, and signal on detected patterns.
-
-        Falls back to rule-based heuristics when providers are unavailable.
+        This library does not spawn external model tooling. Model review, when
+        desired, is delegated to tooling outside this library.
         """
         evolved = []
         for pattern in patterns:
@@ -464,33 +457,15 @@ class EvolutionEngine:
                 print(f"Skipping pattern {pattern_hash!r}: {exc}", file=sys.stderr)
                 continue
 
-            # 1. Grok pattern analysis (when grok.exe is available)
-            grok_available = shutil.which("grok.exe") or shutil.which("grok")
-            grok_analysis = ""
-            if grok_available:
-                groq_msg = (
-                    "Explain the security risk and recurring pattern "
-                    f"for resource type '{rt}' with risk level '{risk}' "
-                    f"based on {cnt} incidents."
-                )
-                cmd = ["grok", "--single", groq_msg]
-                if shutil.which("grok.exe"):
-                    cmd[0] = "grok.exe"
-                try:
-                    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-                    if proc.returncode == 0:
-                        grok_analysis = proc.stdout.strip()
-                    else:
-                        print(
-                            f"grok.exe returned exit code "
-                            f"{proc.returncode}. Output: "
-                            f"{proc.stderr.strip() or proc.stdout.strip()}",
-                            file=sys.stderr,
-                        )
-                except Exception as e:
-                    print(f"Error calling grok.exe: {e}", file=sys.stderr)
-            
-            # 2. Local template generation of candidate rule + validation code
+            # Keep generation local and deterministic. Spawning external model
+            # tooling here could open an authentication flow or consume a
+            # user's quota; optional model review belongs outside this library.
+            analysis_summary = (
+                "Local heuristic analysis; external model review is delegated "
+                "to tooling outside this library."
+            )
+
+            # 1. Local template generation of candidate rule + validation code
             rule_id = self._candidate_rule_id(rt_clean, risk)
             self.candidates_dir.mkdir(parents=True, exist_ok=True)
             candidate_root = self.candidates_dir.resolve()
@@ -550,7 +525,7 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
         assert _RULE("{rt}", actions, {{"actions": sorted(actions)}}) == []
 """
 
-            # 3. Confine candidate artifacts to data_dir and validate them there.
+            # 2. Confine candidate artifacts to data_dir and validate them there.
             _atomic_write_in_directory(candidate_rule_file, rule_code.encode(), candidate_dir)
             _atomic_write_in_directory(candidate_test_file, test_code.encode(), candidate_dir)
 
@@ -571,7 +546,7 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                     file=sys.stderr,
                 )
 
-            # 4. Scoring logic
+            # 3. Scoring logic
             score = 0.0
             if verification_success:
                 base_score = 70.0
@@ -588,10 +563,10 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                 score = base_score + risk_bonus + incident_bonus + 10.0
                 score = min(score, 100.0)
 
-            # 5. Evolve decision
+            # 4. Evolve decision
             decision = self._evolve_decision(score, risk)
 
-            # 6. Save evolved rule to SQLite
+            # 5. Save evolved rule to SQLite
             self._save_evolved_rule(pattern_hash, rule_code, score, decision)
 
             candidate_metadata = {
@@ -616,10 +591,9 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                 candidate_dir,
             )
 
-            # 7. Print a review handoff for strong candidates.  Approval is a
+            # 6. Print a review handoff for strong candidates.  Approval is a
             # separate explicit command; this step never activates the code.
             if score >= 85:
-                grok_fallback = grok_analysis or "No Grok analysis (heuristic fallback)"
                 print(
                     "\n".join(
                         [
@@ -637,7 +611,7 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                             f"- Rule file: {candidate_rule_file}",
                             f"- Test file: {candidate_test_file}",
                             f"- Score: {score:.1f}",
-                            f"- Analysis: {grok_fallback}",
+                            f"- Analysis: {analysis_summary}",
                             f"- Approve: readtheplan evolve approve {rule_id}",
                             "=" * 60,
                         ]
@@ -645,7 +619,7 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                     file=sys.stderr,
                 )
 
-            # 8. Write JSON Handoff to ~/.readtheplan/handoffs/ if score >= 70
+            # 7. Write JSON Handoff to ~/.readtheplan/handoffs/ if score >= 70
             if score >= 70:
                 handoffs_dir = self.data_dir / "handoffs"
                 handoffs_dir.mkdir(parents=True, exist_ok=True)
@@ -692,8 +666,8 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
     def _generate_rule_heuristic(self, pattern: dict) -> str:
         """Generate a rule candidate from pattern data.
 
-        In production this is delegated to a Coder agent (DeepSeek).
-        For local standalone use, generate a heuristic rule description.
+        The library always generates this deterministic heuristic locally;
+        optional model-assisted generation belongs to tooling outside it.
         """
         rt = pattern["resource_type"]
         risk = pattern["risk"]
@@ -717,10 +691,7 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
         )
 
     def _score_rule(self, rule: str, pattern: dict) -> float:
-        """Score a rule candidate 0-100 based on severity and frequency.
-
-        In production this is delegated to a Reviewer agent (Codex).
-        """
+        """Score a rule candidate locally based on severity and frequency."""
         base = 50.0
         # Higher risk = higher potential value
         risk_bonus = {"safe": 10, "review": 20, "dangerous": 35, "irreversible": 50}
@@ -1092,7 +1063,7 @@ Score: {data.get('score')}
         # Stage 3: Analyze
         patterns = self.analyze_incidents(min_incidents=3)
 
-        # Stage 3b: Multi-agent analysis
+        # Stage 3b: Local candidate analysis
         if patterns:
             evolved = self.analyze_with_agents(patterns)
             suggested_rules = [

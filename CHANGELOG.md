@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- Self-improving evolution analysis now stays local and deterministic;
+  candidate generation never spawns external model tooling.
+
 ## [0.4.0] — 2026-07-11
 
 ### Added
