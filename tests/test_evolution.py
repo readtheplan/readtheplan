@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
@@ -36,6 +37,52 @@ def _write_plan(tmp_path: Path, actions: list[str], resource_type: str = "aws_s3
         encoding="utf-8",
     )
     return plan
+
+
+def _generate_candidate(
+    engine: EvolutionEngine,
+    monkeypatch: pytest.MonkeyPatch,
+    resource_type: str,
+) -> dict:
+    """Generate one verified candidate without invoking an optional provider CLI."""
+    monkeypatch.setattr("readtheplan.evolution.shutil.which", lambda _command: None)
+    [candidate] = engine.analyze_with_agents(
+        [
+            {
+                "pattern_hash": f"{resource_type}::dangerous",
+                "resource_type": resource_type,
+                "risk": "dangerous",
+                "incident_count": 12,
+            }
+        ]
+    )
+    return candidate
+
+
+def _write_approved_rule_store(
+    data_dir: Path,
+    rule_id: str,
+    source: bytes,
+) -> Path:
+    approved_dir = data_dir / "approved-rules"
+    approved_dir.mkdir(parents=True, exist_ok=True)
+    rule_file = approved_dir / f"{rule_id}.py"
+    rule_file.write_bytes(source)
+    (approved_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": "readtheplan-approved-rules-v1",
+                "rules": {
+                    rule_id: {
+                        "file": rule_file.name,
+                        "sha256": hashlib.sha256(source).hexdigest(),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return rule_file
 
 
 # ── Engine tests ──────────────────────────────────────────────────
@@ -140,16 +187,9 @@ def test_analyze_with_agents_generates_rule(tmp_path: Path):
     assert evolved[0]["suggested_rule"] is not None
     assert "aws_iam_role" in evolved[0]["suggested_rule"]
     assert evolved[0]["rule_score"] > 0
-    # Irreversible + 3 incidents = score >= 70, so should be at least "pr-ready"
-    assert evolved[0]["rule_status"] in ("pr-ready", "auto-merge", "disabled")
-
-    # Cleanup permanently generated files from tests
-    auto_rule = Path("src/readtheplan/rules/auto/rule_aws_iam_role_irreversible.py")
-    auto_test = Path("tests/test_rules_auto/test_rule_aws_iam_role_irreversible.py")
-    if auto_rule.exists():
-        auto_rule.unlink()
-    if auto_test.exists():
-        auto_test.unlink()
+    # Irreversible + 3 incidents = score >= 70, so it is ready for human approval.
+    assert evolved[0]["rule_status"] == "pr-ready"
+    assert Path(evolved[0]["candidate_dir"]).is_relative_to(engine.data_dir)
 
 
 def test_full_evolution_loop(tmp_path: Path):
@@ -391,15 +431,312 @@ def test_evolution_real_multi_agent_pipeline(tmp_path: Path):
     assert len(mcp_json_files) == 1
     assert len(mcp_md_files) == 1
     
-    from pathlib import Path
-    auto_rule = Path("src/readtheplan/rules/auto/rule_aws_s3_bucket_irreversible.py")
-    auto_test = Path("tests/test_rules_auto/test_rule_aws_s3_bucket_irreversible.py")
-    if auto_rule.exists():
-        auto_rule.unlink()
-    if auto_test.exists():
-        auto_test.unlink()
-        
     del os.environ["AGENT_HANDOFF_ROOT"]
+
+
+def test_candidate_artifacts_are_confined_and_validate_counterexamples(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_confinement")
+
+    candidate_dir = Path(candidate["candidate_dir"]).resolve()
+    assert candidate_dir.parent == engine.candidates_dir.resolve()
+    assert {path.name for path in candidate_dir.iterdir()} == {
+        "candidate.json",
+        "rule.py",
+        "test_rule.py",
+    }
+
+    metadata = json.loads((candidate_dir / "candidate.json").read_text(encoding="utf-8"))
+    assert metadata["rule_id"] == candidate["rule_id"]
+    assert metadata["verified"] is True
+    validation = (candidate_dir / "test_rule.py").read_text(encoding="utf-8")
+    assert "spec_from_file_location" in validation
+    assert 'Path(__file__).with_name("rule.py")' in validation
+    assert '{"no-op"}' in validation
+    assert '{"read"}' in validation
+    assert "== []" in validation
+
+
+def test_generation_rejects_symlinked_candidate_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    engine = _make_engine(tmp_path)
+    resource_type = "custom_widget_symlink_generation"
+    rule_id = f"rule_{resource_type}_dangerous"
+    candidate_dir = engine.candidates_dir / rule_id
+    candidate_dir.mkdir(parents=True)
+    outside = tmp_path / "outside-rule.py"
+    outside.write_text("sentinel", encoding="utf-8")
+    try:
+        (candidate_dir / "rule.py").symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"file symlinks unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="symlinked output"):
+        _generate_candidate(engine, monkeypatch, resource_type)
+    assert outside.read_text(encoding="utf-8") == "sentinel"
+
+
+def test_approve_rule_hash_allowlists_and_loads_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from readtheplan.rules import RuleResult, apply_resource_rules
+    from readtheplan.rules._shared import _RULE_REGISTRY
+
+    engine = _make_engine(tmp_path)
+    resource_type = "custom_widget_approval"
+    candidate = _generate_candidate(engine, monkeypatch, resource_type)
+    rule_id = candidate["rule_id"]
+
+    # Loading an approved rule mutates the process-global registry by design.
+    # Restore the original bucket after this test so provider-coverage tests
+    # remain order-independent when suites are combined.
+    monkeypatch.setitem(
+        _RULE_REGISTRY,
+        resource_type,
+        list(_RULE_REGISTRY.get(resource_type, [])),
+    )
+
+    with pytest.raises(ValueError, match="invalid rule ID"):
+        engine.approve_rule("../rule_escape")
+
+    before = len(_RULE_REGISTRY.get(resource_type, []))
+    approved = engine.approve_rule(rule_id)
+    assert approved["rule_id"] == rule_id
+    manifest = json.loads(
+        (engine.approved_rules_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["schema"] == "readtheplan-approved-rules-v1"
+    assert manifest["rules"][rule_id]["sha256"] == approved["sha256"]
+    assert len(_RULE_REGISTRY.get(resource_type, [])) == before
+
+    assert engine.load_approved_rules() == [rule_id]
+    assert len(_RULE_REGISTRY[resource_type]) == before + 1
+    result = apply_resource_rules(
+        resource_type=resource_type,
+        actions=("delete",),
+        change={"actions": ["delete"]},
+        baseline=RuleResult("safe", "baseline"),
+    )
+    assert result.risk == "dangerous"
+    assert result.source == f"approved:{rule_id}"
+
+    # Re-loading the same manifest record is idempotent.
+    assert engine.load_approved_rules() == [rule_id]
+    assert len(_RULE_REGISTRY[resource_type]) == before + 1
+
+
+def test_approval_rejects_symlinked_approved_rule_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_symlink_approval")
+    engine.approved_rules_dir.mkdir()
+    outside = tmp_path / "outside-approved-rule.py"
+    outside.write_text("sentinel", encoding="utf-8")
+    approved_file = engine.approved_rules_dir / f"{candidate['rule_id']}.py"
+    try:
+        approved_file.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"file symlinks unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="symlinked output"):
+        engine.approve_rule(candidate["rule_id"])
+    assert outside.read_text(encoding="utf-8") == "sentinel"
+    assert not (engine.approved_rules_dir / "manifest.json").exists()
+
+
+def test_unapproved_or_hash_mismatched_rule_file_is_not_loaded(tmp_path: Path):
+    from readtheplan.rules._shared import _RULE_REGISTRY, _load_auto_rules
+
+    engine = _make_engine(tmp_path)
+    resource_type = "custom_widget_unapproved"
+    rule_id = f"rule_{resource_type}_dangerous"
+    engine.approved_rules_dir.mkdir()
+    loose_rule = engine.approved_rules_dir / f"{rule_id}.py"
+    loose_rule.write_text(
+        "from readtheplan.rules import RuleResult, register_rule\n"
+        f"@register_rule({resource_type!r})\n"
+        "def loose_rule(resource_type, action_set, change):\n"
+        "    return [RuleResult('dangerous', 'must not load')]\n",
+        encoding="utf-8",
+    )
+    before = len(_RULE_REGISTRY.get(resource_type, []))
+
+    assert _load_auto_rules(engine.data_dir) == []
+    assert len(_RULE_REGISTRY.get(resource_type, [])) == before
+
+    (engine.approved_rules_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": "readtheplan-approved-rules-v1",
+                "rules": {
+                    rule_id: {
+                        "file": loose_rule.name,
+                        "sha256": "0" * 64,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert _load_auto_rules(engine.data_dir) == []
+    assert len(_RULE_REGISTRY.get(resource_type, [])) == before
+
+
+def test_approved_loader_executes_verified_source_not_timestamp_valid_bytecode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import importlib.util
+    import os
+    import py_compile
+
+    from readtheplan.rules._shared import _RULE_REGISTRY, _load_auto_rules
+
+    data_dir = tmp_path / ".readtheplan"
+    rule_id = "rule_custom_widget_bytecode_dangerous"
+    good_resource = "custom_widget_bytecode_good"
+    evil_resource = "custom_widget_bytecode_evil"
+    template = (
+        "from readtheplan.rules._shared import RuleResult, register_rule\n\n"
+        '@register_rule("custom_widget_bytecode_{token}")\n'
+        "def approved_rule(resource_type, action_set, change):\n"
+        '    return [RuleResult("dangerous", "{token}")]\n'
+    )
+    benign_source = template.format(token="good").encode()
+    malicious_source = template.format(token="evil").encode()
+    assert len(benign_source) == len(malicious_source)
+
+    rule_file = _write_approved_rule_store(data_dir, rule_id, malicious_source)
+    fixed_timestamp = 1_700_000_000
+    os.utime(rule_file, (fixed_timestamp, fixed_timestamp))
+    cached_file = Path(importlib.util.cache_from_source(str(rule_file)))
+    cached_file.parent.mkdir(exist_ok=True)
+    py_compile.compile(
+        str(rule_file),
+        cfile=str(cached_file),
+        doraise=True,
+        invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP,
+    )
+
+    # Keep the timestamp and size accepted by the malicious pyc while the
+    # manifest hashes the benign source now present at the same pathname.
+    _write_approved_rule_store(data_dir, rule_id, benign_source)
+    os.utime(rule_file, (fixed_timestamp, fixed_timestamp))
+    assert cached_file.is_file()
+
+    monkeypatch.setitem(
+        _RULE_REGISTRY,
+        good_resource,
+        list(_RULE_REGISTRY.get(good_resource, [])),
+    )
+    monkeypatch.setitem(
+        _RULE_REGISTRY,
+        evil_resource,
+        list(_RULE_REGISTRY.get(evil_resource, [])),
+    )
+    good_before = len(_RULE_REGISTRY[good_resource])
+    evil_before = len(_RULE_REGISTRY[evil_resource])
+
+    assert _load_auto_rules(data_dir) == [rule_id]
+    assert len(_RULE_REGISTRY[good_resource]) == good_before + 1
+    assert len(_RULE_REGISTRY[evil_resource]) == evil_before
+
+
+def test_approved_loader_rolls_back_partial_registry_mutations(tmp_path: Path):
+    import sys
+
+    import readtheplan.rules._shared as shared
+
+    data_dir = tmp_path / ".readtheplan"
+    rule_id = "rule_custom_widget_failed_load_dangerous"
+    failed_resource = "custom_widget_failed_load"
+    failing_source = (
+        "import readtheplan.rules._shared as shared\n"
+        "from readtheplan.rules._shared import (\n"
+        "    RuleResult, register_cross_cutting, register_rule,\n"
+        ")\n\n"
+        f"@register_rule({failed_resource!r})\n"
+        "def failed_rule(resource_type, action_set, change):\n"
+        "    return [RuleResult('dangerous', 'must roll back')]\n\n"
+        "@register_cross_cutting\n"
+        "def failed_cross_cutting(resource_type, action_set, change):\n"
+        "    return []\n\n"
+        "shared._current_source = 'corrupted-during-load'\n"
+        "raise RuntimeError('approved module failed after registration')\n"
+    ).encode()
+    _write_approved_rule_store(data_dir, rule_id, failing_source)
+
+    registry_object = shared._RULE_REGISTRY
+    cross_cutting_object = shared._CROSS_CUTTING
+    registry_before = {
+        resource_type: tuple(bucket)
+        for resource_type, bucket in registry_object.items()
+    }
+    bucket_ids_before = {
+        resource_type: id(bucket)
+        for resource_type, bucket in registry_object.items()
+    }
+    cross_cutting_before = tuple(cross_cutting_object)
+    source_before = shared._current_source
+
+    assert shared._load_auto_rules(data_dir) == []
+    assert shared._RULE_REGISTRY is registry_object
+    assert shared._CROSS_CUTTING is cross_cutting_object
+    assert set(registry_object) == set(registry_before)
+    for resource_type, before in registry_before.items():
+        assert tuple(registry_object[resource_type]) == before
+        assert id(registry_object[resource_type]) == bucket_ids_before[resource_type]
+    assert tuple(cross_cutting_object) == cross_cutting_before
+    assert failed_resource not in registry_object
+    assert shared._current_source == source_before
+    assert not any(rule_id in module_name for module_name in sys.modules)
+
+
+def test_approval_rejects_disabled_or_unverified_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_unverified")
+    metadata_file = Path(candidate["candidate_dir"]) / "candidate.json"
+    metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+
+    metadata["status"] = "disabled"
+    metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+    with pytest.raises(ValueError, match="not verified and pr-ready"):
+        engine.approve_rule(candidate["rule_id"])
+
+    metadata["status"] = "pr-ready"
+    metadata["verified"] = False
+    metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+    with pytest.raises(ValueError, match="not verified and pr-ready"):
+        engine.approve_rule(candidate["rule_id"])
+    assert not engine.approved_rules_dir.exists()
+
+
+def test_cli_evolve_approve_uses_exact_top_level_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    import readtheplan.cli as cli
+
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_cli")
+    monkeypatch.setattr(cli, "EvolutionEngine", lambda: engine)
+
+    assert cli.main(["evolve", "approve", candidate["rule_id"]]) == 0
+    captured = capsys.readouterr()
+    assert f"Approved {candidate['rule_id']}" in captured.out
+    assert (engine.approved_rules_dir / "manifest.json").is_file()
 
 
 def test_cli_evolution_console(capsys):
@@ -537,4 +874,3 @@ def test_standalone_report_escapes_plan_derived_fields(
     html = report_file.read_text(encoding="utf-8")
     assert xss_payload not in html, "Raw XSS must NOT appear in standalone report"
     assert "&lt;script&gt;" in html, "XSS must be HTML-escaped in standalone report"
-

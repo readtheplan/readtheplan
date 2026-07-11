@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,6 +72,93 @@ def _resolve_path(plan_path: str) -> str:
     """Validate *plan_path* against the working root and return the resolved
     absolute path as a string."""
     return str(_validate_path(plan_path))
+
+
+def _final_path_from_descriptor(descriptor: int) -> Path | None:
+    """Return the filesystem path actually opened by *descriptor*.
+
+    ``MCP_ROOT`` is a security boundary, so checking a pathname before a
+    separate open is insufficient: the path can be swapped to a symlink in
+    between.  Linux exposes the opened path through ``/proc``; Windows exposes
+    it through ``GetFinalPathNameByHandleW``.  Callers fail closed when neither
+    mechanism is available and confinement is enabled.
+    """
+    if os.name == "nt":
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        get_final_path = ctypes.WinDLL("kernel32", use_last_error=True).GetFinalPathNameByHandleW
+        get_final_path.argtypes = [
+            wintypes.HANDLE,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+        ]
+        get_final_path.restype = wintypes.DWORD
+        handle = msvcrt.get_osfhandle(descriptor)
+        size = get_final_path(handle, None, 0, 0)
+        if size == 0:
+            return None
+        buffer = ctypes.create_unicode_buffer(size + 1)
+        written = get_final_path(handle, buffer, len(buffer), 0)
+        if written == 0 or written >= len(buffer):
+            return None
+        final_path = buffer.value
+        if final_path.startswith("\\\\?\\UNC\\"):
+            final_path = "\\\\" + final_path[8:]
+        elif final_path.startswith("\\\\?\\"):
+            final_path = final_path[4:]
+        return Path(final_path).resolve()
+
+    descriptor_link = Path("/proc/self/fd") / str(descriptor)
+    try:
+        return descriptor_link.resolve(strict=True)
+    except OSError:
+        return None
+
+
+def _read_confined_bytes(path: str) -> bytes:
+    """Open *path* once and verify the opened object remains inside MCP_ROOT."""
+    resolved = _resolve_path(path)
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if os.name != "nt":
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(resolved, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP and _working_root() is not None:
+            raise MCPToolInputError(
+                code="PATH_TRAVERSAL",
+                message=f"input path {path!r} changed to a symlink during validation",
+            ) from None
+        raise
+
+    try:
+        root = _working_root()
+        if root is not None:
+            opened_path = _final_path_from_descriptor(descriptor)
+            if opened_path is None:
+                raise MCPToolInputError(
+                    code="PATH_TRAVERSAL",
+                    message=f"cannot verify the opened path for {path!r}",
+                )
+            try:
+                opened_path.relative_to(root)
+            except ValueError:
+                raise MCPToolInputError(
+                    code="PATH_TRAVERSAL",
+                    message=(
+                        f"input path {path!r} opened outside the allowed "
+                        f"working root {root}"
+                    ),
+                ) from None
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            return stream.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
 
 
 def analyze_plan(
@@ -164,7 +252,7 @@ def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
         )
 
     try:
-        data = json.loads(Path(input_path).read_bytes())
+        data = json.loads(_read_confined_bytes(input_path))
     except FileNotFoundError:
         raise MCPToolInputError(
             code="FILE_NOT_FOUND",

@@ -261,6 +261,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Display a terminal-based console dashboard.",
     ).set_defaults(evolution_func=_evolution_console)
 
+    evolve_parser = subparsers.add_parser(
+        "evolve",
+        help="Review and explicitly approve generated evolution candidates.",
+    )
+    evolve_sub = evolve_parser.add_subparsers(dest="evolve_action", required=True)
+    evolve_approve = evolve_sub.add_parser(
+        "approve",
+        help="Approve a verified candidate rule for loading on the next run.",
+    )
+    evolve_approve.add_argument("rule_id", help="Candidate rule ID shown by evolution output.")
+    evolve_approve.set_defaults(evolution_func=_evolution_approve)
+
     return parser
 
 
@@ -781,6 +793,21 @@ def _evolution_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evolution_approve(args: argparse.Namespace) -> int:
+    """Explicitly approve a verified evolution candidate."""
+    engine = EvolutionEngine()
+    try:
+        approved = engine.approve_rule(args.rule_id)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"Approved {approved['rule_id']} ({approved['sha256'][:12]}). "
+        "It will load on the next readtheplan run."
+    )
+    return 0
+
+
 def _evolution_console(args: argparse.Namespace) -> int:
     """Display a terminal-based console dashboard."""
     engine = EvolutionEngine()
@@ -797,7 +824,7 @@ def _evolution_console(args: argparse.Namespace) -> int:
     print(f" Blocked:    {stats['blocked']:<8} | Warned:               {stats['warned']}")
     print(f" Incidents:  {stats['total_incidents']:<8} "
           f"| Patterns: {stats['total_patterns']}")
-    print(f" Auto-Merged Rules: {stats['auto_merged_rules']}")
+    print(f" Approved Rules: {stats['approved_rules']}")
     print("-" * 60)
     print(" DETECTED PATTERNS")
     print("-" * 60)

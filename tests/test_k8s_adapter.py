@@ -133,6 +133,10 @@ class TestKubernetesAdapter:
         assert changes[0]["Action"] == "Add"
         assert changes[0]["Kind"] == "Deployment"
         assert changes[0]["LogicalResourceId"] == "web-frontend"
+        assert changes[0]["_metadata"]["before"] == {}
+        assert changes[0]["_metadata"]["after"]["spec"] == (
+            DEPLOYMENT_CREATE["resources"][0]["spec"]
+        )
 
     def test_extract_changes_from_diff_add(self):
         adapter = KubernetesAdapter()
@@ -141,6 +145,8 @@ class TestKubernetesAdapter:
         assert len(changes) == 1
         assert changes[0]["Action"] == "Add"
         assert changes[0]["Kind"] == "Secret"
+        assert changes[0]["_metadata"]["before"] == {}
+        assert changes[0]["_metadata"]["after"]["type"] == "Opaque"
 
     def test_extract_changes_from_diff_remove(self):
         adapter = KubernetesAdapter()
@@ -149,6 +155,8 @@ class TestKubernetesAdapter:
         assert len(changes) == 1
         assert changes[0]["Action"] == "Remove"
         assert changes[0]["Kind"] == "Secret"
+        assert changes[0]["_metadata"]["before"]["type"] == "Opaque"
+        assert changes[0]["_metadata"]["after"] == {}
 
     def test_extract_changes_from_diff_modify(self):
         adapter = KubernetesAdapter()
@@ -160,6 +168,63 @@ class TestKubernetesAdapter:
         assert "_metadata" in changes[0]
         assert "before" in changes[0]["_metadata"]
         assert "after" in changes[0]["_metadata"]
+
+    @pytest.mark.parametrize(
+        ("kind", "field", "before", "after"),
+        [
+            (
+                "ClusterRole",
+                "rules",
+                [{"apiGroups": [""], "resources": ["pods"], "verbs": ["get"]}],
+                [{"apiGroups": [""], "resources": ["pods"], "verbs": ["list"]}],
+            ),
+            (
+                "RoleBinding",
+                "roleRef",
+                {"kind": "Role", "name": "viewer"},
+                {"kind": "Role", "name": "editor"},
+            ),
+            (
+                "RoleBinding",
+                "subjects",
+                [{"kind": "ServiceAccount", "name": "app"}],
+                [{"kind": "Group", "name": "developers"}],
+            ),
+            ("Secret", "stringData", {"token": "old"}, {"token": "new"}),
+            ("ConfigMap", "binaryData", {"blob": "b2xk"}, {"blob": "bmV3"}),
+            (
+                "ClusterRole",
+                "aggregationRule",
+                {"clusterRoleSelectors": [{"matchLabels": {"tier": "reader"}}]},
+                {"clusterRoleSelectors": [{"matchLabels": {"tier": "editor"}}]},
+            ),
+            ("Secret", "type", "Opaque", "kubernetes.io/tls"),
+        ],
+    )
+    def test_top_level_rule_property_change_produces_modify(
+        self,
+        kind,
+        field,
+        before,
+        after,
+    ):
+        adapter = KubernetesAdapter()
+        old = {
+            "apiVersion": "v1",
+            "kind": kind,
+            "metadata": {"name": "example", "namespace": "default"},
+            field: before,
+        }
+        new = {**old, field: after}
+
+        changes = adapter.extract_changes(
+            {"old_manifests": [old], "new_manifests": [new]}
+        )
+
+        assert len(changes) == 1
+        assert changes[0]["Action"] == "Modify"
+        assert changes[0]["_metadata"]["before"][field] == before
+        assert changes[0]["_metadata"]["after"][field] == after
 
     def test_extract_changes_identical_noop(self):
         adapter = KubernetesAdapter()
@@ -304,6 +369,101 @@ def test_analyze_cluster_role_diff():
     }
     gate = analyze_kubernetes(data)
     assert gate["total_changes"] == 1
+
+
+def test_analyze_cluster_role_aggregation_selector_only_diff():
+    old = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRole",
+        "metadata": {"name": "aggregate-readers"},
+        "aggregationRule": {
+            "clusterRoleSelectors": [{"matchLabels": {"rbac.example/tier": "reader"}}]
+        },
+    }
+    new = {
+        **old,
+        "aggregationRule": {
+            "clusterRoleSelectors": [{"matchLabels": {"rbac.example/tier": "editor"}}]
+        },
+    }
+
+    gate = analyze_kubernetes({"old_manifests": [old], "new_manifests": [new]})
+
+    assert gate["total_changes"] >= 1
+    assert gate["decision"] != "proceed"
+
+
+@pytest.mark.parametrize("wildcard_field", ["apiGroups", "resources", "verbs"])
+def test_analyze_role_wildcard_grant_is_dangerous(wildcard_field):
+    rule = {"apiGroups": [""], "resources": ["pods"], "verbs": ["get"]}
+    rule[wildcard_field] = ["*"]
+    role = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "Role",
+        "metadata": {"name": "broad-role", "namespace": "production"},
+        "rules": [rule],
+    }
+
+    changes = KubernetesAdapter().analyze({"resources": [role]}, tool_name="Kubernetes")
+
+    assert changes[0].risk == "dangerous"
+    assert wildcard_field in changes[0].explanation
+
+
+def test_analyze_role_update_to_wildcard_grant_is_dangerous():
+    old = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "Role",
+        "metadata": {"name": "pod-reader", "namespace": "production"},
+        "rules": [{"apiGroups": [""], "resources": ["pods"], "verbs": ["get"]}],
+    }
+    new = {
+        **old,
+        "rules": [{"apiGroups": [""], "resources": ["pods"], "verbs": ["*"]}],
+    }
+
+    changes = KubernetesAdapter().analyze(
+        {"old_manifests": [old], "new_manifests": [new]},
+        tool_name="Kubernetes",
+    )
+
+    assert len(changes) == 1
+    assert changes[0].risk == "dangerous"
+    assert "wildcard verbs" in changes[0].explanation
+
+
+def test_analyze_bounded_role_grant_requires_review_without_escalation():
+    role = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "Role",
+        "metadata": {"name": "pod-reader", "namespace": "production"},
+        "rules": [
+            {"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "list"]}
+        ],
+    }
+
+    changes = KubernetesAdapter().analyze({"resources": [role]}, tool_name="Kubernetes")
+
+    assert changes[0].risk == "review"
+    assert "change a Role" in changes[0].explanation
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [None, "not-a-list", {"verbs": ["*"]}, [None, "not-a-rule", {"verbs": None}]],
+)
+def test_analyze_malformed_role_rules_do_not_crash(rules):
+    role = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "Role",
+        "metadata": {"name": "malformed-role", "namespace": "production"},
+        "rules": rules,
+    }
+
+    gate = analyze_kubernetes({"resources": [role]})
+
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
 
 
 # ---------------------------------------------------------------------------
