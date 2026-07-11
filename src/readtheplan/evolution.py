@@ -27,8 +27,12 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
+from contextlib import redirect_stdout
 from datetime import datetime
+from importlib.machinery import ModuleSpec
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 # Valid risk values — must match RISK_ORDER in rules/_shared.py
@@ -106,6 +110,116 @@ def _is_link_or_reparse_point(path: Path) -> bool:
         return True
     reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
     return path.is_symlink() or bool(attributes & reparse_flag)
+
+
+def _verify_candidate_rule(
+    rule_bytes: bytes,
+    *,
+    source_path: Path,
+    module_name: str,
+    function_name: str,
+    resource_type: str,
+    risk: str,
+) -> tuple[bool, str | None]:
+    """Execute and verify a generated rule without activating it.
+
+    Candidate modules use the public registration decorators, so executing one
+    mutates the process-global rule registry even when its function is called
+    directly.  Verification therefore holds the registry lock, snapshots the
+    same state protected by the approved-rule loader, and restores it in all
+    cases.  Compiling the bytes already written to the candidate directory
+    also avoids pathname-loader bytecode substitution.
+    """
+    import readtheplan.rules._shared as shared
+
+    try:
+        code = compile(rule_bytes, str(source_path), "exec", dont_inherit=True)
+    except (SyntaxError, TypeError, ValueError) as exc:
+        return False, f"candidate could not be compiled: {exc}"
+
+    module = ModuleType(module_name)
+    module.__file__ = str(source_path)
+    module.__package__ = ""
+    module.__loader__ = None
+    module.__spec__ = ModuleSpec(module_name, loader=None, origin=str(source_path))
+    module.__cached__ = None
+
+    missing_module = object()
+    success = False
+    error: str | None = None
+    with shared._REGISTRY_LOCK:
+        registry_object = shared._RULE_REGISTRY
+        registry_buckets = dict(registry_object)
+        registry_snapshot = {
+            registered_type: list(bucket)
+            for registered_type, bucket in registry_buckets.items()
+        }
+        cross_cutting_object = shared._CROSS_CUTTING
+        cross_cutting_snapshot = list(cross_cutting_object)
+        source_snapshot = shared._current_source
+        previous_module = sys.modules.get(module_name, missing_module)
+        sys.modules[module_name] = module
+
+        try:
+            # Candidate output is diagnostic output and must never share the
+            # caller's machine-readable stdout stream.
+            with redirect_stdout(sys.stderr):
+                exec(code, module.__dict__)
+                rule = module.__dict__.get(function_name)
+                if not callable(rule):
+                    raise ValueError(f"candidate did not define {function_name}")
+
+                mutating_results = rule(
+                    resource_type,
+                    {"delete"},
+                    {"actions": ["delete"]},
+                )
+                if not mutating_results or not any(
+                    getattr(result, "risk", None) == risk
+                    for result in mutating_results
+                ):
+                    raise ValueError("candidate did not flag the mutating change")
+
+                for actions in ({"no-op"}, {"read"}):
+                    results = rule(
+                        resource_type,
+                        actions,
+                        {"actions": sorted(actions)},
+                    )
+                    if results != []:
+                        raise ValueError(
+                            "candidate flagged a no-op or read-only counterexample"
+                        )
+
+            if (
+                shared._RULE_REGISTRY is not registry_object
+                or shared._CROSS_CUTTING is not cross_cutting_object
+            ):
+                raise RuntimeError("candidate replaced a global rule registry")
+            for registered_type, before in registry_snapshot.items():
+                current = registry_object.get(registered_type)
+                if current is None or current[: len(before)] != before:
+                    raise RuntimeError("candidate modified existing registrations")
+            if cross_cutting_object[: len(cross_cutting_snapshot)] != cross_cutting_snapshot:
+                raise RuntimeError("candidate modified existing cross-cutting rules")
+            success = True
+        except (Exception, SystemExit) as exc:
+            error = f"{type(exc).__name__}: {exc}"
+        finally:
+            shared._RULE_REGISTRY = registry_object
+            registry_object.clear()
+            for registered_type, bucket in registry_buckets.items():
+                bucket[:] = registry_snapshot[registered_type]
+                registry_object[registered_type] = bucket
+            shared._CROSS_CUTTING = cross_cutting_object
+            cross_cutting_object[:] = cross_cutting_snapshot
+            shared._current_source = source_snapshot
+            if previous_module is missing_module:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = previous_module
+
+    return success, error
 
 
 class EvolutionEngine:
@@ -347,7 +461,7 @@ class EvolutionEngine:
             try:
                 rt_clean, risk = _sanitize_for_codegen(rt, risk)
             except ValueError as exc:
-                print(f"Skipping pattern {pattern_hash!r}: {exc}")
+                print(f"Skipping pattern {pattern_hash!r}: {exc}", file=sys.stderr)
                 continue
 
             # 1. Grok pattern analysis (when grok.exe is available)
@@ -370,10 +484,11 @@ class EvolutionEngine:
                         print(
                             f"grok.exe returned exit code "
                             f"{proc.returncode}. Output: "
-                            f"{proc.stderr.strip() or proc.stdout.strip()}"
+                            f"{proc.stderr.strip() or proc.stdout.strip()}",
+                            file=sys.stderr,
                         )
                 except Exception as e:
-                    print(f"Error calling grok.exe: {e}")
+                    print(f"Error calling grok.exe: {e}", file=sys.stderr)
             
             # 2. Local template generation of candidate rule + validation code
             rule_id = self._candidate_rule_id(rt_clean, risk)
@@ -439,35 +554,22 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
             _atomic_write_in_directory(candidate_rule_file, rule_code.encode(), candidate_dir)
             _atomic_write_in_directory(candidate_test_file, test_code.encode(), candidate_dir)
 
-            pytest_cmd = [
-                sys.executable,
-                "-m",
-                "pytest",
-                "--no-cov",
-                "-p",
-                "no:cacheprovider",
-                str(candidate_test_file),
-            ]
-            env = os.environ.copy()
-            env["PYTHONPATH"] = "src"
-            env["PYTHONDONTWRITEBYTECODE"] = "1"
-
-            verification_success = False
-            try:
-                proc = subprocess.run(
-                    pytest_cmd, env=env,
-                    capture_output=True, text=True,
-                    timeout=15,
+            verification_success, verification_error = _verify_candidate_rule(
+                candidate_rule_file.read_bytes(),
+                source_path=candidate_rule_file,
+                module_name=(
+                    f"_readtheplan_candidate_verify_{rule_id}_"
+                    f"{hashlib.sha256(rule_code.encode()).hexdigest()[:12]}"
+                ),
+                function_name=f"_rule_{rt_clean}_{risk}",
+                resource_type=rt,
+                risk=risk,
+            )
+            if verification_error is not None:
+                print(
+                    f"Candidate verification failed for {rule_id}: {verification_error}",
+                    file=sys.stderr,
                 )
-                if proc.returncode == 0:
-                    verification_success = True
-                else:
-                    print(
-                        "Verification pytest failed with exit code "
-                        f"{proc.returncode}:\n{proc.stdout}\n{proc.stderr}"
-                    )
-            except Exception as e:
-                print(f"Error running verification pytest: {e}")
 
             # 4. Scoring logic
             score = 0.0
@@ -517,23 +619,31 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
             # 7. Print a review handoff for strong candidates.  Approval is a
             # separate explicit command; this step never activates the code.
             if score >= 85:
-                print("=" * 60)
-                print("PULL REQUEST TEMPLATE")
-                print("=" * 60)
-                print(f"Title: feat(rules): Auto-generated rule for {rt} ({risk})")
-                print("\nDescription:")
-                print(
-                    "This PR adds a self-evolved rule for resource type "
-                    f"'{rt}' with risk '{risk}'."
-                )
-                print(f"- Rule ID: {rule_id}")
-                print(f"- Rule file: {candidate_rule_file}")
-                print(f"- Test file: {candidate_test_file}")
-                print(f"- Score: {score:.1f}")
                 grok_fallback = grok_analysis or "No Grok analysis (heuristic fallback)"
-                print(f"- Analysis: {grok_fallback}")
-                print(f"- Approve: readtheplan evolve approve {rule_id}")
-                print("=" * 60)
+                print(
+                    "\n".join(
+                        [
+                            "=" * 60,
+                            "PULL REQUEST TEMPLATE",
+                            "=" * 60,
+                            f"Title: feat(rules): Auto-generated rule for {rt} ({risk})",
+                            "",
+                            "Description:",
+                            (
+                                "This PR adds a self-evolved rule for resource type "
+                                f"'{rt}' with risk '{risk}'."
+                            ),
+                            f"- Rule ID: {rule_id}",
+                            f"- Rule file: {candidate_rule_file}",
+                            f"- Test file: {candidate_test_file}",
+                            f"- Score: {score:.1f}",
+                            f"- Analysis: {grok_fallback}",
+                            f"- Approve: readtheplan evolve approve {rule_id}",
+                            "=" * 60,
+                        ]
+                    ),
+                    file=sys.stderr,
+                )
 
             # 8. Write JSON Handoff to ~/.readtheplan/handoffs/ if score >= 70
             if score >= 70:
@@ -627,7 +737,10 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
         """Decide whether to propose or disable a generated rule.
 
         Plan-derived observations can prepare a candidate for review, but only
-        :meth:`approve_rule` may make one eligible to load.
+        :meth:`approve_rule` may make one eligible to load.  ``risk`` remains
+        part of this policy hook for compatibility with risk-aware engine
+        subclasses; the base policy intentionally uses the verified score
+        alone so every risk level has the same explicit-approval boundary.
         """
         if score >= 70:
             return "pr-ready"
@@ -926,7 +1039,7 @@ Score: {data.get('score')}
                 f.unlink()
                 dispatched.append(hid)
             except Exception as e:
-                print(f"Error dispatching handoff {f.name}: {e}")
+                print(f"Error dispatching handoff {f.name}: {e}", file=sys.stderr)
 
         return dispatched
 
@@ -1271,5 +1384,22 @@ Score: {data.get('score')}
         ]
 
 
-# Singleton
-evolution = EvolutionEngine()
+_ENGINE_CACHE: dict[Path, EvolutionEngine] = {}
+_ENGINE_CACHE_LOCK = threading.Lock()
+
+
+def get_engine(data_dir: str | Path | None = None) -> EvolutionEngine:
+    """Return the lazily constructed engine for the current data directory.
+
+    The default path is resolved at call time so importing this module has no
+    filesystem side effects and processes that intentionally change HOME use
+    the corresponding engine rather than a stale singleton from another home.
+    """
+    root = Path(data_dir) if data_dir is not None else Path.home() / ".readtheplan"
+    cache_key = root.expanduser().resolve(strict=False)
+    with _ENGINE_CACHE_LOCK:
+        engine = _ENGINE_CACHE.get(cache_key)
+        if engine is None:
+            engine = EvolutionEngine(cache_key)
+            _ENGINE_CACHE[cache_key] = engine
+        return engine

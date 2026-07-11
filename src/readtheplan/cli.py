@@ -18,7 +18,7 @@ from readtheplan.controls import (
     load_catalog,
 )
 from readtheplan.evidence import EvidenceError, Reviewer, build_evidence
-from readtheplan.evolution import EvolutionEngine
+from readtheplan.evolution import get_engine
 from readtheplan.overlays import (
     Overlay,
     OverlayError,
@@ -395,6 +395,16 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
+    if args.mode == "self-improving":
+        gate = _agent_gate_payload(summary, catalog, mode=args.mode)
+        suggested_rules = gate.get("evolution", {}).get("suggested_rules", [])
+        if suggested_rules:
+            print(
+                f"Evolution suggested {len(suggested_rules)} candidate rule(s); "
+                "run `readtheplan evolution patterns` for details.",
+                file=sys.stderr,
+            )
+
     if args.evidence:
         assert catalog is not None
         try:
@@ -485,14 +495,7 @@ def _agent_gate(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    evolution_engine = EvolutionEngine() if args.mode == "self-improving" else None
-
-    gate = agent_gate_to_dict(
-        summary,
-        catalog,
-        mode=args.mode,
-        evolution_engine=evolution_engine,
-    )
+    gate = _agent_gate_payload(summary, catalog, mode=args.mode)
     json.dump(gate, sys.stdout, indent=2)
     print()
     decision = gate.get("decision", "warn")
@@ -501,6 +504,22 @@ def _agent_gate(args: argparse.Namespace) -> int:
     if decision == "warn":
         return 1
     return 0
+
+
+def _agent_gate_payload(
+    summary: PlanSummary,
+    catalog: ControlCatalog | None,
+    *,
+    mode: str,
+) -> dict[str, object]:
+    """Build a gate payload, constructing evolution state only when requested."""
+    evolution_engine = get_engine() if mode == "self-improving" else None
+    return agent_gate_to_dict(
+        summary,
+        catalog,
+        mode=mode,
+        evolution_engine=evolution_engine,
+    )
 
 
 def _cloudformation_gate(args: argparse.Namespace) -> int:
@@ -736,7 +755,7 @@ def _print_summary(
 
 def _evolution_status(args: argparse.Namespace) -> int:
     """Show evolution engine statistics."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     stats = engine.get_stats()
     print(json.dumps(stats, indent=2))
     return 0
@@ -744,7 +763,7 @@ def _evolution_status(args: argparse.Namespace) -> int:
 
 def _evolution_dashboard(args: argparse.Namespace) -> int:
     """Generate and report the dashboard path."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     path = engine.generate_html_dashboard()
     print(f"Dashboard generated: {path}")
     return 0
@@ -752,7 +771,7 @@ def _evolution_dashboard(args: argparse.Namespace) -> int:
 
 def _evolution_voice(args: argparse.Namespace) -> int:
     """Generate a voice brief (text output)."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     brief = engine.generate_voice_brief(style="concise")
     print(brief)
     return 0
@@ -760,7 +779,7 @@ def _evolution_voice(args: argparse.Namespace) -> int:
 
 def _evolution_patterns(args: argparse.Namespace) -> int:
     """List all detected patterns."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     patterns = engine.get_all_patterns()
     if not patterns:
         print("No patterns yet. Run the gate with --mode self-improving on some plans first.")
@@ -771,7 +790,7 @@ def _evolution_patterns(args: argparse.Namespace) -> int:
 
 def _evolution_runs(args: argparse.Namespace) -> int:
     """Show recent runs."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     runs = engine.get_recent_runs()
     if not runs:
         print("No runs recorded yet.")
@@ -782,7 +801,7 @@ def _evolution_runs(args: argparse.Namespace) -> int:
 
 def _evolution_dispatch(args: argparse.Namespace) -> int:
     """Dispatch pending handoffs to the shared handoff directory."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     dispatched = engine.dispatch_handoffs()
     if not dispatched:
         print("No pending handoffs to dispatch.")
@@ -795,7 +814,7 @@ def _evolution_dispatch(args: argparse.Namespace) -> int:
 
 def _evolution_approve(args: argparse.Namespace) -> int:
     """Explicitly approve a verified evolution candidate."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     try:
         approved = engine.approve_rule(args.rule_id)
     except (FileNotFoundError, OSError, ValueError) as exc:
@@ -810,7 +829,7 @@ def _evolution_approve(args: argparse.Namespace) -> int:
 
 def _evolution_console(args: argparse.Namespace) -> int:
     """Display a terminal-based console dashboard."""
-    engine = EvolutionEngine()
+    engine = get_engine()
     stats = engine.get_stats()
     patterns = engine.get_all_patterns()
     runs = engine.get_recent_runs(limit=5)

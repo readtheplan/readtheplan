@@ -292,6 +292,131 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+@pytest.mark.parametrize(
+    ("handler", "fixture_name", "result_key", "expected_value"),
+    [
+        (analyze_plan, "valid_plan.json", "resource_change_count", 3),
+        (agent_gate, "valid_plan.json", "schema", "rtp-agent-gate-v1"),
+        (
+            agent_gate_cloudformation,
+            "cfn_change_set_mixed.json",
+            "adapter",
+            "cloudformation",
+        ),
+    ],
+)
+def test_non_kubernetes_handlers_use_confined_read_boundary(
+    monkeypatch,
+    tmp_path,
+    handler,
+    fixture_name,
+    result_key,
+    expected_value,
+) -> None:
+    """Each file-backed MCP handler consumes bytes from the confined reader."""
+    root = tmp_path / "root"
+    root.mkdir()
+    input_file = root / "input.json"
+    input_file.write_text("not valid JSON", encoding="utf-8")
+    fixture_bytes = (FIXTURES / fixture_name).read_bytes()
+    calls: list[str] = []
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    def fake_read_confined_bytes(path: str) -> bytes:
+        calls.append(path)
+        return fixture_bytes
+
+    monkeypatch.setattr(
+        "readtheplan.mcp_server._read_confined_bytes",
+        fake_read_confined_bytes,
+    )
+
+    result = handler(str(input_file))
+
+    assert calls == [str(input_file.resolve())]
+    assert result[result_key] == expected_value
+
+
+@pytest.mark.parametrize(
+    ("handler", "fixture_name", "result_key", "expected_value"),
+    [
+        (analyze_plan, "valid_plan.json", "resource_change_count", 3),
+        (agent_gate, "valid_plan.json", "schema", "rtp-agent-gate-v1"),
+        (
+            agent_gate_cloudformation,
+            "cfn_change_set_mixed.json",
+            "adapter",
+            "cloudformation",
+        ),
+    ],
+)
+def test_non_kubernetes_handlers_allow_path_inside_root(
+    monkeypatch,
+    tmp_path,
+    handler,
+    fixture_name,
+    result_key,
+    expected_value,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    input_file = root / "input.json"
+    input_file.write_bytes((FIXTURES / fixture_name).read_bytes())
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    result = handler(str(input_file))
+
+    assert result[result_key] == expected_value
+
+
+@pytest.mark.parametrize(
+    ("handler", "fixture_name"),
+    [
+        (analyze_plan, "valid_plan.json"),
+        (agent_gate, "valid_plan.json"),
+        (agent_gate_cloudformation, "cfn_change_set_mixed.json"),
+    ],
+)
+def test_non_kubernetes_handlers_reject_validate_open_swap(
+    monkeypatch,
+    tmp_path,
+    handler,
+    fixture_name,
+) -> None:
+    """Swapping an authorized input cannot redirect any sibling handler."""
+    root = tmp_path / "root"
+    root.mkdir()
+    fixture_bytes = (FIXTURES / fixture_name).read_bytes()
+    inside = root / "input.json"
+    inside.write_bytes(fixture_bytes)
+    outside = tmp_path / "outside.json"
+    outside.write_bytes(fixture_bytes)
+    inside_path = str(inside.resolve())
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    real_open = os.open
+    swapped = False
+
+    def swapping_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and os.fspath(path) == inside_path:
+            inside.unlink()
+            try:
+                inside.symlink_to(outside)
+            except OSError as exc:
+                pytest.skip(f"file symlinks unavailable: {exc}")
+            swapped = True
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr("readtheplan.mcp_server.os.open", swapping_open)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        handler(str(inside))
+
+    assert swapped is True
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_kubernetes_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     """Kubernetes inputs are confined to MCP_ROOT like the other MCP tools."""
     root = tmp_path / "root"
