@@ -57,3 +57,89 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          notes_file="$(mktemp)"
+          trap 'rm -f "$notes_file"' EXIT
+          notes_args=(--generate-notes)
+
+          if NOTES_FILE="$notes_file" python3 - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          if not tag.startswith("v") or len(tag) == 1:
+              print(f"unsupported release tag: {tag!r}", file=sys.stderr)
+              raise SystemExit(1)
+
+          version = tag[1:]
+          raw = Path("CHANGELOG.md").read_bytes()
+          try:
+              lines = raw.decode("utf-8").splitlines(keepends=True)
+          except UnicodeDecodeError as exc:
+              print(f"CHANGELOG.md is not UTF-8: {exc}", file=sys.stderr)
+              raise SystemExit(1) from exc
+
+          matches = []
+          for index, line in enumerate(lines):
+              heading = line.rstrip("\r\n")
+              if not heading.startswith("## ["):
+                  continue
+              close = heading.find("]", 4)
+              if close >= 0 and heading[4:close] == version:
+                  matches.append(index)
+
+          if len(matches) != 1:
+              print(
+                  f"expected one CHANGELOG section for {version!r}; "
+                  f"found {len(matches)}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+
+          start = matches[0]
+          end = next(
+              (
+                  index
+                  for index in range(start + 1, len(lines))
+                  if lines[index].startswith("## ")
+              ),
+              len(lines),
+          )
+          section = "".join(lines[start:end])
+          if not "".join(lines[start + 1 : end]).strip():
+              print(f"CHANGELOG section for {version!r} is empty", file=sys.stderr)
+              raise SystemExit(1)
+
+          Path(os.environ["NOTES_FILE"]).write_bytes(section.encode("utf-8"))
+          PY
+          then
+            notes_args=(--notes-file "$notes_file")
+          else
+            echo "::warning::Could not extract CHANGELOG section for $GITHUB_REF_NAME; using generated notes"
+          fi
+
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            "${notes_args[@]}"
