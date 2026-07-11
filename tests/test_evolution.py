@@ -460,6 +460,111 @@ def test_candidate_artifacts_are_confined_and_validate_counterexamples(
     assert "== []" in validation
 
 
+def test_candidate_runtime_verification_restores_registry_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import sys
+
+    import readtheplan.rules._shared as shared
+    from readtheplan.rules import RuleResult, apply_resource_rules
+
+    resource_type = "custom_widget_runtime_isolation"
+    registry_object = shared._RULE_REGISTRY
+    cross_cutting_object = shared._CROSS_CUTTING
+    registry_snapshot = {
+        registered_type: (id(bucket), tuple(bucket))
+        for registered_type, bucket in registry_object.items()
+    }
+    cross_cutting_snapshot = tuple(cross_cutting_object)
+    source_snapshot = shared._current_source
+
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, monkeypatch, resource_type)
+
+    assert candidate["rule_status"] == "pr-ready"
+    assert shared._RULE_REGISTRY is registry_object
+    assert shared._CROSS_CUTTING is cross_cutting_object
+    assert set(registry_object) == set(registry_snapshot)
+    for registered_type, (bucket_id, functions) in registry_snapshot.items():
+        assert id(registry_object[registered_type]) == bucket_id
+        assert tuple(registry_object[registered_type]) == functions
+    assert tuple(cross_cutting_object) == cross_cutting_snapshot
+    assert shared._current_source == source_snapshot
+    assert not any(
+        module_name.startswith("_readtheplan_candidate_verify_")
+        for module_name in sys.modules
+    )
+
+    result = apply_resource_rules(
+        resource_type=resource_type,
+        actions=("delete",),
+        change={"actions": ["delete"]},
+        baseline=RuleResult("safe", "baseline"),
+    )
+    assert result == RuleResult("safe", "baseline")
+
+
+def test_failed_candidate_verification_is_disabled_with_zero_score(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import readtheplan.evolution as evolution_module
+
+    monkeypatch.setattr(
+        evolution_module,
+        "_verify_candidate_rule",
+        lambda *args, **kwargs: (False, "counterexample failed"),
+    )
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(
+        engine,
+        monkeypatch,
+        "custom_widget_failed_verification",
+    )
+    metadata = json.loads(
+        (Path(candidate["candidate_dir"]) / "candidate.json").read_text(encoding="utf-8")
+    )
+
+    assert candidate["rule_score"] == 0
+    assert candidate["rule_status"] == "disabled"
+    assert metadata["verified"] is False
+    assert metadata["score"] == 0
+
+
+def test_candidate_system_exit_is_a_verification_failure_with_rollback(
+    tmp_path: Path,
+):
+    import sys
+
+    import readtheplan.rules._shared as shared
+    from readtheplan.evolution import _verify_candidate_rule
+
+    resource_type = "custom_widget_system_exit"
+    module_name = "_readtheplan_candidate_verify_system_exit"
+    candidate_file = tmp_path / "rule.py"
+    candidate_source = f'''from readtheplan.rules._shared import register_rule
+
+@register_rule("{resource_type}")
+def _rule_system_exit(resource_type, action_set, change):
+    raise SystemExit(17)
+'''.encode()
+
+    success, error = _verify_candidate_rule(
+        candidate_source,
+        source_path=candidate_file,
+        module_name=module_name,
+        function_name="_rule_system_exit",
+        resource_type=resource_type,
+        risk="dangerous",
+    )
+
+    assert success is False
+    assert error == "SystemExit: 17"
+    assert resource_type not in shared._RULE_REGISTRY
+    assert module_name not in sys.modules
+
+
 def test_generation_rejects_symlinked_candidate_artifact(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -731,7 +836,7 @@ def test_cli_evolve_approve_uses_exact_top_level_command(
 
     engine = _make_engine(tmp_path)
     candidate = _generate_candidate(engine, monkeypatch, "custom_widget_cli")
-    monkeypatch.setattr(cli, "EvolutionEngine", lambda: engine)
+    monkeypatch.setattr(cli, "get_engine", lambda: engine)
 
     assert cli.main(["evolve", "approve", candidate["rule_id"]]) == 0
     captured = capsys.readouterr()

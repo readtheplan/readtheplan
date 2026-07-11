@@ -220,7 +220,7 @@ def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
         import json
 
         input_path = _resolve_path(input_path)
-        data = json.loads(Path(input_path).read_text(encoding="utf-8"))
+        data = json.loads(_read_confined_bytes(input_path).decode("utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise MCPToolInputError(
             code="INPUT_ERROR", message=f"Cannot read {input_path}: {exc}"
@@ -295,8 +295,42 @@ def _check_non_empty(plan_path: str) -> None:
 
 
 def _summary_for_tool(plan_path: str) -> PlanSummary:
+    import json
+
+    plan_file = Path(plan_path)
     try:
-        summary = analyze_plan_file(plan_path, use_rules=True)
+        try:
+            raw = _read_confined_bytes(plan_path).decode("utf-8")
+        except FileNotFoundError as exc:
+            raise PlanError(f"plan file does not exist: {plan_file}") from exc
+        except IsADirectoryError as exc:
+            raise PlanError(f"plan path is a directory, not a file: {plan_file}") from exc
+        except PermissionError as exc:
+            if plan_file.is_dir():
+                raise PlanError(
+                    f"plan path is a directory, not a file: {plan_file}"
+                ) from exc
+            raise PlanError(f"cannot read plan file {plan_file}: {exc}") from exc
+        except OSError as exc:
+            raise PlanError(f"cannot read plan file {plan_file}: {exc}") from exc
+
+        if not raw.strip():
+            raise PlanError(f"plan file is empty: {plan_file}")
+        try:
+            plan_data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise PlanError(
+                f"invalid JSON in {plan_file}: line {exc.lineno}, "
+                f"column {exc.colno}: {exc.msg}"
+            ) from exc
+        if not isinstance(plan_data, dict):
+            raise PlanError(f"Terraform plan JSON must be an object: {plan_file}")
+
+        summary = analyze_plan_file(
+            plan_data,
+            use_rules=True,
+            _original_path=plan_file,
+        )
     except PlanError as exc:
         raise MCPToolInputError(code="PLAN_ERROR", message=str(exc)) from exc
 

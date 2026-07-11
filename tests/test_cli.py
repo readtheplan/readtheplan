@@ -75,6 +75,48 @@ def test_analyze_valid_plan_can_print_json(capsys) -> None:
     }
 
 
+def test_analyze_kernel_mode_does_not_construct_evolution_engine(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail_if_called():
+        pytest.fail("kernel mode must not construct the evolution engine")
+
+    monkeypatch.setattr("readtheplan.cli.get_engine", fail_if_called)
+
+    exit_code = main(["analyze", str(FIXTURES / "valid_plan.json")])
+
+    assert exit_code == 0
+    assert "Resource changes: 3" in capsys.readouterr().out
+
+
+def test_analyze_self_improving_records_via_agent_gate_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from readtheplan.evolution import EvolutionEngine
+
+    engine = EvolutionEngine(data_dir=tmp_path / "evolution")
+    monkeypatch.setattr("readtheplan.cli.get_engine", lambda: engine)
+
+    exit_code = main(
+        [
+            "analyze",
+            "--format",
+            "json",
+            "--mode",
+            "self-improving",
+            str(FIXTURES / "valid_plan.json"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert json.loads(captured.out)["resource_change_count"] == 3
+    assert engine.get_recent_runs(limit=1)
+
+
 def test_agent_gate_prints_json_contract(capsys) -> None:
     exit_code = main(["agent-gate", str(FIXTURES / "valid_plan.json")])
 
