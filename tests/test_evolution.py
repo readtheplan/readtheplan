@@ -41,11 +41,9 @@ def _write_plan(tmp_path: Path, actions: list[str], resource_type: str = "aws_s3
 
 def _generate_candidate(
     engine: EvolutionEngine,
-    monkeypatch: pytest.MonkeyPatch,
     resource_type: str,
 ) -> dict:
-    """Generate one verified candidate without invoking an optional provider CLI."""
-    monkeypatch.setattr("readtheplan.evolution.shutil.which", lambda _command: None)
+    """Generate one verified candidate with the local analysis pipeline."""
     [candidate] = engine.analyze_with_agents(
         [
             {
@@ -190,6 +188,31 @@ def test_analyze_with_agents_generates_rule(tmp_path: Path):
     # Irreversible + 3 incidents = score >= 70, so it is ready for human approval.
     assert evolved[0]["rule_status"] == "pr-ready"
     assert Path(evolved[0]["candidate_dir"]).is_relative_to(engine.data_dir)
+
+
+def test_analyze_with_agents_does_not_spawn_processes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import shutil
+    import subprocess
+
+    def reject_process_spawn(*args, **kwargs):
+        raise AssertionError("local evolution analysis must not spawn a process")
+
+    monkeypatch.setattr(shutil, "which", lambda _command: "external-tool")
+    monkeypatch.setattr(subprocess, "run", reject_process_spawn)
+    monkeypatch.setattr(subprocess, "Popen", reject_process_spawn)
+
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, "custom_widget_local_only")
+    metadata = json.loads(
+        (Path(candidate["candidate_dir"]) / "candidate.json").read_text(encoding="utf-8")
+    )
+
+    assert candidate["rule_status"] == "pr-ready"
+    assert candidate["rule_score"] == 100.0
+    assert metadata["verified"] is True
 
 
 def test_full_evolution_loop(tmp_path: Path):
@@ -392,8 +415,8 @@ def test_different_risk_profiles_different_scores(tmp_path: Path):
     assert bad_gate["decision"] == "block"
 
 
-def test_evolution_real_multi_agent_pipeline(tmp_path: Path):
-    """Test the real multi-agent pipeline verification loop and code generation."""
+def test_evolution_local_candidate_pipeline(tmp_path: Path):
+    """Test the local verification, code-generation, and handoff pipeline."""
     engine = _make_engine(tmp_path)
     
     patterns = [{
@@ -436,10 +459,9 @@ def test_evolution_real_multi_agent_pipeline(tmp_path: Path):
 
 def test_candidate_artifacts_are_confined_and_validate_counterexamples(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     engine = _make_engine(tmp_path)
-    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_confinement")
+    candidate = _generate_candidate(engine, "custom_widget_confinement")
 
     candidate_dir = Path(candidate["candidate_dir"]).resolve()
     assert candidate_dir.parent == engine.candidates_dir.resolve()
@@ -462,7 +484,6 @@ def test_candidate_artifacts_are_confined_and_validate_counterexamples(
 
 def test_candidate_runtime_verification_restores_registry_state(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     import sys
 
@@ -480,7 +501,7 @@ def test_candidate_runtime_verification_restores_registry_state(
     source_snapshot = shared._current_source
 
     engine = _make_engine(tmp_path)
-    candidate = _generate_candidate(engine, monkeypatch, resource_type)
+    candidate = _generate_candidate(engine, resource_type)
 
     assert candidate["rule_status"] == "pr-ready"
     assert shared._RULE_REGISTRY is registry_object
@@ -519,7 +540,6 @@ def test_failed_candidate_verification_is_disabled_with_zero_score(
     engine = _make_engine(tmp_path)
     candidate = _generate_candidate(
         engine,
-        monkeypatch,
         "custom_widget_failed_verification",
     )
     metadata = json.loads(
@@ -567,7 +587,6 @@ def _rule_system_exit(resource_type, action_set, change):
 
 def test_generation_rejects_symlinked_candidate_artifact(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     engine = _make_engine(tmp_path)
     resource_type = "custom_widget_symlink_generation"
@@ -582,7 +601,7 @@ def test_generation_rejects_symlinked_candidate_artifact(
         pytest.skip(f"file symlinks unavailable: {exc}")
 
     with pytest.raises(ValueError, match="symlinked output"):
-        _generate_candidate(engine, monkeypatch, resource_type)
+        _generate_candidate(engine, resource_type)
     assert outside.read_text(encoding="utf-8") == "sentinel"
 
 
@@ -595,11 +614,11 @@ def test_approve_rule_hash_allowlists_and_loads_candidate(
 
     engine = _make_engine(tmp_path)
     resource_type = "custom_widget_approval"
-    candidate = _generate_candidate(engine, monkeypatch, resource_type)
+    candidate = _generate_candidate(engine, resource_type)
     rule_id = candidate["rule_id"]
 
     # Loading an approved rule mutates the process-global registry by design.
-    # Restore the original bucket after this test so provider-coverage tests
+    # Restore the original bucket after this test so registry tests
     # remain order-independent when suites are combined.
     monkeypatch.setitem(
         _RULE_REGISTRY,
@@ -638,10 +657,9 @@ def test_approve_rule_hash_allowlists_and_loads_candidate(
 
 def test_approval_rejects_symlinked_approved_rule_output(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     engine = _make_engine(tmp_path)
-    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_symlink_approval")
+    candidate = _generate_candidate(engine, "custom_widget_symlink_approval")
     engine.approved_rules_dir.mkdir()
     outside = tmp_path / "outside-approved-rule.py"
     outside.write_text("sentinel", encoding="utf-8")
@@ -807,10 +825,9 @@ def test_approved_loader_rolls_back_partial_registry_mutations(tmp_path: Path):
 
 def test_approval_rejects_disabled_or_unverified_candidate(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     engine = _make_engine(tmp_path)
-    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_unverified")
+    candidate = _generate_candidate(engine, "custom_widget_unverified")
     metadata_file = Path(candidate["candidate_dir"]) / "candidate.json"
     metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
 
@@ -835,7 +852,7 @@ def test_cli_evolve_approve_uses_exact_top_level_command(
     import readtheplan.cli as cli
 
     engine = _make_engine(tmp_path)
-    candidate = _generate_candidate(engine, monkeypatch, "custom_widget_cli")
+    candidate = _generate_candidate(engine, "custom_widget_cli")
     monkeypatch.setattr(cli, "get_engine", lambda: engine)
 
     assert cli.main(["evolve", "approve", candidate["rule_id"]]) == 0

@@ -119,15 +119,18 @@ def test_candidate_verification_runs_in_process(monkeypatch, tmp_path) -> None:
     """Candidate verification must not spawn subprocesses.
 
     pytest is not a runtime dependency, and ``PYTHONPATH=src`` only exists in
-    a source checkout, so shelling out breaks on installed wheels. A raised
-    ``AssertionError`` from ``subprocess.run`` proves in-process verification.
+    a source checkout, so shelling out breaks on installed wheels. Raised
+    ``AssertionError`` exceptions from either standard subprocess entry point
+    prove verification remains in-process.
     """
-    import readtheplan.evolution as evolution_module
+    import shutil
 
     def _no_subprocess(*args, **kwargs):
         raise AssertionError("candidate verification must not spawn subprocesses")
 
-    monkeypatch.setattr(evolution_module.subprocess, "run", _no_subprocess)
+    monkeypatch.setattr(shutil, "which", lambda _command: "external-tool")
+    monkeypatch.setattr(subprocess, "run", _no_subprocess)
+    monkeypatch.setattr(subprocess, "Popen", _no_subprocess)
 
     engine = EvolutionEngine(data_dir=tmp_path / "data")
     evolved = engine.analyze_with_agents([dict(_PATTERN)])
