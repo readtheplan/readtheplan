@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "readtheplan"
-version = "0.3.0"
+version = "0.4.0"
 description = "Terraform plan risk explainer — reads `terraform plan` JSON and classifies each change as safe/review/dangerous/irreversible."
 readme = "README.md"
 requires-python = ">=3.10"
