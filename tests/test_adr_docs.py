@@ -49,3 +49,14 @@ def test_resource_rule_adr_documents_mvp2_shape() -> None:
     assert "aws_db_instance" in adr
     assert "aws_s3_bucket" in adr
     assert "aws_kms_key" in adr
+
+
+def test_plan_identity_hash_adr_documents_v2_contract() -> None:
+    adr = (ROOT / "docs" / "adr" / "0014-plan-identity-hash.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "rtp-plan-hash-v2" in adr
+    assert "full 64-character lowercase SHA-256 hex digest" in adr
+    assert "`summary.path` — machine-local noise" in adr
+    assert "(address, type, actions)" in adr

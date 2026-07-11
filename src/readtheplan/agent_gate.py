@@ -135,11 +135,37 @@ def _compute_compliance_score(
 
 
 def _compute_plan_hash(summary: PlanSummary) -> str:
-    """Compute a stable hash for a plan summary."""
+    """Compute the ADR 0014 content identity for a plan summary."""
     import hashlib
+    import json
 
-    raw = f"{summary.path}:{len(summary.resource_changes)}:{summary.terraform_version}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    changes = [
+        {
+            "address": change.address,
+            "type": change.resource_type,
+            "actions": list(change.actions),
+        }
+        for change in sorted(
+            summary.resource_changes,
+            key=lambda change: (
+                change.address,
+                change.resource_type,
+                change.actions,
+            ),
+        )
+    ]
+    payload = {
+        "schema": "rtp-plan-hash-v2",
+        "terraform_version": summary.terraform_version,
+        "changes": changes,
+    }
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _kernel_instruction(evolution_result: dict) -> str:
