@@ -444,6 +444,8 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                 "-m",
                 "pytest",
                 "--no-cov",
+                "-p",
+                "no:cacheprovider",
                 str(candidate_test_file),
             ]
             env = os.environ.copy()
