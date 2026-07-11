@@ -52,6 +52,7 @@ _EXPECTED_RULE_FUNCTIONS = {
     "kubernetes_secret": "_k8s_secret_candidates",
     "kubernetes_namespace": "_k8s_namespace_candidates",
     "kubernetes_cluster_role": "_k8s_rbac_candidates",
+    "kubernetes_role": "_k8s_rbac_candidates",
     "kubernetes_cluster_role_binding": "_k8s_rbac_candidates",
     "kubernetes_role_binding": "_k8s_rbac_candidates",
     "kubernetes_network_policy": "_k8s_network_policy_candidates",

@@ -16,6 +16,7 @@ from readtheplan.mcp_server import (
     _working_root,
     agent_gate,
     agent_gate_cloudformation,
+    agent_gate_kubernetes,
     analyze_plan,
     create_server,
 )
@@ -288,6 +289,84 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
     with pytest.raises(MCPToolInputError) as exc_info:
         agent_gate_cloudformation(str(outside))
 
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_kubernetes_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    """Kubernetes inputs are confined to MCP_ROOT like the other MCP tools."""
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "k8s.json"
+    outside.write_text(json.dumps({"resources": []}), encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_kubernetes(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_kubernetes_allows_path_inside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    manifest = root / "k8s.json"
+    manifest.write_text(json.dumps({"resources": []}), encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    result = agent_gate_kubernetes(str(manifest))
+
+    assert result["adapter"] == "kubernetes"
+
+
+def test_agent_gate_kubernetes_rejects_symlink_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "k8s.json"
+    outside.write_text(json.dumps({"resources": []}), encoding="utf-8")
+    linked = root / "linked.json"
+    try:
+        linked.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"symlink creation is unavailable: {exc}")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_kubernetes(str(linked))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_kubernetes_rejects_validate_open_swap(monkeypatch, tmp_path) -> None:
+    """Swapping an authorized file to an outside symlink cannot win a TOCTOU race."""
+    root = tmp_path / "root"
+    root.mkdir()
+    inside = root / "k8s.json"
+    inside.write_text(json.dumps({"resources": []}), encoding="utf-8")
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps({"resources": []}), encoding="utf-8")
+    inside_path = str(inside.resolve())
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    real_open = os.open
+    swapped = False
+
+    def swapping_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and os.fspath(path) == inside_path:
+            inside.unlink()
+            try:
+                inside.symlink_to(outside)
+            except OSError as exc:
+                pytest.skip(f"file symlinks unavailable: {exc}")
+            swapped = True
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr("readtheplan.mcp_server.os.open", swapping_open)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_kubernetes(str(inside))
+
+    assert swapped is True
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 

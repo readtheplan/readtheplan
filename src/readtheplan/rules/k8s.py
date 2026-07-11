@@ -176,7 +176,39 @@ def _k8s_namespace_candidates(
 
 
 
-@register_rule("kubernetes_cluster_role", "kubernetes_cluster_role_binding", "kubernetes_role_binding")  # noqa: E501
+_RBAC_ROLE_TYPES = frozenset({"kubernetes_cluster_role", "kubernetes_role"})
+
+
+def _wildcard_rbac_fields(change: dict[str, Any]) -> tuple[str, ...]:
+    """Return RBAC rule fields whose desired value contains a wildcard grant."""
+    after = change.get("after", {})
+    if not isinstance(after, dict):
+        return ()
+
+    rules = after.get("rules", [])
+    if not isinstance(rules, list):
+        return ()
+
+    wildcard_fields: set[str] = set()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        for field in ("apiGroups", "resources", "verbs"):
+            values = rule.get(field, [])
+            if values == "*" or (
+                isinstance(values, (list, tuple, set, frozenset)) and "*" in values
+            ):
+                wildcard_fields.add(field)
+
+    return tuple(sorted(wildcard_fields))
+
+
+@register_rule(
+    "kubernetes_cluster_role",
+    "kubernetes_cluster_role_binding",
+    "kubernetes_role_binding",
+    "kubernetes_role",
+)
 def _k8s_rbac_candidates(
     resource_type: str,
     action_set: set[str],
@@ -184,10 +216,29 @@ def _k8s_rbac_candidates(
 ) -> list[RuleResult]:
     if resource_type == "kubernetes_cluster_role":
         label = "ClusterRole"
+    elif resource_type == "kubernetes_role":
+        label = "Role"
     elif resource_type == "kubernetes_cluster_role_binding":
         label = "ClusterRoleBinding"
     else:
         label = "RoleBinding"
+
+    if resource_type in _RBAC_ROLE_TYPES and (
+        "create" in action_set or "update" in action_set
+    ):
+        wildcard_fields = _wildcard_rbac_fields(change)
+        if wildcard_fields:
+            fields = ", ".join(wildcard_fields)
+            return [
+                RuleResult(
+                    "dangerous",
+                    (
+                        f"__TOOL__ will grant wildcard {fields} permissions "
+                        f"through a {label}. Verify that this broad RBAC access "
+                        "is intentional and cannot enable privilege escalation."
+                    ),
+                )
+            ]
 
     if "delete" in action_set and "create" in action_set:
         return [
@@ -267,5 +318,4 @@ def _k8s_network_policy_candidates(
             )
         ]
     return []
-
 

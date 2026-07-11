@@ -75,6 +75,13 @@ def _get_properties_for_rules(r: dict[str, Any]) -> dict[str, Any]:
         },
         "spec": r.get("spec", {}),
         "data": r.get("data", {}),
+        "rules": r.get("rules", []),
+        "roleRef": r.get("roleRef", {}),
+        "subjects": r.get("subjects", []),
+        "stringData": r.get("stringData", {}),
+        "binaryData": r.get("binaryData", {}),
+        "aggregationRule": r.get("aggregationRule", {}),
+        "type": r.get("type"),
     }
 
 
@@ -133,6 +140,7 @@ class KubernetesAdapter(BaseAdapter):
         added_ids = set(new_by_id.keys()) - set(old_by_id.keys())
         for key in added_ids:
             r = new_by_id[key]
+            properties = _get_properties_for_rules(r)
             changes.append({
                 "Action": "Add",
                 "Kind": _kind_from_resource(r),
@@ -142,12 +150,17 @@ class KubernetesAdapter(BaseAdapter):
                 "Replacement": "False",
                 "Spec": r.get("spec", {}),
                 "Data": r.get("data", {}),
+                "_metadata": {
+                    "before": {},
+                    "after": properties,
+                },
             })
 
         # Removed resources (in old but not in new)
         removed_ids = set(old_by_id.keys()) - set(new_by_id.keys())
         for key in removed_ids:
             r = old_by_id[key]
+            properties = _get_properties_for_rules(r)
             changes.append({
                 "Action": "Remove",
                 "Kind": _kind_from_resource(r),
@@ -157,6 +170,10 @@ class KubernetesAdapter(BaseAdapter):
                 "Replacement": "False",
                 "Spec": r.get("spec", {}),
                 "Data": r.get("data", {}),
+                "_metadata": {
+                    "before": properties,
+                    "after": {},
+                },
             })
 
         # Modified resources (in both — check for spec/data changes)
@@ -188,6 +205,7 @@ class KubernetesAdapter(BaseAdapter):
         for r in data.get("resources", []):
             if not isinstance(r, dict) or "kind" not in r:
                 continue
+            properties = _get_properties_for_rules(r)
             changes.append({
                 "Action": "Add",
                 "Kind": _kind_from_resource(r),
@@ -197,6 +215,10 @@ class KubernetesAdapter(BaseAdapter):
                 "Replacement": "False",
                 "Spec": r.get("spec", {}),
                 "Data": r.get("data", {}),
+                "_metadata": {
+                    "before": {},
+                    "after": properties,
+                },
             })
         return changes
 

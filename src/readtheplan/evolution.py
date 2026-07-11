@@ -5,25 +5,28 @@ Self-Improving Evolution Engine for readtheplan.
   1. Gate — classify risk, compliance score, decision
   2. Record — log every run to SQLite
   3. Analyze — detect recurring patterns across incidents
-  4. Evolve — generate/score/merge rules automatically
+  4. Evolve — generate and score candidates for explicit approval
 
 Multi-agent coordination (optional, via provider CLI):
   - Research Agent (Grok) — finds patterns in past incidents
   - Coder Agent (DeepSeek) — generates rule code with tests
   - Reviewer Agent (Codex) — audits for correctness + safety
-  - Signal Agent (Hermes) — decides auto-merge vs PR vs disable
+  - Signal Agent (Hermes) — decides whether a candidate is ready for review
 """
 
 from __future__ import annotations
 
+import hashlib
 import html as _html
 import json
 import os
 import re
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -32,6 +35,9 @@ from typing import Any
 _VALID_RISKS = frozenset({"safe", "review", "dangerous", "irreversible"})
 # Resource type after normalisation must be an identifier-safe token
 _RESOURCE_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
+_RULE_ID_RE = re.compile(r"^rule_[a-z][a-z0-9_]{0,190}$")
+_CANDIDATE_SCHEMA = "readtheplan-evolution-candidate-v1"
+_APPROVAL_MANIFEST_SCHEMA = "readtheplan-approved-rules-v1"
 
 
 def _sanitize_for_codegen(resource_type: str, risk: str) -> tuple[str, str]:
@@ -53,6 +59,55 @@ def _sanitize_for_codegen(resource_type: str, risk: str) -> tuple[str, str]:
     return rt_clean, risk
 
 
+def _atomic_write_in_directory(path: Path, data: bytes, directory: Path) -> None:
+    """Atomically write *data* without following an existing output symlink."""
+    try:
+        resolved_directory = directory.resolve(strict=True)
+        if _is_link_or_reparse_point(directory) or (
+            path.parent.resolve(strict=True) != resolved_directory
+        ):
+            raise ValueError(f"output path escapes its data directory: {path}")
+        if _is_link_or_reparse_point(path):
+            raise ValueError(f"refusing to replace symlinked output: {path}")
+        if path.exists():
+            resolved_path = path.resolve(strict=True)
+            if resolved_path.parent != resolved_directory or not resolved_path.is_file():
+                raise ValueError(f"output path is not a confined regular file: {path}")
+    except OSError as exc:
+        raise ValueError(f"cannot validate output path: {path}") from exc
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=resolved_directory,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    try:
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = -1
+        with stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_name, path)
+    except Exception:
+        if descriptor >= 0:
+            os.close(descriptor)
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
+def _is_link_or_reparse_point(path: Path) -> bool:
+    """Return true for symlinks and Windows junction/reparse-point paths."""
+    try:
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return path.is_symlink() or bool(attributes & reparse_flag)
+
+
 class EvolutionEngine:
     """Records gate runs, detects patterns, and evolves rules."""
 
@@ -64,6 +119,8 @@ class EvolutionEngine:
         self.db_path = self.data_dir / "evolution.db"
         self.report_file = self.data_dir / "evolution-report.html"
         self.brief_dir = self.data_dir / "briefs"
+        self.candidates_dir = self.data_dir / "candidates"
+        self.approved_rules_dir = self.data_dir / "approved-rules"
         self.brief_dir.mkdir(exist_ok=True)
 
         self._init_db()
@@ -318,7 +375,26 @@ class EvolutionEngine:
                 except Exception as e:
                     print(f"Error calling grok.exe: {e}")
             
-            # 2. Local template generation of candidate rule + test code
+            # 2. Local template generation of candidate rule + validation code
+            rule_id = self._candidate_rule_id(rt_clean, risk)
+            self.candidates_dir.mkdir(parents=True, exist_ok=True)
+            candidate_root = self.candidates_dir.resolve()
+            if (
+                _is_link_or_reparse_point(self.candidates_dir)
+                or candidate_root.parent != self.data_dir.resolve()
+            ):
+                raise ValueError("candidates path escapes the evolution data directory")
+            candidate_dir = self.candidates_dir / rule_id
+            candidate_dir.mkdir(exist_ok=True)
+            if (
+                _is_link_or_reparse_point(candidate_dir)
+                or candidate_dir.resolve().parent != candidate_root
+            ):
+                raise ValueError(f"candidate path escapes the data directory: {rule_id!r}")
+            candidate_rule_file = candidate_dir / "rule.py"
+            candidate_test_file = candidate_dir / "test_rule.py"
+            candidate_metadata_file = candidate_dir / "candidate.json"
+
             rule_code = f"""# Auto-generated rule for {rt} ({risk})
 from typing import Any
 from readtheplan.rules._shared import RuleResult, register_rule
@@ -336,45 +412,44 @@ def _rule_{rt_clean}_{risk}(
         )
     return candidates
 """
-            test_code = f"""# Auto-generated test for {rt} ({risk})
-from readtheplan.rules import RuleResult
-from readtheplan.rules._shared import apply_resource_rules
+            test_code = f"""# Auto-generated validation for {rt} ({risk})
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
-def test_rule_{rt_clean}_{risk}():
-    change = {{"actions": ["delete"]}}
-    result = apply_resource_rules(
-        resource_type="{rt}",
-        actions=("delete",),
-        change=change,
-        baseline=RuleResult("safe", "baseline")
-    )
-    assert result.risk == "{risk}"
+_CANDIDATE_FILE = Path(__file__).with_name("rule.py")
+_SPEC = spec_from_file_location("_readtheplan_candidate_{rule_id}", _CANDIDATE_FILE)
+assert _SPEC is not None and _SPEC.loader is not None
+_MODULE = module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_MODULE)
+_RULE = _MODULE._rule_{rt_clean}_{risk}
+
+
+def test_rule_{rt_clean}_{risk}_flags_mutating_change():
+    results = _RULE("{rt}", {{"delete"}}, {{"actions": ["delete"]}})
+    assert results
+    assert any(result.risk == "{risk}" for result in results)
+
+
+def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
+    for actions in ({{"no-op"}}, {{"read"}}):
+        assert _RULE("{rt}", actions, {{"actions": sorted(actions)}}) == []
 """
 
-            # 3. Verification Loop via temporary test execution
-            temp_rule_dir = Path(__file__).parent / "rules" / "auto"
-            temp_rule_dir.mkdir(parents=True, exist_ok=True)
-            init_pkg = '"""Auto-generated rules package."""\n'
-            (temp_rule_dir / "__init__.py").write_text(init_pkg, encoding="utf-8")
-            
-            temp_rule_file = temp_rule_dir / "temp_candidate.py"
-            
-            temp_test_dir = Path(__file__).parent.parent.parent / "tests" / "test_rules_auto"
-            temp_test_dir.mkdir(parents=True, exist_ok=True)
-            init_test = '"""Auto-generated rules tests package."""\n'
-            (temp_test_dir / "__init__.py").write_text(init_test, encoding="utf-8")
-            
-            temp_test_file = temp_test_dir / "test_temp_candidate.py"
-            
-            # Write temp candidate files
-            temp_rule_file.write_text(rule_code, encoding="utf-8")
-            temp_test_file.write_text(test_code, encoding="utf-8")
+            # 3. Confine candidate artifacts to data_dir and validate them there.
+            _atomic_write_in_directory(candidate_rule_file, rule_code.encode(), candidate_dir)
+            _atomic_write_in_directory(candidate_test_file, test_code.encode(), candidate_dir)
 
-            # Run pytest on the temp test
-            pytest_cmd = [sys.executable, "-m", "pytest", "--no-cov", str(temp_test_file)]
+            pytest_cmd = [
+                sys.executable,
+                "-m",
+                "pytest",
+                "--no-cov",
+                str(candidate_test_file),
+            ]
             env = os.environ.copy()
             env["PYTHONPATH"] = "src"
-            
+            env["PYTHONDONTWRITEBYTECODE"] = "1"
+
             verification_success = False
             try:
                 proc = subprocess.run(
@@ -392,12 +467,6 @@ def test_rule_{rt_clean}_{risk}():
             except Exception as e:
                 print(f"Error running verification pytest: {e}")
 
-            # Clean up temp files immediately after test
-            if temp_rule_file.exists():
-                temp_rule_file.unlink()
-            if temp_test_file.exists():
-                temp_test_file.unlink()
-
             # 4. Scoring logic
             score = 0.0
             if verification_success:
@@ -412,7 +481,7 @@ def test_rule_{rt_clean}_{risk}():
                     incident_bonus = 10.0
                 if cnt >= 10:
                     incident_bonus = 20.0
-                score = base_score + risk_bonus + incident_bonus + 10.0 # +10 for test success
+                score = base_score + risk_bonus + incident_bonus + 10.0
                 score = min(score, 100.0)
 
             # 5. Evolve decision
@@ -421,15 +490,31 @@ def test_rule_{rt_clean}_{risk}():
             # 6. Save evolved rule to SQLite
             self._save_evolved_rule(pattern_hash, rule_code, score, decision)
 
-            # 7. Write permanent files if score >= 85
+            candidate_metadata = {
+                "schema": _CANDIDATE_SCHEMA,
+                "rule_id": rule_id,
+                "pattern_hash": pattern_hash,
+                "resource_type": rt,
+                "risk": risk,
+                "incident_count": cnt,
+                "score": score,
+                "status": decision,
+                "verified": verification_success,
+                "rule_file": candidate_rule_file.name,
+                "test_file": candidate_test_file.name,
+                "rule_sha256": hashlib.sha256(candidate_rule_file.read_bytes()).hexdigest(),
+                "test_sha256": hashlib.sha256(candidate_test_file.read_bytes()).hexdigest(),
+                "created_at": datetime.now().isoformat(),
+            }
+            _atomic_write_in_directory(
+                candidate_metadata_file,
+                json.dumps(candidate_metadata, indent=2).encode(),
+                candidate_dir,
+            )
+
+            # 7. Print a review handoff for strong candidates.  Approval is a
+            # separate explicit command; this step never activates the code.
             if score >= 85:
-                perm_rule_file = temp_rule_dir / f"rule_{rt_clean}_{risk}.py"
-                perm_test_file = temp_test_dir / f"test_rule_{rt_clean}_{risk}.py"
-                
-                perm_rule_file.write_text(rule_code, encoding="utf-8")
-                perm_test_file.write_text(test_code, encoding="utf-8")
-                
-                # Print PR Template
                 print("=" * 60)
                 print("PULL REQUEST TEMPLATE")
                 print("=" * 60)
@@ -439,17 +524,24 @@ def test_rule_{rt_clean}_{risk}():
                     "This PR adds a self-evolved rule for resource type "
                     f"'{rt}' with risk '{risk}'."
                 )
-                print(f"- Rule file: src/readtheplan/rules/auto/rule_{rt_clean}_{risk}.py")
-                print(f"- Test file: tests/test_rules_auto/test_rule_{rt_clean}_{risk}.py")
+                print(f"- Rule ID: {rule_id}")
+                print(f"- Rule file: {candidate_rule_file}")
+                print(f"- Test file: {candidate_test_file}")
                 print(f"- Score: {score:.1f}")
                 grok_fallback = grok_analysis or "No Grok analysis (heuristic fallback)"
                 print(f"- Analysis: {grok_fallback}")
+                print(f"- Approve: readtheplan evolve approve {rule_id}")
                 print("=" * 60)
 
             # 8. Write JSON Handoff to ~/.readtheplan/handoffs/ if score >= 70
             if score >= 70:
                 handoffs_dir = self.data_dir / "handoffs"
                 handoffs_dir.mkdir(parents=True, exist_ok=True)
+                if (
+                    _is_link_or_reparse_point(handoffs_dir)
+                    or handoffs_dir.resolve().parent != self.data_dir.resolve()
+                ):
+                    raise ValueError("handoffs path escapes the evolution data directory")
                 handoff_file = handoffs_dir / f"handoff_{rt_clean}_{risk}.json"
                 
                 import uuid
@@ -458,18 +550,26 @@ def test_rule_{rt_clean}_{risk}():
                 
                 handoff_data = {
                     "handoff_id": handoff_id,
+                    "rule_id": rule_id,
                     "pattern_hash": pattern_hash,
                     "resource_type": rt,
                     "risk": risk,
                     "incident_count": cnt,
                     "score": score,
                     "suggested_rule": rule_code,
-                    "status": "pr-ready" if decision == "pr-ready" else "auto-merge"
+                    "candidate_dir": str(candidate_dir),
+                    "status": decision,
                 }
-                handoff_file.write_text(json.dumps(handoff_data, indent=2), encoding="utf-8")
+                _atomic_write_in_directory(
+                    handoff_file,
+                    json.dumps(handoff_data, indent=2).encode(),
+                    handoffs_dir,
+                )
 
             evolved.append({
                 **pattern,
+                "rule_id": rule_id,
+                "candidate_dir": str(candidate_dir),
                 "suggested_rule": rule_code,
                 "rule_score": score,
                 "rule_status": decision,
@@ -522,16 +622,184 @@ def test_rule_{rt_clean}_{risk}():
         return min(base, 100.0)
 
     def _evolve_decision(self, score: float, risk: str) -> str:
-        """Decide whether to auto-merge, create PR, or disable a rule.
+        """Decide whether to propose or disable a generated rule.
 
-        In production this is delegated to a Signal agent (Hermes).
+        Plan-derived observations can prepare a candidate for review, but only
+        :meth:`approve_rule` may make one eligible to load.
         """
-        if score >= 90 and risk not in ("irreversible",):
-            return "auto-merge"
-        elif score >= 70:
+        if score >= 70:
             return "pr-ready"
+        return "disabled"
+
+    @staticmethod
+    def _candidate_rule_id(resource_type: str, risk: str) -> str:
+        """Return the stable, path-safe ID used by generation and approval."""
+        rule_id = f"rule_{resource_type}_{risk}"
+        if not _RULE_ID_RE.fullmatch(rule_id):
+            raise ValueError(f"generated rule ID is not safe: {rule_id!r}")
+        return rule_id
+
+    def approve_rule(self, rule_id: str) -> dict[str, Any]:
+        """Explicitly approve a verified, ``pr-ready`` candidate.
+
+        Approval copies the exact validated bytes into ``approved-rules`` and
+        adds a SHA-256 allowlist record.  The loader ignores all files that are
+        absent from this manifest or differ from the approved digest.
+        """
+        if not _RULE_ID_RE.fullmatch(rule_id):
+            raise ValueError(f"invalid rule ID: {rule_id!r}")
+
+        candidate_root = self.candidates_dir.resolve()
+        if (
+            _is_link_or_reparse_point(self.candidates_dir)
+            or candidate_root.parent != self.data_dir.resolve()
+        ):
+            raise ValueError("candidates path escapes the evolution data directory")
+        candidate_dir = self.candidates_dir / rule_id
+        try:
+            resolved_candidate_dir = candidate_dir.resolve(strict=True)
+        except OSError as exc:
+            raise FileNotFoundError(f"candidate not found: {rule_id}") from exc
+        if (
+            _is_link_or_reparse_point(candidate_dir)
+            or resolved_candidate_dir.parent != candidate_root
+        ):
+            raise ValueError(f"candidate path escapes the data directory: {rule_id!r}")
+
+        metadata_file = resolved_candidate_dir / "candidate.json"
+        try:
+            resolved_metadata_file = metadata_file.resolve(strict=True)
+            if (
+                _is_link_or_reparse_point(metadata_file)
+                or resolved_metadata_file.parent != resolved_candidate_dir
+                or not resolved_metadata_file.is_file()
+            ):
+                raise ValueError(f"candidate metadata escapes its directory: {rule_id}")
+            metadata = json.loads(resolved_metadata_file.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(f"candidate not found: {rule_id}") from exc
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"candidate metadata is invalid: {rule_id}") from exc
+        if not isinstance(metadata, dict) or metadata.get("schema") != _CANDIDATE_SCHEMA:
+            raise ValueError(f"candidate metadata is invalid: {rule_id}")
+        if metadata.get("rule_id") != rule_id:
+            raise ValueError(f"candidate metadata does not match rule ID: {rule_id}")
+
+        try:
+            expected_rule_id = self._candidate_rule_id(
+                *_sanitize_for_codegen(metadata["resource_type"], metadata["risk"])
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"candidate metadata is invalid: {rule_id}") from exc
+        if expected_rule_id != rule_id:
+            raise ValueError(f"candidate metadata does not match rule ID: {rule_id}")
+        score = metadata.get("score")
+        if (
+            metadata.get("status") != "pr-ready"
+            or metadata.get("verified") is not True
+            or not isinstance(score, (int, float))
+            or isinstance(score, bool)
+            or score < 70
+        ):
+            raise ValueError(f"candidate is not verified and pr-ready: {rule_id}")
+
+        rule_file = resolved_candidate_dir / "rule.py"
+        test_file = resolved_candidate_dir / "test_rule.py"
+        try:
+            resolved_rule_file = rule_file.resolve(strict=True)
+            resolved_test_file = test_file.resolve(strict=True)
+            if (
+                _is_link_or_reparse_point(rule_file)
+                or _is_link_or_reparse_point(test_file)
+                or resolved_rule_file.parent != resolved_candidate_dir
+                or resolved_test_file.parent != resolved_candidate_dir
+                or not resolved_rule_file.is_file()
+                or not resolved_test_file.is_file()
+            ):
+                raise ValueError(f"candidate artifacts escape their directory: {rule_id}")
+            rule_bytes = resolved_rule_file.read_bytes()
+            test_bytes = resolved_test_file.read_bytes()
+        except OSError as exc:
+            raise ValueError(f"candidate artifacts are missing: {rule_id}") from exc
+
+        rule_hash = hashlib.sha256(rule_bytes).hexdigest()
+        test_hash = hashlib.sha256(test_bytes).hexdigest()
+        if (
+            metadata.get("rule_file") != "rule.py"
+            or metadata.get("test_file") != "test_rule.py"
+            or metadata.get("rule_sha256") != rule_hash
+            or metadata.get("test_sha256") != test_hash
+        ):
+            raise ValueError(f"candidate artifacts changed after validation: {rule_id}")
+
+        self.approved_rules_dir.mkdir(parents=True, exist_ok=True)
+        approved_root = self.approved_rules_dir.resolve()
+        if (
+            _is_link_or_reparse_point(self.approved_rules_dir)
+            or approved_root.parent != self.data_dir.resolve()
+        ):
+            raise ValueError("approved-rules path escapes the evolution data directory")
+        manifest_file = approved_root / "manifest.json"
+        if _is_link_or_reparse_point(manifest_file):
+            raise ValueError("approved-rules manifest must be a regular in-store file")
+        if manifest_file.exists():
+            try:
+                resolved_manifest_file = manifest_file.resolve(strict=True)
+                if (
+                    resolved_manifest_file.parent != approved_root
+                    or not resolved_manifest_file.is_file()
+                ):
+                    raise ValueError("approved-rules manifest escapes its directory")
+                manifest = json.loads(resolved_manifest_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError("approved-rules manifest is invalid") from exc
+            if (
+                not isinstance(manifest, dict)
+                or manifest.get("schema") != _APPROVAL_MANIFEST_SCHEMA
+                or not isinstance(manifest.get("rules"), dict)
+            ):
+                raise ValueError("approved-rules manifest is invalid")
         else:
-            return "disabled"
+            manifest = {"schema": _APPROVAL_MANIFEST_SCHEMA, "rules": {}}
+
+        approved_file = approved_root / f"{rule_id}.py"
+        _atomic_write_in_directory(approved_file, rule_bytes, self.approved_rules_dir)
+        approved_at = datetime.now().isoformat()
+        record = {
+            "file": approved_file.name,
+            "sha256": rule_hash,
+            "approved_at": approved_at,
+            "pattern_hash": metadata.get("pattern_hash"),
+            "resource_type": metadata["resource_type"],
+            "risk": metadata["risk"],
+        }
+        manifest["rules"][rule_id] = record
+        _atomic_write_in_directory(
+            manifest_file,
+            json.dumps(manifest, indent=2).encode(),
+            self.approved_rules_dir,
+        )
+
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            "UPDATE patterns SET rule_status = 'approved' WHERE pattern_hash = ?",
+            (metadata.get("pattern_hash"),),
+        )
+        conn.execute(
+            "UPDATE rules_catalog SET status = 'approved', merged_at = ? "
+            "WHERE id = (SELECT MAX(rc.id) FROM rules_catalog rc "
+            "JOIN patterns p ON p.id = rc.pattern_id WHERE p.pattern_hash = ?)",
+            (approved_at, metadata.get("pattern_hash")),
+        )
+        conn.commit()
+        conn.close()
+        return {"rule_id": rule_id, **record}
+
+    def load_approved_rules(self) -> list[str]:
+        """Load manifest-approved rules from this engine's data directory."""
+        from readtheplan.rules._shared import _load_auto_rules
+
+        return _load_auto_rules(self.data_dir)
 
     def _save_evolved_rule(self, pattern_hash: str, rule: str, score: float, status: str):
         conn = sqlite3.connect(self.db_path)
@@ -714,6 +982,7 @@ Score: {data.get('score')}
             evolved = self.analyze_with_agents(patterns)
             suggested_rules = [
                 {
+                    "rule_id": e["rule_id"],
                     "pattern_hash": e["pattern_hash"],
                     "rule": e["suggested_rule"],
                     "score": e["rule_score"],
@@ -756,6 +1025,9 @@ Score: {data.get('score')}
         auto_merged = conn.execute(
             "SELECT COUNT(*) FROM rules_catalog WHERE status = 'auto-merge'"
         ).fetchone()[0]
+        approved = conn.execute(
+            "SELECT COUNT(*) FROM rules_catalog WHERE status = 'approved'"
+        ).fetchone()[0]
 
         recent = conn.execute(
             "SELECT timestamp, decision, compliance_score FROM runs ORDER BY id DESC LIMIT 10"
@@ -769,6 +1041,8 @@ Score: {data.get('score')}
             "avg_compliance_score": round(avg_score, 1),
             "total_incidents": total_incidents,
             "total_patterns": total_patterns,
+            "approved_rules": approved,
+            # Retained for dashboards created from databases predating explicit approval.
             "auto_merged_rules": auto_merged,
             "recent_runs": [
                 {"timestamp": r[0], "decision": r[1], "score": r[2]} for r in recent
@@ -789,6 +1063,7 @@ Score: {data.get('score')}
         for p in patterns:
             status_badge = {
                 "auto-merge": "🟢",
+                "approved": "🟢",
                 "pr-ready": "🟡",
                 "disabled": "🔴",
                 "pending": "⚪",
@@ -866,8 +1141,8 @@ Score: {data.get('score')}
       <div class="label">Patterns</div>
     </div>
     <div class="stat-card">
-      <div class="value">{stats['auto_merged_rules']}</div>
-      <div class="label">Auto-Merged Rules</div>
+      <div class="value">{stats['approved_rules']}</div>
+      <div class="label">Approved Rules</div>
     </div>
   </div>
 
@@ -928,7 +1203,11 @@ Score: {data.get('score')}
         """
         stats = self.get_stats()
         patterns = self.get_all_patterns()
-        active_patterns = [p for p in patterns if p["rule_status"] in ("pr-ready", "auto-merge")]
+        active_patterns = [
+            p
+            for p in patterns
+            if p["rule_status"] in ("pr-ready", "approved", "auto-merge")
+        ]
 
         if style == "concise":
             text = (
@@ -936,7 +1215,7 @@ Score: {data.get('score')}
                 f"{stats['total_runs']} runs analyzed. "
                 f"Average compliance score: {stats['avg_compliance_score']:.1f}. "
                 f"{len(patterns)} patterns detected. "
-                f"{stats['auto_merged_rules']} rules auto-merged."
+                f"{stats['approved_rules']} rules explicitly approved."
             )
         elif style == "narrative":
             text = (
@@ -944,7 +1223,7 @@ Score: {data.get('score')}
                 f"The average compliance score is {stats['avg_compliance_score']:.1f}. "
                 f"We detected {len(patterns)} recurring patterns "
                 f"across {stats['total_incidents']} incidents. "
-                f"{stats['auto_merged_rules']} rules have been auto-merged into the catalog. "
+                f"{stats['approved_rules']} rules have been explicitly approved. "
                 f"{len(active_patterns)} patterns are ready for review."
             )
         elif style == "professional":
@@ -953,7 +1232,7 @@ Score: {data.get('score')}
                 f"Total runs: {stats['total_runs']}. "
                 f"Average compliance score: {stats['avg_compliance_score']:.1f}. "
                 f"Patterns detected: {len(patterns)}. "
-                f"Rules auto-merged: {stats['auto_merged_rules']}. "
+                f"Rules approved: {stats['approved_rules']}. "
                 f"Active patterns pending: {len(active_patterns)}."
             )
         else:  # excited
@@ -961,7 +1240,7 @@ Score: {data.get('score')}
                 f"Your self-improving kernel gate is getting smarter! "
                 f"Compliance score is {stats['avg_compliance_score']:.1f}. "
                 f"We've spotted {len(patterns)} patterns and "
-                f"auto-merged {stats['auto_merged_rules']} rules. "
+                f"explicitly approved {stats['approved_rules']} rules. "
                 f"The system is learning from every run!"
             )
 

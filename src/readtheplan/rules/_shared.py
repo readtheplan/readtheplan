@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import stat
+import sys
+import threading
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from importlib.machinery import ModuleSpec
 from importlib.metadata import entry_points
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 # ── Rule registry ──────────────────────────────────────────────────────
@@ -23,6 +30,9 @@ _CROSS_CUTTING: list[Callable[..., list[RuleResult]]] = []
 internally by checking the ``resource_type`` prefix.  Currently holds the
 AWS platform/network/observability candidate functions."""
 
+_REGISTRY_LOCK = threading.RLock()
+"""Serializes rule registration and transactional approved-rule loads."""
+
 
 # ── Plugin provenance ──────────────────────────────────────────────────
 # Tracks the "current" provenance source while a plugin's entry point is being
@@ -39,12 +49,13 @@ def _source_context(source: str):
     """Temporarily set the provenance source applied to rules registered inside
     the ``with`` block (used by entry-point discovery)."""
     global _current_source
-    previous = _current_source
-    _current_source = source
-    try:
-        yield
-    finally:
-        _current_source = previous
+    with _REGISTRY_LOCK:
+        previous = _current_source
+        _current_source = source
+        try:
+            yield
+        finally:
+            _current_source = previous
 
 
 def register_rule(*resource_types: str, source: str | None = None) -> Callable:
@@ -64,15 +75,17 @@ def register_rule(*resource_types: str, source: str | None = None) -> Callable:
     parameters, accept them and ignore them — the caller always passes
     all three.
     """
-    src = source if source is not None else _current_source
+    with _REGISTRY_LOCK:
+        src = source if source is not None else _current_source
 
     def decorator(func: Callable) -> Callable:
-        if not hasattr(func, "__rtp_source__"):
-            func.__rtp_source__ = src
-        for rt in resource_types:
-            bucket = _RULE_REGISTRY.setdefault(rt, [])
-            if func not in bucket:  # idempotent: re-discovery must not duplicate
-                bucket.append(func)
+        with _REGISTRY_LOCK:
+            if not hasattr(func, "__rtp_source__"):
+                func.__rtp_source__ = src
+            for rt in resource_types:
+                bucket = _RULE_REGISTRY.setdefault(rt, [])
+                if func not in bucket:  # idempotent: re-discovery must not duplicate
+                    bucket.append(func)
         return func
     return decorator
 
@@ -83,10 +96,11 @@ def register_cross_cutting(func: Callable, *, source: str | None = None) -> Call
     The function self-filters by inspecting ``resource_type`` internally
     (e.g. checking ``resource_type.startswith(\"aws_\")``).
     """
-    if not hasattr(func, "__rtp_source__"):
-        func.__rtp_source__ = source if source is not None else _current_source
-    if func not in _CROSS_CUTTING:  # idempotent: re-discovery must not duplicate
-        _CROSS_CUTTING.append(func)
+    with _REGISTRY_LOCK:
+        if not hasattr(func, "__rtp_source__"):
+            func.__rtp_source__ = source if source is not None else _current_source
+        if func not in _CROSS_CUTTING:  # idempotent: re-discovery must not duplicate
+            _CROSS_CUTTING.append(func)
     return func
 
 
@@ -172,13 +186,16 @@ def _rule_candidates(
     """Look up registered rule functions from the decorator-based registry."""
     action_set = set(actions)
     candidates: list[RuleResult] = []
+    with _REGISTRY_LOCK:
+        exact_rules = tuple(_RULE_REGISTRY.get(resource_type, ()))
+        cross_cutting_rules = tuple(_CROSS_CUTTING)
 
     # Exact resource-type rules
-    for func in _RULE_REGISTRY.get(resource_type, []):
+    for func in exact_rules:
         candidates.extend(_stamp_source(func, func(resource_type, action_set, change)))
 
     # Cross-cutting rules (run for every type, self-filter internally)
-    for func in _CROSS_CUTTING:
+    for func in cross_cutting_rules:
         candidates.extend(_stamp_source(func, func(resource_type, action_set, change)))
 
     return candidates
@@ -518,31 +535,202 @@ def _contains_public_principal(value: Any) -> bool:
 from readtheplan.rules import aws, azure, gcp, k8s  # noqa: E402, F401, I001
 
 
-# Dynamically load auto-generated rules
-try:
-    from pathlib import Path  # noqa: I001
-    import importlib  # noqa: I001
-    import pkgutil  # noqa: I001
+# Approved evolution rules are kept outside the installed package.  A Python
+# file appearing in this directory is deliberately insufficient for loading:
+# it must also have an allowlisted manifest record whose SHA-256 matches.
+_APPROVED_RULE_ID_RE = re.compile(r"^rule_[a-z][a-z0-9_]{0,190}$")
+_APPROVAL_MANIFEST_SCHEMA = "readtheplan-approved-rules-v1"
+_LOADED_APPROVED_RULES: set[tuple[str, str]] = set()
 
-    def _load_auto_rules() -> None:
-        auto_dir = Path(__file__).parent / "auto"
-        if not auto_dir.exists():
-            auto_dir.mkdir(parents=True, exist_ok=True)
-        init_file = auto_dir / "__init__.py"
-        if not init_file.exists():
-            init_file.write_text('"""Auto-generated rules package."""\n', encoding="utf-8")
-        
-        package_name = "readtheplan.rules.auto"
+
+def _is_link_or_reparse_point(path: Path) -> bool:
+    """Return true for symlinks and Windows junction/reparse-point paths."""
+    try:
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return path.is_symlink() or bool(attributes & reparse_flag)
+
+
+def _execute_verified_rule_bytes(
+    rule_bytes: bytes,
+    *,
+    source_path: Path,
+    module_name: str,
+    provenance: str,
+) -> bool:
+    """Compile and transactionally execute the already-verified source bytes.
+
+    Compiling the in-memory snapshot prevents Python's pathname loader from
+    substituting a timestamp-valid ``__pycache__`` file after the source hash
+    has been checked.  The registry lock serializes public registration APIs;
+    if execution fails, the exact pre-load registry and provenance state is
+    restored without discarding builtin or other completed registrations.
+    """
+    global _CROSS_CUTTING, _RULE_REGISTRY, _current_source
+
+    try:
+        code = compile(rule_bytes, str(source_path), "exec", dont_inherit=True)
+    except (SyntaxError, TypeError, ValueError):
+        return False
+
+    module = ModuleType(module_name)
+    module.__file__ = str(source_path)
+    module.__package__ = ""
+    module.__loader__ = None
+    module.__spec__ = ModuleSpec(module_name, loader=None, origin=str(source_path))
+    module.__cached__ = None
+
+    missing_module = object()
+    with _REGISTRY_LOCK:
+        registry_object = _RULE_REGISTRY
+        registry_buckets = dict(registry_object)
+        registry_snapshot = {
+            resource_type: list(bucket)
+            for resource_type, bucket in registry_buckets.items()
+        }
+        cross_cutting_object = _CROSS_CUTTING
+        cross_cutting_snapshot = list(cross_cutting_object)
+        source_snapshot = _current_source
+        previous_module = sys.modules.get(module_name, missing_module)
+        sys.modules[module_name] = module
+
         try:
-            auto_pkg = importlib.import_module(package_name)
-            for _, module_name, _ in pkgutil.iter_modules(auto_pkg.__path__):
-                importlib.import_module(f"{package_name}.{module_name}")
-        except Exception:  # auto-rule package may not exist yet; safe to skip
-            pass
+            with _source_context(provenance):
+                exec(code, module.__dict__)
 
-    _load_auto_rules()
-except Exception:  # auto-rule directory setup is best-effort; never block startup
-    pass
+            # Approved modules may append registrations, but they may not
+            # replace registries or remove/reorder rules that predated them.
+            if _RULE_REGISTRY is not registry_object or _CROSS_CUTTING is not cross_cutting_object:
+                raise RuntimeError("approved rule replaced a global registry")
+            for resource_type, before in registry_snapshot.items():
+                current = registry_object.get(resource_type)
+                if current is None or current[: len(before)] != before:
+                    raise RuntimeError("approved rule modified existing registrations")
+            if cross_cutting_object[: len(cross_cutting_snapshot)] != cross_cutting_snapshot:
+                raise RuntimeError("approved rule modified existing cross-cutting registrations")
+        except BaseException as exc:
+            _RULE_REGISTRY = registry_object
+            registry_object.clear()
+            for resource_type, bucket in registry_buckets.items():
+                bucket[:] = registry_snapshot[resource_type]
+                registry_object[resource_type] = bucket
+            _CROSS_CUTTING = cross_cutting_object
+            cross_cutting_object[:] = cross_cutting_snapshot
+            _current_source = source_snapshot
+            if previous_module is missing_module:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = previous_module
+            if not isinstance(exc, Exception):
+                raise
+            return False
+
+        _current_source = source_snapshot
+        return True
+
+
+def _load_auto_rules(data_dir: str | Path | None = None) -> list[str]:
+    """Load explicitly approved evolution rules from *data_dir*.
+
+    The historical implementation scanned ``readtheplan.rules.auto`` and
+    imported every module found there, creating the package directory as a
+    side effect of importing :mod:`readtheplan.rules`.  The approved-rules
+    manifest is now the sole allowlist.  Missing, malformed, unlisted, or
+    hash-mismatched files are ignored without changing the filesystem.
+    """
+    root = Path(data_dir) if data_dir is not None else Path.home() / ".readtheplan"
+    approved_dir = root / "approved-rules"
+    manifest_file = approved_dir / "manifest.json"
+    if (
+        _is_link_or_reparse_point(approved_dir)
+        or _is_link_or_reparse_point(manifest_file)
+        or not manifest_file.is_file()
+    ):
+        return []
+
+    try:
+        approved_root = approved_dir.resolve(strict=True)
+        resolved_manifest_file = manifest_file.resolve(strict=True)
+    except OSError:
+        return []
+    if (
+        approved_root.parent != root.resolve()
+        or resolved_manifest_file.parent != approved_root
+        or not resolved_manifest_file.is_file()
+    ):
+        return []
+
+    try:
+        manifest = json.loads(resolved_manifest_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema") != _APPROVAL_MANIFEST_SCHEMA
+    ):
+        return []
+    records = manifest.get("rules")
+    if not isinstance(records, dict):
+        return []
+
+    loaded: list[str] = []
+    for rule_id, record in records.items():
+        if not isinstance(rule_id, str) or not _APPROVED_RULE_ID_RE.fullmatch(rule_id):
+            continue
+        if not isinstance(record, dict):
+            continue
+        file_name = record.get("file")
+        expected_hash = record.get("sha256")
+        if (
+            not isinstance(file_name, str)
+            or Path(file_name).name != file_name
+            or file_name != f"{rule_id}.py"
+            or not isinstance(expected_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", expected_hash)
+        ):
+            continue
+
+        rule_file = approved_dir / file_name
+        try:
+            resolved_rule_file = rule_file.resolve(strict=True)
+            if (
+                _is_link_or_reparse_point(rule_file)
+                or resolved_rule_file.parent != approved_root
+                or not resolved_rule_file.is_file()
+            ):
+                continue
+            rule_bytes = resolved_rule_file.read_bytes()
+        except OSError:
+            continue
+        if hashlib.sha256(rule_bytes).hexdigest() != expected_hash:
+            continue
+
+        load_key = (str(resolved_rule_file), expected_hash)
+        if load_key in _LOADED_APPROVED_RULES:
+            loaded.append(rule_id)
+            continue
+        path_hash = hashlib.sha256(str(resolved_rule_file).encode()).hexdigest()[:12]
+        module_name = (
+            f"_readtheplan_approved_{rule_id}_{expected_hash[:12]}_{path_hash}"
+        )
+        if not _execute_verified_rule_bytes(
+            rule_bytes,
+            source_path=resolved_rule_file,
+            module_name=module_name,
+            provenance=f"approved:{rule_id}",
+        ):
+            continue
+        _LOADED_APPROVED_RULES.add(load_key)
+        loaded.append(rule_id)
+    return loaded
+
+
+# Read-only at import time: no directories or package files are created.
+_load_auto_rules()
 
 
 
