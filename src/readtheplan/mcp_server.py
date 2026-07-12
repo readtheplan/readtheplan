@@ -427,6 +427,52 @@ def agent_gate_pulumi(
     return analyze_pulumi(data, catalog=catalog)
 
 
+def agent_gate_pulumi_project(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Pulumi project, stack settings, or policy-pack YAML."""
+    from readtheplan.adapters.pulumi_project import (
+        PulumiProjectAdapter,
+        PulumiProjectInputError,
+        analyze_pulumi_project,
+        parse_pulumi_project,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except FileNotFoundError as exc:
+        raise MCPToolInputError(
+            code="FILE_NOT_FOUND",
+            message=f"File not found: {input_path}",
+        ) from exc
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_pulumi_project(source, filename=Path(input_path).name)
+    except PulumiProjectInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Pulumi project input in {input_path}: {exc}",
+        ) from exc
+    if not PulumiProjectAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Pulumi project configuration",
+        )
+
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_pulumi_project(data, catalog=catalog)
+
+
 def agent_gate_pipeline(
     input_path: str,
     ecosystem: str,
@@ -1818,6 +1864,7 @@ def create_server() -> Any:
     agent_gate_bicep_handler = agent_gate_bicep
     agent_gate_k8s_handler = agent_gate_kubernetes
     agent_gate_pulumi_handler = agent_gate_pulumi
+    agent_gate_pulumi_project_handler = agent_gate_pulumi_project
     agent_gate_pipeline_handler = agent_gate_pipeline
     agent_gate_atlantis_handler = agent_gate_atlantis
     agent_gate_workload_handler = agent_gate_workload
@@ -1937,6 +1984,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_pulumi_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_pulumi_project")
+    def _agent_gate_pulumi_project_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return the gate for Pulumi project, stack, or policy-pack YAML.
+
+        Args:
+            input_path: Path to Pulumi.yaml, Pulumi.<stack>.yaml, or PulumiPolicy.yaml.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_pulumi_project_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_pipeline")
     def _agent_gate_pipeline_tool(

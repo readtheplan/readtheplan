@@ -31,6 +31,7 @@ matrix makes those boundaries explicit.
 | KEDA | ScaledObject, ScaledJob, authentication, and CloudEventSource YAML | `readtheplan kubernetes keda.yaml` | Scale bounds and scale-to-zero, metric endpoints/TLS, fallback, executable Jobs, credential/identity scope, rollout, and autoscaling event export | Built-in |
 | Knative Serving / Eventing | Service/Route/Revision plus Broker, Trigger, Channel, Subscription, flows, sources, EventPolicy, transforms, and request/reply YAML | `readtheplan kubernetes knative.yaml` | Container/image/identity risk, traffic visibility and revision splits, CloudEvent routing/filtering, retries/DLQ, event-source identity, and sender authorization | Built-in |
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
+| Pulumi project / stack / policy | `Pulumi.yaml`, `Pulumi.<stack>.yaml`, or `PulumiPolicy.yaml` | `readtheplan pulumi-project Pulumi.yaml` | Strict duplicate-safe YAML; runtime/compiler and path execution, backends, packages/plugins and provenance, project config schemas, encrypted/plaintext stack config, secrets providers, ESC imports, Pulumi YAML resources with deep rules, policy packs, and explicit evaluation boundaries | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles; privilege, controller delegation, check/error controls, includes, identity/host security, supply-chain inputs, TLS, and secret-bearing environments | Built-in |
 | Ansible project | `ansible.cfg` or Galaxy requirements YAML | `readtheplan ansible-project ansible.cfg` | Controller transport/privilege, plugins, callbacks, inventory, Galaxy endpoints and credentials, roles/collections, version pinning, SCM transport, signatures, and parse boundaries | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
@@ -97,7 +98,7 @@ the same optional `framework` parameter through its MCP tool.
 
 ## Deliberate boundaries
 
-- readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
+- readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Pulumi, Helm, Kustomize,
   Crossplane packages, providers, or Composition functions,
   Serverless Framework plugins or AWS SAM builds/transforms,
   Pulumi, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,

@@ -357,6 +357,7 @@ for (const token of [
   "analyze_plan",
   "agent_gate",
   "agent_gate_pulumi",
+  "agent_gate_pulumi_project",
   "agent_gate_azure",
   "agent_gate_bicep",
   "agent_gate_cdk",

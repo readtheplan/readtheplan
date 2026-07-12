@@ -113,6 +113,7 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "dsc",
         "cfengine",
         "puppet-project",
+        "pulumi-project",
         "salt-project",
         "terraform-lock",
     } <= set(adapters)

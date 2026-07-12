@@ -42,6 +42,7 @@ from readtheplan.adapters.pipelines import (
 )
 from readtheplan.adapters.proxy_configs import HAProxyAdapter, NginxAdapter
 from readtheplan.adapters.pulumi import PulumiAdapter
+from readtheplan.adapters.pulumi_project import PulumiProjectAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
 from readtheplan.adapters.puppet_project import PuppetProjectAdapter
 from readtheplan.adapters.salt import SaltAdapter
@@ -135,6 +136,7 @@ register_adapter(CFEngineAdapter())
 register_adapter(PuppetAdapter())
 register_adapter(PuppetProjectAdapter())
 register_adapter(PulumiAdapter())
+register_adapter(PulumiProjectAdapter())
 register_adapter(NginxAdapter())
 register_adapter(HAProxyAdapter())
 register_adapter(AzureWhatIfAdapter())
@@ -204,6 +206,7 @@ __all__ = [
     "HAProxyAdapter",
     "PackerInspectAdapter",
     "PulumiAdapter",
+    "PulumiProjectAdapter",
     "PuppetAdapter",
     "PuppetProjectAdapter",
     "SaltAdapter",

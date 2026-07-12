@@ -1,0 +1,17 @@
+secretsprovider: http://operator:password@vault.internal/secrets
+encryptionsalt: v1:example-salt
+encryptedkey: ""
+config:
+  platform:database-password: plaintext-password
+  platform:encrypted-token:
+    secure: ciphertext-is-not-reported
+  platform:empty-secret:
+    secure: ""
+  platform:callback: http://service.internal/hook
+environment:
+  imports:
+    - organization/platform/shared
+    - organization/platform/database@42
+  values:
+    database:
+      password: inline-environment-password

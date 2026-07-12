@@ -81,6 +81,34 @@ jobs:
           assert any(item.startswith("rtp.control.soc2.") for item in payload["required_checks"])
           PY
 
+      - name: Run action on Pulumi project configuration
+        id: pulumi_project
+        uses: ./
+        with:
+          tool: pulumi-project
+          input-file: tests/fixtures/pulumi_project_risky.yaml
+          framework: soc2
+
+      - name: Assert Pulumi project action outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.pulumi_project.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.pulumi_project.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.pulumi_project.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "24"
+          test "$RISK_COUNTS" = '{"dangerous":16,"irreversible":0,"review":8,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "pulumi-project"
+          assert payload["artifact"] == "project"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on AWS CDK Cloud Assembly
         id: cdk
         uses: ./
