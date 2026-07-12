@@ -262,6 +262,23 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     pulumi.set_defaults(func=_pulumi_gate)
 
+    pulumi_project = subparsers.add_parser(
+        "pulumi-project",
+        help="Emit the agent-gate decision for Pulumi project, stack, or policy YAML.",
+    )
+    pulumi_project.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    pulumi_project.add_argument(
+        "input_file",
+        help="Path to Pulumi.yaml, Pulumi.<stack>.yaml, or PulumiPolicy.yaml.",
+    )
+    pulumi_project.set_defaults(func=_pulumi_project_gate)
+
     ansible = subparsers.add_parser(
         "ansible",
         help="Emit the agent-gate decision for an Ansible playbook.",
@@ -1294,6 +1311,36 @@ def _pulumi_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_pulumi(data, catalog=catalog))
+
+
+def _pulumi_project_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Pulumi project-side configuration."""
+    from readtheplan.adapters.pulumi_project import (
+        PulumiProjectAdapter,
+        PulumiProjectInputError,
+        analyze_pulumi_project,
+        parse_pulumi_project,
+    )
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_pulumi_project(source, filename=path.name)
+    except PulumiProjectInputError as exc:
+        print(f"Error: invalid Pulumi project input: {exc}", file=sys.stderr)
+        return 1
+    if not PulumiProjectAdapter().can_handle(data):
+        print("Error: input not recognized as Pulumi project configuration", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_pulumi_project(data, catalog=catalog))
 
 
 def _jenkins_gate(args: argparse.Namespace) -> int:

@@ -1,0 +1,22 @@
+name: platform
+runtime:
+  name: python
+  options:
+    toolchain: uv
+    virtualenv: .venv
+main: src
+backend:
+  url: https://api.pulumi.com
+config:
+  region:
+    type: string
+    default: us-west-2
+  database-password:
+    type: string
+    secret: true
+packages:
+  aws:
+    source: aws
+    version: 6.75.0
+    checksums:
+      linux-x64: sha256:example

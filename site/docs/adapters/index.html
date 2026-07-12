@@ -345,12 +345,22 @@ class ResourceChange:
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pulumi preview --json &gt; preview.json
 readtheplan pulumi preview.json
-readtheplan pulumi --framework soc2 preview.json</code></pre>
+readtheplan pulumi --framework soc2 preview.json
+readtheplan pulumi-project Pulumi.yaml
+readtheplan pulumi-project Pulumi.prod.yaml
+readtheplan pulumi-project PulumiPolicy.yaml</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             The adapter accepts Pulumi preview digest JSON and newline-delimited streaming engine
             events. It reads <code>oldState</code>/<code>newState</code> inputs, converts Pulumi
             provider types into the shared rule vocabulary, and normalizes nested camelCase input
             names before applying resource-aware rules. Root stack bookkeeping is ignored.
+          </p>
+          <p style="color:var(--muted);margin:12px 0 0">
+            The separate <code>pulumi-project</code> gate strictly parses project, stack, and
+            policy-pack YAML without executing Pulumi. It reviews runtime/compiler commands,
+            entry-point and config paths, backend state, package and local-plugin provenance,
+            secret schemas and encrypted stack values, ESC imports, and policy execution.
+            Pulumi YAML resource declarations also receive the shared deep resource rules.
           </p>
           <p style="color:var(--muted);margin:12px 0 0">
             Create is initially safe, update and import require review, replacement is dangerous,

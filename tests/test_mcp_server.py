@@ -41,6 +41,7 @@ from readtheplan.mcp_server import (
     agent_gate_pipeline,
     agent_gate_proxy_config,
     agent_gate_pulumi,
+    agent_gate_pulumi_project,
     agent_gate_salt,
     agent_gate_sam,
     agent_gate_serverless,
@@ -85,6 +86,17 @@ def test_agent_gate_pulumi_supports_framework_checks() -> None:
     assert result["adapter"] == "pulumi"
     assert result["decision"] == "block"
     assert any(str(check).startswith("rtp.control.soc2.") for check in result["required_checks"])
+
+
+def test_agent_gate_pulumi_project_supports_framework_checks() -> None:
+    result = agent_gate_pulumi_project(
+        str(FIXTURES / "pulumi_project_risky.yaml"),
+        "soc2",
+    )
+    assert result["adapter"] == "pulumi-project"
+    assert result["artifact"] == "project"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
 def test_agent_gate_bicep_supports_source_and_framework_checks() -> None:
@@ -771,6 +783,12 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
         ),
         (agent_gate_azure, "azure_whatif_mixed.json", "adapter", "azure"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
+        (
+            agent_gate_pulumi_project,
+            "pulumi_project_risky.yaml",
+            "adapter",
+            "pulumi-project",
+        ),
         (agent_gate_helm, "helm_template_risky.yaml", "adapter", "helm"),
         (agent_gate_kustomize, "kustomization_risky.yml", "adapter", "kustomize"),
         (agent_gate_crossplane, "crossplane_risky.yml", "adapter", "crossplane"),
@@ -823,6 +841,12 @@ def test_non_kubernetes_handlers_use_confined_read_boundary(
         ),
         (agent_gate_azure, "azure_whatif_mixed.json", "adapter", "azure"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
+        (
+            agent_gate_pulumi_project,
+            "pulumi_project_risky.yaml",
+            "adapter",
+            "pulumi-project",
+        ),
         (agent_gate_helm, "helm_template_risky.yaml", "adapter", "helm"),
         (agent_gate_kustomize, "kustomization_risky.yml", "adapter", "kustomize"),
         (agent_gate_crossplane, "crossplane_risky.yml", "adapter", "crossplane"),
@@ -857,6 +881,7 @@ def test_non_kubernetes_handlers_allow_path_inside_root(
         (agent_gate_cloudformation, "cfn_change_set_mixed.json"),
         (agent_gate_azure, "azure_whatif_mixed.json"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json"),
+        (agent_gate_pulumi_project, "pulumi_project_risky.yaml"),
         (agent_gate_helm, "helm_template_risky.yaml"),
         (agent_gate_kustomize, "kustomization_risky.yml"),
         (agent_gate_crossplane, "crossplane_risky.yml"),
@@ -1260,6 +1285,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_bicep" in tool_names
         assert "agent_gate_kubernetes" in tool_names
         assert "agent_gate_pulumi" in tool_names
+        assert "agent_gate_pulumi_project" in tool_names
         assert "agent_gate_pipeline" in tool_names
         assert "agent_gate_workload" in tool_names
         assert "agent_gate_packer" in tool_names
@@ -1298,6 +1324,7 @@ def test_stdio_server_tools_list() -> None:
             "agent_gate_bicep",
             "agent_gate_kubernetes",
             "agent_gate_pulumi",
+            "agent_gate_pulumi_project",
         ):
             assert "framework" in tools_by_name[tool_name]["inputSchema"]["properties"]
         pipeline_schema = tools_by_name["agent_gate_pipeline"]["inputSchema"]

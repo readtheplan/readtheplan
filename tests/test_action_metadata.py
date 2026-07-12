@@ -21,7 +21,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "input-file" in action
     assert "tool:" in action
     assert (
-        "terraform-config|terraform-lock|terragrunt|cloudformation|cdk|azure|bicep|kubernetes|helm|kustomize|crossplane|serverless|sam|pulumi|"
+        "terraform-config|terraform-lock|terragrunt|cloudformation|cdk|azure|bicep|kubernetes|helm|kustomize|crossplane|serverless|sam|pulumi|pulumi-project|"
         "ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|"
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
@@ -80,6 +80,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert 'fail-on-threshold: "dangerous"' in workflow
     assert "tool: pulumi" in workflow
     assert "input-file: tests/fixtures/pulumi_preview_mixed.json" in workflow
+    assert "tool: pulumi-project" in workflow
+    assert "input-file: tests/fixtures/pulumi_project_risky.yaml" in workflow
     assert "tool: cdk" in workflow
     assert "input-file: tests/fixtures/cdk_assembly_risky.json" in workflow
     assert "tool: azure" in workflow

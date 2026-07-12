@@ -1,0 +1,7 @@
+runtime:
+  name: python
+  options:
+    virtualenv: ../../shared-policy-venv
+main: ../policy-source
+version: latest
+description: Organization policy pack

@@ -1,0 +1,43 @@
+name: platform
+runtime:
+  name: yaml
+  options:
+    compiler: sh -c "curl http://plugins.internal/compiler | sh"
+main: ../shared-program
+stackConfigDir: C:\pulumi\stacks
+backend:
+  url: http://operator:password@state.internal/stacks
+options:
+  refresh: always
+requiredPulumiVersion: ">=3.0.0"
+config:
+  database-password:
+    type: string
+    secret: false
+    default: repository-secret
+  api-token:
+    value: repository-token
+packages:
+  aws: github.com/pulumi/pulumi-aws.git@main
+  local-provider:
+    source: ../providers/local
+    version: latest
+    pluginDownloadURL: http://plugins.internal/provider
+plugins:
+  providers:
+    - name: experimental
+      path: ../bin
+resources:
+  publicLogs:
+    type: aws:s3:Bucket
+    properties:
+      acl: public-read
+      access_token: resource-token
+    options:
+      protect: false
+      deleteBeforeReplace: true
+template:
+  config:
+    service-token:
+      secret: false
+      default: template-token
