@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for all 146 resources in Datadog provider v4.14.0,
+  provider catalog. Credentials and service accounts, organization identity and
+  access policy, cloud and incident integrations, logs/APM/RUM retention and
+  routing, monitors/SLOs/Synthetics, Cloud Security and AppSec, sensitive-data
+  scanning, findings workflow, on-call and deployment automation, and App
+  Builder/catalog data now receive explicit control-plane semantics.
 - First-party Terraform rules for all 130 resources in the current GitLab
   provider catalog. Projects/groups and instance defaults, protected refs and
   environments, approvals, identity/federation, tokens/keys/variables, runners
