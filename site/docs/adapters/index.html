@@ -65,7 +65,8 @@
             Terraform and OpenTofu work natively. Built-in adapters cover <strong>CloudFormation</strong>,
             <strong>Azure Bicep/ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
             <strong>Pulumi</strong>, <strong>Chef</strong>, <strong>Puppet</strong>, <strong>GitHub Actions</strong>,
-            <strong>GitLab CI</strong>, and <strong>CircleCI</strong>. Rendered Helm,
+            <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
+            and <strong>HashiCorp Nomad</strong>. Rendered Helm,
             Kustomize, and Crossplane resources flow through the Kubernetes gate. AWS CDK, Packer,
             Terragrunt, and internal tools can use the same public adapter interface.
           </p>
@@ -81,10 +82,14 @@ readtheplan chef default.rb
 readtheplan puppet site.pp
 readtheplan github-actions .github/workflows/deploy.yml
 readtheplan gitlab-ci .gitlab-ci.yml
-readtheplan circleci .circleci/config.yml</code></pre>
+readtheplan circleci .circleci/config.yml
+readtheplan docker-compose compose.yml
+readtheplan nomad plan-response.json</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Ansible consumes
-            YAML structurally. Jenkins, Chef, Puppet, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning:
+            YAML structurally. Docker Compose is parsed structurally without resolving external
+            files, while Nomad consumes the scheduler's structured job-plan API response.
+            Jenkins, Chef, Puppet, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
           </p>
@@ -95,6 +100,28 @@ readtheplan circleci .circleci/config.yml</code></pre>
             <li style="margin-bottom:6px">You have a custom IaC tool and want compliance gates and audit evidence.</li>
             <li style="margin-bottom:6px">You want to extend the type-map for CloudFormation or Kubernetes resources not yet covered.</li>
           </ul>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="workloads-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="workloads-title">Docker Compose and Nomad</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Gate container runtime boundaries and scheduler decisions without starting a
+            container or contacting a cluster.
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan docker-compose compose.yml
+
+# POST the job specification to /v1/job/:id/plan with Diff enabled,
+# save the JSON response, then review it locally:
+readtheplan nomad plan-response.json</code></pre>
+          <p style="color:var(--muted);margin:12px 0 0">
+            Compose checks image immutability, builds, commands, privileged execution,
+            host/container namespaces, capabilities, mounts, devices, secrets, external
+            file boundaries, security profiles, and published ports. Nomad checks placement
+            failures, allocation stops and replacements, rollout operations, task drivers,
+            mutable images, commands, and secret-bearing fields from the scheduler plan.
+          </p>
         </div>
       </section>
 

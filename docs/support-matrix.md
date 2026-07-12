@@ -22,6 +22,8 @@ matrix makes those boundaries explicit.
 | GitHub Actions | Workflow YAML | `readtheplan github-actions workflow.yml` | Token permissions, action/reusable-workflow pinning, secret inputs, environments, and run steps | Built-in |
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
+| Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
+| HashiCorp Nomad | `/v1/job/:id/plan` JSON response | `readtheplan nomad plan-response.json` | Scheduler diff, allocation placement/replacement/stops, failures, task drivers, images, commands, and secret-bearing fields | Built-in |
 
 ## Maturity meanings
 
@@ -67,7 +69,7 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 ## Deliberate boundaries
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Helm, Kustomize,
-  Pulumi, GitHub Actions, GitLab CI, CircleCI, or provider code.
+  Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, or provider code.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
@@ -79,3 +81,9 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 - Flux custom resources currently receive conservative custom-resource review.
   Argo CD has deeper first-party GitOps policy semantics because its project and
   automated-pruning fields materially change deployment boundaries.
+- Docker Compose analysis deliberately does not resolve `include`, `extends`,
+  `env_file`, secret files, build contexts, or Dockerfiles. Those external trust
+  boundaries remain review or dangerous.
+- Nomad analysis accepts the structured plan response returned by the HTTP API.
+  Generate it inside the existing Nomad trust boundary; readtheplan never contacts
+  the cluster or submits a job.

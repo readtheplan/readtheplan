@@ -17,6 +17,7 @@ from readtheplan.adapters.pipelines import (
 )
 from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
+from readtheplan.adapters.workloads import DockerComposeAdapter, NomadPlanAdapter
 
 #: Entry point group external packages use to contribute adapters.
 ADAPTER_ENTRY_POINT_GROUP = "readtheplan.adapters"
@@ -80,6 +81,8 @@ register_adapter(AzureWhatIfAdapter())
 register_adapter(GitHubActionsAdapter())
 register_adapter(GitLabCIAdapter())
 register_adapter(CircleCIAdapter())
+register_adapter(DockerComposeAdapter())
+register_adapter(NomadPlanAdapter())
 load_entry_point_adapters()
 
 __all__ = [
@@ -90,10 +93,12 @@ __all__ = [
     "ChefAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",
+    "DockerComposeAdapter",
     "JenkinsAdapter",
     "GitHubActionsAdapter",
     "GitLabCIAdapter",
     "KubernetesAdapter",
+    "NomadPlanAdapter",
     "PulumiAdapter",
     "PuppetAdapter",
     "register_adapter",

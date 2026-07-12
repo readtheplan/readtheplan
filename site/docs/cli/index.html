@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="readtheplan CLI reference — risk gates for Terraform, OpenTofu, CloudFormation, Azure, Pulumi, Kubernetes, Ansible, Jenkins, Chef, and Puppet." />
+    <meta name="description" content="readtheplan CLI reference — local risk gates for cloud plans, Kubernetes, CI pipelines, Docker Compose, Nomad, and configuration management." />
     <title>CLI Reference — readtheplan</title>
     <link rel="canonical" href="https://readtheplan.dev/docs/cli/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -143,8 +143,10 @@ readtheplan chef default.rb
 readtheplan puppet site.pp
 readtheplan github-actions .github/workflows/deploy.yml
 readtheplan gitlab-ci .gitlab-ci.yml
-readtheplan circleci .circleci/config.yml</code></pre>
-          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, and Crossplane artifacts work directly. Azure accepts Bicep/ARM deployment What-If JSON; use FullResourcePayloads for property-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events. Ansible input is parsed as structured YAML. Jenkins, Chef, and Puppet use conservative syntax-aware scanners. GitHub Actions, GitLab CI, and CircleCI parse YAML structurally and review permissions, secrets, reusable code, includes, deployment environments, and executable steps. None of the adapters execute user configuration.</p>
+readtheplan circleci .circleci/config.yml
+readtheplan docker-compose compose.yml
+readtheplan nomad plan-response.json</code></pre>
+          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, and Crossplane artifacts work directly. Azure accepts Bicep/ARM deployment What-If JSON; use FullResourcePayloads for property-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events. Ansible input is parsed as structured YAML. Jenkins, Chef, and Puppet use conservative syntax-aware scanners. GitHub Actions, GitLab CI, CircleCI, and Docker Compose parse YAML structurally; external Compose files and build contexts are not resolved. Nomad accepts the structured job-plan HTTP API response. None of the adapters execute user configuration or contact infrastructure services.</p>
           <p style="color:var(--muted);margin-top:12px">Adapter exit codes are <code>0</code> for proceed, <code>1</code> for warn, and <code>2</code> for block. Add <code>--framework soc2</code>, <code>--framework iso27001</code>, or <code>--framework hipaa</code> to include required control checks.</p>
         </div>
       </section>

@@ -398,6 +398,58 @@ def agent_gate_pipeline(
     return analyze_pipeline(adapter, data, catalog=catalog)  # type: ignore[arg-type]
 
 
+def agent_gate_workload(
+    input_path: str,
+    ecosystem: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for Docker Compose or a Nomad plan response."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.workloads import (
+        WorkloadInputError,
+        analyze_workload,
+        parse_docker_compose,
+        parse_nomad_plan,
+    )
+
+    parsers = {
+        "docker-compose": parse_docker_compose,
+        "nomad": parse_nomad_plan,
+    }
+    if ecosystem not in parsers:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="ecosystem must be docker-compose or nomad",
+        )
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read {ecosystem} input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parsers[ecosystem](source)
+    except WorkloadInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid {ecosystem} input in {input_path}: {exc}",
+        ) from exc
+
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != ecosystem:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Input is not recognized as {ecosystem} configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_workload(adapter, data, catalog=catalog)  # type: ignore[arg-type]
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -470,6 +522,7 @@ def create_server() -> Any:
     agent_gate_k8s_handler = agent_gate_kubernetes
     agent_gate_pulumi_handler = agent_gate_pulumi
     agent_gate_pipeline_handler = agent_gate_pipeline
+    agent_gate_workload_handler = agent_gate_workload
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -557,6 +610,25 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_pipeline_handler(
+            input_path,
+            ecosystem,
+            framework=framework,
+        )
+
+    @mcp.tool(name="agent_gate_workload")
+    def _agent_gate_workload_tool(
+        input_path: str,
+        ecosystem: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Docker Compose or a Nomad job plan response.
+
+        Args:
+            input_path: Local path to Compose YAML or Nomad plan response JSON.
+            ecosystem: docker-compose or nomad.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_workload_handler(
             input_path,
             ecosystem,
             framework=framework,

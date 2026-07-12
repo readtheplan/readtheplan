@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Docker Compose and HashiCorp Nomad gates across the CLI, generalized
+  Action, and local MCP server. Compose analysis covers host access and container
+  boundaries without resolving external files; Nomad consumes structured job-plan
+  API responses and preserves scheduler allocation semantics.
 - Native GitHub Actions, GitLab CI, and CircleCI YAML gates across the CLI,
   generalized Action, and local MCP server. The adapters flag write-token scopes,
   unpinned reusable code, secret exposure, arbitrary commands, remote includes,
