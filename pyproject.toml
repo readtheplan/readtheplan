@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "pulumi", "azure", "bicep", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "nomad", "packer", "vagrant", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "pulumi", "azure", "bicep", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "nomad", "packer", "vagrant", "cloud-init", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -45,6 +45,7 @@ azure = "readtheplan.adapters.azure:AzureWhatIfAdapter"
 chef = "readtheplan.adapters.chef:ChefAdapter"
 circleci = "readtheplan.adapters.pipelines:CircleCIAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
+cloud-init = "readtheplan.adapters.cloud_init:CloudInitAdapter"
 docker-compose = "readtheplan.adapters.workloads:DockerComposeAdapter"
 github-actions = "readtheplan.adapters.pipelines:GitHubActionsAdapter"
 gitlab-ci = "readtheplan.adapters.pipelines:GitLabCIAdapter"

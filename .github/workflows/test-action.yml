@@ -328,6 +328,35 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on cloud-init user-data
+        id: cloud_init
+        uses: ./
+        with:
+          tool: cloud-init
+          input-file: tests/fixtures/cloud_init_risky.yml
+          framework: soc2
+
+      - name: Assert cloud-init outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.cloud_init.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.cloud_init.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.cloud_init.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "20"
+          test "$RISK_COUNTS" = '{"dangerous":11,"irreversible":0,"review":8,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "cloud-init"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Fail on invalid plan JSON
         id: invalid
         uses: ./

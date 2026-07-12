@@ -343,6 +343,16 @@ def _build_parser() -> argparse.ArgumentParser:
     vagrant.add_argument("input_file", help="Path to a Vagrantfile.")
     vagrant.set_defaults(func=_vagrant_gate)
 
+    cloud_init = subparsers.add_parser(
+        "cloud-init",
+        help="Emit the agent-gate decision for cloud-init user-data.",
+    )
+    cloud_init.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    cloud_init.add_argument("input_file", help="Path to cloud-init user-data.")
+    cloud_init.set_defaults(func=_cloud_init_gate)
+
     verify = subparsers.add_parser(
         "verify",
         help="Verify a signed rtp-evidence-v1 envelope.",
@@ -1071,6 +1081,35 @@ def _vagrant_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_vagrant(data, catalog=catalog))
+
+
+def _cloud_init_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for cloud-init user-data."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.cloud_init import (
+        CloudInitInputError,
+        analyze_cloud_init,
+        parse_cloud_init,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_cloud_init(source)
+    except CloudInitInputError as exc:
+        print(f"Error: invalid cloud-init input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "cloud-init":
+        print("Error: input not recognized as cloud-init user-data", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_cloud_init(data, catalog=catalog))
 
 
 def _adapter_catalog(framework: str | None) -> ControlCatalog | None:
