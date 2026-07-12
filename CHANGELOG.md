@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Traefik YAML/JSON/TOML gates across the CLI, generalized Action, and
+  local MCP server. Static entry points, forwarded-header trust, providers,
+  Docker/Kubernetes scope, API/dashboard, ACME, plugins and observability join
+  dynamic routers, auth/CORS middleware, upstreams, certificates, transports,
+  and TLS options in the shared risk contract.
 - Native OpenTelemetry Collector configuration gates across the CLI, generalized
   Action, and local MCP server. Receivers, host/file collection, public endpoints,
   processors, exporters, connectors, extensions, diagnostics, TLS/auth, secrets,

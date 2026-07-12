@@ -688,6 +688,43 @@ def agent_gate_systemd(
     return analyze_systemd(data, catalog=catalog)
 
 
+def agent_gate_traefik(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Traefik YAML, JSON, or TOML."""
+    from readtheplan.adapters.traefik import (
+        TraefikAdapter,
+        TraefikInputError,
+        analyze_traefik,
+        parse_traefik_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Traefik input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_traefik_config(source)
+    except TraefikInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Traefik configuration in {input_path}: {exc}",
+        ) from exc
+    if not TraefikAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Traefik configuration"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_traefik(data, catalog=catalog)
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -976,6 +1013,7 @@ def create_server() -> Any:
     agent_gate_envoy_handler = agent_gate_envoy
     agent_gate_monitoring_handler = agent_gate_monitoring
     agent_gate_otel_collector_handler = agent_gate_otel_collector
+    agent_gate_traefik_handler = agent_gate_traefik
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1167,6 +1205,14 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_systemd_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_traefik")
+    def _agent_gate_traefik_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Traefik YAML, JSON, or TOML configuration."""
+        return agent_gate_traefik_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_otel_collector")
     def _agent_gate_otel_collector_tool(

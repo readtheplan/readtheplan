@@ -30,6 +30,7 @@ from readtheplan.mcp_server import (
     agent_gate_pulumi,
     agent_gate_salt,
     agent_gate_systemd,
+    agent_gate_traefik,
     agent_gate_vagrant,
     agent_gate_workload,
     analyze_plan,
@@ -235,6 +236,16 @@ def test_agent_gate_otel_collector_supports_framework_checks() -> None:
     assert result["decision"] == "block"
     assert result["total_changes"] == 26
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_traefik_supports_yaml_and_toml() -> None:
+    risky = agent_gate_traefik(str(FIXTURES / "traefik_risky.yml"), "soc2")
+    static = agent_gate_traefik(str(FIXTURES / "traefik_static.toml"), "soc2")
+    assert risky["adapter"] == "traefik"
+    assert risky["decision"] == "block"
+    assert risky["total_changes"] == 23
+    assert static["adapter"] == "traefik"
+    assert "rtp.control.soc2.CC8.1" in risky["required_checks"]
 
 
 def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
@@ -1014,6 +1025,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_envoy" in tool_names
         assert "agent_gate_monitoring" in tool_names
         assert "agent_gate_otel_collector" in tool_names
+        assert "agent_gate_traefik" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1048,6 +1060,8 @@ def test_stdio_server_tools_list() -> None:
         )
         collector_schema = tools_by_name["agent_gate_otel_collector"]["inputSchema"]
         assert {"input_path", "framework"} <= set(collector_schema["properties"])
+        traefik_schema = tools_by_name["agent_gate_traefik"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(traefik_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 
