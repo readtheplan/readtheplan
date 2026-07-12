@@ -602,6 +602,46 @@ def agent_gate_cloud_init(
     return analyze_cloud_init(data, catalog=catalog)
 
 
+def agent_gate_dockerfile(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for a local Dockerfile/Containerfile."""
+    from readtheplan.adapters.dockerfile import (
+        DockerfileAdapter,
+        DockerfileInputError,
+        analyze_dockerfile,
+        parse_dockerfile,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read Dockerfile input {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_dockerfile(source)
+    except DockerfileInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Dockerfile in {input_path}: {exc}",
+        ) from exc
+    if not DockerfileAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as a Dockerfile",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_dockerfile(data, catalog=catalog)
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -679,6 +719,7 @@ def create_server() -> Any:
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_vagrant_handler = agent_gate_vagrant
     agent_gate_cloud_init_handler = agent_gate_cloud_init
+    agent_gate_dockerfile_handler = agent_gate_dockerfile
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -841,6 +882,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_cloud_init_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_dockerfile")
+    def _agent_gate_dockerfile_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for a Dockerfile/Containerfile without building an image.
+
+        Args:
+            input_path: Local path to a Dockerfile or Containerfile.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_dockerfile_handler(input_path, framework=framework)
 
     @mcp.tool(name="evolution_status")
     def _evolution_status_tool() -> dict[str, object]:

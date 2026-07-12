@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Dockerfile/Containerfile gates across the CLI, generalized Action, and
+  local MCP server. Multi-stage builds, heredocs, mutable base images, commands,
+  BuildKit secret/SSH mounts, secret ARG/ENV, sensitive COPY/remote ADD, root
+  runtime defaults, health, deferred instructions, and context boundaries are
+  classified without invoking a frontend or builder.
 - Native cloud-init user-data gates across the CLI, generalized Action, and local
   MCP server. Cloud-config YAML, scripts, boothooks, URL includes, and MIME
   boundaries surface users, SSH trust, files, secrets, commands, storage,

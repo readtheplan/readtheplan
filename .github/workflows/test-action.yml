@@ -357,6 +357,35 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Dockerfile
+        id: dockerfile
+        uses: ./
+        with:
+          tool: dockerfile
+          input-file: tests/fixtures/Dockerfile.risky
+          framework: soc2
+
+      - name: Assert Dockerfile outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.dockerfile.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.dockerfile.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.dockerfile.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "20"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":10,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "dockerfile"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Fail on invalid plan JSON
         id: invalid
         uses: ./

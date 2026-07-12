@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+ARG VERSION=3.20
+ARG API_TOKEN=fixture-secret
+FROM alpine:${VERSION} AS build
+RUN --mount=type=secret,id=npm_token apk add --no-cache nodejs && npm ci
+COPY . /src
+ADD https://example.test/tool.tar.gz /tmp/tool.tar.gz
+USER root
+
+FROM gcr.io/distroless/static@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa AS final
+COPY --from=build /src/app /app
+ENV API_TOKEN=fixture-runtime-secret
+USER 65532:65532
+EXPOSE 8080
+VOLUME ["/data"]
+HEALTHCHECK NONE
+ENTRYPOINT ["/app"]
+ONBUILD RUN echo deferred
+STOPSIGNAL SIGKILL
