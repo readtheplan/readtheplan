@@ -1,0 +1,14 @@
+roles:
+  - name: geerlingguy.apache
+    version: 3.2.0
+
+collections:
+  - name: community.general
+    version: "==7.5.0"
+    source: https://galaxy.ansible.com
+    signatures:
+      - https://example.test/community-general-7.5.0.asc
+  - name: internal.platform
+    type: git
+    source: git+https://git.example.test/automation/platform-collection.git
+    version: 0123456789abcdef0123456789abcdef01234567

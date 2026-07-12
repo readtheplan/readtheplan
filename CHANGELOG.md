@@ -9,6 +9,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Ansible project configuration gates across the CLI, GitHub Action, and MCP.
+  Strict parsing of `ansible.cfg` and Galaxy requirements YAML now covers SSH
+  trust, privilege, controller plugins/callbacks, inventory execution, Galaxy
+  credentials/TLS, dependency pinning, SCM transport, and signature metadata.
 - Jenkins Configuration as Code gates across the CLI, GitHub Action, and MCP.
   JCasC controller YAML now receives explicit authentication, authorization,
   credential, executor, agent/cloud, image provenance, library, script-approval,

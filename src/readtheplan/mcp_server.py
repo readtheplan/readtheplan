@@ -1368,8 +1368,14 @@ def agent_gate_configuration_management(
     ecosystem: str,
     framework: str | None = None,
 ) -> dict[str, object]:
-    """Return a gate for Ansible, Jenkins/JCasC, Chef, or Puppet source."""
+    """Return a gate for Ansible project/playbook, Jenkins/JCasC, Chef, or Puppet source."""
     from readtheplan.adapters.ansible import AnsibleAdapter, analyze_ansible
+    from readtheplan.adapters.ansible_project import (
+        AnsibleProjectAdapter,
+        AnsibleProjectInputError,
+        analyze_ansible_project,
+        parse_ansible_project,
+    )
     from readtheplan.adapters.chef import ChefAdapter, analyze_chef
     from readtheplan.adapters.jenkins import JenkinsAdapter, analyze_jenkins
     from readtheplan.adapters.jenkins_jcasc import (
@@ -1380,7 +1386,7 @@ def agent_gate_configuration_management(
     )
     from readtheplan.adapters.puppet import PuppetAdapter, analyze_puppet
 
-    supported = {"ansible", "jenkins", "jenkins-jcasc", "chef", "puppet"}
+    supported = {"ansible", "ansible-project", "jenkins", "jenkins-jcasc", "chef", "puppet"}
     if ecosystem not in supported:
         raise MCPToolInputError(
             code="INVALID_INPUT",
@@ -1418,6 +1424,16 @@ def agent_gate_configuration_management(
         data = {"plays": plays}
         adapter = AnsibleAdapter()
         analyze = analyze_ansible
+    elif ecosystem == "ansible-project":
+        try:
+            data = parse_ansible_project(source)
+        except AnsibleProjectInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Ansible project input {input_path}: {exc}",
+            ) from exc
+        adapter = AnsibleProjectAdapter()
+        analyze = analyze_ansible_project
     elif ecosystem == "jenkins-jcasc":
         try:
             data = parse_jenkins_jcasc(source)
@@ -1924,7 +1940,7 @@ def create_server() -> Any:
 
         Args:
             input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
-            ecosystem: ansible, jenkins, jenkins-jcasc, chef, or puppet.
+            ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, chef, or puppet.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(

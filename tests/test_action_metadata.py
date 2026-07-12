@@ -22,7 +22,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "tool:" in action
     assert (
         "terraform-config|terragrunt|cloudformation|azure|bicep|kubernetes|helm|kustomize|crossplane|serverless|sam|pulumi|"
-        "ansible|jenkins|jenkins-jcasc|chef|puppet|"
+        "ansible|ansible-project|jenkins|jenkins-jcasc|chef|puppet|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "atlantis|"
         "docker-compose|"
@@ -152,6 +152,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "tool: sam" in workflow
     assert "input-file: tests/fixtures/sam_template_risky.yml" in workflow
     assert "input-file: tests/fixtures/ansible_config_management_risky.yml" in workflow
+    assert "tool: ansible-project" in workflow
+    assert "input-file: tests/fixtures/ansible_project_risky.cfg" in workflow
     assert "input-file: tests/fixtures/Jenkinsfile.config-management-risky" in workflow
     assert "tool: jenkins-jcasc" in workflow
     assert "input-file: tests/fixtures/jenkins_jcasc_risky.yml" in workflow
