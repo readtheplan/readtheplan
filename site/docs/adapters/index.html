@@ -151,7 +151,7 @@ readtheplan azure whatif.json</code></pre>
 
       <section class="g" aria-labelledby="rendered-k8s-title">
         <div class="gc utility-panel-wide">
-          <h2 id="rendered-k8s-title">Helm, Kustomize, Crossplane, and Argo CD</h2>
+          <h2 id="rendered-k8s-title">Helm, Kustomize, Crossplane, Argo CD, and Flux</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
             Review the rendered artifact that Kubernetes will receive. readtheplan accepts one
             manifest, <code>kind: List</code>, multi-document YAML, JSON resources, or an explicit
@@ -173,7 +173,10 @@ readtheplan kubernetes rendered.yaml</code></pre>
             Argo CD Applications, ApplicationSets, and AppProjects receive deeper GitOps rules.
             Automated pruning and wildcard source, destination, resource, or project-role scopes
             are <code>dangerous</code>; scoped source/destination and generator changes require
-            review. Flux resources currently follow the conservative custom-resource path.
+            review. Flux sources, Kustomizations, HelmReleases, image update automation, and
+            webhook Receivers also receive native rules. The gate reviews source trust and
+            immutability, pruning and forced recreation, decryption, remote clusters, Helm
+            remediation, automated Git writes, webhook triggers, and controller deletion.
           </p>
         </div>
       </section>

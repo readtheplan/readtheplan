@@ -102,6 +102,19 @@ def test_cloudformation_and_kubernetes_mcp_tools_accept_frameworks(
     assert "rtp.control.soc2.CC8.1" in kubernetes["required_checks"]
 
 
+def test_kubernetes_mcp_applies_flux_gitops_rules() -> None:
+    result = agent_gate_kubernetes(str(FIXTURES / "flux_gitops_risky.yml"), "soc2")
+    assert result["adapter"] == "kubernetes"
+    assert result["decision"] == "block"
+    assert result["risk_counts"] == {
+        "safe": 0,
+        "review": 0,
+        "dangerous": 5,
+        "irreversible": 0,
+    }
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_pulumi_rejects_invalid_preview(tmp_path: Path) -> None:
     invalid = tmp_path / "preview.json"
     invalid.write_text("not-json", encoding="utf-8")

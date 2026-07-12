@@ -51,8 +51,6 @@ def _k8s_deployment_candidates(
     return []
 
 
-
-
 @register_rule("kubernetes_service", "kubernetes_ingress")
 def _k8s_service_candidates(
     resource_type: str,
@@ -96,8 +94,6 @@ def _k8s_service_candidates(
     return []
 
 
-
-
 @register_rule("kubernetes_secret")
 def _k8s_secret_candidates(
     resource_type: str,
@@ -116,7 +112,9 @@ def _k8s_secret_candidates(
             )
         ]
     if "update" in action_set or "create" in action_set:
-        is_create = "delete" not in action_set and "create" in action_set and "update" not in action_set  # noqa: E501
+        is_create = (
+            "delete" not in action_set and "create" in action_set and "update" not in action_set
+        )  # noqa: E501
         verb = "create this" if is_create else "change this"
         return [
             RuleResult(
@@ -129,8 +127,6 @@ def _k8s_secret_candidates(
             )
         ]
     return []
-
-
 
 
 @register_rule("kubernetes_namespace")
@@ -172,8 +168,6 @@ def _k8s_namespace_candidates(
             )
         ]
     return []
-
-
 
 
 _RBAC_ROLE_TYPES = frozenset({"kubernetes_cluster_role", "kubernetes_role"})
@@ -223,9 +217,7 @@ def _k8s_rbac_candidates(
     else:
         label = "RoleBinding"
 
-    if resource_type in _RBAC_ROLE_TYPES and (
-        "create" in action_set or "update" in action_set
-    ):
+    if resource_type in _RBAC_ROLE_TYPES and ("create" in action_set or "update" in action_set):
         wildcard_fields = _wildcard_rbac_fields(change)
         if wildcard_fields:
             fields = ", ".join(wildcard_fields)
@@ -274,8 +266,6 @@ def _k8s_rbac_candidates(
             )
         ]
     return []
-
-
 
 
 @register_rule("kubernetes_network_policy")
@@ -409,8 +399,7 @@ def _argocd_project_wildcards(spec: dict[str, Any]) -> tuple[str, ...]:
 
     roles = spec.get("roles", [])
     if isinstance(roles, list) and any(
-        isinstance(role, dict)
-        and any("*" in str(policy) for policy in role.get("policies", []))
+        isinstance(role, dict) and any("*" in str(policy) for policy in role.get("policies", []))
         for role in roles
     ):
         findings.add("project role policies")
@@ -496,6 +485,281 @@ def _argocd_application_set_candidates(
                 (
                     "__TOOL__ will change an Argo CD ApplicationSet. Review generators, "
                     "template source/destination, project, and deletion preservation."
+                ),
+            )
+        ]
+    return []
+
+
+def _flux_source_candidates(
+    source_name: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"__TOOL__ will delete this Flux {source_name}. Dependent "
+                    "reconciliations will lose their artifact source and may stop updating."
+                ),
+            )
+        ]
+    spec = _desired_spec(change)
+    url = str(spec.get("url") or "").lower()
+    if url.startswith("http://"):
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Flux {source_name} fetches artifacts over unencrypted HTTP.",
+            )
+        ]
+    if any(spec.get(field) for field in ("secretRef", "proxySecretRef")):
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"This Flux {source_name} uses authentication or proxy secret "
+                    "material. Verify repository trust, credential scope, and rotation."
+                ),
+            )
+        ]
+    if spec.get("suspend") is True:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"This Flux {source_name} suspends reconciliation. Artifact and "
+                    "security updates will stop until it is resumed."
+                ),
+            )
+        ]
+    if "create" in action_set or "update" in action_set:
+        ref = spec.get("ref", {})
+        immutable = isinstance(ref, dict) and bool(ref.get("commit") or ref.get("digest"))
+        verification = spec.get("verify")
+        guidance = (
+            "The source uses an immutable revision; still verify repository ownership, "
+            "signature policy, included artifacts, and consumer scope."
+            if immutable
+            else "The source follows a mutable branch, tag, or version selector; review "
+            "repository ownership, signature verification, and update scope."
+        )
+        if verification:
+            guidance += " Source verification is configured."
+        return [RuleResult("review", f"__TOOL__ will change a Flux {source_name}. {guidance}")]
+    return []
+
+
+@register_rule("kubernetes_flux_git_repository")
+def _flux_git_repository_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    return _flux_source_candidates("GitRepository", action_set, change)
+
+
+@register_rule("kubernetes_flux_oci_repository")
+def _flux_oci_repository_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    return _flux_source_candidates("OCIRepository", action_set, change)
+
+
+@register_rule("kubernetes_flux_kustomization")
+def _flux_kustomization_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Flux Kustomization. Depending on its "
+                    "deletion policy and finalizers, managed cluster resources may be pruned."
+                ),
+            )
+        ]
+    spec = _desired_spec(change)
+    destructive: list[str] = []
+    if spec.get("prune") is True:
+        destructive.append("prune resources removed from the source")
+    if spec.get("force") is True:
+        destructive.append("recreate resources when immutable fields change")
+    if spec.get("kubeConfig"):
+        destructive.append("apply to a remote cluster through kubeConfig")
+    if spec.get("decryption"):
+        destructive.append("decrypt secret-bearing manifests")
+    if destructive:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Flux Kustomization can "
+                    f"{'; '.join(destructive)}. Verify source, identity, target cluster, "
+                    "deletion policy, and recovery path."
+                ),
+            )
+        ]
+    if spec.get("suspend") is True:
+        return [
+            RuleResult(
+                "dangerous",
+                "This Flux Kustomization suspends reconciliation and drift correction.",
+            )
+        ]
+    if "create" in action_set or "update" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will change a Flux Kustomization. Review sourceRef, path, "
+                    "dependencies, service account, target namespace, health checks, and "
+                    "server-side apply policies."
+                ),
+            )
+        ]
+    return []
+
+
+def _helm_release_uses_secrets(spec: dict[str, Any]) -> bool:
+    values_from = spec.get("valuesFrom", [])
+    if isinstance(values_from, list) and any(
+        isinstance(value, dict) and str(value.get("kind", "Secret")).lower() == "secret"
+        for value in values_from
+    ):
+        return True
+    kube_config = spec.get("kubeConfig")
+    return isinstance(kube_config, dict) and bool(kube_config.get("secretRef"))
+
+
+def _helm_release_destructive_remediation(spec: dict[str, Any]) -> bool:
+    install = spec.get("install", {})
+    upgrade = spec.get("upgrade", {})
+    for phase in (install, upgrade):
+        if not isinstance(phase, dict):
+            continue
+        if phase.get("force") is True:
+            return True
+        remediation = phase.get("remediation", {})
+        if isinstance(remediation, dict) and (
+            remediation.get("remediateLastFailure") is True
+            or remediation.get("retries") not in (None, 0, "0")
+        ):
+            return True
+    return False
+
+
+@register_rule("kubernetes_flux_helm_release")
+def _flux_helm_release_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                (
+                    "__TOOL__ will delete this Flux HelmRelease. The controller may "
+                    "uninstall the release and delete its managed resources."
+                ),
+            )
+        ]
+    spec = _desired_spec(change)
+    findings: list[str] = []
+    if spec.get("kubeConfig"):
+        findings.append("target a remote cluster")
+    if _helm_release_uses_secrets(spec):
+        findings.append("consume secret-backed values or credentials")
+    if _helm_release_destructive_remediation(spec):
+        findings.append("automatically remediate failed installs or upgrades")
+    if findings:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Flux HelmRelease can "
+                    f"{'; '.join(findings)}. Review chart provenance, target identity, "
+                    "values, remediation, rollback, and uninstall behavior."
+                ),
+            )
+        ]
+    if spec.get("suspend") is True:
+        return [
+            RuleResult(
+                "dangerous",
+                "This Flux HelmRelease suspends release reconciliation and drift correction.",
+            )
+        ]
+    if "create" in action_set or "update" in action_set:
+        return [
+            RuleResult(
+                "review",
+                (
+                    "__TOOL__ will change a Flux HelmRelease. Review chart source and "
+                    "version, values, target namespace, service account, tests, and "
+                    "install/upgrade/rollback strategies."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_flux_image_update_automation")
+def _flux_image_update_automation_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                "__TOOL__ will delete Flux image update automation and stop managed updates.",
+            )
+        ]
+    if "create" in action_set or "update" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Flux ImageUpdateAutomation can commit and push image changes "
+                    "to Git automatically. Review checkout/push branches, commit identity, "
+                    "update path, image policies, and repository credentials."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_flux_receiver")
+def _flux_receiver_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                "__TOOL__ will delete a Flux webhook receiver and stop event reconciliation.",
+            )
+        ]
+    if "create" in action_set or "update" in action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Flux Receiver exposes an event-driven reconciliation endpoint. "
+                    "Verify receiver type, webhook secret, resource filters, ingress, and "
+                    "denial-of-service controls."
                 ),
             )
         ]
