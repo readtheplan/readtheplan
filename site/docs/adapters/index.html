@@ -46,9 +46,9 @@
           <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / Adapters</p>
           <h1 id="title">One risk gate for every infrastructure tool.</h1>
           <p class="intro-copy">
-            readtheplan's adapter system lets you plug in support for any infrastructure-as-code tool — Pulumi, CDK,
-            Crossplane, or custom in-house tooling. This guide walks through the full process, from the
-            <code>BaseAdapter</code> interface to an end-to-end worked example.
+            readtheplan ships cross-tool infrastructure gates and a public adapter system for adding
+            CDK, Packer, or custom in-house plan formats. This guide covers the built-in integrations
+            and the <code>BaseAdapter</code> extension contract.
           </p>
         </div>
       </section>
@@ -64,13 +64,14 @@
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively. Built-in adapters cover <strong>CloudFormation</strong>,
             <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
-            <strong>Pulumi</strong>, <strong>Chef</strong>, and <strong>Puppet</strong>. AWS CDK,
-            Crossplane, Terragrunt, and internal tools can use the same public adapter interface.
+            <strong>Pulumi</strong>, <strong>Chef</strong>, and <strong>Puppet</strong>. Rendered Helm,
+            Kustomize, and Crossplane resources flow through the Kubernetes gate. AWS CDK, Packer,
+            Terragrunt, and internal tools can use the same public adapter interface.
           </p>
 
           <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
-readtheplan kubernetes manifests.json
+readtheplan kubernetes rendered.yaml
 readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
 readtheplan jenkins Jenkinsfile
@@ -89,6 +90,29 @@ readtheplan puppet site.pp</code></pre>
             <li style="margin-bottom:6px">You have a custom IaC tool and want compliance gates and audit evidence.</li>
             <li style="margin-bottom:6px">You want to extend the type-map for CloudFormation or Kubernetes resources not yet covered.</li>
           </ul>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="rendered-k8s-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="rendered-k8s-title">Helm, Kustomize, and Crossplane</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review the rendered artifact that Kubernetes will receive. readtheplan accepts one
+            manifest, <code>kind: List</code>, multi-document YAML, JSON resources, or an explicit
+            old/new manifest diff wrapper.
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>helm template web ./chart -f values-prod.yaml &gt; rendered.yaml
+readtheplan kubernetes rendered.yaml
+
+kubectl kustomize overlays/production &gt; rendered.yaml
+readtheplan kubernetes rendered.yaml</code></pre>
+          <p style="color:var(--muted);margin:12px 0 0">
+            Known workloads, services, RBAC, secrets, storage, and network-policy kinds use their
+            resource-aware rules. Unknown custom resources—including Crossplane managed
+            resources—default to <code>review</code> because their controller determines the real
+            cloud-side effect. CRDs, API services, and admission webhook configurations are
+            <code>dangerous</code> because they extend cluster control-plane behavior.
+          </p>
         </div>
       </section>
 

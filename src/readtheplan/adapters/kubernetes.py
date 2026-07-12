@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from typing import Any
+
+import yaml
 
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.plan import ResourceChange
@@ -29,7 +32,20 @@ _K8S_KIND_MAP: dict[str, str] = {
     "PersistentVolume": "kubernetes_persistent_volume",
     "ServiceAccount": "kubernetes_service_account",
     "PriorityClass": "kubernetes_priority_class",
+    "CustomResourceDefinition": "kubernetes_custom_resource_definition",
+    "MutatingWebhookConfiguration": "kubernetes_mutating_webhook_configuration",
+    "ValidatingWebhookConfiguration": "kubernetes_validating_webhook_configuration",
+    "APIService": "kubernetes_api_service",
 }
+
+_SENSITIVE_CONTROL_PLANE_KINDS = frozenset(
+    {
+        "APIService",
+        "CustomResourceDefinition",
+        "MutatingWebhookConfiguration",
+        "ValidatingWebhookConfiguration",
+    }
+)
 
 _CLUSTER_SCOPED_KINDS = frozenset(
     {
@@ -40,8 +56,56 @@ _CLUSTER_SCOPED_KINDS = frozenset(
         "StorageClass",
         "PersistentVolume",
         "PriorityClass",
+        *_SENSITIVE_CONTROL_PLANE_KINDS,
     }
 )
+
+
+class KubernetesInputError(ValueError):
+    """Raised when text is not a supported Kubernetes JSON or YAML artifact."""
+
+
+def _manifest_resources(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict) and "kind" in item]
+    if not isinstance(value, dict) or "kind" not in value:
+        return []
+    if value.get("kind") == "List" and isinstance(value.get("items"), list):
+        return [item for item in value["items"] if isinstance(item, dict) and "kind" in item]
+    return [value]
+
+
+def parse_kubernetes_input(source: str) -> dict[str, Any]:
+    """Parse wrapper JSON/YAML, a manifest list, or multi-document YAML."""
+    try:
+        data = json.loads(source)
+    except json.JSONDecodeError:
+        try:
+            documents = list(yaml.safe_load_all(source))
+        except yaml.YAMLError as exc:
+            raise KubernetesInputError(f"invalid YAML: {exc}") from exc
+        if not any(document is not None for document in documents):
+            raise KubernetesInputError("manifest input is empty")
+        if len(documents) == 1 and isinstance(documents[0], dict):
+            document = documents[0]
+            if "old_manifests" in document or "new_manifests" in document:
+                return document
+        resources = [
+            resource
+            for document in documents
+            for resource in _manifest_resources(document)
+        ]
+        if not resources:
+            raise KubernetesInputError("no Kubernetes resources were found")
+        return {"resources": resources}
+
+    if isinstance(data, dict):
+        resources = _manifest_resources(data)
+        return {"resources": resources} if resources else data
+    resources = _manifest_resources(data)
+    if resources:
+        return {"resources": resources}
+    raise KubernetesInputError("input must be a manifest, resource list, or diff object")
 
 
 def _resource_identity(kind: str, name: str, namespace: str | None) -> tuple[str, str, str]:
@@ -235,9 +299,22 @@ class KubernetesAdapter(BaseAdapter):
         explanation = f"Kubernetes action '{action}' on {kind} requires review."
 
         if action == "Add":
-            risk = "safe"
             actions = ("create",)
-            explanation = f"Kubernetes will create {kind} '{logical_id}'."
+            if kind in _SENSITIVE_CONTROL_PLANE_KINDS:
+                risk = "dangerous"
+                explanation = (
+                    f"Kubernetes will create control-plane extension {kind} "
+                    f"'{logical_id}'. Review API and admission impact."
+                )
+            elif kind not in _K8S_KIND_MAP:
+                risk = "review"
+                explanation = (
+                    f"Kubernetes will create custom resource {kind} '{logical_id}'. "
+                    "Review the owning controller and reconciliation effects."
+                )
+            else:
+                risk = "safe"
+                explanation = f"Kubernetes will create {kind} '{logical_id}'."
         elif action == "Modify":
             if replacement == "True":
                 risk = "dangerous"
@@ -251,6 +328,12 @@ class KubernetesAdapter(BaseAdapter):
                 risk = "review"
                 actions = ("update",)
                 explanation = f"Kubernetes will update {kind} '{logical_id}' in place."
+            if kind in _SENSITIVE_CONTROL_PLANE_KINDS:
+                risk = "dangerous"
+                explanation = (
+                    f"Kubernetes will update control-plane extension {kind} "
+                    f"'{logical_id}'. Review API and admission impact."
+                )
         elif action == "Remove":
             risk = "irreversible"
             actions = ("delete",)

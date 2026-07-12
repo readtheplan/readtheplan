@@ -237,13 +237,16 @@ def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
 def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
     """Return the agent-gate decision for a Kubernetes manifest diff.
 
-    Accepts a JSON file with either:
+    Accepts JSON or YAML with any of:
       - {"old_manifests": [...], "new_manifests": [...]} — diff format
       - {"resources": [...]} — single manifest format
+      - one manifest, ``kind: List``, or multi-document YAML
     """
-    import json
-
-    from readtheplan.adapters.kubernetes import analyze_kubernetes
+    from readtheplan.adapters.kubernetes import (
+        KubernetesInputError,
+        analyze_kubernetes,
+        parse_kubernetes_input,
+    )
 
     if not isinstance(input_path, str) or not input_path.strip():
         raise MCPToolInputError(
@@ -252,23 +255,23 @@ def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
         )
 
     try:
-        data = json.loads(_read_confined_bytes(input_path))
+        source = _read_confined_bytes(input_path).decode("utf-8")
     except FileNotFoundError:
         raise MCPToolInputError(
             code="FILE_NOT_FOUND",
             message=f"File not found: {input_path}",
         )
-    except json.JSONDecodeError as exc:
+    except UnicodeDecodeError as exc:
         raise MCPToolInputError(
-            code="INVALID_JSON",
-            message=f"Invalid JSON in {input_path}: {exc}",
-        )
-
-    if not isinstance(data, dict):
+            code="INVALID_INPUT", message=f"Input is not UTF-8: {input_path}"
+        ) from exc
+    try:
+        data = parse_kubernetes_input(source)
+    except KubernetesInputError as exc:
         raise MCPToolInputError(
             code="INVALID_INPUT",
-            message="Input must be a JSON object",
-        )
+            message=f"Invalid Kubernetes input in {input_path}: {exc}",
+        ) from exc
 
     return analyze_kubernetes(data)
 
@@ -426,9 +429,10 @@ def create_server() -> Any:
         """Return the agent-gate decision for a Kubernetes manifest diff.
 
         Args:
-            input_path: Path to a JSON file. Supports two formats:
+            input_path: Path to a JSON or YAML file. Supports:
                 - {"old_manifests": [...], "new_manifests": [...]} — diff format
                 - {"resources": [...]} — single manifest format
+                - one manifest, kind: List, or multi-document YAML
         """
         return agent_gate_k8s_handler(input_path)
 

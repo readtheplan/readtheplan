@@ -194,7 +194,11 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     kubernetes.add_argument(
-        "input_file", help="Path to Kubernetes manifest diff JSON (old_manifests/new_manifests or resources)."  # noqa: E501
+        "input_file",
+        help=(
+            "Path to Kubernetes JSON/YAML, multi-document YAML, or a manifest "
+            "diff wrapper."
+        ),
     )
     kubernetes.set_defaults(func=_kubernetes_gate)
 
@@ -628,16 +632,21 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
 def _kubernetes_gate(args: argparse.Namespace) -> int:
     """Emit the agent-gate contract for a Kubernetes manifest diff."""
     from readtheplan.adapters import detect_adapter
-    from readtheplan.adapters.kubernetes import analyze_kubernetes
+    from readtheplan.adapters.kubernetes import (
+        KubernetesInputError,
+        analyze_kubernetes,
+        parse_kubernetes_input,
+    )
 
     try:
-        data = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
-
-    if not isinstance(data, dict):
-        print("Error: input must be a JSON object", file=sys.stderr)
+    try:
+        data = parse_kubernetes_input(source)
+    except KubernetesInputError as exc:
+        print(f"Error: invalid Kubernetes input: {exc}", file=sys.stderr)
         return 1
 
     adapter = detect_adapter(data)
