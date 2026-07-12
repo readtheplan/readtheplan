@@ -363,6 +363,14 @@ def _build_parser() -> argparse.ArgumentParser:
     vagrant.add_argument("input_file", help="Path to a Vagrantfile.")
     vagrant.set_defaults(func=_vagrant_gate)
 
+    systemd = subparsers.add_parser(
+        "systemd",
+        help="Emit the agent-gate decision for a systemd unit file.",
+    )
+    systemd.add_argument("--framework", help="Include checks from a compliance framework.")
+    systemd.add_argument("input_file", help="Path to a systemd unit file.")
+    systemd.set_defaults(func=_systemd_gate)
+
     cloud_init = subparsers.add_parser(
         "cloud-init",
         help="Emit the agent-gate decision for cloud-init user-data.",
@@ -1144,6 +1152,35 @@ def _cloud_init_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_cloud_init(data, catalog=catalog))
+
+
+def _systemd_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for a systemd unit file."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.systemd import (
+        SystemdUnitInputError,
+        analyze_systemd,
+        parse_systemd_unit,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_systemd_unit(source)
+    except SystemdUnitInputError as exc:
+        print(f"Error: invalid systemd unit input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "systemd":
+        print("Error: input not recognized as a systemd unit", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_systemd(data, catalog=catalog))
 
 
 def _dockerfile_gate(args: argparse.Namespace) -> int:

@@ -95,6 +95,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Packer | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and inspect limitations |
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
 | cloud-init | `readtheplan cloud-init user-data.yml` | Users, SSH, packages, files, commands, storage, power state, includes, scripts, and merged configuration |
+| systemd | `readtheplan systemd example.service` | Commands, identities, capabilities, credentials, sandboxing, filesystems, devices, sockets, timers, mounts, restart behavior, and merged-unit boundaries |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
@@ -112,6 +113,8 @@ Vagrantfiles are scanned as Ruby source without evaluation; known DSL operations
 host-command escape hatches, and merged configuration boundaries remain visible.
 cloud-init user-data is parsed without executing guest code; scripts, boothooks,
 commands, credentials, and first-boot system changes use the same gate contract.
+systemd units are parsed statically without invoking the manager; repeated/reset
+directives, activation targets, omitted hardening, and merged drop-ins remain visible.
 Dockerfile analysis understands multi-stage builds, heredocs, BuildKit secret/SSH
 mounts, and runtime metadata without invoking Docker or sending a build context.
 

@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -59,6 +59,7 @@ packer = "readtheplan.adapters.packer:PackerInspectAdapter"
 pulumi = "readtheplan.adapters.pulumi:PulumiAdapter"
 puppet = "readtheplan.adapters.puppet:PuppetAdapter"
 salt = "readtheplan.adapters.salt:SaltAdapter"
+systemd = "readtheplan.adapters.systemd:SystemdUnitAdapter"
 vagrant = "readtheplan.adapters.vagrant:VagrantAdapter"
 
 [project.entry-points."readtheplan.rules"]
