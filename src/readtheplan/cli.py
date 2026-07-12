@@ -495,6 +495,14 @@ def _build_parser() -> argparse.ArgumentParser:
     kustomize.add_argument("input_file", help="Path to kustomization.yaml.")
     kustomize.set_defaults(func=_kustomize_gate)
 
+    crossplane = subparsers.add_parser(
+        "crossplane",
+        help="Emit the agent-gate decision for Crossplane package and resource YAML.",
+    )
+    crossplane.add_argument("--framework", help="Include checks from a compliance framework.")
+    crossplane.add_argument("input_file", help="Path to Crossplane YAML or JSON resources.")
+    crossplane.set_defaults(func=_crossplane_gate)
+
     prometheus = subparsers.add_parser(
         "prometheus",
         help="Emit the agent-gate decision for Prometheus configuration YAML.",
@@ -1582,6 +1590,35 @@ def _kustomize_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_kustomize(data, catalog=catalog))
+
+
+def _crossplane_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Crossplane package and resource source."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.crossplane import (
+        CrossplaneInputError,
+        analyze_crossplane,
+        parse_crossplane_input,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_crossplane_input(source)
+    except CrossplaneInputError as exc:
+        print(f"Error: invalid Crossplane source: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "crossplane":
+        print("Error: input not recognized as Crossplane source", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_crossplane(data, catalog=catalog))
 
 
 def _otel_collector_gate(args: argparse.Namespace) -> int:

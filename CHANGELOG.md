@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Crossplane package and resource gates across the CLI, generalized
+  Action, and local MCP server. Providers, Functions, Configurations, image
+  policy, runtime overrides, XRDs, Compositions, one-way MRD activation,
+  provider credentials, managed-resource lifecycle, and composite selection now
+  receive first-party semantics instead of a generic custom-resource review.
 - Native Helm Chart.yaml, values YAML, template source, and Kustomize source
   gates across the CLI, generalized Action, and local MCP server. Dependency
   pinning, hooks, dynamic evaluation, generated secrets, resource composition,

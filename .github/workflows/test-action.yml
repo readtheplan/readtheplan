@@ -605,6 +605,33 @@ jobs:
           assert payload["decision"] == "block"
           PY
 
+      - name: Run action on Crossplane source
+        id: crossplane
+        uses: ./
+        with:
+          tool: crossplane
+          input-file: tests/fixtures/crossplane_risky.yml
+          framework: soc2
+
+      - name: Assert Crossplane outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.crossplane.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.crossplane.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.crossplane.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "55"
+          test "$RISK_COUNTS" = '{"dangerous":33,"irreversible":1,"review":20,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "crossplane"
+          assert payload["decision"] == "block"
+          assert "rtp.check.recovery_plan" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

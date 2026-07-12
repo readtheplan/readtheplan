@@ -79,9 +79,10 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Terragrunt | `readtheplan terragrunt terragrunt.hcl` | HCL/JSON root modules, hooks, CLI arguments, remote state, includes, dependencies/mocks, generated files, inputs, assumed identity, engines, and evaluation functions |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
 | Azure Bicep / ARM | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
-| Kubernetes / Crossplane / Argo CD / Flux / Tekton | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, custom-resource, GitOps, and cloud-native pipeline rules |
+| Kubernetes / Argo CD / Flux / Tekton | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, custom-resource, GitOps, and cloud-native pipeline rules |
 | Helm source | `readtheplan helm Chart.yaml` | Chart metadata, values, and Go-template source with dependencies, hooks, dynamic evaluation, exposure, privilege, and secret rules |
 | Kustomize source | `readtheplan kustomize kustomization.yaml` | Resources/bases, remote pinning, patches, generators, image overrides, Helm inflation, plugins, and transforms |
+| Crossplane | `readtheplan crossplane resources.yaml` | Packages/functions, image policy, runtime configuration, XRDs, Compositions, provider credentials, managed-resource lifecycle, and composite selection |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
 | Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |
 | Salt | `readtheplan salt state.sls` | Structured SLS states, destructive functions, command/module execution, secrets, includes, and Jinja rendering |
@@ -149,6 +150,9 @@ OpenTelemetry Collector analysis validates component definitions against activat
 service pipelines and surfaces multi-file/provider boundaries without starting a collector.
 Dockerfile analysis understands multi-stage builds, heredocs, BuildKit secret/SSH
 mounts, and runtime metadata without invoking Docker or sending a build context.
+Crossplane analysis parses package and resource manifests without pulling package
+images, executing Composition functions/providers, contacting external APIs, or
+resolving controller runtime state.
 
 ## How it looks
 
@@ -453,7 +457,8 @@ Good first issues are tagged [`good first issue`](https://github.com/readtheplan
 
 **v0.3 — stable CLI + GitHub Action.** The PyPI package ships the Python CLI and composite GitHub Action. Current development includes resource-aware AWS risk rules, compliance framework annotations, evidence envelopes, signed attestation verification, customer rule overlays, infrastructure adapters, MCP preview, examples, benchmarks, and the static onboarding site.
 
-What's shipping next: deeper adapter coverage, Helm/Crossplane delivery workflows, PCI-DSS and NIST 800-53 catalogs, and expanded cloud resource rules.
+What's shipping next: deeper adapter coverage, cloud-native delivery workflows,
+PCI-DSS and NIST 800-53 catalogs, and expanded cloud resource rules.
 
 ## License
 
