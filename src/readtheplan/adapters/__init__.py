@@ -11,6 +11,7 @@ from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.bicep import BicepAdapter
 from readtheplan.adapters.caddy import CaddyAdapter
 from readtheplan.adapters.chef import ChefAdapter
+from readtheplan.adapters.chef_project import ChefProjectAdapter
 from readtheplan.adapters.cloud_init import CloudInitAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.crossplane import CrossplaneAdapter
@@ -119,6 +120,7 @@ register_adapter(AnsibleProjectAdapter())
 register_adapter(JenkinsAdapter())
 register_adapter(JenkinsJCasCAdapter())
 register_adapter(ChefAdapter())
+register_adapter(ChefProjectAdapter())
 register_adapter(PuppetAdapter())
 register_adapter(PulumiAdapter())
 register_adapter(NginxAdapter())
@@ -157,6 +159,7 @@ __all__ = [
     "BuildkiteAdapter",
     "CaddyAdapter",
     "ChefAdapter",
+    "ChefProjectAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",
     "CrossplaneAdapter",

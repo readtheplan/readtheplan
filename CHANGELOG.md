@@ -9,6 +9,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Chef project gates across the CLI, GitHub Action, and MCP. Static parsing of
+  `Policyfile.rb`, `Policyfile.lock.json`, and cookbook `metadata.rb` now covers
+  run lists, cookbook sources and resolved identity, immutable Git revisions,
+  included policies, attributes/secrets, gems, compatibility, privacy, and Ruby boundaries.
 - Ansible project configuration gates across the CLI, GitHub Action, and MCP.
   Strict parsing of `ansible.cfg` and Galaxy requirements YAML now covers SSH
   trust, privilege, controller plugins/callbacks, inventory execution, Galaxy

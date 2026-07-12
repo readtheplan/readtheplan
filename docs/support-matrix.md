@@ -36,6 +36,7 @@ matrix makes those boundaries explicit.
 | Jenkins | Jenkinsfile | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step scanner covering agents/images/host arguments, libraries, credentials, commands/dynamic Groovy, triggers, approvals, checkout/HTTP/artifacts, and cleanup | Conservative |
 | Jenkins Configuration as Code | JCasC YAML | `readtheplan jenkins-jcasc jenkins.yaml` | Security realms, authorization, credentials, controller executors, nodes/clouds, agent images/privilege, libraries, script approval, Job DSL, endpoints/TLS, and plugin boundaries | Built-in |
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
+| Chef project | `Policyfile.rb`, `Policyfile.lock.json`, or `metadata.rb` | `readtheplan chef-project Policyfile.rb` | Policy/run lists, cookbook sources and immutable revisions, included policies, resolved lock identity, attributes/secrets, cookbook/gem dependencies, compatibility, privacy, and dynamic Ruby boundaries | Built-in |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Built-in and namespaced resource/state scanner covering execution/identity/connectivity, classes, dynamic data/templates, custom types, virtual/exported resources, collectors, refresh relationships, sources, and permissions | Conservative |
 | GitHub Actions | Workflow YAML | `readtheplan github-actions workflow.yml` | Token permissions, action/reusable-workflow pinning, secret inputs, environments, and run steps | Built-in |
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
@@ -100,7 +101,8 @@ the same optional `framework` parameter through its MCP tool.
   Vagrant, cloud-init user-data, or provider code.
 - Ansible configuration precedence, inventory/plugin execution, transitive Galaxy
   dependencies, includes/roles, and Jenkins shared libraries remain external code
-  boundaries. Chef/Puppet Ruby extensions, custom providers/types, dynamic
+  boundaries. Chef policy-group/node assignment, credentials, config.rb,
+  cookbook contents, server-side state, Puppet Ruby extensions, custom providers/types, dynamic
   language expressions, Hiera/data bindings, and compiled catalogs are not
   evaluated; recognized boundaries are surfaced for review instead.
 - Jenkins JCasC analysis parses one YAML file without resolving supplementary

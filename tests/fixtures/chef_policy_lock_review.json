@@ -1,0 +1,33 @@
+{
+  "revision_id": "38d1a495b3ca1b108be9f0fd90055902c0ddefb2af04b681e6bf12004774c509",
+  "name": "production-web",
+  "run_list": [
+    "recipe[base::default]",
+    "recipe[web::default]"
+  ],
+  "cookbook_locks": {
+    "base": {
+      "version": "3.2.1",
+      "identifier": "c3289cbd8fc14b3e4a8b7a05522194046be2eb0f",
+      "source_options": {
+        "artifactserver": "https://supermarket.chef.io/api/v1/cookbooks/base/versions/3.2.1/download"
+      }
+    },
+    "web": {
+      "version": "5.4.0",
+      "identifier": "d3289cbd8fc14b3e4a8b7a05522194046be2eb0f",
+      "source_options": {
+        "git": "https://github.com/example/web-cookbook.git",
+        "revision": "0123456789abcdef0123456789abcdef01234567"
+      }
+    }
+  },
+  "solution_dependencies": {
+    "Policyfile": [["base", "= 3.2.1"], ["web", "= 5.4.0"]]
+  },
+  "default_attributes": {
+    "application": {
+      "environment": "production"
+    }
+  }
+}

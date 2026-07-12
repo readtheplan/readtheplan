@@ -308,6 +308,19 @@ def _build_parser() -> argparse.ArgumentParser:
     chef.add_argument("input_file", help="Path to a Chef recipe (.rb).")
     chef.set_defaults(func=_chef_gate)
 
+    chef_project = subparsers.add_parser(
+        "chef-project",
+        help="Emit the agent-gate decision for Chef policy or cookbook project files.",
+    )
+    chef_project.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    chef_project.add_argument(
+        "input_file",
+        help="Path to Policyfile.rb, Policyfile.lock.json, or cookbook metadata.rb.",
+    )
+    chef_project.set_defaults(func=_chef_project_gate)
+
     puppet = subparsers.add_parser(
         "puppet",
         help="Emit the agent-gate decision for a Puppet manifest.",
@@ -1238,6 +1251,35 @@ def _chef_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_chef(data, catalog=catalog))
+
+
+def _chef_project_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Chef project policy and metadata."""
+    from readtheplan.adapters.chef_project import (
+        ChefProjectAdapter,
+        ChefProjectInputError,
+        analyze_chef_project,
+        parse_chef_project,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_chef_project(source)
+    except ChefProjectInputError as exc:
+        print(f"Error: invalid Chef project input: {exc}", file=sys.stderr)
+        return 1
+    if not ChefProjectAdapter().can_handle(data):
+        print("Error: input not recognized as Chef project configuration", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_chef_project(data, catalog=catalog))
 
 
 def _puppet_gate(args: argparse.Namespace) -> int:

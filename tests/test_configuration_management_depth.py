@@ -91,6 +91,7 @@ def test_puppet_fixture_surfaces_modules_dynamic_data_and_cross_node_resources()
         ("jenkins", "Jenkinsfile.config-management-risky"),
         ("jenkins-jcasc", "jenkins_jcasc_risky.yml"),
         ("chef", "chef_config_management_risky.rb"),
+        ("chef-project", "chef_policyfile_risky.rb"),
         ("puppet", "puppet_config_management_risky.pp"),
     ],
 )

@@ -98,6 +98,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
 | Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
+| Chef project | `readtheplan chef-project Policyfile.rb` | Policyfiles, resolved locks, cookbook metadata, run lists, source provenance, immutable revisions, attributes, gems, compatibility, privacy, and Ruby boundaries |
 | Puppet | `readtheplan puppet site.pp` | Built-in/custom resources, state, identities, classes, lookups/templates, virtual/exported resources, collectors, refresh relationships, and sources/permissions |
 | GitHub Actions | `readtheplan github-actions workflow.yml` | Token permissions, action pinning, secrets, environments, and run steps |
 | GitLab CI | `readtheplan gitlab-ci .gitlab-ci.yml` | Includes, tokens, downstream pipelines, environments, and scripts |
