@@ -316,6 +316,33 @@ jobs:
           assert payload["decision"] == "block"
           PY
 
+      - name: Run action on OpenTelemetry Collector configuration
+        id: otel_collector
+        uses: ./
+        with:
+          tool: otel-collector
+          input-file: tests/fixtures/otel_collector_risky.yml
+          framework: soc2
+
+      - name: Assert OpenTelemetry Collector outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.otel_collector.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.otel_collector.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.otel_collector.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "26"
+          test "$RISK_COUNTS" = '{"dangerous":16,"irreversible":0,"review":8,"safe":2}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "otel-collector"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

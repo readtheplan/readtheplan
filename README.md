@@ -103,6 +103,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Envoy | `readtheplan envoy envoy.yaml` | Bootstrap/config dumps, listeners, admin, clusters, TLS validation, xDS, runtime layers, secrets, filters, Lua/Wasm, authorization, and active runtime boundaries |
 | Prometheus | `readtheplan prometheus prometheus.yml` | Scrape jobs, discovery, targets, auth/TLS, relabeling, rule files, remote read/write, Alertmanager delivery, and OTLP ingestion |
 | Alertmanager | `readtheplan alertmanager alertmanager.yml` | Routing, receivers, notification integrations, credentials, TLS, templates, inhibition/time intervals, and event export |
+| OpenTelemetry Collector | `readtheplan otel-collector config.yaml` | Receivers, processors, exporters, connectors, extensions, pipelines, public diagnostics, TLS/auth, credentials, host/file access, and merged config providers |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
@@ -132,6 +133,8 @@ Envoy accepts bootstrap YAML/JSON and admin config dumps so statically declared
 resources and active xDS-delivered runtime state share the same review contract.
 Prometheus and Alertmanager analysis tracks telemetry ingestion/egress and alert
 routing together without loading rule/template files or contacting integrations.
+OpenTelemetry Collector analysis validates component definitions against activated
+service pipelines and surfaces multi-file/provider boundaries without starting a collector.
 Dockerfile analysis understands multi-stage builds, heredocs, BuildKit secret/SSH
 mounts, and runtime metadata without invoking Docker or sending a build context.
 

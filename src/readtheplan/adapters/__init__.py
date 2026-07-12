@@ -15,6 +15,7 @@ from readtheplan.adapters.envoy import EnvoyAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
 from readtheplan.adapters.monitoring import AlertmanagerAdapter, PrometheusAdapter
+from readtheplan.adapters.otel_collector import OTelCollectorAdapter
 from readtheplan.adapters.packer import PackerInspectAdapter
 from readtheplan.adapters.pipelines import (
     AzurePipelinesAdapter,
@@ -91,6 +92,7 @@ register_adapter(EnvoyAdapter())
 register_adapter(KubernetesAdapter())
 register_adapter(PrometheusAdapter())
 register_adapter(AlertmanagerAdapter())
+register_adapter(OTelCollectorAdapter())
 register_adapter(AnsibleAdapter())
 register_adapter(JenkinsAdapter())
 register_adapter(ChefAdapter())
@@ -135,6 +137,7 @@ __all__ = [
     "KubernetesAdapter",
     "PrometheusAdapter",
     "AlertmanagerAdapter",
+    "OTelCollectorAdapter",
     "NomadPlanAdapter",
     "NginxAdapter",
     "HAProxyAdapter",
