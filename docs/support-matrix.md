@@ -8,6 +8,8 @@ matrix makes those boundaries explicit.
 |---|---|---|---|---|
 | Terraform / OpenTofu | `terraform show -json` plan | `readtheplan analyze plan.json` | Native plan diff, old/new state, resource-aware rules, evidence and signing | Stable |
 | CloudFormation | Change Set JSON or old/new template wrapper | `readtheplan cloudformation changes.json` | Structured operations; template wrappers include deep old/new properties | Built-in |
+| Serverless Framework | `serverless.yml` service source | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity and artifacts, IAM, functions, events, plugins, external variables, packaging, extensions and embedded CloudFormation | Built-in |
+| AWS SAM | SAM template YAML/JSON | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code sources, policies, event ingress, APIs, state machines, nested apps, Connectors, custom builds and lifecycle policies | Built-in |
 | Azure Bicep / ARM | Deployment What-If JSON | `readtheplan azure whatif.json` | FullResourcePayloads operations and old/new resource state; conservative ResourceIdOnly handling | Built-in |
 | Kubernetes | JSON/YAML, `kind: List`, multi-doc YAML, or diff wrapper | `readtheplan kubernetes rendered.yaml` | Workload, RBAC, secret, network, storage, custom-resource, and control-plane rules | Built-in |
 | Helm | `Chart.yaml`, values YAML, Go-template source, or rendered manifests | `readtheplan helm Chart.yaml` / `readtheplan kubernetes rendered.yaml` | Dependencies, hooks, dynamic evaluation, files, generated secrets, images, exposure and privilege before rendering; rendered objects receive Kubernetes rules | Built-in |
@@ -79,6 +81,7 @@ the same optional `framework` parameter through its MCP tool.
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
   Crossplane packages, providers, or Composition functions,
+  Serverless Framework plugins or AWS SAM builds/transforms,
   Pulumi, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,
   Docker Compose, Dockerfiles, Nomad, Packer,
   Vagrant, cloud-init user-data, or provider code.
@@ -92,6 +95,11 @@ the same optional `framework` parameter through its MCP tool.
   schemas, invoking functions, or contacting Kubernetes or external cloud APIs.
   Package signature-verification feature flags, RBAC, admission, provider runtime
   state, and external-resource state remain deployment-side trust boundaries.
+- Serverless Framework and AWS SAM analysis parses source without resolving
+  variables, loading external files, downloading code/application artifacts,
+  executing plugins or custom builders, or applying CloudFormation macros. Run
+  the corresponding synthesized CloudFormation change set through the existing
+  CloudFormation gate for operation-level confirmation before deployment.
 - AWS CDK currently flows through synthesized CloudFormation. Terragrunt flows
   through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
   those tools expose additional structured semantics worth preserving.

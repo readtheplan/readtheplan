@@ -78,6 +78,8 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Terraform configuration | `readtheplan terraform-config main.tf` | HCL/JSON providers, backends, modules, resources/data, provisioners, lifecycle, remote state, imports/moves/removals, secrets, and static exposure |
 | Terragrunt | `readtheplan terragrunt terragrunt.hcl` | HCL/JSON root modules, hooks, CLI arguments, remote state, includes, dependencies/mocks, generated files, inputs, assumed identity, engines, and evaluation functions |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
+| Serverless Framework | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity/artifacts, IAM, functions, events, plugins, variables, packaging, and embedded CloudFormation |
+| AWS SAM | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code, policies, event ingress, APIs, state machines, nested apps, Connectors, builds, and lifecycle policies |
 | Azure Bicep / ARM | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
 | Kubernetes / Argo CD / Flux / Tekton | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, custom-resource, GitOps, and cloud-native pipeline rules |
 | Helm source | `readtheplan helm Chart.yaml` | Chart metadata, values, and Go-template source with dependencies, hooks, dynamic evaluation, exposure, privilege, and secret rules |
@@ -153,6 +155,9 @@ mounts, and runtime metadata without invoking Docker or sending a build context.
 Crossplane analysis parses package and resource manifests without pulling package
 images, executing Composition functions/providers, contacting external APIs, or
 resolving controller runtime state.
+Serverless Framework and AWS SAM source analysis does not resolve variables,
+download artifacts, execute plugins/builders/macros, package code, or synthesize
+CloudFormation; each remains an explicit review or blocking trust boundary.
 
 ## How it looks
 

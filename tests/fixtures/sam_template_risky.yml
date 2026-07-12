@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform:
+  - AWS::Serverless-2016-10-31
+  - Example::Rewrite
+Globals:
+  Function:
+    Environment:
+      Variables:
+        GLOBAL_PASSWORD: plaintext-global-password
+Resources:
+  CheckoutFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Delete
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      Runtime: python3.13
+      Handler: app.handler
+      InlineCode: |
+        def handler(event, context):
+            return {"statusCode": 200}
+      Role: arn:aws:iam::123456789012:role/checkout-runtime
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: "*"
+              Resource: "*"
+      Environment:
+        Variables:
+          API_SECRET: plaintext-api-secret
+      VpcConfig:
+        SecurityGroupIds: [sg-123456]
+        SubnetIds: [subnet-123456]
+      FileSystemConfigs:
+        - Arn: arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-123
+          LocalMountPath: /mnt/data
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors: "*"
+      DeploymentPreference:
+        Type: Canary10Percent5Minutes
+        Hooks:
+          PreTraffic: !Ref PreTrafficHook
+      AutoPublishAlias: live
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 2
+      ReservedConcurrentExecutions: 10
+      Events:
+        PublicApi:
+          Type: HttpApi
+          Properties:
+            Path: /checkout
+            Method: POST
+        Upload:
+          Type: S3
+          Properties:
+            Bucket: !Ref UploadBucket
+            Events: s3:ObjectCreated:*
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageUri: 123456789012.dkr.ecr.us-east-1.amazonaws.com/worker:latest
+  PublicApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: ["*"]
+      DefinitionUri: s3://api-artifacts/openapi.yml
+      ResourcePolicy:
+        CustomStatements:
+          - Effect: Allow
+            Principal: "*"
+            Action: execute-api:Invoke
+  Workflow:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: s3://workflow-artifacts/checkout.asl.json
+      Role: arn:aws:iam::123456789012:role/workflow
+      Events:
+        EveryMinute:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 minute)
+  SharedApplication:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: arn:aws:serverlessrepo:us-east-1:123456789012:applications/shared
+      Parameters:
+        AuthToken: plaintext-nested-token
+  DataConnector:
+    Type: AWS::Serverless::Connector
+    Properties:
+      Source:
+        Id: CheckoutFunction
+      Destination:
+        Id: UploadBucket
+      Permissions: [Read, Write]
+  VpcConnector:
+    Type: AWS::Serverless::NetworkConnector
+    Properties:
+      SourceSecurityGroup:
+        Id: sg-123456
+      DestinationSecurityGroup:
+        Id: sg-654321
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: layers/shared
+  DeploymentRole:
+    Type: AWS::IAM::Role
+    UpdateReplacePolicy: Delete
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: "*"
+            Resource: "*"
+  UploadBucket:
+    Type: AWS::S3::Bucket
