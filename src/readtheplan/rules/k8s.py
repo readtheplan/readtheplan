@@ -1248,3 +1248,691 @@ def _tekton_resolution_request_candidates(
             )
         ]
     return []
+
+
+def _controller_walk(value: Any):
+    yield value
+    if isinstance(value, dict):
+        for child in value.values():
+            yield from _controller_walk(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _controller_walk(child)
+
+
+def _controller_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _controller_items(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _controller_dicts(value: Any):
+    return (item for item in _controller_walk(value) if isinstance(item, dict))
+
+
+def _controller_has_key(value: Any, *keys: str) -> bool:
+    lowered = {key.lower() for key in keys}
+    return any(
+        any(str(key).lower() in lowered for key in item) for item in _controller_dicts(value)
+    )
+
+
+def _controller_secret_refs(value: Any) -> bool:
+    return _controller_has_key(
+        value,
+        "secretKeyRef",
+        "secretRef",
+        "secretName",
+        "privateKeySecretRef",
+        "certificateRefs",
+        "authSecretRef",
+    )
+
+
+def _controller_mutable_images(value: Any) -> bool:
+    for item in _controller_dicts(value):
+        image = item.get("image")
+        if isinstance(image, str) and "@sha256:" not in image.lower():
+            return True
+    return False
+
+
+def _controller_privileged(value: Any) -> bool:
+    for item in _controller_dicts(value):
+        if item.get("privileged") is True or item.get("hostNetwork") is True:
+            return True
+        if item.get("hostPID") is True or item.get("hostIPC") is True:
+            return True
+        if item.get("allowPrivilegeEscalation") is True:
+            return True
+        if item.get("runAsNonRoot") is False:
+            return True
+        capabilities = item.get("capabilities")
+        if isinstance(capabilities, dict) and capabilities.get("add"):
+            return True
+    return False
+
+
+def _controller_delete(label: str, action_set: set[str]) -> list[RuleResult] | None:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                f"__TOOL__ will delete this {label} and remove its controller-managed state.",
+            )
+        ]
+    return None
+
+
+@register_rule(
+    "kubernetes_argo_workflow",
+    "kubernetes_argo_workflow_template",
+    "kubernetes_argo_cluster_workflow_template",
+    "kubernetes_argo_cron_workflow",
+    "kubernetes_argo_workflow_task_set",
+)
+def _argo_workflow_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_argo_").replace("_", " ").title()
+    deleted = _controller_delete(f"Argo {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["define or start executable workflow tasks"]
+    if spec.get("serviceAccountName") or _controller_has_key(spec, "serviceAccountName"):
+        findings.append("run with a selected Kubernetes ServiceAccount")
+    if spec.get("automountServiceAccountToken") is not False:
+        findings.append("may mount a Kubernetes API token into workflow pods")
+    if _controller_mutable_images(spec):
+        findings.append("execute container images not pinned by digest")
+    if _controller_privileged(spec) or spec.get("podSpecPatch"):
+        findings.append("alter pod security, host, or runtime settings")
+    if _controller_secret_refs(spec):
+        findings.append("consume Secret-backed credentials or artifacts")
+    if _controller_has_key(spec, "script", "resource", "http", "plugin", "containerSet"):
+        findings.append("run scripts, mutate Kubernetes resources, or call external services")
+    if spec.get("workflowTemplateRef") or _controller_has_key(spec, "templateRef"):
+        findings.append("execute reusable templates resolved from cluster state")
+    return [
+        RuleResult(
+            "dangerous",
+            (
+                f"This Argo {label} can {'; '.join(dict.fromkeys(findings))}. Review "
+                "resolved templates, identity, parameters, artifacts, synchronization, "
+                "pod GC, exit handlers, retries, and controller restrictions."
+            ),
+        )
+    ]
+
+
+@register_rule("kubernetes_argo_workflow_event_binding")
+def _argo_workflow_event_binding_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Argo WorkflowEventBinding", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Argo WorkflowEventBinding turns accepted event payloads into "
+                    "Workflow submissions. Review selector scope, payload-to-parameter "
+                    "mapping, referenced template, submit identity, and API authentication."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_argo_event_source")
+def _argo_event_source_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Argo EventSource", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["ingest events from webhooks, brokers, cloud APIs, or Kubernetes resources"]
+    if _controller_secret_refs(spec):
+        findings.append("use Secret-backed broker or cloud credentials")
+    if _controller_has_key(spec, "serviceAccountName"):
+        findings.append("watch resources with a selected ServiceAccount")
+    if any(item.get("insecureSkipVerify") is True for item in _controller_dicts(spec)):
+        findings.append("disable TLS peer verification")
+    return [
+        RuleResult(
+            "dangerous",
+            (
+                f"This Argo EventSource can {'; '.join(findings)}. Review endpoint exposure, "
+                "authentication, TLS, filters, payload limits, credential scope, and EventBus."
+            ),
+        )
+    ]
+
+
+@register_rule("kubernetes_argo_sensor")
+def _argo_sensor_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Argo Sensor", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["turn untrusted event data into external or Kubernetes actions"]
+        if _controller_has_key(spec, "serviceAccountName"):
+            findings.append("execute resource/workflow triggers with a selected ServiceAccount")
+        if _controller_secret_refs(spec):
+            findings.append("use Secret-backed trigger credentials")
+        if _controller_has_key(spec, "parameters", "payload"):
+            findings.append("substitute event payload fields into trigger destinations")
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"This Argo Sensor can {'; '.join(findings)}. Review dependency filters, "
+                    "conditions, trigger templates, retries, rate limits, delivery semantics, "
+                    "dead-letter behavior, and least-privilege identity."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_argo_event_bus")
+def _argo_event_bus_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Argo EventBus", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["change the shared event transport used by EventSources and Sensors"]
+        if _controller_secret_refs(spec):
+            findings.append("use Secret-backed transport authentication or TLS")
+        if _controller_has_key(spec, "persistence", "volumeClaimTemplate"):
+            findings.append("persist event and delivery state")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Argo EventBus can {'; '.join(findings)}. Review NATS/Kafka "
+                "security, durability, topic scope, availability, and migration impact.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_gateway_class")
+def _gateway_class_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("GatewayClass", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This GatewayClass selects a cluster gateway controller and optional "
+                    "implementation-specific parameters. Review controller trust, scope, "
+                    "supported features, infrastructure ownership, and class acceptance."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_gateway", "kubernetes_gateway_listener_set")
+def _gateway_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = "ListenerSet" if resource_type.endswith("listener_set") else "Gateway"
+    deleted = _controller_delete(label, action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["change externally or internally reachable network listeners"]
+    listeners = [
+        item for item in _controller_items(spec.get("listeners")) if isinstance(item, dict)
+    ]
+    if any(
+        str(item.get("protocol", "HTTP")).upper() in {"HTTP", "TCP", "UDP"} for item in listeners
+    ):
+        findings.append("expose plaintext or unauthenticated transport listeners")
+    if any(not item.get("hostname") or item.get("hostname") == "*" for item in listeners):
+        findings.append("accept listener traffic without a specific hostname")
+    if any(
+        _controller_mapping(_controller_mapping(item.get("allowedRoutes")).get("namespaces")).get(
+            "from"
+        )
+        == "All"
+        for item in listeners
+    ):
+        findings.append("allow Routes from every namespace")
+    if _controller_secret_refs(spec):
+        findings.append("terminate TLS with referenced certificate Secrets")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This {label} can {'; '.join(findings)}. Review addresses, TLS mode, "
+            "route attachment, namespace trust, implementation parameters, and status "
+            "before rollout.",
+        )
+    ]
+
+
+@register_rule(
+    "kubernetes_gateway_http_route",
+    "kubernetes_gateway_grpc_route",
+    "kubernetes_gateway_tls_route",
+    "kubernetes_gateway_tcp_route",
+    "kubernetes_gateway_udp_route",
+)
+def _gateway_route_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_gateway_").replace("_", " ").upper()
+    deleted = _controller_delete(label, action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["change traffic matching and backend forwarding"]
+    if not spec.get("hostnames") or "*" in _controller_items(spec.get("hostnames")):
+        findings.append("match traffic without a specific hostname")
+    refs = [
+        item
+        for item in _controller_dicts(spec)
+        if any(key in item for key in ("backendRefs", "backendRef", "parentRefs"))
+    ]
+    if any(_controller_has_key(item, "namespace") for item in refs):
+        findings.append("reference gateways or backends across namespace boundaries")
+    filter_types = {
+        str(item.get("type"))
+        for item in _controller_dicts(spec)
+        if item.get("type")
+        in {
+            "ExternalAuth",
+            "RequestHeaderModifier",
+            "RequestMirror",
+            "RequestRedirect",
+            "ResponseHeaderModifier",
+            "URLRewrite",
+        }
+    }
+    if filter_types:
+        findings.append(f"apply traffic filters: {', '.join(sorted(filter_types))}")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Gateway API {label} can {'; '.join(findings)}. Review parent "
+            "attachment, ReferenceGrants, filters, backend kinds/ports/weights, timeouts, "
+            "retries, and controller conformance.",
+        )
+    ]
+
+
+@register_rule("kubernetes_gateway_reference_grant")
+def _gateway_reference_grant_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Gateway API ReferenceGrant", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This ReferenceGrant authorizes cross-namespace object references. "
+                    "Review every source group/kind/namespace and destination group/kind/name "
+                    "for confused-deputy, Secret, and backend access risks."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_gateway_backend_tls_policy")
+def _gateway_backend_tls_policy_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Gateway API BackendTLSPolicy", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This BackendTLSPolicy changes how a Gateway authenticates backend TLS. "
+                    "Review targetRef, hostname validation, CA sources, system trust, "
+                    "cross-namespace references, and implementation support."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_cert_manager_certificate")
+def _cert_manager_certificate_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("cert-manager Certificate", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["issue and store a private key and signed certificate in a Secret"]
+    dns_names = [str(name) for name in _controller_items(spec.get("dnsNames"))]
+    if any(name.startswith("*.") for name in dns_names):
+        findings.append("request a wildcard DNS certificate")
+    if spec.get("isCA") is True or any(
+        usage in {"cert sign", "crl sign"} for usage in _controller_items(spec.get("usages"))
+    ):
+        findings.append("create a certificate capable of signing other certificates")
+    if _controller_mapping(spec.get("privateKey")).get("rotationPolicy") == "Never":
+        findings.append("reuse the private key across certificate renewals")
+    if _controller_mapping(spec.get("issuerRef")).get("kind") == "ClusterIssuer":
+        findings.append("use a cluster-scoped signing authority")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This cert-manager Certificate can {'; '.join(findings)}. Review names, "
+            "usages, issuer, key algorithm/size/rotation, duration, renewal, secret "
+            "ownership, and approval policy.",
+        )
+    ]
+
+
+@register_rule(
+    "kubernetes_cert_manager_issuer",
+    "kubernetes_cert_manager_cluster_issuer",
+)
+def _cert_manager_issuer_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    cluster = resource_type.endswith("cluster_issuer")
+    label = "ClusterIssuer" if cluster else "Issuer"
+    deleted = _controller_delete(f"cert-manager {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["configure a certificate signing authority"]
+    if cluster:
+        findings.append("make the authority usable across namespaces")
+    if spec.get("selfSigned") is not None or spec.get("ca") is not None:
+        findings.append("trust a self-signed or Secret-backed CA key")
+    acme = _controller_mapping(spec.get("acme"))
+    if acme:
+        findings.append("register an ACME account and solve domain-control challenges")
+        if any(
+            "dns01" in solver
+            for solver in _controller_items(acme.get("solvers"))
+            if isinstance(solver, dict)
+        ):
+            findings.append("grant DNS provider access for DNS01 records")
+        if any(
+            _cert_manager_unscoped_http01(solver)
+            for solver in _controller_items(acme.get("solvers"))
+            if isinstance(solver, dict)
+        ):
+            findings.append("let all installed ingress controllers serve an HTTP01 challenge")
+    if _controller_secret_refs(spec):
+        findings.append("use Secret-backed issuer credentials or account keys")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This cert-manager {label} can {'; '.join(findings)}. Review scope, "
+            "credential access, server/CA trust, solver selectors, name constraints, and "
+            "request approval policy.",
+        )
+    ]
+
+
+def _cert_manager_unscoped_http01(solver: dict[str, Any]) -> bool:
+    http01 = _controller_mapping(solver.get("http01"))
+    if "ingress" not in http01:
+        return False
+    ingress = _controller_mapping(http01.get("ingress"))
+    return not any(key in ingress for key in ("class", "ingressClassName", "name"))
+
+
+@register_rule("kubernetes_cert_manager_certificate_request")
+def _cert_manager_request_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("cert-manager CertificateRequest", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This CertificateRequest asks an issuer to sign a CSR. Review requester "
+                    "identity, approval/denial conditions, issuer scope, requested names and "
+                    "usages, CSR integrity, and approver-policy enforcement."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_cert_manager_acme_order",
+    "kubernetes_cert_manager_acme_challenge",
+)
+def _cert_manager_acme_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = "ACME Challenge" if resource_type.endswith("challenge") else "ACME Order"
+    deleted = _controller_delete(f"cert-manager {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                f"This cert-manager {label} changes active certificate issuance state. "
+                "Review requested identifiers, authorization URL, solver configuration, "
+                "DNS/ingress mutations, and controller ownership.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_cert_manager_trust_bundle")
+def _cert_manager_bundle_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("trust-manager Bundle", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This trust-manager Bundle distributes trusted CA certificates across "
+                    "workloads or namespaces. Review every source, default-CA package pin, "
+                    "target kind/key/selector, namespace scope, and CA rotation overlap."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_external_secrets_secret_store",
+    "kubernetes_external_secrets_cluster_secret_store",
+)
+def _external_secrets_store_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    cluster = resource_type.endswith("cluster_secret_store")
+    label = "ClusterSecretStore" if cluster else "SecretStore"
+    deleted = _controller_delete(f"External Secrets {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["authorize access to an external secret backend"]
+    if cluster:
+        findings.append("make the backend selectable across namespaces")
+        if not spec.get("conditions"):
+            findings.append("set no namespace conditions on cluster-wide use")
+    if _controller_secret_refs(spec):
+        findings.append("use Kubernetes Secrets for backend authentication")
+    if _controller_has_key(spec, "serviceAccountRef"):
+        findings.append("mint or use a Kubernetes ServiceAccount identity")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This External Secrets {label} can {'; '.join(findings)}. Review provider "
+            "endpoint, auth scope, controller class, namespace conditions, retry/refresh "
+            "behavior, and backend maintenance status.",
+        )
+    ]
+
+
+@register_rule(
+    "kubernetes_external_secrets_external_secret",
+    "kubernetes_external_secrets_cluster_external_secret",
+)
+def _external_secret_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    cluster = resource_type.endswith("cluster_external_secret")
+    label = "ClusterExternalSecret" if cluster else "ExternalSecret"
+    deleted = _controller_delete(f"External Secrets {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["read external values and write Kubernetes Secrets"]
+    if cluster:
+        findings.append("replicate secrets into selected namespaces")
+    if spec.get("dataFrom") or _controller_has_key(spec, "find", "extract"):
+        findings.append("bulk import or discover remote secret values")
+    target = _controller_mapping(spec.get("target"))
+    if target.get("template") or target.get("templateFrom"):
+        findings.append("render secret data through templates or ConfigMaps")
+    if _controller_mapping(spec.get("secretStoreRef")).get("kind") == "ClusterSecretStore":
+        findings.append("use a cluster-scoped secret backend identity")
+    if str(spec.get("refreshPolicy", "Periodic")) == "Periodic":
+        findings.append("periodically overwrite the target from remote state")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This External Secrets {label} can {'; '.join(findings)}. Review remote "
+            "keys/properties, store scope, target ownership/type, refresh and "
+            "deletion/creation policies, templates, namespace selectors, and consumers.",
+        )
+    ]
+
+
+@register_rule(
+    "kubernetes_external_secrets_push_secret",
+    "kubernetes_external_secrets_cluster_push_secret",
+)
+def _external_secrets_push_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    cluster = resource_type.endswith("cluster_push_secret")
+    label = "ClusterPushSecret" if cluster else "PushSecret"
+    deleted = _controller_delete(f"External Secrets {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"This External Secrets {label} exports Kubernetes Secret data to one "
+                    "or more remote stores. Review source selector, namespace scope, store "
+                    "selection, key rewrites, template output, update/deletion policy, bulk "
+                    "dataTo matching, and exfiltration boundaries."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_external_secrets_generator")
+def _external_secrets_generator_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("External Secrets generator", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This External Secrets generator creates dynamic credentials, tokens, "
+                    "keys, passwords, or webhook-derived values. Review generator scope, "
+                    "provider identity, endpoint/TLS, output lifetime, entropy, consumers, "
+                    "and cluster-wide reuse."
+                ),
+            )
+        ]
+    return []

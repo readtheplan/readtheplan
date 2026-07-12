@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Kubernetes rules for Argo Workflows/Events, Gateway API,
+  cert-manager/trust-manager, and External Secrets. Executable workflows,
+  event-driven triggers, listener/route namespace trust, cross-namespace grants,
+  signing authorities and key rotation, distributed trust, external secret-store
+  scope, refresh/replication, outbound pushes, and generators no longer collapse
+  into generic custom-resource review.
 - Native Serverless Framework service and AWS SAM template gates across the CLI,
   generalized Action, and local MCP server. Deployment identities and artifacts,
   wildcard IAM, functions, public events, plugins, variables, packaging,

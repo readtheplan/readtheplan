@@ -18,6 +18,10 @@ matrix makes those boundaries explicit.
 | Argo CD | Application, ApplicationSet, and AppProject YAML | `readtheplan kubernetes argocd.yaml` | Automated-prune, wildcard project-boundary, source/destination, and deletion semantics | Built-in |
 | Flux CD | Source, Kustomization, HelmRelease, image automation, and notification YAML | `readtheplan kubernetes flux.yaml` | Source trust/immutability, pruning/force, remote targets, decryption, Helm remediation, Git writes, webhook triggers, and deletion semantics | Built-in |
 | Tekton | Task, Pipeline, Run, and Triggers YAML | `readtheplan kubernetes tekton.yaml` | Scripts/commands, image provenance, privileged settings, identities, workspaces, remote resolvers, event ingress, resource templates, and bindings | Built-in |
+| Argo Workflows / Events | Workflow, template, CronWorkflow, EventSource, Sensor, EventBus, and event-binding YAML | `readtheplan kubernetes argo.yaml` | Executable templates, images, pod privilege, ServiceAccounts, Secrets/artifacts, event ingress, payload substitution, triggers, delivery and bus persistence | Built-in |
+| Kubernetes Gateway API | GatewayClass, Gateway/ListenerSet, Routes, ReferenceGrant, and BackendTLSPolicy YAML | `readtheplan kubernetes gateway.yaml` | Listener exposure/TLS, route namespace trust, host matching, filters/mirroring, backend references, cross-namespace grants, and backend TLS validation | Built-in |
+| cert-manager / trust-manager | Certificate, Issuer, CertificateRequest, ACME, and Bundle YAML | `readtheplan kubernetes certificates.yaml` | Signing authority scope, wildcard/CA issuance, key rotation, ACME DNS/HTTP mutation, request approval, Secret ownership, and distributed trust | Built-in |
+| External Secrets Operator | Store, ExternalSecret, PushSecret, and generator YAML | `readtheplan kubernetes external-secrets.yaml` | Backend identity/scope, cluster-wide namespace boundaries, bulk imports, refresh/templates, Secret replication, outbound pushes, deletion policy, and generated credentials | Built-in |
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays, tasks, nested blocks, handlers, and roles | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
@@ -103,9 +107,13 @@ the same optional `framework` parameter through its MCP tool.
 - AWS CDK currently flows through synthesized CloudFormation. Terragrunt flows
   through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
   those tools expose additional structured semantics worth preserving.
-- Argo CD, Flux, and Tekton receive first-party controller semantics. Other custom
+- Argo CD/Workflows/Events, Flux, Tekton, Gateway API, cert-manager/trust-manager,
+  and External Secrets receive first-party controller semantics. Other custom
   resources remain conservative because their reconciliation effects depend on
   code and runtime configuration outside the submitted manifest.
+- Controller-aware Kubernetes rules remain static: referenced templates, Secrets,
+  Services, stores, trust roots, backends, controller configuration, admission,
+  runtime status, and external systems must be verified in the target environment.
 - Tekton analysis covers Pipeline and Triggers API groups without contacting the
   cluster or resolving remote Tasks. Resolver installation/configuration, RBAC,
   admission, ServiceAccount credentials, and EventListener network exposure remain
