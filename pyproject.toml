@@ -96,6 +96,7 @@ datadog = "readtheplan.rules.datadog"
 github = "readtheplan.rules.github"
 gitlab = "readtheplan.rules.gitlab"
 k8s = "readtheplan.rules.k8s"
+vault = "readtheplan.rules.vault"
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0.0,<2.0.0; python_version >= '3.10'"]

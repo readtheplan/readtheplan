@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for all 198 resources in HashiCorp Vault provider
+  v5.10.1. Secret values and generated tokens, auth methods and identity, ACL,
+  Sentinel/RGP and quota policy, dynamic-secret engines, PKI/SSH/KMIP/transit
+  cryptography, audit devices, namespaces/mounts/Raft recovery, executable
+  plugins, and external Secrets Sync destinations now receive explicit
+  control-plane and Terraform state-exposure semantics.
 - First-party Terraform rules for all 146 resources in Datadog provider v4.14.0,
   provider catalog. Credentials and service accounts, organization identity and
   access policy, cloud and incident integrations, logs/APM/RUM retention and

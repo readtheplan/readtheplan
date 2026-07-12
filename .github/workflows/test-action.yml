@@ -168,6 +168,36 @@ jobs:
           assert "credential" in payload["changes"][0]["explanation"]
           PY
 
+      - name: Run action on Vault Terraform plan
+        id: vault_provider
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/vault_provider_plan_risky.json
+          framework: soc2
+
+      - name: Assert Vault Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.vault_provider.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.vault_provider.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.vault_provider.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.vault_provider.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "36"
+          test "$ACTION_COUNTS" = '{"create":31,"delete":4,"update":1}'
+          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 36
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == "vault_generic_secret"
+          assert "Terraform plan/state" in payload["changes"][0]["explanation"]
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./
