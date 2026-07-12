@@ -59,6 +59,12 @@ _EXPECTED_RULE_FUNCTIONS = {
     "kubernetes_argocd_application": "_argocd_application_candidates",
     "kubernetes_argocd_application_set": "_argocd_application_set_candidates",
     "kubernetes_argocd_project": "_argocd_project_candidates",
+    "kubernetes_flux_git_repository": "_flux_git_repository_candidates",
+    "kubernetes_flux_oci_repository": "_flux_oci_repository_candidates",
+    "kubernetes_flux_kustomization": "_flux_kustomization_candidates",
+    "kubernetes_flux_helm_release": "_flux_helm_release_candidates",
+    "kubernetes_flux_image_update_automation": "_flux_image_update_automation_candidates",
+    "kubernetes_flux_receiver": "_flux_receiver_candidates",
 }
 
 

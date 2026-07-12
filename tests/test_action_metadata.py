@@ -59,6 +59,7 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/docker_compose_risky.yml" in workflow
     assert "tool: nomad" in workflow
     assert "input-file: tests/fixtures/nomad_plan_risky.json" in workflow
+    assert "input-file: tests/fixtures/flux_gitops_risky.yml" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow

@@ -56,6 +56,25 @@ _ARGO_KIND_MAP: dict[str, str] = {
     "ClusterAnalysisTemplate": "kubernetes_argocd_cluster_analysis_template",
 }
 
+_FLUX_KIND_MAP: dict[tuple[str, str], str] = {
+    ("source.toolkit.fluxcd.io", "GitRepository"): "kubernetes_flux_git_repository",
+    ("source.toolkit.fluxcd.io", "OCIRepository"): "kubernetes_flux_oci_repository",
+    ("source.toolkit.fluxcd.io", "Bucket"): "kubernetes_flux_bucket",
+    ("source.toolkit.fluxcd.io", "HelmRepository"): "kubernetes_flux_helm_repository",
+    ("source.toolkit.fluxcd.io", "HelmChart"): "kubernetes_flux_helm_chart",
+    ("kustomize.toolkit.fluxcd.io", "Kustomization"): "kubernetes_flux_kustomization",
+    ("helm.toolkit.fluxcd.io", "HelmRelease"): "kubernetes_flux_helm_release",
+    ("image.toolkit.fluxcd.io", "ImageRepository"): "kubernetes_flux_image_repository",
+    ("image.toolkit.fluxcd.io", "ImagePolicy"): "kubernetes_flux_image_policy",
+    (
+        "image.toolkit.fluxcd.io",
+        "ImageUpdateAutomation",
+    ): "kubernetes_flux_image_update_automation",
+    ("notification.toolkit.fluxcd.io", "Receiver"): "kubernetes_flux_receiver",
+    ("notification.toolkit.fluxcd.io", "Provider"): "kubernetes_flux_provider",
+    ("notification.toolkit.fluxcd.io", "Alert"): "kubernetes_flux_alert",
+}
+
 _CLUSTER_SCOPED_KINDS = frozenset(
     {
         "ClusterRole",
@@ -101,9 +120,7 @@ def parse_kubernetes_input(source: str) -> dict[str, Any]:
             if "old_manifests" in document or "new_manifests" in document:
                 return document
         resources = [
-            resource
-            for document in documents
-            for resource in _manifest_resources(document)
+            resource for document in documents for resource in _manifest_resources(document)
         ]
         if not resources:
             raise KubernetesInputError("no Kubernetes resources were found")
@@ -171,7 +188,9 @@ class KubernetesAdapter(BaseAdapter):
     def can_handle(self, input_data: dict[str, Any]) -> bool:
         # Format 1: old_manifests / new_manifests diff
         if "old_manifests" in input_data and "new_manifests" in input_data:
-            if isinstance(input_data["old_manifests"], list) or isinstance(input_data["new_manifests"], list):  # noqa: E501
+            if isinstance(input_data["old_manifests"], list) or isinstance(
+                input_data["new_manifests"], list
+            ):  # noqa: E501
                 return True
         # Format 2: single resources array
         if "resources" in input_data and isinstance(input_data["resources"], list):
@@ -219,42 +238,46 @@ class KubernetesAdapter(BaseAdapter):
         for key in added_ids:
             r = new_by_id[key]
             properties = _get_properties_for_rules(r)
-            changes.append({
-                "Action": "Add",
+            changes.append(
+                {
+                    "Action": "Add",
                     "Kind": _kind_from_resource(r),
                     "ApiVersion": _api_version_from_resource(r),
-                "ResourceType": _kind_from_resource(r),
-                "LogicalResourceId": _name_from_resource(r),
-                "Namespace": _namespace_from_resource(r),
-                "Replacement": "False",
-                "Spec": r.get("spec", {}),
-                "Data": r.get("data", {}),
-                "_metadata": {
-                    "before": {},
-                    "after": properties,
-                },
-            })
+                    "ResourceType": _kind_from_resource(r),
+                    "LogicalResourceId": _name_from_resource(r),
+                    "Namespace": _namespace_from_resource(r),
+                    "Replacement": "False",
+                    "Spec": r.get("spec", {}),
+                    "Data": r.get("data", {}),
+                    "_metadata": {
+                        "before": {},
+                        "after": properties,
+                    },
+                }
+            )
 
         # Removed resources (in old but not in new)
         removed_ids = set(old_by_id.keys()) - set(new_by_id.keys())
         for key in removed_ids:
             r = old_by_id[key]
             properties = _get_properties_for_rules(r)
-            changes.append({
-                "Action": "Remove",
+            changes.append(
+                {
+                    "Action": "Remove",
                     "Kind": _kind_from_resource(r),
                     "ApiVersion": _api_version_from_resource(r),
-                "ResourceType": _kind_from_resource(r),
-                "LogicalResourceId": _name_from_resource(r),
-                "Namespace": _namespace_from_resource(r),
-                "Replacement": "False",
-                "Spec": r.get("spec", {}),
-                "Data": r.get("data", {}),
-                "_metadata": {
-                    "before": properties,
-                    "after": {},
-                },
-            })
+                    "ResourceType": _kind_from_resource(r),
+                    "LogicalResourceId": _name_from_resource(r),
+                    "Namespace": _namespace_from_resource(r),
+                    "Replacement": "False",
+                    "Spec": r.get("spec", {}),
+                    "Data": r.get("data", {}),
+                    "_metadata": {
+                        "before": properties,
+                        "after": {},
+                    },
+                }
+            )
 
         # Modified resources (in both — check for spec/data changes)
         common_ids = set(old_by_id.keys()) & set(new_by_id.keys())
@@ -265,19 +288,21 @@ class KubernetesAdapter(BaseAdapter):
             new_props = _get_properties_for_rules(new_r)
 
             if old_props != new_props:
-                changes.append({
-                    "Action": "Modify",
-                    "Kind": _kind_from_resource(new_r),
-                    "ApiVersion": _api_version_from_resource(new_r),
-                    "ResourceType": _kind_from_resource(new_r),
-                    "LogicalResourceId": _name_from_resource(new_r),
-                    "Namespace": _namespace_from_resource(new_r),
-                    "Replacement": "Conditional",
-                    "_metadata": {
-                        "before": old_props,
-                        "after": new_props,
-                    },
-                })
+                changes.append(
+                    {
+                        "Action": "Modify",
+                        "Kind": _kind_from_resource(new_r),
+                        "ApiVersion": _api_version_from_resource(new_r),
+                        "ResourceType": _kind_from_resource(new_r),
+                        "LogicalResourceId": _name_from_resource(new_r),
+                        "Namespace": _namespace_from_resource(new_r),
+                        "Replacement": "Conditional",
+                        "_metadata": {
+                            "before": old_props,
+                            "after": new_props,
+                        },
+                    }
+                )
 
         return changes
 
@@ -287,21 +312,23 @@ class KubernetesAdapter(BaseAdapter):
             if not isinstance(r, dict) or "kind" not in r:
                 continue
             properties = _get_properties_for_rules(r)
-            changes.append({
-                "Action": "Add",
-                "Kind": _kind_from_resource(r),
-                "ApiVersion": _api_version_from_resource(r),
-                "ResourceType": _kind_from_resource(r),
-                "LogicalResourceId": _name_from_resource(r),
-                "Namespace": _namespace_from_resource(r),
-                "Replacement": "False",
-                "Spec": r.get("spec", {}),
-                "Data": r.get("data", {}),
-                "_metadata": {
-                    "before": {},
-                    "after": properties,
-                },
-            })
+            changes.append(
+                {
+                    "Action": "Add",
+                    "Kind": _kind_from_resource(r),
+                    "ApiVersion": _api_version_from_resource(r),
+                    "ResourceType": _kind_from_resource(r),
+                    "LogicalResourceId": _name_from_resource(r),
+                    "Namespace": _namespace_from_resource(r),
+                    "Replacement": "False",
+                    "Spec": r.get("spec", {}),
+                    "Data": r.get("data", {}),
+                    "_metadata": {
+                        "before": {},
+                        "after": properties,
+                    },
+                }
+            )
         return changes
 
     def normalize_change(self, raw: dict[str, Any]) -> ResourceChange:
@@ -338,7 +365,9 @@ class KubernetesAdapter(BaseAdapter):
             if replacement == "True":
                 risk = "dangerous"
                 actions = ("delete", "create")
-                explanation = f"Kubernetes will replace {kind} '{logical_id}' (destroy and recreate)."  # noqa: E501
+                explanation = (
+                    f"Kubernetes will replace {kind} '{logical_id}' (destroy and recreate)."  # noqa: E501
+                )
             elif replacement == "Conditional":
                 risk = "review"
                 actions = ("update",)
@@ -372,6 +401,9 @@ class KubernetesAdapter(BaseAdapter):
         api_group, separator, _version = api_version.partition("/")
         if separator and api_group == "argoproj.io" and kind in _ARGO_KIND_MAP:
             return _ARGO_KIND_MAP[kind]
+        flux_type = _FLUX_KIND_MAP.get((api_group, kind)) if separator else None
+        if flux_type:
+            return flux_type
         mapped = _K8S_KIND_MAP.get(kind)
         if mapped:
             return mapped

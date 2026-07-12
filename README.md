@@ -77,7 +77,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff + resource-aware rules |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
 | Azure Bicep / ARM | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
-| Kubernetes / Helm / Kustomize / Crossplane / Argo CD | `readtheplan kubernetes rendered.yaml` | JSON/YAML, multi-doc, RBAC, custom-resource, and GitOps rules |
+| Kubernetes / Helm / Kustomize / Crossplane / Argo CD / Flux | `readtheplan kubernetes rendered.yaml` | JSON/YAML, multi-doc, RBAC, custom-resource, and GitOps rules |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
 | Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Conservative pipeline-step analysis |

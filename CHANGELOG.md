@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Flux-aware Kubernetes rules for GitRepository/OCIRepository sources,
+  Kustomizations, HelmReleases, image update automation, and webhook Receivers.
+  The rules cover source authentication and immutability, pruning, force,
+  decryption, remote targets, remediation, automated Git writes, and deletion.
 - Native Docker Compose and HashiCorp Nomad gates across the CLI, generalized
   Action, and local MCP server. Compose analysis covers host access and container
   boundaries without resolving external files; Nomad consumes structured job-plan
