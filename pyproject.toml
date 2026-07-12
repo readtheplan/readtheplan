@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "prometheus", "alertmanager", "grafana", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "prometheus", "alertmanager", "grafana", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -24,7 +24,11 @@ classifiers = [
   "Topic :: Software Development :: Build Tools",
   "Topic :: System :: Systems Administration",
 ]
-dependencies = ["PyYAML>=6.0", "tomli>=2.0; python_version < '3.11'"]
+dependencies = [
+  "PyYAML>=6.0",
+  "python-hcl2>=7.0,<9.0",
+  "tomli>=2.0; python_version < '3.11'",
+]
 
 [project.urls]
 Homepage = "https://readtheplan.dev"
@@ -51,6 +55,7 @@ chef = "readtheplan.adapters.chef:ChefAdapter"
 circleci = "readtheplan.adapters.pipelines:CircleCIAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
 cloud-init = "readtheplan.adapters.cloud_init:CloudInitAdapter"
+consul = "readtheplan.adapters.hashicorp:ConsulAdapter"
 docker-compose = "readtheplan.adapters.workloads:DockerComposeAdapter"
 dockerfile = "readtheplan.adapters.dockerfile:DockerfileAdapter"
 envoy = "readtheplan.adapters.envoy:EnvoyAdapter"
@@ -71,6 +76,7 @@ salt = "readtheplan.adapters.salt:SaltAdapter"
 systemd = "readtheplan.adapters.systemd:SystemdUnitAdapter"
 traefik = "readtheplan.adapters.traefik:TraefikAdapter"
 vagrant = "readtheplan.adapters.vagrant:VagrantAdapter"
+vault = "readtheplan.adapters.hashicorp:VaultAdapter"
 
 [project.entry-points."readtheplan.rules"]
 aws = "readtheplan.rules.aws"

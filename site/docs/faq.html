@@ -75,7 +75,9 @@
           <div style="margin-bottom:20px;padding:20px;border:1px solid var(--border);border-radius:8px">
             <h3 style="margin:0 0 8px;color:var(--accent);font-size:16px">pip install fails or takes forever</h3>
             <p style="margin:0;color:var(--muted);font-size:14px;line-height:1.6">
-              readtheplan is a pure-Python package with minimal dependencies (just PyYAML). If install is slow, try upgrading pip first:
+              readtheplan is a pure-Python package with minimal dependencies: PyYAML,
+              python-hcl2 for Vault/Consul configuration, and tomli on Python 3.10.
+              If install is slow, try upgrading pip first:
               <code>pip install --upgrade pip</code>. If you get permission errors, use a virtual environment or <code>pip install --user</code>.
               On some platforms you may need <code>pip3</code> instead of <code>pip</code>.
             </p>

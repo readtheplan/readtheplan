@@ -19,6 +19,7 @@ from readtheplan.mcp_server import (
     agent_gate_azure,
     agent_gate_cloud_init,
     agent_gate_cloudformation,
+    agent_gate_consul,
     agent_gate_dockerfile,
     agent_gate_envoy,
     agent_gate_grafana,
@@ -33,6 +34,7 @@ from readtheplan.mcp_server import (
     agent_gate_systemd,
     agent_gate_traefik,
     agent_gate_vagrant,
+    agent_gate_vault,
     agent_gate_workload,
     analyze_plan,
     create_server,
@@ -253,6 +255,22 @@ def test_agent_gate_traefik_supports_yaml_and_toml() -> None:
 def test_agent_gate_grafana_supports_ini_and_provisioning(fixture: str) -> None:
     result = agent_gate_grafana(str(FIXTURES / fixture), "soc2")
     assert result["adapter"] == "grafana"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize(
+    ("handler", "fixture", "adapter"),
+    [
+        (agent_gate_vault, "vault_risky.hcl", "vault"),
+        (agent_gate_consul, "consul_risky.hcl", "consul"),
+    ],
+)
+def test_agent_gate_hashicorp_supports_vault_and_consul(
+    handler, fixture: str, adapter: str
+) -> None:
+    result = handler(str(FIXTURES / fixture), "soc2")
+    assert result["adapter"] == adapter
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -1036,6 +1054,8 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_otel_collector" in tool_names
         assert "agent_gate_traefik" in tool_names
         assert "agent_gate_grafana" in tool_names
+        assert "agent_gate_vault" in tool_names
+        assert "agent_gate_consul" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1074,6 +1094,10 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(traefik_schema["properties"])
         grafana_schema = tools_by_name["agent_gate_grafana"]["inputSchema"]
         assert {"input_path", "framework"} <= set(grafana_schema["properties"])
+        vault_schema = tools_by_name["agent_gate_vault"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(vault_schema["properties"])
+        consul_schema = tools_by_name["agent_gate_consul"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(consul_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 

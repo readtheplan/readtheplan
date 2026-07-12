@@ -13,6 +13,7 @@ from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.dockerfile import DockerfileAdapter
 from readtheplan.adapters.envoy import EnvoyAdapter
 from readtheplan.adapters.grafana import GrafanaAdapter
+from readtheplan.adapters.hashicorp import ConsulAdapter, VaultAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
 from readtheplan.adapters.monitoring import AlertmanagerAdapter, PrometheusAdapter
@@ -92,6 +93,8 @@ register_adapter(CloudInitAdapter())
 register_adapter(DockerfileAdapter())
 register_adapter(EnvoyAdapter())
 register_adapter(GrafanaAdapter())
+register_adapter(VaultAdapter())
+register_adapter(ConsulAdapter())
 register_adapter(KubernetesAdapter())
 register_adapter(PrometheusAdapter())
 register_adapter(AlertmanagerAdapter())
@@ -136,6 +139,8 @@ __all__ = [
     "DockerfileAdapter",
     "EnvoyAdapter",
     "GrafanaAdapter",
+    "VaultAdapter",
+    "ConsulAdapter",
     "JenkinsAdapter",
     "GitHubActionsAdapter",
     "GitLabCIAdapter",
