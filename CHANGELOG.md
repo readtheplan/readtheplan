@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native HashiCorp Vault and Consul HCL/JSON gates across the CLI, generalized
+  Action, and local MCP server. Vault listeners, storage/HA, seals, plugins,
+  telemetry, service registration, and lockout join Consul quorum, ACL, TLS,
+  gossip, service mesh, discovery, checks, execution, and dynamic configuration
+  in the shared risk contract.
 - Native Grafana configuration gates across the CLI, generalized Action, and
   local MCP server. Server/auth/security INI plus provisioning YAML/JSON expose
   listeners, cookies, anonymous/proxy/federated auth, data sources, dashboards,

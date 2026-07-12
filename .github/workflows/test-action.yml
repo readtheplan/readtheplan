@@ -397,6 +397,58 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Vault configuration
+        id: vault
+        uses: ./
+        with:
+          tool: vault
+          input-file: tests/fixtures/vault_risky.hcl
+          framework: soc2
+
+      - name: Assert Vault outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.vault.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.vault.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.vault.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "24"
+          test "$RISK_COUNTS" = '{"dangerous":15,"irreversible":0,"review":9,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "vault"
+          assert payload["decision"] == "block"
+          PY
+
+      - name: Run action on Consul configuration
+        id: consul
+        uses: ./
+        with:
+          tool: consul
+          input-file: tests/fixtures/consul_risky.hcl
+          framework: soc2
+
+      - name: Assert Consul outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.consul.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.consul.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.consul.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "28"
+          test "$RISK_COUNTS" = '{"dangerous":19,"irreversible":0,"review":9,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "consul"
+          assert payload["decision"] == "block"
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

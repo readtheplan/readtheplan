@@ -429,6 +429,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     grafana.set_defaults(func=_grafana_gate)
 
+    vault = subparsers.add_parser(
+        "vault",
+        help="Emit the agent-gate decision for Vault server HCL/JSON configuration.",
+    )
+    vault.add_argument("--framework", help="Include checks from a compliance framework.")
+    vault.add_argument("input_file", help="Path to Vault server HCL or JSON configuration.")
+    vault.set_defaults(func=_hashicorp_gate)
+
+    consul = subparsers.add_parser(
+        "consul",
+        help="Emit the agent-gate decision for Consul agent HCL/JSON configuration.",
+    )
+    consul.add_argument("--framework", help="Include checks from a compliance framework.")
+    consul.add_argument("input_file", help="Path to Consul agent HCL or JSON configuration.")
+    consul.set_defaults(func=_hashicorp_gate)
+
     prometheus = subparsers.add_parser(
         "prometheus",
         help="Emit the agent-gate decision for Prometheus configuration YAML.",
@@ -1354,6 +1370,35 @@ def _grafana_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_grafana(data, catalog=catalog))
+
+
+def _hashicorp_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Vault or Consul HCL/JSON configuration."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.hashicorp import (
+        HashiCorpInputError,
+        analyze_hashicorp,
+        parse_hashicorp_config,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_hashicorp_config(source, args.command)
+    except HashiCorpInputError as exc:
+        print(f"Error: invalid {args.command} configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != args.command:
+        print(f"Error: input not recognized as {args.command} configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_hashicorp(data, catalog=catalog))
 
 
 def _otel_collector_gate(args: argparse.Namespace) -> int:

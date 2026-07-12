@@ -762,6 +762,64 @@ def agent_gate_grafana(
     return analyze_grafana(data, catalog=catalog)
 
 
+def _agent_gate_hashicorp(
+    input_path: str,
+    ecosystem: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Vault or Consul HCL/JSON configuration."""
+    from readtheplan.adapters.hashicorp import (
+        ConsulAdapter,
+        HashiCorpInputError,
+        VaultAdapter,
+        analyze_hashicorp,
+        parse_hashicorp_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read {ecosystem} input {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_hashicorp_config(source, ecosystem)
+    except HashiCorpInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid {ecosystem} configuration in {input_path}: {exc}",
+        ) from exc
+    adapter = VaultAdapter() if ecosystem == "vault" else ConsulAdapter()
+    if not adapter.can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Input is not recognized as {ecosystem} configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_hashicorp(data, catalog=catalog)
+
+
+def agent_gate_vault(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Vault server HCL/JSON configuration."""
+    return _agent_gate_hashicorp(input_path, "vault", framework)
+
+
+def agent_gate_consul(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Consul agent HCL/JSON configuration."""
+    return _agent_gate_hashicorp(input_path, "consul", framework)
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -1052,6 +1110,8 @@ def create_server() -> Any:
     agent_gate_otel_collector_handler = agent_gate_otel_collector
     agent_gate_traefik_handler = agent_gate_traefik
     agent_gate_grafana_handler = agent_gate_grafana
+    agent_gate_vault_handler = agent_gate_vault
+    agent_gate_consul_handler = agent_gate_consul
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1272,6 +1332,22 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return a gate for Grafana INI or provisioning YAML/JSON configuration."""
         return agent_gate_grafana_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_vault")
+    def _agent_gate_vault_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Vault server HCL/JSON configuration."""
+        return agent_gate_vault_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_consul")
+    def _agent_gate_consul_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Consul agent HCL/JSON configuration."""
+        return agent_gate_consul_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(
