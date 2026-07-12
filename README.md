@@ -96,6 +96,8 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
 | cloud-init | `readtheplan cloud-init user-data.yml` | Users, SSH, packages, files, commands, storage, power state, includes, scripts, and merged configuration |
 | systemd | `readtheplan systemd example.service` | Commands, identities, capabilities, credentials, sandboxing, filesystems, devices, sockets, timers, mounts, restart behavior, and merged-unit boundaries |
+| NGINX | `readtheplan nginx nginx.conf` | Includes, modules, listeners, TLS, upstreams, authentication, headers, filesystem exposure, and inherited configuration |
+| HAProxy | `readtheplan haproxy haproxy.cfg` | Runtime identity, listeners, TLS verification, upstreams, routing, traffic mutation, management APIs, Lua/program execution, and runtime state |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
@@ -115,6 +117,8 @@ cloud-init user-data is parsed without executing guest code; scripts, boothooks,
 commands, credentials, and first-boot system changes use the same gate contract.
 systemd units are parsed statically without invoking the manager; repeated/reset
 directives, activation targets, omitted hardening, and merged drop-ins remain visible.
+NGINX and HAProxy configurations are parsed without loading modules, includes,
+certificates, state files, Lua, or starting either proxy.
 Dockerfile analysis understands multi-stage builds, heredocs, BuildKit secret/SSH
 mounts, and runtime metadata without invoking Docker or sending a build context.
 

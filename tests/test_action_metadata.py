@@ -24,7 +24,7 @@ def test_action_uses_json_cli_contract() -> None:
         "cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|docker-compose|"
         "dockerfile|nomad|packer|salt|vagrant|"
-        "cloud-init|systemd"
+        "cloud-init|systemd|nginx|haproxy"
     ) in action
     assert "RESOLVED_INPUT_FILE" in action
     assert "p.get('risks', p.get('risk_counts', {}))" in action
@@ -73,6 +73,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/cloud_init_risky.yml" in workflow
     assert "tool: systemd" in workflow
     assert "input-file: tests/fixtures/systemd_risky.service" in workflow
+    assert "tool: nginx" in workflow
+    assert "input-file: tests/fixtures/nginx_risky.conf" in workflow
+    assert "tool: haproxy" in workflow
+    assert "input-file: tests/fixtures/haproxy_risky.cfg" in workflow
     assert "tool: dockerfile" in workflow
     assert "input-file: tests/fixtures/Dockerfile.risky" in workflow
     assert "tool: azure-pipelines" in workflow

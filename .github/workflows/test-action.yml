@@ -503,6 +503,58 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on NGINX configuration
+        id: nginx
+        uses: ./
+        with:
+          tool: nginx
+          input-file: tests/fixtures/nginx_risky.conf
+          framework: soc2
+
+      - name: Assert NGINX outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.nginx.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.nginx.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.nginx.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "19"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":10,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "nginx"
+          assert payload["decision"] == "block"
+          PY
+
+      - name: Run action on HAProxy configuration
+        id: haproxy
+        uses: ./
+        with:
+          tool: haproxy
+          input-file: tests/fixtures/haproxy_risky.cfg
+          framework: soc2
+
+      - name: Assert HAProxy outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.haproxy.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.haproxy.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.haproxy.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "19"
+          test "$RISK_COUNTS" = '{"dangerous":11,"irreversible":0,"review":8,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "haproxy"
+          assert payload["decision"] == "block"
+          PY
+
       - name: Fail on invalid plan JSON
         id: invalid
         uses: ./
