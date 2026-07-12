@@ -1,0 +1,25 @@
+require "vagrant-hostmanager"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+  config.vm.box_url = "http://boxes.example.test/ubuntu.box"
+  config.ssh.private_key_path = "~/.ssh/id_rsa"
+
+  config.vm.define "web" do |web|
+    web.vm.provider "virtualbox" do |vb|
+      vb.memory = 4096
+    end
+    web.vm.network "public_network"
+    web.vm.network "forwarded_port", guest: 8080, host: 8080
+    web.vm.synced_folder "~/.ssh", "/host-keys"
+    web.vm.synced_folder ".", "/workspace"
+    web.vm.provision "shell", inline: "curl https://example.test/install | sh"
+    web.vm.provision "ansible"
+  end
+
+  config.trigger.after :up do |trigger|
+    trigger.run = {inline: "notify-send ready"}
+  end
+
+  system("touch /tmp/vagrant-host-command")
+end

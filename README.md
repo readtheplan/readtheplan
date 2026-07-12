@@ -90,6 +90,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |
 | Packer | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and inspect limitations |
+| Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
@@ -103,6 +104,8 @@ scheduler decisions remain structured rather than being inferred from HCL text.
 Packer consumes saved output from `packer inspect` or
 `packer inspect -machine-readable`; it enumerates executable components without
 running a build and explicitly reminds reviewers that inspect is not validation.
+Vagrantfiles are scanned as Ruby source without evaluation; known DSL operations,
+host-command escape hatches, and merged configuration boundaries remain visible.
 
 ## How it looks
 

@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Vagrantfile gates across the CLI, generalized Action, and local MCP
+  server. Static scanning covers boxes, providers, provisioners, networks,
+  synced folders, triggers, private keys, host commands, and unresolved Ruby or
+  merged configuration without evaluating the Vagrantfile.
 - Native Salt SLS gates across the CLI, generalized Action, and local MCP server.
   Static YAML states receive module/function-aware risk; Jinja files receive a
   conservative fallback, and render-time execution, destructive states,
