@@ -1,0 +1,323 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: privileged-build
+  namespace: workflows
+spec:
+  serviceAccountName: workflow-admin
+  entrypoint: build
+  templates:
+    - name: build
+      script:
+        image: docker:latest
+        command: [sh]
+        source: docker build .
+        securityContext:
+          privileged: true
+        env:
+          - name: REGISTRY_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: registry
+                key: token
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowEventBinding
+metadata:
+  name: submit-on-event
+spec:
+  event:
+    selector: payload.repository == "platform"
+  submit:
+    workflowTemplateRef:
+      name: deploy
+---
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: public-webhook
+spec:
+  template:
+    serviceAccountName: event-watcher
+  webhook:
+    deploy:
+      port: "12000"
+      endpoint: /deploy
+      method: POST
+  kafka:
+    builds:
+      url: kafka.example.com:9092
+      tls:
+        insecureSkipVerify: true
+      sasl:
+        userSecret:
+          name: kafka
+          key: username
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: deploy
+spec:
+  template:
+    serviceAccountName: workflow-admin
+  dependencies:
+    - name: webhook
+      eventSourceName: public-webhook
+      eventName: deploy
+  triggers:
+    - template:
+        name: workflow
+        k8s:
+          operation: create
+          parameters:
+            - src:
+                dependencyName: webhook
+                dataKey: body.image
+              dest: spec.arguments.parameters.0.value
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: deploy-
+---
+apiVersion: argoproj.io/v1alpha1
+kind: EventBus
+metadata:
+  name: production
+spec:
+  jetstream:
+    persistence:
+      volumeSize: 20Gi
+    accessSecret:
+      name: eventbus-auth
+      key: token
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: public
+spec:
+  controllerName: example.net/public-gateway
+  parametersRef:
+    group: infrastructure.example.net
+    kind: GatewayConfig
+    name: public
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shared
+  namespace: gateways
+spec:
+  gatewayClassName: public
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: wildcard-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: checkout
+  namespace: applications
+spec:
+  parentRefs:
+    - name: shared
+      namespace: gateways
+  rules:
+    - filters:
+        - type: RequestMirror
+          requestMirror:
+            backendRef:
+              name: audit
+              namespace: security
+              port: 8080
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: checkout
+          namespace: applications
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-shared-secrets
+  namespace: security
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: gateways
+  to:
+    - group: ""
+      kind: Secret
+---
+apiVersion: gateway.networking.k8s.io/v1alpha3
+kind: BackendTLSPolicy
+metadata:
+  name: checkout
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: checkout
+  validation:
+    hostname: checkout.applications.svc
+    wellKnownCACertificates: System
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard
+  namespace: gateways
+spec:
+  secretName: wildcard-tls
+  dnsNames: ["*.example.com"]
+  isCA: true
+  usages: ["server auth", "cert sign"]
+  privateKey:
+    rotationPolicy: Never
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-account
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare
+              key: token
+      - http01:
+          ingress: {}
+---
+apiVersion: cert-manager.io/v1
+kind: CertificateRequest
+metadata:
+  name: checkout
+spec:
+  request: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0=
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: organization-trust
+spec:
+  sources:
+    - useDefaultCAs: true
+    - secret:
+        name: private-root
+        key: ca.crt
+  target:
+    configMap:
+      key: trust.pem
+    namespaceSelector:
+      matchLabels: {}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: production-vault
+spec:
+  provider:
+    vault:
+      server: https://vault.example.com
+      path: secret
+      auth:
+        tokenSecretRef:
+          name: vault-token
+          namespace: external-secrets
+          key: token
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: database
+  namespace: applications
+spec:
+  refreshPolicy: Periodic
+  refreshInterval: 1m
+  secretStoreRef:
+    name: production-vault
+    kind: ClusterSecretStore
+  dataFrom:
+    - extract:
+        key: production/database
+  target:
+    name: database
+    creationPolicy: Owner
+    deletionPolicy: Delete
+    template:
+      engineVersion: v2
+      data:
+        connection: "postgres://{{ .username }}:{{ .password }}@database"
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterExternalSecret
+metadata:
+  name: shared-registry
+spec:
+  namespaceSelectors:
+    - matchLabels: {}
+  externalSecretSpec:
+    secretStoreRef:
+      name: production-vault
+      kind: ClusterSecretStore
+    dataFrom:
+      - extract:
+          key: shared/registry
+---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: push-database
+  namespace: applications
+spec:
+  updatePolicy: Replace
+  deletionPolicy: Delete
+  secretStoreRefs:
+    - name: production-vault
+      kind: ClusterSecretStore
+  selector:
+    secret:
+      name: database
+  dataTo:
+    - match:
+        regexp: ".*"
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: ClusterGenerator
+metadata:
+  name: deployment-token
+spec:
+  kind: Password
+  generator:
+    passwordSpec:
+      length: 32

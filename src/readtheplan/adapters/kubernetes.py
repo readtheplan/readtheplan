@@ -54,6 +54,47 @@ _ARGO_KIND_MAP: dict[str, str] = {
     "Rollout": "kubernetes_deployment",
     "AnalysisTemplate": "kubernetes_argocd_analysis_template",
     "ClusterAnalysisTemplate": "kubernetes_argocd_cluster_analysis_template",
+    "Workflow": "kubernetes_argo_workflow",
+    "WorkflowTemplate": "kubernetes_argo_workflow_template",
+    "ClusterWorkflowTemplate": "kubernetes_argo_cluster_workflow_template",
+    "CronWorkflow": "kubernetes_argo_cron_workflow",
+    "WorkflowEventBinding": "kubernetes_argo_workflow_event_binding",
+    "WorkflowTaskSet": "kubernetes_argo_workflow_task_set",
+    "EventSource": "kubernetes_argo_event_source",
+    "Sensor": "kubernetes_argo_sensor",
+    "EventBus": "kubernetes_argo_event_bus",
+}
+
+_GATEWAY_API_KIND_MAP: dict[str, str] = {
+    "GatewayClass": "kubernetes_gateway_class",
+    "Gateway": "kubernetes_gateway",
+    "HTTPRoute": "kubernetes_gateway_http_route",
+    "GRPCRoute": "kubernetes_gateway_grpc_route",
+    "TLSRoute": "kubernetes_gateway_tls_route",
+    "TCPRoute": "kubernetes_gateway_tcp_route",
+    "UDPRoute": "kubernetes_gateway_udp_route",
+    "ReferenceGrant": "kubernetes_gateway_reference_grant",
+    "BackendTLSPolicy": "kubernetes_gateway_backend_tls_policy",
+    "ListenerSet": "kubernetes_gateway_listener_set",
+}
+
+_CERT_MANAGER_KIND_MAP: dict[tuple[str, str], str] = {
+    ("cert-manager.io", "Certificate"): "kubernetes_cert_manager_certificate",
+    ("cert-manager.io", "Issuer"): "kubernetes_cert_manager_issuer",
+    ("cert-manager.io", "ClusterIssuer"): "kubernetes_cert_manager_cluster_issuer",
+    ("cert-manager.io", "CertificateRequest"): "kubernetes_cert_manager_certificate_request",
+    ("acme.cert-manager.io", "Order"): "kubernetes_cert_manager_acme_order",
+    ("acme.cert-manager.io", "Challenge"): "kubernetes_cert_manager_acme_challenge",
+    ("trust.cert-manager.io", "Bundle"): "kubernetes_cert_manager_trust_bundle",
+}
+
+_EXTERNAL_SECRETS_KIND_MAP: dict[str, str] = {
+    "ExternalSecret": "kubernetes_external_secrets_external_secret",
+    "SecretStore": "kubernetes_external_secrets_secret_store",
+    "ClusterSecretStore": "kubernetes_external_secrets_cluster_secret_store",
+    "ClusterExternalSecret": "kubernetes_external_secrets_cluster_external_secret",
+    "PushSecret": "kubernetes_external_secrets_push_secret",
+    "ClusterPushSecret": "kubernetes_external_secrets_cluster_push_secret",
 }
 
 _FLUX_KIND_MAP: dict[tuple[str, str], str] = {
@@ -117,6 +158,14 @@ _CLUSTER_SCOPED_KINDS = frozenset(
         "ClusterTask",
         "ClusterTriggerBinding",
         "ClusterInterceptor",
+        "ClusterWorkflowTemplate",
+        "GatewayClass",
+        "ClusterIssuer",
+        "Bundle",
+        "ClusterSecretStore",
+        "ClusterExternalSecret",
+        "ClusterPushSecret",
+        "ClusterGenerator",
     }
 )
 
@@ -438,6 +487,22 @@ class KubernetesAdapter(BaseAdapter):
         tekton_type = _TEKTON_KIND_MAP.get((api_group, kind)) if separator else None
         if tekton_type:
             return tekton_type
+        if separator and api_group in {
+            "gateway.networking.k8s.io",
+            "gateway.networking.x-k8s.io",
+        }:
+            gateway_type = _GATEWAY_API_KIND_MAP.get(kind)
+            if gateway_type:
+                return gateway_type
+        cert_manager_type = _CERT_MANAGER_KIND_MAP.get((api_group, kind)) if separator else None
+        if cert_manager_type:
+            return cert_manager_type
+        if separator and api_group == "external-secrets.io":
+            external_secrets_type = _EXTERNAL_SECRETS_KIND_MAP.get(kind)
+            if external_secrets_type:
+                return external_secrets_type
+        if separator and api_group == "generators.external-secrets.io":
+            return "kubernetes_external_secrets_generator"
         mapped = _K8S_KIND_MAP.get(kind)
         if mapped:
             return mapped
