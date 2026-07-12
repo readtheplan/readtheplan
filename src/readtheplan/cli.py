@@ -300,6 +300,22 @@ def _build_parser() -> argparse.ArgumentParser:
     circleci.add_argument("input_file", help="Path to .circleci/config.yml.")
     circleci.set_defaults(func=_pipeline_gate)
 
+    docker_compose = subparsers.add_parser(
+        "docker-compose",
+        help="Emit the agent-gate decision for a Docker Compose configuration.",
+    )
+    docker_compose.add_argument("--framework", help="Include checks from a compliance framework.")
+    docker_compose.add_argument("input_file", help="Path to a Compose YAML file.")
+    docker_compose.set_defaults(func=_workload_gate)
+
+    nomad = subparsers.add_parser(
+        "nomad",
+        help="Emit the agent-gate decision for a Nomad job plan API response.",
+    )
+    nomad.add_argument("--framework", help="Include checks from a compliance framework.")
+    nomad.add_argument("input_file", help="Path to a Nomad job plan response JSON file.")
+    nomad.set_defaults(func=_workload_gate)
+
     verify = subparsers.add_parser(
         "verify",
         help="Verify a signed rtp-evidence-v1 envelope.",
@@ -645,8 +661,7 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
     if adapter is None or adapter.adapter_name != "cloudformation":
         detected = adapter.adapter_name if adapter else "none"
         print(
-            "Error: input not recognized as a supported IaC format "
-            f"(detected: {detected})",
+            f"Error: input not recognized as a supported IaC format (detected: {detected})",
             file=sys.stderr,
         )
         return 1
@@ -694,8 +709,7 @@ def _kubernetes_gate(args: argparse.Namespace) -> int:
     if adapter is None or adapter.adapter_name != "kubernetes":
         detected = adapter.adapter_name if adapter else "none"
         print(
-            "Error: input not recognized as a supported IaC format "
-            f"(detected: {detected})",
+            f"Error: input not recognized as a supported IaC format (detected: {detected})",
             file=sys.stderr,
         )
         return 1
@@ -909,6 +923,44 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_pipeline(adapter, data, catalog=catalog))
+
+
+def _workload_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Compose and Nomad artifacts."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.workloads import (
+        DockerComposeAdapter,
+        NomadPlanAdapter,
+        WorkloadInputError,
+        analyze_workload,
+        parse_docker_compose,
+        parse_nomad_plan,
+    )
+
+    adapters = {
+        "docker-compose": (DockerComposeAdapter, parse_docker_compose),
+        "nomad": (NomadPlanAdapter, parse_nomad_plan),
+    }
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    expected, parser = adapters[args.command]
+    try:
+        data = parser(source)
+    except WorkloadInputError as exc:
+        print(f"Error: invalid {args.command} input: {exc}", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    if adapter is None or not isinstance(adapter, expected):
+        print(f"Error: input not recognized as {args.command} configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_workload(adapter, data, catalog=catalog))
 
 
 def _adapter_catalog(framework: str | None) -> ControlCatalog | None:

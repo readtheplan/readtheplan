@@ -1,0 +1,45 @@
+{
+  "Warnings": "",
+  "JobModifyIndex": 14,
+  "Diff": {
+    "Type": "Edited",
+    "ID": "api",
+    "Fields": [],
+    "Objects": [],
+    "TaskGroups": [
+      {
+        "Type": "Edited",
+        "Name": "web",
+        "Fields": [],
+        "Objects": [],
+        "Tasks": [
+          {
+            "Type": "Edited",
+            "Name": "server",
+            "Fields": [
+              {"Type": "Edited", "Name": "Driver", "Old": "docker", "New": "raw_exec"},
+              {"Type": "Edited", "Name": "Config[image]", "Old": "api:v1", "New": "api:latest"},
+              {"Type": "Edited", "Name": "Config[command]", "Old": "serve", "New": "deploy"}
+            ],
+            "Objects": []
+          }
+        ]
+      }
+    ]
+  },
+  "FailedTGAllocs": {
+    "web": {"NodesEvaluated": 1, "NodesAvailable": {"dc1": 0}}
+  },
+  "Annotations": {
+    "DesiredTGUpdates": {
+      "web": {
+        "DestructiveUpdate": 2,
+        "InPlaceUpdate": 0,
+        "Stop": 1,
+        "Migrate": 0,
+        "Place": 2,
+        "Ignore": 0
+      }
+    }
+  }
+}

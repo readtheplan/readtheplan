@@ -20,6 +20,7 @@ from readtheplan.mcp_server import (
     agent_gate_kubernetes,
     agent_gate_pipeline,
     agent_gate_pulumi,
+    agent_gate_workload,
     analyze_plan,
     create_server,
 )
@@ -125,6 +126,30 @@ def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
     with pytest.raises(MCPToolInputError) as exc_info:
         agent_gate_pipeline("pipeline.yml", "unknown")
 
+    assert exc_info.value.code == "INVALID_INPUT"
+
+
+@pytest.mark.parametrize(
+    ("ecosystem", "fixture", "adapter"),
+    [
+        ("docker-compose", "docker_compose_risky.yml", "docker-compose"),
+        ("nomad", "nomad_plan_risky.json", "nomad"),
+    ],
+)
+def test_agent_gate_workload_supports_framework_checks(
+    ecosystem: str,
+    fixture: str,
+    adapter: str,
+) -> None:
+    result = agent_gate_workload(str(FIXTURES / fixture), ecosystem, "soc2")
+    assert result["adapter"] == adapter
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_workload_rejects_unknown_ecosystem() -> None:
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_workload("workload.yml", "unknown")
     assert exc_info.value.code == "INVALID_INPUT"
 
 
@@ -529,6 +554,19 @@ def test_agent_gate_pipeline_rejects_path_outside_root(monkeypatch, tmp_path) ->
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_workload_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "compose.yml"
+    outside.write_text("services:\n  api:\n    image: api:latest\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_workload(str(outside), "docker-compose")
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_kubernetes_allows_path_inside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -697,6 +735,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_kubernetes" in tool_names
         assert "agent_gate_pulumi" in tool_names
         assert "agent_gate_pipeline" in tool_names
+        assert "agent_gate_workload" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
             "agent_gate_azure",
@@ -706,6 +745,8 @@ def test_stdio_server_tools_list() -> None:
             assert "framework" in tools_by_name[tool_name]["inputSchema"]["properties"]
         pipeline_schema = tools_by_name["agent_gate_pipeline"]["inputSchema"]
         assert {"input_path", "ecosystem", "framework"} <= set(pipeline_schema["properties"])
+        workload_schema = tools_by_name["agent_gate_workload"]["inputSchema"]
+        assert {"input_path", "ecosystem", "framework"} <= set(workload_schema["properties"])
 
         # --- tools/call: analyze_plan ---
         call_req = {

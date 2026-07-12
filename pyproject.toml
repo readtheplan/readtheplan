@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "readtheplan"
 version = "0.4.0"
-description = "Local infrastructure risk analysis for Terraform, Pulumi, Azure, Kubernetes, Ansible, Jenkins, Chef, Puppet, and CloudFormation."
+description = "Local infrastructure risk analysis for Terraform, Kubernetes, cloud plans, CI pipelines, Docker Compose, and Nomad."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "pulumi", "azure", "bicep", "ansible", "jenkins", "chef", "puppet", "kubernetes", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "pulumi", "azure", "bicep", "ansible", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "nomad", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -43,9 +43,14 @@ readtheplan = "readtheplan.cli:main"
 ansible = "readtheplan.adapters.ansible:AnsibleAdapter"
 azure = "readtheplan.adapters.azure:AzureWhatIfAdapter"
 chef = "readtheplan.adapters.chef:ChefAdapter"
+circleci = "readtheplan.adapters.pipelines:CircleCIAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
+docker-compose = "readtheplan.adapters.workloads:DockerComposeAdapter"
+github-actions = "readtheplan.adapters.pipelines:GitHubActionsAdapter"
+gitlab-ci = "readtheplan.adapters.pipelines:GitLabCIAdapter"
 jenkins = "readtheplan.adapters.jenkins:JenkinsAdapter"
 kubernetes = "readtheplan.adapters.kubernetes:KubernetesAdapter"
+nomad = "readtheplan.adapters.workloads:NomadPlanAdapter"
 pulumi = "readtheplan.adapters.pulumi:PulumiAdapter"
 puppet = "readtheplan.adapters.puppet:PuppetAdapter"
 

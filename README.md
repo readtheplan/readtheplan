@@ -11,7 +11,7 @@
 > [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review cloud plans, Kubernetes manifests, configuration-management code, and GitHub Actions, GitLab CI, CircleCI, or Jenkins pipelines through one deterministic local risk gate. Runs locally — no uploads, no accounts, no backend.
+**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review cloud plans, Kubernetes manifests, Docker Compose workloads, Nomad scheduler plans, configuration-management code, and CI pipelines through one deterministic local risk gate. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
 pip install readtheplan && readtheplan analyze plan.json
@@ -86,11 +86,16 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | GitHub Actions | `readtheplan github-actions workflow.yml` | Token permissions, action pinning, secrets, environments, and run steps |
 | GitLab CI | `readtheplan gitlab-ci .gitlab-ci.yml` | Includes, tokens, downstream pipelines, environments, and scripts |
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |
+| Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
+| Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
 The CI workflow adapters preserve GitHub's YAML `on` key correctly and require
 immutable references for reusable third-party code.
+Docker Compose parsing follows Docker's documented trust boundary without resolving
+external files. Nomad consumes the JSON response from the job plan HTTP API so
+scheduler decisions remain structured rather than being inferred from HCL text.
 
 ## How it looks
 
