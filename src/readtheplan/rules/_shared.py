@@ -532,7 +532,18 @@ def _contains_public_principal(value: Any) -> bool:
 # ── Import provider modules to trigger @register_rule decorators ──────
 # Placed at the end so ALL symbols (RuleResult, _after_value, etc.) are
 # defined before provider modules try to import them.
-from readtheplan.rules import aws, azure, cloudflare, datadog, gcp, github, gitlab, k8s, vault  # noqa: E402, F401, I001
+from readtheplan.rules import (  # noqa: E402, F401, I001
+    aws,
+    azure,
+    cloudflare,
+    datadog,
+    gcp,
+    github,
+    gitlab,
+    grafana,
+    k8s,
+    vault,
+)
 
 
 # Approved evolution rules are kept outside the installed package.  A Python
