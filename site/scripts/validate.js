@@ -146,6 +146,10 @@ for (const token of [
   "payment=()",
   "usb=()",
   "serial=()",
+  "canonicalHeader",
+  "canonicalFooter",
+  "__READTHEPLAN_VERSION__",
+  "pyproject.toml",
 ]) {
   requireIncludes(buildScript, token, "security header");
 }

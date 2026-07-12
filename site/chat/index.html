@@ -78,6 +78,8 @@
     }
     .suggestion:hover { border-color: var(--matrix-green); color: var(--matrix-green); }
     .error-msg { color: #ff5555; font-size: 0.8rem; text-align: center; }
+    .privacy-notice { color: var(--matrix-fg-dim); font-size: 0.75rem; text-align: center; margin: 0.6rem 0 0; }
+    .error-msg button { margin-left: 0.5rem; color: inherit; background: transparent; border: 1px solid currentColor; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -86,6 +88,7 @@
       <h1>⚡ readtheplan AI</h1>
       <p>Ask me about Terraform risk analysis, compliance, pricing, or getting started</p>
     </div>
+    <p class="privacy-notice" id="privacyNoticeText">Messages are processed by DeepSeek. Do not share Terraform plans, credentials, or other sensitive data.</p>
     <div class="chat-messages" id="messages">
       <div class="msg agent">
         <p>Hey! I'm the readtheplan sales agent. I can help you:</p>
@@ -107,7 +110,7 @@
              onkeydown="if(event.key==='Enter')send()" />
       <button id="sendBtn" onclick="send()">Send</button>
     </div>
-    <div class="error-msg" id="error" style="display:none"></div>
+    <div class="error-msg" id="error" role="status" aria-live="polite" style="display:none"></div>
   </div>
 
 <script>
@@ -119,18 +122,32 @@ function ask(text) {
   send();
 }
 
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+
+function renderSafeMarkdown(text) {
+  let safe = escapeHtml(text);
+  safe = safe.replace(/```(?:\w*)\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  safe = safe.replace(/`([^`]+)`/g, '<code>$1</code>');
+  safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, href) => {
+    if (!/^https?:\/\//i.test(href)) return label;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
+  return safe.replace(/\n/g, '<br>');
+}
+
 function addMsg(role, text) {
   const div = document.createElement('div');
   div.className = 'msg ' + role;
   if (role === 'agent') {
-    // Convert markdown-like formatting
-    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    text = text.replace(/\n/g, '<br>');
-    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    div.innerHTML = renderSafeMarkdown(text);
+  } else {
+    div.textContent = text;
   }
-  div.innerHTML = text;
   document.getElementById('messages').appendChild(div);
   document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 }
@@ -171,15 +188,27 @@ async function send() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: history.slice(-10) })
     });
-    if (!resp.ok) throw new Error(`API ${resp.status}`);
-    const data = await resp.json();
+    const isJson = (resp.headers.get('Content-Type') || '').includes('application/json');
+    const data = isJson ? await resp.json() : {};
+    if (!resp.ok) {
+      const retryAfter = resp.headers.get('Retry-After');
+      const message = resp.status === 429
+        ? `Too many requests. Try again${retryAfter ? ` in ${retryAfter} seconds` : ' shortly'}.`
+        : (data.reply || data.error || `The AI service is temporarily unavailable (HTTP ${resp.status}).`);
+      throw new Error(message);
+    }
     hideTyping();
     const reply = data.reply || "Sorry, I couldn't process that. Try rephrasing?";
     addMsg('agent', reply);
     history.push({ role: 'assistant', content: reply });
   } catch (e) {
     hideTyping();
-    err.textContent = 'Connection error — try again in a moment.';
+    err.textContent = e.message || 'Connection error — try again in a moment.';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Retry';
+    retry.onclick = () => { input.value = text; send(); };
+    err.appendChild(retry);
     err.style.display = 'block';
     // Remove the user message from history so retry works
     history.pop();

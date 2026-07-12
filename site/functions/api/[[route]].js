@@ -11,10 +11,10 @@ const CORS_HEADERS = {
   "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
 };
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS, ...extraHeaders },
   });
 }
 
@@ -27,6 +27,12 @@ async function fetchData(request, path) {
 
 export async function onRequest(context) {
   const { request } = context;
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: { ...CORS_HEADERS, Allow: "GET, HEAD, OPTIONS" } });
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ error: "method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
+  }
   let route = context.params.route || [];
   if (!Array.isArray(route)) route = [route];
 
@@ -59,10 +65,10 @@ export async function onRequest(context) {
   if (route[0] === "v1" && route[1] === "version") {
     const idx = await fetchData(request, "/data/index.json");
     if (!idx) {
-      return json({ version: "0.3.0", service: "readtheplan", data_available: false });
+      return json({ version: null, service: "readtheplan", data_available: false });
     }
     return json({
-      version: idx.version || "0.3.0",
+      version: idx.version || null,
       frameworks: Object.keys(idx.frameworks || {}).length,
       controls_total: Object.values(idx.frameworks || {})
         .reduce((sum, f) => sum + (f.control_count || 0), 0),

@@ -21,17 +21,34 @@ jobs:
             local label="$1"
             local url="$2"
             local body="$3"
+            local expected="${4:-200}"
             local code
             code=$(curl -sS -L --max-time 20 -o "$body" -w "%{http_code}" "$url")
             echo "$label status=$code url=$url"
-            if [ "$code" != "200" ]; then
-              echo "❌ $label failed: expected 200 got $code ($url)" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$code" != "$expected" ]; then
+              echo "❌ $label failed: expected $expected got $code ($url)" | tee -a "$GITHUB_STEP_SUMMARY"
               return 1
             fi
           }
 
           probe "apex" "https://readtheplan.dev" "/tmp/apex.html"
           probe "www" "https://www.readtheplan.dev" "/tmp/www.html"
+          probe "health function" "https://readtheplan.dev/health" "/tmp/health.json"
+          probe "version function" "https://readtheplan.dev/api/v1/version" "/tmp/version.json"
+
+          chat_code=$(curl -sS --max-time 20 -o /tmp/chat-options.txt -w "%{http_code}" -X OPTIONS https://readtheplan.dev/api/chat)
+          if [ "$chat_code" != "204" ]; then
+            echo "❌ chat function failed: expected 204 got $chat_code" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          for path in ("/tmp/health.json", "/tmp/version.json"):
+              with open(path, encoding="utf-8") as handle:
+                  payload = json.load(handle)
+              assert payload.get("version"), f"missing version in {path}"
+          PY
 
           if ! grep -qi "readtheplan" /tmp/apex.html; then
             echo "❌ apex content check failed: missing 'readtheplan' marker" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -43,4 +60,5 @@ jobs:
             echo "- apex: 200"
             echo "- www: 200"
             echo "- content marker: present"
+            echo "- Pages Functions: health, version, and chat routes live"
           } >> "$GITHUB_STEP_SUMMARY"

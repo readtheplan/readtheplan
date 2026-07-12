@@ -4,11 +4,15 @@
 import json
 from pathlib import Path
 
+import tomllib
 import yaml
 
 SRC = Path("src/readtheplan/data/controls")
 OUT = Path("site/data")
 OUT.mkdir(parents=True, exist_ok=True)
+
+with open("pyproject.toml", "rb") as f:
+    VERSION = tomllib.load(f)["project"]["version"]
 
 # Convert each framework.
 frameworks = {}
@@ -28,7 +32,7 @@ for yf in sorted(SRC.glob("*.yaml")):
 
 # Write framework index.
 index = {
-    "version": "0.3.0",
+    "version": VERSION,
     "frameworks": frameworks,
     "endpoints": {
         "list": "/api/v1/controls",

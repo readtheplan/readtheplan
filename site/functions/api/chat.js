@@ -32,12 +32,13 @@ It also maps changes to compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS,
 
 ### Products
 1. **OSS CLI** — Free, MIT licensed. \`pip install readtheplan\`. Run locally or in CI. Python 3.10+.
-2. **GitHub Action** — Free. \`uses: readtheplan/readtheplan@v1\`. Adds risk reports to PRs.
-3. **Enterprise** — Signed attestations, audit trail, custom rules, SSO. Contact for pricing.
+2. **GitHub Action** — Free. \`uses: readtheplan/readtheplan@v0.3.0\`. Adds risk reports to PRs.
+3. **Enterprise support** — Custom rules, framework mapping, onboarding, and negotiated support. Contact for scope and pricing.
 
 ### Key Differentiators
 - Runs offline — plan JSON is processed locally and never uploaded (this chat agent is the exception: it sends chat messages to an AI API)
-- Works with existing Terraform workflow — just pipe \`terraform plan -out=/dev/stdout\` to readtheplan
+- Works with existing Terraform workflow — generate plan JSON with \`terraform show -json tfplan > plan.json\`, then run \`readtheplan analyze plan.json\`
+- Resource-aware rules currently cover AWS, GCP, Azure, and Kubernetes; other Terraform providers use action-based fallback classification
 - Evidence envelopes — cryptographically verifiable analysis outputs for auditors
 - Agent gate — coding agents (Claude Code, Codex, etc.) can use readtheplan to validate their own Terraform changes before applying
 
@@ -65,18 +66,20 @@ It also maps changes to compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS,
 \`\`\`bash
 pip install readtheplan
 cd your-terraform-project
-terraform plan -out=/dev/stdout | readtheplan
+terraform plan -out=tfplan
+terraform show -json tfplan > plan.json
+readtheplan analyze plan.json
 \`\`\`
 
 ## GitHub Action
 \`\`\`yaml
-- uses: readtheplan/readtheplan@v1
+- uses: readtheplan/readtheplan@v0.3.0
   with:
-    plan_file: tfplan.json
+    plan-file: plan.json
 \`\`\`
 
 ## Default Responses
-- "How much does it cost?" → "The CLI and GitHub Action are free and MIT licensed. Enterprise (signed attestations, SSO, custom rules) is coming — email info@readtheplan.dev for early access."
+- "How much does it cost?" → "The CLI and GitHub Action are free and MIT licensed. Enterprise support is custom-scoped — email info@readtheplan.dev to discuss it."
 - "Is my data safe?" → "Absolutely. readtheplan runs offline — your Terraform plan JSON never leaves your machine or CI runner. No telemetry, no uploads."
 - "Does it support AWS / Azure / GCP?" → "Yes — readtheplan is cloud-agnostic. It reads Terraform plan JSON and classifies resources from any provider Terraform supports."
 - "Can it prevent bad deploys?" → "readtheplan is an analysis tool, not a policy engine. It tells you what's dangerous — you decide whether to proceed. Many teams use it in CI to flag risky changes before merge."

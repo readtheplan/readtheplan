@@ -1,4 +1,9 @@
 export async function onRequest(context) {
+  let version = "unavailable";
+  try {
+    const response = await fetch(new URL("/data/index.json", context.request.url));
+    if (response.ok) version = (await response.json()).version || version;
+  } catch (_) { /* data not yet deployed */ }
   const headers = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "https://readtheplan.dev",
@@ -14,7 +19,7 @@ export async function onRequest(context) {
     openapi: "3.0.3",
     info: {
       title: "readtheplan API",
-      version: "0.3.0",
+      version,
       description: "Static data API serving compliance catalogs, demo plans, and version info."
     },
     servers: [{ url: "https://readtheplan.dev" }],

@@ -203,6 +203,47 @@ pre {
   backdrop-filter: blur(12px);
 }
 
+/* Canonical build-injected chrome shared by every public route. */
+.site-nav {
+  width: 100%;
+  padding: 14px max(16px, calc((100vw - 1180px) / 2));
+}
+
+.site-nav .container,
+.site-footer .container {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.site-footer {
+  position: relative;
+  z-index: 2;
+  margin-top: auto;
+  padding: 28px 16px;
+  border-top: 1px solid rgba(0, 255, 65, 0.16);
+  color: var(--matrix-fg-dim);
+  font-size: 0.8rem;
+}
+
+.site-footer .footer-inner,
+.site-footer .footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.site-footer .footer-links { justify-content: flex-end; }
+
+@media (max-width: 720px) {
+  .site-nav .nav-shell { align-items: flex-start; border-radius: 18px; }
+  .site-nav .nav-version { display: none; }
+  .site-nav .nav-links { gap: 4px; }
+  .site-nav .nav-links a { padding-inline: 7px; }
+}
+
 .nav-shell {
   display: flex;
   align-items: center;

@@ -35,7 +35,7 @@
         <a href="/demo/">Demo</a>
         <a href="/playground/">Playground</a>
       </nav>
-      <div class="version-cell gc">v0.3.0</div>
+      <div class="version-cell gc">v__READTHEPLAN_VERSION__</div>
     </header>
 
     <main class="workspace">
@@ -66,8 +66,8 @@
           <input type="file" id="fileInput" accept=".json" style="display:none" />
           <div style="text-align:center;margin-top:16px">
             <p style="color:var(--muted);font-size:13px;margin-bottom:8px">No plan handy? Load a sample generated against real emulated AWS (Floci):</p>
-            <button id="loadCreate" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">📦 Create plan (4 resources)</button>
-            <button id="loadDestroy" style="background:var(--surface);color:#ef4444;border:1px solid #ef4444;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">💣 Destroy plan (2 resources)</button>
+            <button id="loadCreate" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">📦 Create plan (7 resources)</button>
+            <button id="loadDestroy" style="background:var(--surface);color:#ef4444;border:1px solid #ef4444;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">💣 Destroy plan (7 resources)</button>
             <p id="sampleMeta" style="color:var(--muted);font-size:12px;margin-top:8px">Sample source: Floci emulated AWS</p>
           </div>
           <div style="text-align:center;margin-top:8px">
@@ -161,7 +161,7 @@
 
       // ── File handling ──
       function handleFile(file) {
-        if (!file.name.endsWith(".json")) {
+        if (!file.name.toLowerCase().endsWith(".json")) {
           showError("Please drop a .json file (Terraform plan JSON).");
           return;
         }
@@ -220,15 +220,16 @@
           return;
         }
 
+        const hasControls = changes.some(c => (c.controls || []).length > 0);
         let html = `<table class="plan-table"><thead><tr>
           <th>Resource</th><th>Type</th><th>Actions</th><th>Risk</th><th>Explanation</th>
-          ${changes[0]?.controls?.length ? '<th>Controls</th>' : ''}
+          ${hasControls ? '<th>Controls</th>' : ''}
         </tr></thead><tbody>`;
 
         for (const c of changes) {
           const actions = c.actions.map(a => `<span class="action-tag">${esc(a)}</span>`).join(" ");
-          const controls = c.controls?.length
-            ? `<td><div class="controls-list">${c.controls.map(ctrl => `<span title="${esc(ctrl.title)}">${esc(ctrl.id)}</span>`).join(" ")}</div></td>`
+          const controls = hasControls
+            ? `<td><div class="controls-list">${(c.controls || []).map(ctrl => `<span title="${esc(ctrl.title)}">${esc(ctrl.id)}</span>`).join(" ")}</div></td>`
             : "";
           html += `<tr>
             <td><code style="color:var(--text)">${esc(c.address)}</code></td>
@@ -274,10 +275,10 @@
         }
       }
       document.getElementById("loadCreate").addEventListener("click", () =>
-        loadSamplePlan("floci-spike-create-plan.json", "Create plan — 5 resources (Moto)")
+        loadSamplePlan("floci-spike-create-plan.json", "Create plan - 7 resources (Floci)")
       );
       document.getElementById("loadDestroy").addEventListener("click", () =>
-        loadSamplePlan("floci-spike-destroy-plan.json", "Destroy plan — 5 resources (Moto)")
+        loadSamplePlan("floci-spike-destroy-plan.json", "Destroy plan - 7 resources (Floci)")
       );
 
       // Surface sample freshness metadata when available.

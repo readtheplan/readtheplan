@@ -5,6 +5,26 @@ const { execSync } = require("node:child_process");
 const root = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(root, "..");
 
+function projectVersion() {
+  const pyproject = fs.readFileSync(path.join(repoRoot, "pyproject.toml"), "utf8");
+  const match = pyproject.match(/^version\s*=\s*"([^"]+)"/m);
+  if (!match) throw new Error("Could not read project version from pyproject.toml");
+  return match[1];
+}
+
+const version = projectVersion();
+const canonicalHeader = `<!-- site-header:start -->
+<nav class="navbar site-nav" aria-label="Primary navigation">
+  <div class="container nav-shell">
+    <a class="brand" href="/" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span><span class="nav-version">v${version}</span></a>
+    <div class="nav-links"><a href="/docs/">Docs</a><a href="/playground/">Playground</a><a href="/pricing/">Pricing</a><a href="/chat/">AI chat</a><a class="nav-link-outline" href="https://github.com/readtheplan/readtheplan">GitHub</a></div>
+  </div>
+</nav>
+<!-- site-header:end -->`;
+const canonicalFooter = `<!-- site-footer:start -->
+<footer class="site-footer"><div class="container footer-inner"><div>readtheplan · MIT licensed · local-first</div><div class="footer-links"><a href="/docs/">Docs</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="https://github.com/readtheplan/readtheplan">GitHub</a></div></div></footer>
+<!-- site-footer:end -->`;
+
 // Convert YAML compliance catalogs → JSON for Pages Functions
 console.log("Converting compliance catalogs...");
 try {
@@ -104,10 +124,29 @@ collectHtml(dist);
 const basePath = "";  // custom domain (readtheplan.dev) — site at root
 for (const file of htmlFiles) {
   let content = fs.readFileSync(file, "utf8");
+  const topbarPattern = /<header\b[^>]*class="[^"]*topbar[^"]*"[^>]*>[\s\S]*?<\/header>/i;
+  const navbarPattern = /<nav\b[^>]*class="[^"]*navbar[^"]*"[^>]*>[\s\S]*?<\/nav>/i;
+  if (topbarPattern.test(content)) content = content.replace(topbarPattern, canonicalHeader);
+  else if (navbarPattern.test(content)) content = content.replace(navbarPattern, canonicalHeader);
+  else content = content.replace(/<body([^>]*)>/i, `<body$1>\n${canonicalHeader}`);
+  const footerPattern = /<footer\b[^>]*>[\s\S]*?<\/footer>/i;
+  content = footerPattern.test(content)
+    ? content.replace(footerPattern, canonicalFooter)
+    : content.replace(/<\/body>/i, `${canonicalFooter}\n</body>`);
+  content = content.replaceAll("__READTHEPLAN_VERSION__", version);
   // Fix href and src that start with / but not // or http
   content = content.replace(/(href|src)="\/(?!\/)([^"]*)"/g, `$1="${basePath}/$2"`);
+  if ((content.match(/site-header:start/g) || []).length !== 1) {
+    throw new Error(`Expected one canonical header in ${file}`);
+  }
+  if ((content.match(/site-footer:start/g) || []).length !== 1) {
+    throw new Error(`Expected one canonical footer in ${file}`);
+  }
+  if (content.includes("__READTHEPLAN_VERSION__")) {
+    throw new Error(`Unresolved version placeholder in ${file}`);
+  }
   fs.writeFileSync(file, content, "utf8");
 }
-console.log(`Fixed absolute paths in ${htmlFiles.length} HTML files`);
+console.log(`Injected canonical site chrome into ${htmlFiles.length} HTML files (v${version})`);
 
 console.log(`Built site into ${path.relative(process.cwd(), dist)}`);

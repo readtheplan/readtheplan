@@ -126,6 +126,15 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert '"mcp"' in build_script
     assert '"brief"' in build_script
     assert "npm --prefix site run build" in workflow
+    assert "canonicalHeader" in build_script
+    assert "canonicalFooter" in build_script
+    assert "__READTHEPLAN_VERSION__" in build_script
+    assert "pyproject.toml" in build_script
+
+    converter = (SITE / "scripts" / "convert_data.py").read_text(encoding="utf-8")
+    assert 'tomllib.load(f)["project"]["version"]' in converter
+    for function in ["health.js", "openapi.json.js", "api/[[route]].js"]:
+        assert '"0.3.0"' not in (SITE / "functions" / function).read_text(encoding="utf-8")
 
     for asset in [
         "404.html",
@@ -137,6 +146,21 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     ]:
         assert (SITE / asset).exists()
         assert asset in build_script
+
+
+def test_site_ui_handoff_contracts() -> None:
+    pricing = (SITE / "pricing" / "index.html").read_text(encoding="utf-8")
+    health = (ROOT / ".github" / "workflows" / "site-health.yml").read_text(encoding="utf-8")
+    privacy = (SITE / "privacy" / "index.html").read_text(encoding="utf-8")
+
+    assert "$499" not in pricing
+    assert "Managed" not in pricing
+    assert "Six built-in catalogs" in pricing
+    assert "DeepSeek" in privacy
+    assert "third-party processor" in privacy
+    assert "https://readtheplan.dev/health" in health
+    assert "https://readtheplan.dev/api/v1/version" in health
+    assert "-X OPTIONS https://readtheplan.dev/api/chat" in health
 
 
 def test_static_seo_tools_preserve_local_first_privacy() -> None:
@@ -324,7 +348,7 @@ def test_docs_routes_are_sitemap_listed_and_landing_aligned() -> None:
         assert url_path in sitemap
         assert '<link rel="stylesheet" href="/matrix.css" />' in html
         assert '<header class="topbar g"' in html
-        assert 'class="version-cell gc">v0.3.0' in html
+        assert 'class="version-cell gc">v__READTHEPLAN_VERSION__' in html
         assert "readtheplan" in html
 
     assert "/demo/" in sitemap
@@ -355,7 +379,7 @@ def test_site_redesign_visual_contract() -> None:
     assert "@media (max-width: 720px)" in css
     assert '<link rel="stylesheet" href="/matrix.css" />' in docs
     assert '<header class="topbar g"' in docs
-    assert 'class="version-cell gc">v0.3.0' in docs
+    assert 'class="version-cell gc">v__READTHEPLAN_VERSION__' in docs
 
     for asset in [
         "fonts/DepartureMono-Regular.woff2",
@@ -365,4 +389,3 @@ def test_site_redesign_visual_contract() -> None:
         "img/noise.svg",
     ]:
         assert (SITE / asset).exists()
-
