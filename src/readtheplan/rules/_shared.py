@@ -542,6 +542,7 @@ from readtheplan.rules import (  # noqa: E402, F401, I001
     gitlab,
     grafana,
     k8s,
+    tfe,
     vault,
 )
 
