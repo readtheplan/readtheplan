@@ -9,6 +9,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Jenkins Configuration as Code gates across the CLI, GitHub Action, and MCP.
+  JCasC controller YAML now receives explicit authentication, authorization,
+  credential, executor, agent/cloud, image provenance, library, script-approval,
+  Job DSL, endpoint/TLS, CSRF, secret interpolation, and plugin-boundary findings.
 - Native Azure Bicep source gates across the CLI, GitHub Action, and MCP.
   Static analysis now covers resources/modules, deployment scope, RBAC and policy,
   Deployment Scripts, public exposure, complete-mode deletion, secure parameters

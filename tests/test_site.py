@@ -209,6 +209,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "agent_gate_pulumi",
         "agent_gate_azure",
         "agent_gate_bicep",
+        "jenkins-jcasc",
         "proceed/warn/block",
         "PR reviewer",
         "SOC 2 evidence prep",

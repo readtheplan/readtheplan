@@ -88,11 +88,12 @@ def test_puppet_fixture_surfaces_modules_dynamic_data_and_cross_node_resources()
     [
         ("ansible", "ansible_config_management_risky.yml"),
         ("jenkins", "Jenkinsfile.config-management-risky"),
+        ("jenkins-jcasc", "jenkins_jcasc_risky.yml"),
         ("chef", "chef_config_management_risky.rb"),
         ("puppet", "puppet_config_management_risky.pp"),
     ],
 )
-def test_configuration_management_mcp_gate_supports_all_four_ecosystems(
+def test_configuration_management_mcp_gate_supports_all_ecosystems(
     ecosystem: str, fixture: str
 ) -> None:
     result = agent_gate_configuration_management(

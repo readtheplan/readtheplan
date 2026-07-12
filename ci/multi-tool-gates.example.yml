@@ -9,6 +9,7 @@ on:
       - "**/*.bicep"
       - "ansible/**"
       - "Jenkinsfile"
+      - "jenkins.yaml"
       - "chef/**"
       - "puppet/**"
 
@@ -32,6 +33,8 @@ jobs:
             input: ansible/site.yml
           - tool: jenkins
             input: Jenkinsfile
+          - tool: jenkins-jcasc
+            input: jenkins.yaml
           - tool: chef
             input: chef/recipes/default.rb
           - tool: puppet

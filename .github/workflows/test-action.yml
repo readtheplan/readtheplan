@@ -737,6 +737,34 @@ jobs:
           assert "not pinned by digest" in payload["pr_comment"]
           PY
 
+      - name: Run action on Jenkins Configuration as Code
+        id: jenkins_jcasc
+        uses: ./
+        with:
+          tool: jenkins-jcasc
+          input-file: tests/fixtures/jenkins_jcasc_risky.yml
+          framework: soc2
+
+      - name: Assert Jenkins Configuration as Code outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.jenkins_jcasc.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.jenkins_jcasc.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.jenkins_jcasc.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "20"
+          test "$RISK_COUNTS" = '{"dangerous":14,"irreversible":0,"review":6,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "jenkins-jcasc"
+          assert payload["decision"] == "block"
+          assert "security realm" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef recipe
         id: chef
         uses: ./

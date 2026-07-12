@@ -274,6 +274,16 @@ def _build_parser() -> argparse.ArgumentParser:
     jenkins.add_argument("input_file", help="Path to a Jenkinsfile.")
     jenkins.set_defaults(func=_jenkins_gate)
 
+    jenkins_jcasc = subparsers.add_parser(
+        "jenkins-jcasc",
+        help="Emit the agent-gate decision for Jenkins Configuration as Code YAML.",
+    )
+    jenkins_jcasc.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    jenkins_jcasc.add_argument("input_file", help="Path to a JCasC YAML file.")
+    jenkins_jcasc.set_defaults(func=_jenkins_jcasc_gate)
+
     chef = subparsers.add_parser(
         "chef",
         help="Emit the agent-gate decision for a Chef recipe.",
@@ -1134,6 +1144,34 @@ def _jenkins_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_jenkins(data, catalog=catalog))
+
+
+def _jenkins_jcasc_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Jenkins Configuration as Code YAML."""
+    from readtheplan.adapters.jenkins_jcasc import (
+        JenkinsJCasCAdapter,
+        JenkinsJCasCInputError,
+        analyze_jenkins_jcasc,
+        parse_jenkins_jcasc,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_jenkins_jcasc(source)
+    except JenkinsJCasCInputError as exc:
+        print(f"Error: invalid Jenkins JCasC YAML: {exc}", file=sys.stderr)
+        return 1
+    if not JenkinsJCasCAdapter().can_handle(data):
+        print("Error: input not recognized as Jenkins JCasC YAML", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_jenkins_jcasc(data, catalog=catalog))
 
 
 def _chef_gate(args: argparse.Namespace) -> int:
