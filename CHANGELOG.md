@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Terraform configuration and Terragrunt HCL/JSON gates across the CLI,
+  generalized Action, and local MCP server. Provider/module supply chain,
+  backends, provisioners, lifecycle, remote state, static exposure, hooks,
+  injected arguments, dependencies/mocks, generated files, assumed identity,
+  and configuration-time functions join the shared risk contract before a plan
+  exists.
 - Native Grafana Loki YAML and Caddyfile/native JSON gates across the CLI,
   generalized Action, and local MCP server. Loki tenancy, listeners, storage,
   schemas, limits, runtime overrides, rules, retention, and query paths join

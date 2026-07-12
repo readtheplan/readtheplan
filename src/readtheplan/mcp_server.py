@@ -892,6 +892,63 @@ def agent_gate_caddy(
     return analyze_caddy(data, catalog=catalog)
 
 
+def _agent_gate_terraform_source(
+    input_path: str,
+    ecosystem: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Terraform config or Terragrunt HCL/JSON."""
+    from readtheplan.adapters.terraform_config import (
+        TerraformConfigAdapter,
+        TerraformConfigInputError,
+        TerragruntAdapter,
+        analyze_terraform_config,
+        parse_terraform_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read {ecosystem} input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_terraform_config(source, ecosystem)
+    except TerraformConfigInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid {ecosystem} configuration in {input_path}: {exc}",
+        ) from exc
+    adapter = TerraformConfigAdapter() if ecosystem == "terraform-config" else TerragruntAdapter()
+    if not adapter.can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Input is not recognized as {ecosystem} configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_terraform_config(data, catalog=catalog)
+
+
+def agent_gate_terraform_config(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Terraform configuration HCL/JSON."""
+    return _agent_gate_terraform_source(input_path, "terraform-config", framework)
+
+
+def agent_gate_terragrunt(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Terragrunt HCL/JSON configuration."""
+    return _agent_gate_terraform_source(input_path, "terragrunt", framework)
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -1186,6 +1243,8 @@ def create_server() -> Any:
     agent_gate_consul_handler = agent_gate_consul
     agent_gate_loki_handler = agent_gate_loki
     agent_gate_caddy_handler = agent_gate_caddy
+    agent_gate_terraform_config_handler = agent_gate_terraform_config
+    agent_gate_terragrunt_handler = agent_gate_terragrunt
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1438,6 +1497,22 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return a gate for Caddyfile or native Caddy JSON."""
         return agent_gate_caddy_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_terraform_config")
+    def _agent_gate_terraform_config_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Terraform configuration HCL/JSON."""
+        return agent_gate_terraform_config_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_terragrunt")
+    def _agent_gate_terragrunt_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Terragrunt HCL/JSON configuration."""
+        return agent_gate_terragrunt_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(
