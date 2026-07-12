@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +9,7 @@ from readtheplan.adapters import detect_adapter
 from readtheplan.adapters.pipelines import (
     AzurePipelinesAdapter,
     BitbucketPipelinesAdapter,
+    BuildkiteAdapter,
     CircleCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
@@ -316,6 +318,30 @@ pipelines:
     assert by_type["bitbucket_pipelines_unresolved"].risk == "review"
 
 
+def test_buildkite_flags_commands_plugins_secrets_agents_and_dynamic_uploads() -> None:
+    source = (Path(__file__).parent / "fixtures" / "buildkite_deploy.yml").read_text(
+        encoding="utf-8"
+    )
+    data = parse_pipeline_yaml(source, "buildkite")
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, BuildkiteAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+
+    assert by_type["buildkite_environment"] == ["dangerous"]
+    assert by_type["buildkite_agents"] == ["review", "review"]
+    assert by_type["buildkite_command"] == ["dangerous", "dangerous"]
+    assert by_type["buildkite_dynamic_pipeline"] == ["dangerous"]
+    assert by_type["buildkite_plugin"] == ["dangerous", "review"]
+    assert by_type["buildkite_secret_input"] == ["dangerous"]
+    assert by_type["buildkite_soft_fail"] == ["dangerous"]
+    assert by_type["buildkite_trigger"] == ["dangerous"]
+    assert by_type["buildkite_approval"] == ["review"]
+    assert by_type["buildkite_wait"] == ["safe"]
+
+
 @pytest.mark.parametrize(
     ("tool", "source", "expected_code", "expected_adapter"),
     [
@@ -343,6 +369,12 @@ pipelines:
             "pipelines:\n  default:\n    - step:\n        script: [echo hello]\n",
             2,
             "bitbucket-pipelines",
+        ),
+        (
+            "buildkite",
+            "steps:\n  - command: ./deploy.sh\n",
+            2,
+            "buildkite",
         ),
     ],
 )
