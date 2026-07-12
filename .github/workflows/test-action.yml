@@ -858,6 +858,34 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on service mesh, policy, autoscaling, and serverless manifests
+        id: kubernetes_mesh_policy_serverless
+        uses: ./
+        with:
+          tool: kubernetes
+          input-file: tests/fixtures/kubernetes_mesh_policy_serverless_risky.yml
+          framework: soc2
+
+      - name: Assert service mesh, policy, autoscaling, and serverless outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.kubernetes_mesh_policy_serverless.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.kubernetes_mesh_policy_serverless.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.kubernetes_mesh_policy_serverless.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "35"
+          test "$RISK_COUNTS" = '{"dangerous":34,"irreversible":0,"review":1,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "kubernetes"
+          assert payload["decision"] == "block"
+          assert "Istio Virtual Service" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Packer inspect output
         id: packer
         uses: ./

@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Kubernetes rules for Istio, Kyverno, OPA Gatekeeper, KEDA, and
+  Knative Serving/Eventing. Mesh traffic and identity, admission policy code and
+  exceptions, external scaler credentials, event-driven Jobs, serverless
+  revisions/routes, and CloudEvent delivery now receive API-group-aware
+  semantics instead of generic custom-resource review.
 - First-party Kubernetes rules for Argo Workflows/Events, Gateway API,
   cert-manager/trust-manager, and External Secrets. Executable workflows,
   event-driven triggers, listener/route namespace trust, cross-namespace grants,

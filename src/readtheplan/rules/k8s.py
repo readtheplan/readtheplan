@@ -984,8 +984,7 @@ def _tekton_pipeline_candidates(
     spec = _desired_spec(change)
     findings = _tekton_reference_findings(spec)
     embedded = any(
-        isinstance(item, dict) and item.get("taskSpec") is not None
-        for item in _tekton_walk(spec)
+        isinstance(item, dict) and item.get("taskSpec") is not None for item in _tekton_walk(spec)
     )
     if embedded:
         findings.append("embed executable Task specifications directly")
@@ -1933,6 +1932,709 @@ def _external_secrets_generator_candidates(
                     "provider identity, endpoint/TLS, output lifetime, entropy, consumers, "
                     "and cluster-wide reuse."
                 ),
+            )
+        ]
+    return []
+
+
+def _desired_metadata(change: dict[str, Any]) -> dict[str, Any]:
+    after = change.get("after", {})
+    if not isinstance(after, dict):
+        return {}
+    metadata = after.get("metadata", {})
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _contains_value(value: Any, *expected: str) -> bool:
+    wanted = {item.lower() for item in expected}
+    return any(isinstance(item, str) and item.lower() in wanted for item in _controller_walk(value))
+
+
+def _integer_or_default(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+@register_rule(
+    "kubernetes_istio_virtual_service",
+    "kubernetes_istio_destination_rule",
+    "kubernetes_istio_gateway",
+    "kubernetes_istio_service_entry",
+    "kubernetes_istio_sidecar",
+    "kubernetes_istio_workload_entry",
+    "kubernetes_istio_workload_group",
+    "kubernetes_istio_proxy_config",
+)
+def _istio_networking_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_istio_").replace("_", " ").title()
+    deleted = _controller_delete(f"Istio {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["change service-mesh traffic reachability or identity"]
+    if resource_type.endswith("virtual_service"):
+        if _controller_has_key(spec, "mirror", "fault", "rewrite", "redirect", "delegate"):
+            findings.append("mirror, fault, rewrite, redirect, or delegate live traffic")
+        if not spec.get("hosts") or "*" in _controller_items(spec.get("hosts")):
+            findings.append("match traffic without a specific host")
+    elif resource_type.endswith("destination_rule"):
+        if _contains_value(spec.get("trafficPolicy"), "DISABLE", "SIMPLE"):
+            findings.append("disable mutual TLS or use server-only TLS")
+        if _controller_has_key(spec, "loadBalancer", "outlierDetection", "connectionPool"):
+            findings.append("change load balancing, ejection, or connection limits")
+    elif resource_type.endswith("gateway"):
+        if _contains_value(spec, "HTTP", "PASSTHROUGH", "AUTO_PASSTHROUGH"):
+            findings.append("expose plaintext or pass-through listeners")
+        if any(
+            "*" in _controller_items(item.get("hosts"))
+            for item in _controller_dicts(spec)
+            if "hosts" in item
+        ):
+            findings.append("accept wildcard hosts")
+    elif resource_type.endswith("service_entry"):
+        if spec.get("location") == "MESH_EXTERNAL":
+            findings.append("add external endpoints to the mesh service registry")
+        if spec.get("resolution") == "NONE":
+            findings.append("allow traffic by port without DNS or endpoint resolution")
+        if not spec.get("exportTo") or "*" in _controller_items(spec.get("exportTo")):
+            findings.append("export the service entry to all namespaces")
+        if any(str(host).startswith("*.") for host in _controller_items(spec.get("hosts"))):
+            findings.append("register wildcard external hosts")
+    elif resource_type.endswith("sidecar"):
+        if _contains_value(spec.get("egress"), "*/*"):
+            findings.append("allow sidecar egress to every namespace and host")
+        if _contains_value(spec.get("outboundTrafficPolicy"), "ALLOW_ANY"):
+            findings.append("allow traffic to destinations absent from the mesh registry")
+    elif resource_type.endswith(("workload_entry", "workload_group")):
+        findings.append("attach VM or non-Kubernetes workload endpoints and service accounts")
+    if _controller_secret_refs(spec):
+        findings.append("use certificate or credential Secrets")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Istio {label} can {'; '.join(findings)}. Review selectors, "
+            "namespace export, hosts, ports, TLS/SAN validation, routes, retries, "
+            "failover, and proxy/controller compatibility.",
+        )
+    ]
+
+
+@register_rule("kubernetes_istio_envoy_filter", "kubernetes_istio_wasm_plugin")
+def _istio_extension_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = "WasmPlugin" if resource_type.endswith("wasm_plugin") else "EnvoyFilter"
+    deleted = _controller_delete(f"Istio {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["inject custom code or low-level proxy configuration into mesh data paths"]
+        if _controller_mutable_images(spec) or (
+            isinstance(spec.get("url"), str) and "@sha256:" not in spec["url"]
+        ):
+            findings.append("load an extension artifact not pinned by digest")
+        if _controller_secret_refs(spec):
+            findings.append("provide Secret-backed pull or plugin configuration")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Istio {label} can {'; '.join(findings)}. Review patch context/order, "
+                "workload scope, ABI/runtime, artifact integrity, capabilities, failure "
+                "mode, and proxy-version compatibility.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_istio_authorization_policy")
+def _istio_authorization_policy_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Istio AuthorizationPolicy", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        action = str(spec.get("action", "ALLOW"))
+        findings = [f"change mesh request authorization with action {action}"]
+        if action == "CUSTOM":
+            findings.append("delegate decisions to an extension provider")
+        if not spec.get("selector") and not spec.get("targetRefs"):
+            findings.append("apply broadly within the policy namespace or mesh root")
+        if _contains_value(spec.get("rules"), "*"):
+            findings.append("use wildcard principals, namespaces, methods, paths, or hosts")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Istio AuthorizationPolicy can {'; '.join(findings)}. Review target "
+                "scope, rule normalization, source identity/IP, operations, conditions, "
+                "dry-run/audit use, and deny-by-default interactions.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_istio_peer_authentication",
+    "kubernetes_istio_request_authentication",
+)
+def _istio_authentication_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    request = resource_type.endswith("request_authentication")
+    label = "RequestAuthentication" if request else "PeerAuthentication"
+    deleted = _controller_delete(f"Istio {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["change workload authentication requirements"]
+    if request:
+        if _controller_has_key(spec, "jwksUri"):
+            findings.append("fetch JWT verification keys from external endpoints")
+        if any(item.get("forwardOriginalToken") is True for item in _controller_dicts(spec)):
+            findings.append("forward original bearer tokens to workloads")
+        if _controller_has_key(spec, "outputClaimToHeaders"):
+            findings.append("copy JWT claims into request headers")
+    elif _contains_value(spec, "DISABLE", "PERMISSIVE"):
+        findings.append("permit plaintext or non-mutually-authenticated workload traffic")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Istio {label} can {'; '.join(findings)}. Review selector/target scope, "
+            "trust domains, issuer/audience, key sources, token forwarding, mTLS mode, "
+            "port overrides, and AuthorizationPolicy coupling.",
+        )
+    ]
+
+
+@register_rule("kubernetes_istio_telemetry")
+def _istio_telemetry_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Istio Telemetry", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        disabled = any(item.get("disabled") is True for item in _controller_dicts(spec))
+        return [
+            RuleResult(
+                "dangerous" if disabled else "review",
+                (
+                    "This Istio Telemetry policy disables selected mesh telemetry providers."
+                    if disabled
+                    else "__TOOL__ will change mesh metrics, access logs, or tracing providers."
+                )
+                + " Review workload scope, provider selection, filters, sampling, tag "
+                "overrides, sensitive-data capture, and observability gaps.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_kyverno_cluster_policy", "kubernetes_kyverno_policy")
+def _kyverno_legacy_policy_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    cluster = resource_type.endswith("cluster_policy")
+    label = "ClusterPolicy" if cluster else "Policy"
+    deleted = _controller_delete(f"Kyverno {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["evaluate Kubernetes admission requests"]
+    if cluster:
+        findings.append("apply policy across cluster namespaces")
+    if _controller_has_key(spec, "mutate", "patchStrategicMerge", "patchesJson6902"):
+        findings.append("mutate matching resources before validation")
+    if _controller_has_key(spec, "generate", "clone", "cloneList"):
+        findings.append("create, clone, synchronize, or mutate existing resources")
+    if _controller_has_key(spec, "verifyImages"):
+        findings.append("verify or mutate container image references and attestations")
+    if str(spec.get("validationFailureAction", "Audit")) != "Enforce":
+        findings.append("audit validation failures instead of blocking them")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Kyverno {label} can {'; '.join(findings)}. Review match/exclude scope, "
+            "failure policy, background behavior, context/API calls, preconditions, "
+            "foreach, mutation order, generated ownership, and policy exceptions.",
+        )
+    ]
+
+
+@register_rule(
+    "kubernetes_kyverno_validating_policy",
+    "kubernetes_kyverno_namespaced_validating_policy",
+    "kubernetes_kyverno_mutating_policy",
+    "kubernetes_kyverno_namespaced_mutating_policy",
+    "kubernetes_kyverno_generating_policy",
+    "kubernetes_kyverno_namespaced_generating_policy",
+    "kubernetes_kyverno_deleting_policy",
+    "kubernetes_kyverno_namespaced_deleting_policy",
+    "kubernetes_kyverno_image_validating_policy",
+    "kubernetes_kyverno_namespaced_image_validating_policy",
+)
+def _kyverno_cel_policy_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_kyverno_").replace("_", " ").title()
+    deleted = _controller_delete(f"Kyverno {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        mutating = any(word in resource_type for word in ("mutating", "generating", "deleting"))
+        image = "image_validating" in resource_type
+        effect = (
+            "mutate, generate, or delete matching resources"
+            if mutating
+            else "verify image signatures/attestations and optionally rewrite image references"
+            if image
+            else "allow, deny, warn, or audit matching admission requests"
+        )
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Kyverno {label} can {effect}. Review cluster/namespaced scope, match "
+                "constraints, CEL expressions, variables/context, failure policy, webhook "
+                "timeout, background actions, credentials, and exceptions.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_kyverno_cleanup_policy",
+    "kubernetes_kyverno_cluster_cleanup_policy",
+)
+def _kyverno_cleanup_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Kyverno cleanup policy", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                "This Kyverno cleanup policy deletes matching resources on a schedule. "
+                "Review match/exclude scope, conditions, schedule, propagation, cluster "
+                "scope, and recovery evidence.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_kyverno_policy_exception")
+def _kyverno_exception_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Kyverno PolicyException", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                "This PolicyException bypasses selected Kyverno policy rules for matching "
+                "resources. Review namespace, subjects, policy/rule names, match scope, "
+                "duration, approvals, and exception governance.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_gatekeeper_constraint_template")
+def _gatekeeper_template_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Gatekeeper ConstraintTemplate", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                "This ConstraintTemplate installs Rego or CEL admission policy code and a "
+                "new Constraint API. Review code, targets, schema, external data, library "
+                "dependencies, failure behavior, and every instantiated Constraint.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_gatekeeper_constraint")
+def _gatekeeper_constraint_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Gatekeeper Constraint", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        enforcement = str(spec.get("enforcementAction", "deny")).lower()
+        risk = "review" if enforcement in {"dryrun", "warn"} else "dangerous"
+        return [
+            RuleResult(
+                risk,
+                "This Gatekeeper Constraint applies a template with "
+                f"enforcementAction={enforcement}. Review match scope, excluded namespaces, "
+                "parameters, scoped enforcement points, audit behavior, and template "
+                "provenance.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_gatekeeper_assign",
+    "kubernetes_gatekeeper_assign_metadata",
+    "kubernetes_gatekeeper_modify_set",
+    "kubernetes_gatekeeper_assign_image",
+)
+def _gatekeeper_mutation_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_gatekeeper_").replace("_", " ").title()
+    deleted = _controller_delete(f"Gatekeeper {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        external = _controller_has_key(spec, "externalData")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Gatekeeper {label} mutates matching admission objects"
+                + (" using an external data provider" if external else "")
+                + ". Review applyTo/match scope, location, value source, path tests, "
+                "mutation conflicts/order, provider failure policy, and validation "
+                "interactions.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_gatekeeper_config",
+    "kubernetes_gatekeeper_expansion_template",
+    "kubernetes_gatekeeper_sync_set",
+    "kubernetes_gatekeeper_external_data_provider",
+)
+def _gatekeeper_control_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_gatekeeper_").replace("_", " ").title()
+    deleted = _controller_delete(f"Gatekeeper {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Gatekeeper {label} changes policy-engine inventory, expansion, "
+                "exclusion, or external-data behavior. Review cluster scope, synced data "
+                "sensitivity, process exclusions, generated resources, provider "
+                "endpoint/TLS, timeout/failure mode, and policy consumers.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_keda_scaled_object")
+def _keda_scaled_object_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("KEDA ScaledObject", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["let external metrics change workload replica count, including scale to zero"]
+    if _integer_or_default(spec.get("maxReplicaCount", 100) or 100, 100) > 100:
+        findings.append("allow more than 100 replicas")
+    if spec.get("fallback"):
+        findings.append("force a fallback replica count when scaler metrics fail")
+    if _controller_has_key(spec, "authenticationRef"):
+        findings.append("use referenced scaler credentials or pod identity")
+    if _contains_value(spec, "external", "metrics-api"):
+        findings.append("trust an external scaler or arbitrary metrics API")
+    if any(
+        str(item.get("unsafeSsl", "false")).lower() == "true" for item in _controller_dicts(spec)
+    ):
+        findings.append("disable TLS validation for a metric endpoint")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This KEDA ScaledObject can {'; '.join(findings)}. Review target ownership, "
+            "min/idle/max replicas, polling/cooldown, trigger endpoints/queries, HPA "
+            "behavior, fallback, pause/transfer annotations, and deletion restoration.",
+        )
+    ]
+
+
+@register_rule("kubernetes_keda_scaled_job")
+def _keda_scaled_job_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("KEDA ScaledJob", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["create executable Jobs in response to external metrics"]
+        if _controller_mutable_images(spec):
+            findings.append("run images not pinned by digest")
+        if _controller_privileged(spec):
+            findings.append("launch privileged or host-accessing job pods")
+        if _controller_has_key(spec, "authenticationRef"):
+            findings.append("use referenced scaler credentials")
+        if (
+            _contains_value(spec.get("rollout"), "default")
+            or spec.get("rolloutStrategy") == "default"
+        ):
+            findings.append("terminate existing Jobs when the ScaledJob changes")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This KEDA ScaledJob can {'; '.join(findings)}. Review job identity/code, "
+                "secrets, triggers, replica/job-history limits, rollout propagation, "
+                "scaling strategy, pending-job calculation, and duplicate processing.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_keda_trigger_authentication",
+    "kubernetes_keda_cluster_trigger_authentication",
+)
+def _keda_authentication_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    cluster = resource_type.endswith("cluster_trigger_authentication")
+    label = "ClusterTriggerAuthentication" if cluster else "TriggerAuthentication"
+    deleted = _controller_delete(f"KEDA {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["provide credentials or workload identity to metric scalers"]
+        if cluster:
+            findings.append("make the identity reusable across namespaces")
+        if _controller_secret_refs(spec) or _controller_has_key(spec, "secretTargetRef"):
+            findings.append("read Kubernetes Secret values")
+        if _controller_has_key(spec, "podIdentity", "serviceAccount"):
+            findings.append("use cloud or Kubernetes workload identity")
+        if _controller_has_key(spec, "hashiCorpVault", "azureKeyVault", "awsSecretManager"):
+            findings.append("retrieve credentials from an external secret backend")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This KEDA {label} can {'; '.join(findings)}. Review namespace scope, "
+                "secret names/keys, environment sources, identity provider/role, Vault/Key "
+                "Vault settings, token lifetime, and every referencing trigger.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_keda_cloud_event_source")
+def _keda_cloud_event_source_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("KEDA CloudEventSource", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "review",
+                "__TOOL__ will change where KEDA emits autoscaling CloudEvents. Review "
+                "destination URI, authentication/network policy, event metadata "
+                "sensitivity, failure handling, and receiver trust.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_knative_service",
+    "kubernetes_knative_configuration",
+    "kubernetes_knative_revision",
+)
+def _knative_serving_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_knative_").replace("_", " ").title()
+    deleted = _controller_delete(f"Knative {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    metadata = _desired_metadata(change)
+    annotations = _controller_mapping(metadata.get("annotations"))
+    findings = ["deploy executable containers and create immutable revisions"]
+    if _controller_mutable_images(spec):
+        findings.append("run container images not pinned by digest")
+    if _controller_privileged(spec):
+        findings.append("request privileged or host-level pod settings")
+    if _controller_secret_refs(spec):
+        findings.append("consume Secret-backed environment, volumes, or image pulls")
+    if _controller_has_key(spec, "serviceAccountName"):
+        findings.append("run with a selected Kubernetes ServiceAccount")
+    if (
+        resource_type.endswith("service")
+        and annotations.get("networking.knative.dev/visibility") != "cluster-local"
+    ):
+        findings.append("create a network Route that may be externally visible")
+    if annotations.get("autoscaling.knative.dev/min-scale") == "0":
+        findings.append("permit scale-to-zero cold starts")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Knative {label} can {'; '.join(findings)}. Review traffic visibility, "
+            "revision rollout, image provenance, identity, pod security, concurrency, "
+            "timeout, scale bounds/metrics, probes, volumes, and retained revisions.",
+        )
+    ]
+
+
+@register_rule("kubernetes_knative_route")
+def _knative_route_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Knative Route", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                "This Knative Route changes network exposure and weighted/tagged traffic "
+                "across Revisions. Review visibility/domain, certificate/TLS, "
+                "latestRevision usage, percentage splits, tag URLs, target readiness, and "
+                "rollback.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_knative_broker",
+    "kubernetes_knative_trigger",
+    "kubernetes_knative_channel",
+    "kubernetes_knative_in_memory_channel",
+    "kubernetes_knative_subscription",
+    "kubernetes_knative_sequence",
+    "kubernetes_knative_parallel",
+    "kubernetes_knative_event_source",
+    "kubernetes_knative_event_transform",
+    "kubernetes_knative_request_reply",
+)
+def _knative_eventing_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_knative_").replace("_", " ").title()
+    deleted = _controller_delete(f"Knative {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["route CloudEvents between producers, brokers/channels, and sinks"]
+    if _controller_has_key(spec, "uri"):
+        findings.append("send events to an explicit network URI")
+    if _controller_has_key(spec, "namespace"):
+        findings.append("reference event components across namespaces")
+    if _controller_has_key(spec, "deadLetterSink", "retry", "backoffPolicy"):
+        findings.append("change retry and dead-letter delivery semantics")
+    if resource_type.endswith("event_source"):
+        findings.append("read external or Kubernetes event sources with controller identity")
+    if resource_type.endswith("in_memory_channel"):
+        findings.append("use a development-only in-memory delivery implementation")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Knative {label} can {'; '.join(findings)}. Review ingress authentication, "
+            "broker/channel class, filters/transforms, sink identity, payload sensitivity, "
+            "delivery guarantees, retries/DLQ, reply paths, and availability.",
+        )
+    ]
+
+
+@register_rule("kubernetes_knative_event_policy")
+def _knative_event_policy_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Knative EventPolicy", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        broad = not spec.get("to")
+        return [
+            RuleResult(
+                "dangerous",
+                "This Knative EventPolicy changes which OIDC identities or sources may send events"
+                + (" to every addressable resource in the namespace" if broad else "")
+                + ". Review targets, subjects, OIDC issuer/audience, cross-namespace "
+                "references, defaults, and enforcement status.",
             )
         ]
     return []

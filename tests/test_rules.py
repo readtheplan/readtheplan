@@ -114,6 +114,65 @@ _EXPECTED_RULE_FUNCTIONS = {
     "kubernetes_external_secrets_push_secret": "_external_secrets_push_candidates",
     "kubernetes_external_secrets_cluster_push_secret": "_external_secrets_push_candidates",
     "kubernetes_external_secrets_generator": "_external_secrets_generator_candidates",
+    "kubernetes_istio_virtual_service": "_istio_networking_candidates",
+    "kubernetes_istio_destination_rule": "_istio_networking_candidates",
+    "kubernetes_istio_gateway": "_istio_networking_candidates",
+    "kubernetes_istio_service_entry": "_istio_networking_candidates",
+    "kubernetes_istio_sidecar": "_istio_networking_candidates",
+    "kubernetes_istio_workload_entry": "_istio_networking_candidates",
+    "kubernetes_istio_workload_group": "_istio_networking_candidates",
+    "kubernetes_istio_proxy_config": "_istio_networking_candidates",
+    "kubernetes_istio_envoy_filter": "_istio_extension_candidates",
+    "kubernetes_istio_wasm_plugin": "_istio_extension_candidates",
+    "kubernetes_istio_authorization_policy": "_istio_authorization_policy_candidates",
+    "kubernetes_istio_peer_authentication": "_istio_authentication_candidates",
+    "kubernetes_istio_request_authentication": "_istio_authentication_candidates",
+    "kubernetes_istio_telemetry": "_istio_telemetry_candidates",
+    "kubernetes_kyverno_cluster_policy": "_kyverno_legacy_policy_candidates",
+    "kubernetes_kyverno_policy": "_kyverno_legacy_policy_candidates",
+    "kubernetes_kyverno_validating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_namespaced_validating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_mutating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_namespaced_mutating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_generating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_namespaced_generating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_deleting_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_namespaced_deleting_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_image_validating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_namespaced_image_validating_policy": "_kyverno_cel_policy_candidates",
+    "kubernetes_kyverno_cleanup_policy": "_kyverno_cleanup_candidates",
+    "kubernetes_kyverno_cluster_cleanup_policy": "_kyverno_cleanup_candidates",
+    "kubernetes_kyverno_policy_exception": "_kyverno_exception_candidates",
+    "kubernetes_gatekeeper_constraint_template": "_gatekeeper_template_candidates",
+    "kubernetes_gatekeeper_constraint": "_gatekeeper_constraint_candidates",
+    "kubernetes_gatekeeper_assign": "_gatekeeper_mutation_candidates",
+    "kubernetes_gatekeeper_assign_metadata": "_gatekeeper_mutation_candidates",
+    "kubernetes_gatekeeper_modify_set": "_gatekeeper_mutation_candidates",
+    "kubernetes_gatekeeper_assign_image": "_gatekeeper_mutation_candidates",
+    "kubernetes_gatekeeper_config": "_gatekeeper_control_candidates",
+    "kubernetes_gatekeeper_expansion_template": "_gatekeeper_control_candidates",
+    "kubernetes_gatekeeper_sync_set": "_gatekeeper_control_candidates",
+    "kubernetes_gatekeeper_external_data_provider": "_gatekeeper_control_candidates",
+    "kubernetes_keda_scaled_object": "_keda_scaled_object_candidates",
+    "kubernetes_keda_scaled_job": "_keda_scaled_job_candidates",
+    "kubernetes_keda_trigger_authentication": "_keda_authentication_candidates",
+    "kubernetes_keda_cluster_trigger_authentication": "_keda_authentication_candidates",
+    "kubernetes_keda_cloud_event_source": "_keda_cloud_event_source_candidates",
+    "kubernetes_knative_service": "_knative_serving_candidates",
+    "kubernetes_knative_configuration": "_knative_serving_candidates",
+    "kubernetes_knative_revision": "_knative_serving_candidates",
+    "kubernetes_knative_route": "_knative_route_candidates",
+    "kubernetes_knative_broker": "_knative_eventing_candidates",
+    "kubernetes_knative_trigger": "_knative_eventing_candidates",
+    "kubernetes_knative_channel": "_knative_eventing_candidates",
+    "kubernetes_knative_in_memory_channel": "_knative_eventing_candidates",
+    "kubernetes_knative_subscription": "_knative_eventing_candidates",
+    "kubernetes_knative_sequence": "_knative_eventing_candidates",
+    "kubernetes_knative_parallel": "_knative_eventing_candidates",
+    "kubernetes_knative_event_source": "_knative_eventing_candidates",
+    "kubernetes_knative_event_transform": "_knative_eventing_candidates",
+    "kubernetes_knative_request_reply": "_knative_eventing_candidates",
+    "kubernetes_knative_event_policy": "_knative_event_policy_candidates",
 }
 
 
@@ -224,9 +283,7 @@ def test_tier_a_resource_rules_add_explainers(tmp_path: Path) -> None:
                 ["update"],
                 before={"assume_role_policy": _policy([])},
                 after={
-                    "assume_role_policy": _policy(
-                        [{"Effect": "Allow", "Principal": {"AWS": "*"}}]
-                    )
+                    "assume_role_policy": _policy([{"Effect": "Allow", "Principal": {"AWS": "*"}}])
                 },
             ),
             "dangerous",
@@ -546,10 +603,7 @@ def test_network_topology_route_to_internet_gateway_is_dangerous(
     summary = analyze_plan_file(plan)
 
     assert summary.resource_changes[0].risk == "dangerous"
-    assert (
-        "default route to an internet gateway"
-        in summary.resource_changes[0].explanation
-    )
+    assert "default route to an internet gateway" in summary.resource_changes[0].explanation
 
 
 def test_security_group_open_ingress_is_dangerous(tmp_path: Path) -> None:
