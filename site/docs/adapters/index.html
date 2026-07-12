@@ -64,7 +64,8 @@
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively. Built-in adapters cover <strong>CloudFormation</strong>,
             <strong>Azure Bicep/ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
-            <strong>Pulumi</strong>, <strong>Chef</strong>, and <strong>Puppet</strong>. Rendered Helm,
+            <strong>Pulumi</strong>, <strong>Chef</strong>, <strong>Puppet</strong>, <strong>GitHub Actions</strong>,
+            <strong>GitLab CI</strong>, and <strong>CircleCI</strong>. Rendered Helm,
             Kustomize, and Crossplane resources flow through the Kubernetes gate. AWS CDK, Packer,
             Terragrunt, and internal tools can use the same public adapter interface.
           </p>
@@ -77,10 +78,13 @@ readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
 readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
-readtheplan puppet site.pp</code></pre>
+readtheplan puppet site.pp
+readtheplan github-actions .github/workflows/deploy.yml
+readtheplan gitlab-ci .gitlab-ci.yml
+readtheplan circleci .circleci/config.yml</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Ansible consumes
-            YAML structurally. Jenkins, Chef, and Puppet use conservative syntax-aware scanning:
+            YAML structurally. Jenkins, Chef, Puppet, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
           </p>

@@ -50,8 +50,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="readtheplan",
         description=(
-            "Review infrastructure changes across plans, manifests, playbooks, "
-            "and pipelines."
+            "Review infrastructure changes across plans, manifests, playbooks, and pipelines."
         ),
     )
     parser.add_argument(
@@ -212,10 +211,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kubernetes.add_argument(
         "input_file",
-        help=(
-            "Path to Kubernetes JSON/YAML, multi-document YAML, or a manifest "
-            "diff wrapper."
-        ),
+        help=("Path to Kubernetes JSON/YAML, multi-document YAML, or a manifest diff wrapper."),
     )
     kubernetes.set_defaults(func=_kubernetes_gate)
 
@@ -279,6 +275,30 @@ def _build_parser() -> argparse.ArgumentParser:
     puppet.add_argument("--framework", help="Include checks from a compliance framework.")
     puppet.add_argument("input_file", help="Path to a Puppet manifest (.pp).")
     puppet.set_defaults(func=_puppet_gate)
+
+    github_actions = subparsers.add_parser(
+        "github-actions",
+        help="Emit the agent-gate decision for a GitHub Actions workflow YAML file.",
+    )
+    github_actions.add_argument("--framework", help="Include checks from a compliance framework.")
+    github_actions.add_argument("input_file", help="Path to a workflow YAML file.")
+    github_actions.set_defaults(func=_pipeline_gate)
+
+    gitlab_ci = subparsers.add_parser(
+        "gitlab-ci",
+        help="Emit the agent-gate decision for a GitLab CI configuration.",
+    )
+    gitlab_ci.add_argument("--framework", help="Include checks from a compliance framework.")
+    gitlab_ci.add_argument("input_file", help="Path to .gitlab-ci.yml.")
+    gitlab_ci.set_defaults(func=_pipeline_gate)
+
+    circleci = subparsers.add_parser(
+        "circleci",
+        help="Emit the agent-gate decision for a CircleCI configuration.",
+    )
+    circleci.add_argument("--framework", help="Include checks from a compliance framework.")
+    circleci.add_argument("input_file", help="Path to .circleci/config.yml.")
+    circleci.set_defaults(func=_pipeline_gate)
 
     verify = subparsers.add_parser(
         "verify",
@@ -385,7 +405,9 @@ def _package_version() -> str:
     try:
         commit = subprocess.run(
             ["git", "rev-parse", "--short=7", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             cwd=Path(__file__).resolve().parent.parent,
         )
         if commit.returncode == 0 and commit.stdout.strip():
@@ -551,10 +573,7 @@ def _fail_on_exit_code(summary: PlanSummary, threshold: str | None) -> int:
         return 0
 
     threshold_rank = RISK_ORDER[threshold]
-    count = sum(
-        RISK_ORDER[change.risk] >= threshold_rank
-        for change in summary.resource_changes
-    )
+    count = sum(RISK_ORDER[change.risk] >= threshold_rank for change in summary.resource_changes)
     if count == 0:
         return 0
 
@@ -624,7 +643,12 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
 
     adapter = detect_adapter(data)
     if adapter is None or adapter.adapter_name != "cloudformation":
-        print(f"Error: input not recognized as a supported IaC format (detected: {adapter.adapter_name if adapter else 'none'})", file=sys.stderr)  # noqa: E501
+        detected = adapter.adapter_name if adapter else "none"
+        print(
+            "Error: input not recognized as a supported IaC format "
+            f"(detected: {detected})",
+            file=sys.stderr,
+        )
         return 1
 
     catalog: ControlCatalog | None = None
@@ -668,7 +692,12 @@ def _kubernetes_gate(args: argparse.Namespace) -> int:
 
     adapter = detect_adapter(data)
     if adapter is None or adapter.adapter_name != "kubernetes":
-        print(f"Error: input not recognized as a supported IaC format (detected: {adapter.adapter_name if adapter else 'none'})", file=sys.stderr)  # noqa: E501
+        detected = adapter.adapter_name if adapter else "none"
+        print(
+            "Error: input not recognized as a supported IaC format "
+            f"(detected: {detected})",
+            file=sys.stderr,
+        )
         return 1
 
     catalog: ControlCatalog | None = None
@@ -843,6 +872,45 @@ def _puppet_gate(args: argparse.Namespace) -> int:
     return _write_adapter_gate(analyze_puppet(data, catalog=catalog))
 
 
+def _pipeline_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for supported CI workflow YAML."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.pipelines import (
+        CircleCIAdapter,
+        GitHubActionsAdapter,
+        GitLabCIAdapter,
+        PipelineInputError,
+        analyze_pipeline,
+        parse_pipeline_yaml,
+    )
+
+    adapters = {
+        "github-actions": GitHubActionsAdapter,
+        "gitlab-ci": GitLabCIAdapter,
+        "circleci": CircleCIAdapter,
+    }
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_pipeline_yaml(source, args.command)
+    except PipelineInputError as exc:
+        print(f"Error: invalid {args.command} pipeline YAML: {exc}", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    expected = adapters[args.command]
+    if adapter is None or not isinstance(adapter, expected):
+        print(f"Error: input not recognized as {args.command} configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_pipeline(adapter, data, catalog=catalog))
+
+
 def _adapter_catalog(framework: str | None) -> ControlCatalog | None:
     if not framework:
         return None
@@ -868,9 +936,7 @@ def _verify(args: argparse.Namespace) -> int:
     try:
         envelope_bytes = Path(args.envelope).read_bytes()
     except OSError as exc:
-        print(
-            f"Error: cannot read envelope file {args.envelope}: {exc}", file=sys.stderr
-        )
+        print(f"Error: cannot read envelope file {args.envelope}: {exc}", file=sys.stderr)
         return 1
 
     if not args.certificate_identity or not args.certificate_oidc_issuer:
@@ -995,9 +1061,7 @@ def _print_summary(
         print("| Risk | Actions | Resource | Type | Explanation |", file=stream)
         print("| --- | --- | --- | --- | --- |", file=stream)
     else:
-        print(
-            "| Risk | Actions | Resource | Type | Explanation | Controls |", file=stream
-        )
+        print("| Risk | Actions | Resource | Type | Explanation | Controls |", file=stream)
         print("| --- | --- | --- | --- | --- | --- |", file=stream)
     for change in summary.resource_changes:
         actions = "/".join(change.actions)
@@ -1101,12 +1165,10 @@ def _evolution_console(args: argparse.Namespace) -> int:
     print("=" * 60)
     print("      ⚡ READTHEPLAN EVOLUTION CONSOLE DASHBOARD ⚡")
     print("=" * 60)
-    avg = stats['avg_compliance_score']
-    print(f" Total Runs: {stats['total_runs']:<8} "
-          f"| Avg Compliance Score: {avg:.1f}%")
+    avg = stats["avg_compliance_score"]
+    print(f" Total Runs: {stats['total_runs']:<8} | Avg Compliance Score: {avg:.1f}%")
     print(f" Blocked:    {stats['blocked']:<8} | Warned:               {stats['warned']}")
-    print(f" Incidents:  {stats['total_incidents']:<8} "
-          f"| Patterns: {stats['total_patterns']}")
+    print(f" Incidents:  {stats['total_incidents']:<8} | Patterns: {stats['total_patterns']}")
     print(f" Approved Rules: {stats['approved_rules']}")
     print("-" * 60)
     print(" DETECTED PATTERNS")
@@ -1115,10 +1177,12 @@ def _evolution_console(args: argparse.Namespace) -> int:
         print("  No patterns detected yet.")
     else:
         print(f"  {'Resource Type':<25} {'Risk':<12} {'Count':<8} {'Status':<12}")
-        print(f"  {'-'*25} {'-'*12} {'-'*8} {'-'*12}")
+        print(f"  {'-' * 25} {'-' * 12} {'-' * 8} {'-' * 12}")
         for p in patterns[:10]:
-            print(f"  {p['resource_type']:<25} {p['risk']:<12} "
-                  f"{p['incident_count']:<8} {p['rule_status']:<12}")
+            print(
+                f"  {p['resource_type']:<25} {p['risk']:<12} "
+                f"{p['incident_count']:<8} {p['rule_status']:<12}"
+            )
         if len(patterns) > 10:
             print(f"  ... and {len(patterns) - 10} more patterns.")
     print("-" * 60)
@@ -1128,7 +1192,7 @@ def _evolution_console(args: argparse.Namespace) -> int:
         print("  No runs recorded yet.")
     else:
         print(f"  {'Timestamp':<22} {'Decision':<12} {'Score':<8} {'Outcome':<8}")
-        print(f"  {'-'*22} {'-'*12} {'-'*8} {'-'*8}")
+        print(f"  {'-' * 22} {'-' * 12} {'-' * 8} {'-' * 8}")
         for r in runs:
             ts = r["timestamp"][:19].replace("T", " ")
             print(f"  {ts:<22} {r['decision']:<12} {r['compliance_score']:<8.1f} {r['outcome']:<8}")
