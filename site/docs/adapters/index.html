@@ -95,7 +95,7 @@ readtheplan puppet site.pp</code></pre>
 
       <section class="g" aria-labelledby="rendered-k8s-title">
         <div class="gc utility-panel-wide">
-          <h2 id="rendered-k8s-title">Helm, Kustomize, and Crossplane</h2>
+          <h2 id="rendered-k8s-title">Helm, Kustomize, Crossplane, and Argo CD</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
             Review the rendered artifact that Kubernetes will receive. readtheplan accepts one
             manifest, <code>kind: List</code>, multi-document YAML, JSON resources, or an explicit
@@ -112,6 +112,12 @@ readtheplan kubernetes rendered.yaml</code></pre>
             resources—default to <code>review</code> because their controller determines the real
             cloud-side effect. CRDs, API services, and admission webhook configurations are
             <code>dangerous</code> because they extend cluster control-plane behavior.
+          </p>
+          <p style="color:var(--muted);margin:12px 0 0">
+            Argo CD Applications, ApplicationSets, and AppProjects receive deeper GitOps rules.
+            Automated pruning and wildcard source, destination, resource, or project-role scopes
+            are <code>dangerous</code>; scoped source/destination and generator changes require
+            review. Flux resources currently follow the conservative custom-resource path.
           </p>
         </div>
       </section>

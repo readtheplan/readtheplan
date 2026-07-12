@@ -7,6 +7,9 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Argo CD-aware Kubernetes rules for Applications, ApplicationSets, and
+  AppProjects. Automated pruning and wildcard project boundaries classify as
+  dangerous; scoped GitOps changes require review.
 - Kubernetes gates now accept individual JSON/YAML manifests, `kind: List`,
   multi-document YAML, and diff wrappers. This enables rendered Helm and
   Kustomize output directly; unknown Crossplane/controller resources require

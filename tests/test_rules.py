@@ -56,6 +56,9 @@ _EXPECTED_RULE_FUNCTIONS = {
     "kubernetes_cluster_role_binding": "_k8s_rbac_candidates",
     "kubernetes_role_binding": "_k8s_rbac_candidates",
     "kubernetes_network_policy": "_k8s_network_policy_candidates",
+    "kubernetes_argocd_application": "_argocd_application_candidates",
+    "kubernetes_argocd_application_set": "_argocd_application_set_candidates",
+    "kubernetes_argocd_project": "_argocd_project_candidates",
 }
 
 

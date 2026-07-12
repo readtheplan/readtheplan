@@ -47,6 +47,15 @@ _SENSITIVE_CONTROL_PLANE_KINDS = frozenset(
     }
 )
 
+_ARGO_KIND_MAP: dict[str, str] = {
+    "Application": "kubernetes_argocd_application",
+    "ApplicationSet": "kubernetes_argocd_application_set",
+    "AppProject": "kubernetes_argocd_project",
+    "Rollout": "kubernetes_deployment",
+    "AnalysisTemplate": "kubernetes_argocd_analysis_template",
+    "ClusterAnalysisTemplate": "kubernetes_argocd_cluster_analysis_template",
+}
+
 _CLUSTER_SCOPED_KINDS = frozenset(
     {
         "ClusterRole",
@@ -57,6 +66,7 @@ _CLUSTER_SCOPED_KINDS = frozenset(
         "PersistentVolume",
         "PriorityClass",
         *_SENSITIVE_CONTROL_PLANE_KINDS,
+        "ClusterAnalysisTemplate",
     }
 )
 
@@ -116,6 +126,10 @@ def _resource_identity(kind: str, name: str, namespace: str | None) -> tuple[str
 
 def _kind_from_resource(r: dict[str, Any]) -> str:
     return r.get("kind", "Unknown")
+
+
+def _api_version_from_resource(r: dict[str, Any]) -> str:
+    return str(r.get("apiVersion", ""))
 
 
 def _name_from_resource(r: dict[str, Any]) -> str:
@@ -207,7 +221,8 @@ class KubernetesAdapter(BaseAdapter):
             properties = _get_properties_for_rules(r)
             changes.append({
                 "Action": "Add",
-                "Kind": _kind_from_resource(r),
+                    "Kind": _kind_from_resource(r),
+                    "ApiVersion": _api_version_from_resource(r),
                 "ResourceType": _kind_from_resource(r),
                 "LogicalResourceId": _name_from_resource(r),
                 "Namespace": _namespace_from_resource(r),
@@ -227,7 +242,8 @@ class KubernetesAdapter(BaseAdapter):
             properties = _get_properties_for_rules(r)
             changes.append({
                 "Action": "Remove",
-                "Kind": _kind_from_resource(r),
+                    "Kind": _kind_from_resource(r),
+                    "ApiVersion": _api_version_from_resource(r),
                 "ResourceType": _kind_from_resource(r),
                 "LogicalResourceId": _name_from_resource(r),
                 "Namespace": _namespace_from_resource(r),
@@ -252,6 +268,7 @@ class KubernetesAdapter(BaseAdapter):
                 changes.append({
                     "Action": "Modify",
                     "Kind": _kind_from_resource(new_r),
+                    "ApiVersion": _api_version_from_resource(new_r),
                     "ResourceType": _kind_from_resource(new_r),
                     "LogicalResourceId": _name_from_resource(new_r),
                     "Namespace": _namespace_from_resource(new_r),
@@ -273,6 +290,7 @@ class KubernetesAdapter(BaseAdapter):
             changes.append({
                 "Action": "Add",
                 "Kind": _kind_from_resource(r),
+                "ApiVersion": _api_version_from_resource(r),
                 "ResourceType": _kind_from_resource(r),
                 "LogicalResourceId": _name_from_resource(r),
                 "Namespace": _namespace_from_resource(r),
@@ -290,6 +308,7 @@ class KubernetesAdapter(BaseAdapter):
         action = raw.get("Action", "Unknown")
         replacement = str(raw.get("Replacement", "False"))
         kind = raw.get("Kind", "Unknown")
+        api_version = str(raw.get("ApiVersion", ""))
         logical_id = raw.get("LogicalResourceId", "<unknown>")
         namespace = raw.get("Namespace")
         address = f"{namespace}/{logical_id}" if namespace else logical_id
@@ -339,7 +358,7 @@ class KubernetesAdapter(BaseAdapter):
             actions = ("delete",)
             explanation = f"Kubernetes will delete {kind} '{logical_id}'."
 
-        normalized_type = self._normalize_resource_type(kind)
+        normalized_type = self._normalize_resource_type(kind, api_version)
 
         return ResourceChange(
             address=address,
@@ -349,7 +368,10 @@ class KubernetesAdapter(BaseAdapter):
             explanation=explanation,
         )
 
-    def _normalize_resource_type(self, kind: str) -> str:
+    def _normalize_resource_type(self, kind: str, api_version: str = "") -> str:
+        api_group, separator, _version = api_version.partition("/")
+        if separator and api_group == "argoproj.io" and kind in _ARGO_KIND_MAP:
+            return _ARGO_KIND_MAP[kind]
         mapped = _K8S_KIND_MAP.get(kind)
         if mapped:
             return mapped

@@ -50,6 +50,7 @@ Runnable source inputs for the built-in cross-tool agent gates:
 - [Puppet manifest](10-puppet-manifest/site.pp): `readtheplan puppet examples/10-puppet-manifest/site.pp`
 - [Pulumi preview](11-pulumi-preview/preview.json): `readtheplan pulumi examples/11-pulumi-preview/preview.json`
 - [Rendered Kubernetes YAML](12-kubernetes-yaml/rendered.yaml): `readtheplan kubernetes examples/12-kubernetes-yaml/rendered.yaml`
+- [Argo CD GitOps policy](13-argocd-gitops/application.yaml): `readtheplan kubernetes examples/13-argocd-gitops/application.yaml`
 
 ## Regenerate
 
