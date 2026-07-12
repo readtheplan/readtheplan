@@ -1,4 +1,4 @@
-name: Trigger CF Pages Deploy
+name: Deploy to Cloudflare Pages
 
 on:
   push:
@@ -8,12 +8,24 @@ on:
   workflow_dispatch:
 
 jobs:
-  dispatch:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger deploy in readtheplan-infra
-        uses: peter-evans/repository-dispatch@v4
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
         with:
-          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
-          repository: readtheplan/readtheplan-infra
-          event-type: deploy-pages
+          node-version: 24
+
+      - name: Build site
+        working-directory: site
+        run: |
+          npm install
+          npm run build
+
+      - name: Deploy production
+        working-directory: site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler pages deploy dist --project-name=readtheplan --branch=main --commit-dirty=true
