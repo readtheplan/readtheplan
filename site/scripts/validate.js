@@ -347,7 +347,7 @@ if (/<form/i.test(briefCombined)) {
 // MCP page: local preview only, no hosted/upload implications.
 for (const token of [
   "Local MCP infrastructure reviewer",
-  "Give your AI coding agent deterministic Terraform, CloudFormation, Kubernetes",
+  "Give your AI coding agent deterministic Terraform, CloudFormation, Azure, Kubernetes",
   "Local-first",
   "No raw plan upload",
   "No hosted MCP service",
@@ -357,6 +357,7 @@ for (const token of [
   "analyze_plan",
   "agent_gate",
   "agent_gate_pulumi",
+  "agent_gate_azure",
   "proceed/warn/block",
   "PR reviewer",
   "SOC 2 evidence prep",

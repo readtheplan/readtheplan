@@ -1,0 +1,47 @@
+{
+  "status": "Succeeded",
+  "changes": [
+    {
+      "resourceId": "/subscriptions/000/resourceGroups/production/providers/Microsoft.Storage/storageAccounts/applogs",
+      "changeType": "Create",
+      "after": {
+        "type": "Microsoft.Storage/storageAccounts",
+        "name": "applogs",
+        "location": "centralus",
+        "properties": {
+          "allowBlobPublicAccess": false,
+          "minimumTlsVersion": "TLS1_2"
+        }
+      }
+    },
+    {
+      "resourceId": "/subscriptions/000/resourceGroups/production/providers/Microsoft.Network/networkSecurityGroups/web",
+      "changeType": "Modify",
+      "before": {
+        "type": "Microsoft.Network/networkSecurityGroups",
+        "name": "web",
+        "properties": {
+          "securityRules": []
+        }
+      },
+      "after": {
+        "type": "Microsoft.Network/networkSecurityGroups",
+        "name": "web",
+        "properties": {
+          "securityRules": [
+            {
+              "name": "https",
+              "properties": {
+                "access": "Allow",
+                "direction": "Inbound",
+                "protocol": "Tcp",
+                "sourceAddressPrefix": "Internet",
+                "destinationPortRange": "443"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

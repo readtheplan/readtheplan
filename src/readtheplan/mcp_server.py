@@ -234,6 +234,37 @@ def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
     return analyze_cloudformation(data)
 
 
+def agent_gate_azure(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the agent-gate decision for Azure Bicep/ARM What-If JSON."""
+    import json
+
+    from readtheplan.adapters.azure import AzureWhatIfAdapter, analyze_azure_whatif
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        data = json.loads(_read_confined_bytes(input_path).decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read Azure What-If input {input_path}: {exc}",
+        ) from exc
+    if not isinstance(data, dict) or not AzureWhatIfAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Azure deployment What-If output",
+        )
+
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_azure_whatif(data, catalog=catalog)
+
+
 def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
     """Return the agent-gate decision for a Kubernetes manifest diff.
 
@@ -389,6 +420,7 @@ def create_server() -> Any:
     analyze_plan_handler = analyze_plan
     agent_gate_handler = agent_gate
     agent_gate_cfn_handler = agent_gate_cloudformation
+    agent_gate_azure_handler = agent_gate_azure
     agent_gate_k8s_handler = agent_gate_kubernetes
     agent_gate_pulumi_handler = agent_gate_pulumi
 
@@ -423,6 +455,14 @@ def create_server() -> Any:
     def _agent_gate_cfn_tool(input_path: str) -> dict[str, object]:
         """Return the agent-gate decision for a CloudFormation Change Set / template diff."""
         return agent_gate_cfn_handler(input_path)
+
+    @mcp.tool(name="agent_gate_azure")
+    def _agent_gate_azure_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return the gate decision for Azure Bicep/ARM What-If JSON."""
+        return agent_gate_azure_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_kubernetes")
     def _agent_gate_k8s_tool(input_path: str) -> dict[str, object]:

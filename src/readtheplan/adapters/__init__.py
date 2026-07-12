@@ -4,6 +4,7 @@ from importlib.metadata import entry_points
 from typing import Any
 
 from readtheplan.adapters.ansible import AnsibleAdapter
+from readtheplan.adapters.azure import AzureWhatIfAdapter
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
@@ -65,12 +66,14 @@ register_adapter(JenkinsAdapter())
 register_adapter(ChefAdapter())
 register_adapter(PuppetAdapter())
 register_adapter(PulumiAdapter())
+register_adapter(AzureWhatIfAdapter())
 load_entry_point_adapters()
 
 __all__ = [
     "ADAPTER_ENTRY_POINT_GROUP",
     "AnsibleAdapter",
     "BaseAdapter",
+    "AzureWhatIfAdapter",
     "ChefAdapter",
     "CloudFormationAdapter",
     "JenkinsAdapter",

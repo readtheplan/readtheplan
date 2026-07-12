@@ -51,6 +51,7 @@ Runnable source inputs for the built-in cross-tool agent gates:
 - [Pulumi preview](11-pulumi-preview/preview.json): `readtheplan pulumi examples/11-pulumi-preview/preview.json`
 - [Rendered Kubernetes YAML](12-kubernetes-yaml/rendered.yaml): `readtheplan kubernetes examples/12-kubernetes-yaml/rendered.yaml`
 - [Argo CD GitOps policy](13-argocd-gitops/application.yaml): `readtheplan kubernetes examples/13-argocd-gitops/application.yaml`
+- [Azure What-If](14-azure-whatif/whatif.json): `readtheplan azure examples/14-azure-whatif/whatif.json`
 
 ## Regenerate
 

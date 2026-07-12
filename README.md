@@ -11,7 +11,7 @@
 > [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review Terraform/OpenTofu and Pulumi plans, CloudFormation and Kubernetes changes, Ansible playbooks, Jenkins pipelines, Chef recipes, and Puppet manifests through one deterministic risk gate. Runs locally — no uploads, no accounts, no backend.
+**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review Terraform/OpenTofu and Pulumi plans, Azure Bicep/ARM What-If and CloudFormation changes, Kubernetes manifests, Ansible playbooks, Jenkins pipelines, Chef recipes, and Puppet manifests through one deterministic risk gate. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
 pip install readtheplan && readtheplan analyze plan.json
@@ -76,6 +76,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 |------|---------|----------------|
 | Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff + resource-aware rules |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
+| Azure Bicep / ARM | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
 | Kubernetes / Helm / Kustomize / Crossplane / Argo CD | `readtheplan kubernetes rendered.yaml` | JSON/YAML, multi-doc, RBAC, custom-resource, and GitOps rules |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
 | Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |

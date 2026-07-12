@@ -63,7 +63,7 @@
           </p>
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively. Built-in adapters cover <strong>CloudFormation</strong>,
-            <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
+            <strong>Azure Bicep/ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
             <strong>Pulumi</strong>, <strong>Chef</strong>, and <strong>Puppet</strong>. Rendered Helm,
             Kustomize, and Crossplane resources flow through the Kubernetes gate. AWS CDK, Packer,
             Terragrunt, and internal tools can use the same public adapter interface.
@@ -71,6 +71,7 @@
 
           <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
+readtheplan azure whatif.json
 readtheplan kubernetes rendered.yaml
 readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
@@ -78,7 +79,7 @@ readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
 readtheplan puppet site.pp</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            CloudFormation, Kubernetes, and Pulumi consume structured diffs. Ansible consumes
+            CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Ansible consumes
             YAML structurally. Jenkins, Chef, and Puppet use conservative syntax-aware scanning:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
@@ -90,6 +91,30 @@ readtheplan puppet site.pp</code></pre>
             <li style="margin-bottom:6px">You have a custom IaC tool and want compliance gates and audit evidence.</li>
             <li style="margin-bottom:6px">You want to extend the type-map for CloudFormation or Kubernetes resources not yet covered.</li>
           </ul>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="azure-whatif-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="azure-whatif-title">Azure Bicep and ARM What-If</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Ask Azure Resource Manager to evaluate the Bicep or ARM template, retain full resource
+            payloads, and gate the resulting local JSON artifact:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>az deployment group what-if \
+  --resource-group production \
+  --template-file main.bicep \
+  --result-format FullResourcePayloads \
+  --no-pretty-print --output json &gt; whatif.json
+
+readtheplan azure whatif.json</code></pre>
+          <p style="color:var(--muted);margin:12px 0 0">
+            Create, modify, delete, ignore/no-change, deploy-only, unsupported, and potential
+            changes map into the shared gate. Full before/after resource payloads feed Azure VM,
+            AKS, storage, RBAC, and network-security rules. ResourceIdOnly <code>Deploy</code>
+            results, unresolved potential changes, nested-deployment diagnostics, and unsupported
+            predictions require manual review rather than receiving a false-safe result.
+          </p>
         </div>
       </section>
 

@@ -124,6 +124,23 @@ def _azurerm_storage_account_candidates(
 ) -> list[RuleResult]:
     candidates: list[RuleResult] = []
 
+    after = change.get("after", {})
+    properties = after.get("properties", {}) if isinstance(after, dict) else {}
+    if (
+        ("create" in action_set or "update" in action_set)
+        and isinstance(properties, dict)
+        and properties.get("allow_blob_public_access") is True
+    ):
+        candidates.append(
+            RuleResult(
+                "dangerous",
+                (
+                    "Azure storage account blob public access is enabled. Public "
+                    "containers may expose data outside the intended trust boundary."
+                ),
+            )
+        )
+
     if "delete" in action_set and "create" in action_set:
         candidates.append(
             RuleResult(
@@ -169,6 +186,30 @@ def _azurerm_role_assignment_candidates(
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
+    after = change.get("after", {})
+    properties = after.get("properties", {}) if isinstance(after, dict) else {}
+    role_definition = (
+        str(properties.get("role_definition_id", "")).lower()
+        if isinstance(properties, dict)
+        else ""
+    )
+    privileged_roles = (
+        "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",  # Owner
+        "b24988ac-6180-42a0-ab88-20f7382dd24c",  # Contributor
+        "18d7d88d-75b7-48a9-b8a9-1a3af7f4f472",  # User Access Administrator
+    )
+    if ("create" in action_set or "update" in action_set) and any(
+        role_definition.endswith(role_id) for role_id in privileged_roles
+    ):
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "Azure role assignment grants Owner, Contributor, or User Access "
+                    "Administrator privileges. Verify principal, scope, and delegation."
+                ),
+            )
+        ]
     if "delete" in action_set and "create" in action_set:
         return [
             RuleResult(
@@ -217,6 +258,55 @@ def _azurerm_network_security_candidates(
     candidates: list[RuleResult] = []
     label = "NSG" if resource_type == "azurerm_network_security_group" else "NSG rule"
 
+    after = change.get("after", {})
+    properties = after.get("properties", {}) if isinstance(after, dict) else {}
+    rules: list[dict[str, Any]] = []
+    if isinstance(properties, dict):
+        if resource_type == "azurerm_network_security_group":
+            raw_rules = properties.get("security_rules", [])
+            if isinstance(raw_rules, list):
+                rules = [rule for rule in raw_rules if isinstance(rule, dict)]
+        else:
+            rules = [{"properties": properties}]
+    for rule in rules:
+        rule_properties = rule.get("properties", {})
+        if not isinstance(rule_properties, dict):
+            continue
+        sources = {
+            str(rule_properties.get("source_address_prefix", "")).lower(),
+            *(
+                str(value).lower()
+                for value in rule_properties.get("source_address_prefixes", [])
+                if isinstance(value, str)
+            ),
+        }
+        destination_ports = {
+            str(rule_properties.get("destination_port_range", "")),
+            *(
+                str(value)
+                for value in rule_properties.get("destination_port_ranges", [])
+                if isinstance(value, (str, int))
+            ),
+        }
+        internet_sources = {"*", "internet", "0.0.0.0/0", "::/0"}
+        sensitive_ports = {"*", "22", "3389"}
+        if (
+            str(rule_properties.get("access", "")).lower() == "allow"
+            and str(rule_properties.get("direction", "")).lower() == "inbound"
+            and sources & internet_sources
+            and destination_ports & sensitive_ports
+        ):
+            candidates.append(
+                RuleResult(
+                    "dangerous",
+                    (
+                        "This Azure network security rule allows internet-wide inbound "
+                        "access to all ports, SSH, or RDP. Confirm the exposure is intentional."
+                    ),
+                )
+            )
+            break
+
     if "delete" in action_set and "create" in action_set:
         candidates.append(
             RuleResult(
@@ -257,5 +347,4 @@ def _azurerm_network_security_candidates(
 # ---------------------------------------------------------------------------
 # kubernetes_* (K8s) provider rules
 # ---------------------------------------------------------------------------
-
 

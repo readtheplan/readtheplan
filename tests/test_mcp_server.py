@@ -15,6 +15,7 @@ from readtheplan.mcp_server import (
     _validate_path,
     _working_root,
     agent_gate,
+    agent_gate_azure,
     agent_gate_cloudformation,
     agent_gate_kubernetes,
     agent_gate_pulumi,
@@ -322,6 +323,7 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
             "adapter",
             "cloudformation",
         ),
+        (agent_gate_azure, "azure_whatif_mixed.json", "adapter", "azure"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
     ],
 )
@@ -368,6 +370,7 @@ def test_non_kubernetes_handlers_use_confined_read_boundary(
             "adapter",
             "cloudformation",
         ),
+        (agent_gate_azure, "azure_whatif_mixed.json", "adapter", "azure"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
     ],
 )
@@ -396,6 +399,7 @@ def test_non_kubernetes_handlers_allow_path_inside_root(
         (analyze_plan, "valid_plan.json"),
         (agent_gate, "valid_plan.json"),
         (agent_gate_cloudformation, "cfn_change_set_mixed.json"),
+        (agent_gate_azure, "azure_whatif_mixed.json"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json"),
     ],
 )
@@ -616,6 +620,7 @@ def test_stdio_server_tools_list() -> None:
         assert "analyze_plan" in tool_names
         assert "agent_gate" in tool_names
         assert "agent_gate_cloudformation" in tool_names
+        assert "agent_gate_azure" in tool_names
         assert "agent_gate_pulumi" in tool_names
 
         # --- tools/call: analyze_plan ---

@@ -7,6 +7,9 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Azure Bicep/ARM deployment What-If adapter, CLI gate, MCP tool, and Action
+  selector. FullResourcePayloads old/new state feeds existing Azure resource
+  rules; ResourceIdOnly, potential changes, and diagnostics require review.
 - Argo CD-aware Kubernetes rules for Applications, ApplicationSets, and
   AppProjects. Automated pruning and wildcard project boundaries classify as
   dangerous; scoped GitOps changes require review.

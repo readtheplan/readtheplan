@@ -20,7 +20,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "fail-on-threshold" in action
     assert "input-file" in action
     assert "tool:" in action
-    assert "cloudformation|kubernetes|pulumi|ansible|jenkins|chef|puppet" in action
+    assert "cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet" in action
     assert "RESOLVED_INPUT_FILE" in action
     assert "p.get('risks', p.get('risk_counts', {}))" in action
     assert "deprecationMessage" in action
@@ -50,6 +50,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "fail-on-threshold: \"dangerous\"" in workflow
     assert "tool: pulumi" in workflow
     assert "input-file: tests/fixtures/pulumi_preview_mixed.json" in workflow
+    assert "tool: azure" in workflow
+    assert "input-file: tests/fixtures/azure_whatif_mixed.json" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow
