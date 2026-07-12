@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "readtheplan"
 version = "0.4.0"
-description = "Local infrastructure change risk analysis for Terraform, Kubernetes, Ansible, Jenkins, Chef, Puppet, and CloudFormation."
+description = "Local infrastructure risk analysis for Terraform, Pulumi, Kubernetes, Ansible, Jenkins, Chef, Puppet, and CloudFormation."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "ansible", "jenkins", "chef", "puppet", "kubernetes", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "pulumi", "ansible", "jenkins", "chef", "puppet", "kubernetes", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -45,6 +45,7 @@ chef = "readtheplan.adapters.chef:ChefAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
 jenkins = "readtheplan.adapters.jenkins:JenkinsAdapter"
 kubernetes = "readtheplan.adapters.kubernetes:KubernetesAdapter"
+pulumi = "readtheplan.adapters.pulumi:PulumiAdapter"
 puppet = "readtheplan.adapters.puppet:PuppetAdapter"
 
 [project.entry-points."readtheplan.rules"]

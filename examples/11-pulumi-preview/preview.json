@@ -1,0 +1,42 @@
+{
+  "steps": [
+    {
+      "op": "create",
+      "urn": "urn:pulumi:prod::web::aws:s3/bucket:Bucket::logs",
+      "newState": {
+        "type": "aws:s3/bucket:Bucket",
+        "inputs": {
+          "bucket": "web-prod-logs"
+        }
+      },
+      "detailedDiff": {}
+    },
+    {
+      "op": "replace",
+      "urn": "urn:pulumi:prod::web::aws:ec2/instance:Instance::api",
+      "oldState": {
+        "type": "aws:ec2/instance:Instance",
+        "inputs": {
+          "instanceType": "t3.small"
+        }
+      },
+      "newState": {
+        "type": "aws:ec2/instance:Instance",
+        "inputs": {
+          "instanceType": "m7g.large"
+        }
+      },
+      "replaceReasons": ["ami"],
+      "detailedDiff": {
+        "ami": {
+          "kind": "update-replace",
+          "inputDiff": true
+        }
+      }
+    }
+  ],
+  "changeSummary": {
+    "create": 1,
+    "replace": 1
+  }
+}

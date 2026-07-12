@@ -198,6 +198,23 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kubernetes.set_defaults(func=_kubernetes_gate)
 
+    pulumi = subparsers.add_parser(
+        "pulumi",
+        help="Emit the agent-gate decision for Pulumi preview JSON.",
+    )
+    pulumi.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    pulumi.add_argument(
+        "input_file",
+        help="Path to Pulumi preview digest JSON or streaming JSON events.",
+    )
+    pulumi.set_defaults(func=_pulumi_gate)
+
     ansible = subparsers.add_parser(
         "ansible",
         help="Emit the agent-gate decision for an Ansible playbook.",
@@ -676,6 +693,38 @@ def _ansible_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_ansible(data, catalog=catalog))
+
+
+def _pulumi_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Pulumi preview output."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.pulumi import (
+        PulumiPreviewError,
+        analyze_pulumi,
+        parse_pulumi_preview,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        data = parse_pulumi_preview(source)
+    except PulumiPreviewError as exc:
+        print(f"Error: invalid Pulumi preview JSON: {exc}", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "pulumi":
+        print("Error: input not recognized as Pulumi preview output", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_pulumi(data, catalog=catalog))
 
 
 def _jenkins_gate(args: argparse.Namespace) -> int:

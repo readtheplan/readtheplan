@@ -9,6 +9,7 @@ from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
+from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
 
 #: Entry point group external packages use to contribute adapters.
@@ -63,6 +64,7 @@ register_adapter(AnsibleAdapter())
 register_adapter(JenkinsAdapter())
 register_adapter(ChefAdapter())
 register_adapter(PuppetAdapter())
+register_adapter(PulumiAdapter())
 load_entry_point_adapters()
 
 __all__ = [
@@ -73,6 +75,7 @@ __all__ = [
     "CloudFormationAdapter",
     "JenkinsAdapter",
     "KubernetesAdapter",
+    "PulumiAdapter",
     "PuppetAdapter",
     "register_adapter",
     "get_adapter",

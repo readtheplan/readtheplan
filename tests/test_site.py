@@ -196,8 +196,8 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
     assert "/mcp/" in sitemap
 
     for expected in [
-        "Local MCP Terraform reviewer",
-        "Give your AI coding agent a Terraform/SOC 2 reviewer that runs locally",
+        "Local MCP infrastructure reviewer",
+        "Give your AI coding agent deterministic Terraform, CloudFormation, Kubernetes",
         "Local-first",
         "No raw plan upload",
         "No hosted MCP service",
@@ -206,6 +206,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "readtheplan mcp",
         "analyze_plan",
         "agent_gate",
+        "agent_gate_pulumi",
         "proceed/warn/block",
         "PR reviewer",
         "SOC 2 evidence prep",
@@ -213,7 +214,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "Auditor-friendly summary",
         "CloudFormation",
         "Kubernetes",
-        "Terraform-first today",
+        "Pulumi",
         "Request pilot setup",
         "info@readtheplan.dev",
         "auth design",
@@ -365,4 +366,3 @@ def test_site_redesign_visual_contract() -> None:
         "img/noise.svg",
     ]:
         assert (SITE / asset).exists()
-

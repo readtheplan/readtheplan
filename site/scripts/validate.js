@@ -346,8 +346,8 @@ if (/<form/i.test(briefCombined)) {
 
 // MCP page: local preview only, no hosted/upload implications.
 for (const token of [
-  "Local MCP Terraform reviewer",
-  "Give your AI coding agent a Terraform/SOC 2 reviewer that runs locally",
+  "Local MCP infrastructure reviewer",
+  "Give your AI coding agent deterministic Terraform, CloudFormation, Kubernetes",
   "Local-first",
   "No raw plan upload",
   "No hosted MCP service",
@@ -356,6 +356,7 @@ for (const token of [
   "readtheplan mcp",
   "analyze_plan",
   "agent_gate",
+  "agent_gate_pulumi",
   "proceed/warn/block",
   "PR reviewer",
   "SOC 2 evidence prep",
@@ -363,7 +364,7 @@ for (const token of [
   "Auditor-friendly summary",
   "CloudFormation",
   "Kubernetes",
-  "Terraform-first today",
+  "Pulumi",
   "info@readtheplan.dev",
   "auth design",
   "least privilege",

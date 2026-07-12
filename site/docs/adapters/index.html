@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Developer guide for writing new IaC adapters for readtheplan — BaseAdapter interface, step-by-step Pulumi example, registration, and testing." />
+    <meta name="description" content="Built-in infrastructure adapters and developer guide for extending readtheplan with additional plan formats." />
     <title>Adapters — readtheplan</title>
     <link rel="canonical" href="https://readtheplan.dev/docs/adapters/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -64,27 +64,28 @@
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively. Built-in adapters cover <strong>CloudFormation</strong>,
             <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
-            <strong>Chef</strong>, and <strong>Puppet</strong>. Pulumi, AWS CDK, Crossplane,
-            Terragrunt, and internal tools can use the same public adapter interface.
+            <strong>Pulumi</strong>, <strong>Chef</strong>, and <strong>Puppet</strong>. AWS CDK,
+            Crossplane, Terragrunt, and internal tools can use the same public adapter interface.
           </p>
 
           <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
 readtheplan kubernetes manifests.json
+readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
 readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
 readtheplan puppet site.pp</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            CloudFormation and Kubernetes consume structured diffs. Ansible consumes YAML
-            structurally. Jenkins, Chef, and Puppet use conservative syntax-aware scanning:
+            CloudFormation, Kubernetes, and Pulumi consume structured diffs. Ansible consumes
+            YAML structurally. Jenkins, Chef, and Puppet use conservative syntax-aware scanning:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
           </p>
 
           <h3 style="margin-top:28px;color:var(--accent)">Why write one?</h3>
           <ul style="color:var(--muted);margin:8px 0 0;padding-left:20px">
-            <li style="margin-bottom:6px">You use Pulumi or CDK and want readtheplan's risk analysis on your plans.</li>
+            <li style="margin-bottom:6px">You use CDK or an internal provisioning tool and want readtheplan's risk analysis on its plans.</li>
             <li style="margin-bottom:6px">You have a custom IaC tool and want compliance gates and audit evidence.</li>
             <li style="margin-bottom:6px">You want to extend the type-map for CloudFormation or Kubernetes resources not yet covered.</li>
           </ul>
@@ -189,152 +190,31 @@ class ResourceChange:
         </div>
       </section>
 
-      <section class="g" aria-labelledby="stepbystep-title">
+      <section class="g" aria-labelledby="pulumi-title">
         <div class="gc utility-panel-wide">
-          <h2 id="stepbystep-title">Worked example: Pulumi adapter</h2>
+          <h2 id="pulumi-title">Built-in Pulumi support</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
-            Pulumi exports plan data as JSON via <code>pulumi preview --show-secrets --json</code>.
-            The output has a <code>"steps"</code> array where each step describes a resource change.
-            Below is a complete adapter implementation.
+            Generate a preview without exposing secret values, then pass the resulting artifact to
+            the local gate:
           </p>
-
-          <h3 style="margin-top:24px;color:var(--accent)">1. Create the file</h3>
-          <p style="color:var(--muted);margin:8px 0 0">
-            Add a new file at <code>src/readtheplan/adapters/pulumi.py</code>:
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pulumi preview --json &gt; preview.json
+readtheplan pulumi preview.json
+readtheplan pulumi --framework soc2 preview.json</code></pre>
+          <p style="color:var(--muted);margin:12px 0 0">
+            The adapter accepts Pulumi preview digest JSON and newline-delimited streaming engine
+            events. It reads <code>oldState</code>/<code>newState</code> inputs, converts Pulumi
+            provider types into the shared rule vocabulary, and normalizes nested camelCase input
+            names before applying resource-aware rules. Root stack bookkeeping is ignored.
           </p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:12px"><code>from __future__ import annotations
-
-from typing import Any
-
-from readtheplan.adapters.base import BaseAdapter
-from readtheplan.plan import ResourceChange
-
-
-class PulumiAdapter(BaseAdapter):
-
-    _TYPE_MAP = {
-        "aws:s3/bucket:Bucket":                "aws_s3_bucket",
-        "aws:rds/instance:Instance":           "aws_db_instance",
-        "aws:rds/cluster:Cluster":             "aws_rds_cluster",
-        "aws:iam/role:Role":                   "aws_iam_role",
-        "aws:iam/policy:Policy":               "aws_iam_policy",
-        "aws:kms/key:Key":                     "aws_kms_key",
-        "aws:lambda/function:Function":        "aws_lambda_function",
-        "aws:ecs/service:Service":             "aws_ecs_service",
-        "aws:ec2/securityGroup:SecurityGroup": "aws_security_group",
-    }
-
-    @property
-    def adapter_name(self) -> str:
-        return "pulumi"
-
-    def can_handle(self, input_data: dict[str, Any]) -> bool:
-        # Pulumi deployments always have a "steps" key with resource ops
-        if "steps" in input_data and isinstance(input_data["steps"], list):
-            return len(input_data["steps"]) > 0
-        return False
-
-    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
-        changes = []
-        for step in input_data.get("steps", []):
-            op = step.get("op", "").upper()
-            urn = step.get("urn", "")
-            # URN format: urn:pulumi:stack::project::type::name
-            parts = urn.split("::")
-            resource_type = parts[3] if len(parts) >= 4 else "Unknown"
-            logical_id = parts[-1] if parts else urn
-
-            # Extract before/after properties from detailed diff
-            metadata = {}
-            if "diffs" in step and "detailedDiff" in step.get("detailedDiff", {}):
-                metadata = {
-                    "before": step.get("oldState", {}).get("inputs", {}),
-                    "after": step.get("newState", {}).get("inputs", {}),
-                }
-
-            changes.append({
-                "Action": op,
-                "LogicalResourceId": logical_id,
-                "ResourceType": resource_type,
-                "urn": urn,
-                "_metadata": metadata if metadata else None,
-            })
-        return changes
-
-    def normalize_change(self, raw: dict[str, Any]) -> ResourceChange:
-        action = raw.get("Action", "UNKNOWN")
-        resource_type = raw.get("ResourceType", "Unknown")
-        logical_id = raw.get("LogicalResourceId", "&lt;unknown&gt;")
-        urn = raw.get("urn", "")
-
-        # Map Pulumi op codes to risk/actions
-        risk = "review"
-        actions = ("unknown",)
-        explanation = f"Pulumi action '{action}' requires review."
-
-        if action == "CREATE":
-            risk = "safe"
-            actions = ("create",)
-            explanation = "Pulumi will create this resource."
-        elif action == "UPDATE":
-            risk = "review"
-            actions = ("update",)
-            explanation = "Pulumi will update this resource in place."
-        elif action == "DELETE":
-            risk = "irreversible"
-            actions = ("delete",)
-            explanation = "Pulumi will delete this resource."
-        elif action == "DELETE-REPLACE":
-            risk = "dangerous"
-            actions = ("delete", "create")
-            explanation = "Pulumi will replace this resource (destroy and recreate)."
-        elif action == "CREATE-REPLACE":
-            risk = "dangerous"
-            actions = ("delete", "create")
-            explanation = "Pulumi will replace this resource (create then destroy)."
-        elif action == "READ":
-            risk = "safe"
-            actions = ("read",)
-            explanation = "Pulumi will read an existing resource."
-
-        normalized_type = self._normalize_resource_type(resource_type)
-        address = urn if urn else logical_id
-
-        return ResourceChange(
-            address=address,
-            resource_type=normalized_type,
-            actions=actions,
-            risk=risk,
-            explanation=explanation,
-        )
-
-    def _normalize_resource_type(self, pulumi_type: str) -> str:
-        if pulumi_type in self._TYPE_MAP:
-            return self._TYPE_MAP[pulumi_type]
-        if not pulumi_type or not isinstance(pulumi_type, str):
-            return "unknown"
-        # Fallback: aws:s3/bucket:Bucket -> aws_s3_bucket
-        return pulumi_type.replace(":", "_").rsplit("/", 1)[-1].lower()</code></pre>
-
-          <h3 style="margin-top:28px;color:var(--accent)">2. Register the adapter</h3>
-          <p style="color:var(--muted);margin:8px 0 0">
-            Open <code>src/readtheplan/adapters/__init__.py</code> and add your import and registration call:
+          <p style="color:var(--muted);margin:12px 0 0">
+            Create is initially safe, update and import require review, replacement is dangerous,
+            and delete is irreversible. Deep rules can escalate that baseline—for example, a
+            security-group update opening an internet-wide CIDR becomes dangerous. The command
+            exits <code>0</code> for proceed, <code>1</code> for warn, and <code>2</code> for block.
           </p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:12px"><code>from readtheplan.adapters.pulumi import PulumiAdapter
-
-# ... existing registry code ...
-
-register_adapter(PulumiAdapter())</code></pre>
-          <p style="color:var(--muted);margin:8px 0 0">
-            The <code>register_adapter()</code> call makes the adapter available to
-            <code>detect_adapter()</code>, which iterates the registry and returns the first adapter
-            whose <code>can_handle()</code> returns <code>True</code>.
-          </p>
-
-          <h3 style="margin-top:28px;color:var(--accent)">3. Wire the CLI (optional but recommended)</h3>
-          <p style="color:var(--muted);margin:8px 0 16px">
-            If your adapter should have its own CLI subcommand (like <code>readtheplan cloudformation</code> or <code>readtheplan kubernetes</code>),
-            add it to the CLI entry point. The dedicated handler should load the JSON, call <code>detect_adapter()</code>, verify the adapter type, and invoke its analyzer. The general <code>analyze</code> and <code>agent-gate</code> commands remain Terraform/OpenTofu-specific.
+          <p style="color:var(--muted);margin:12px 0 0">
+            Do not add <code>--show-secrets</code> when creating review artifacts. readtheplan does
+            not need plaintext secrets to classify the preview.
           </p>
         </div>
       </section>
@@ -377,98 +257,18 @@ def detect_adapter(input_data: dict) -&gt; BaseAdapter | None:
         </div>
       </section>
 
-      <section class="g" aria-labelledby="testing-title">
+      <section class="g" aria-labelledby="adapter-tests-title">
         <div class="gc utility-panel-wide">
-          <h2 id="testing-title">Testing your adapter</h2>
+          <h2 id="adapter-tests-title">Testing an adapter</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
-            Follow the test patterns in <code>tests/test_cfn_adapter.py</code> and <code>tests/test_k8s_adapter.py</code>. Create a new
-            file <code>tests/test_pulumi_adapter.py</code>. Every adapter should cover:
+            Each adapter should test strict format detection, every supported operation, type
+            normalization, before/after metadata flow into deep rules, the full agent-gate
+            contract, compliance catalogs, invalid input, and CLI exit codes. Use the shipped
+            Pulumi tests as the structured-plan reference and the Jenkins tests as the conservative
+            scanner reference.
           </p>
-
-          <h3 style="margin-top:20px;color:var(--accent)">Unit tests for <code>can_handle</code></h3>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>from readtheplan.adapters.pulumi import PulumiAdapter
-from readtheplan.adapters import detect_adapter
-
-def test_pulumi_can_handle():
-    adapter = PulumiAdapter()
-    data = {"steps": [{"op": "CREATE", "urn": "urn:pulumi:..."}]}
-    assert adapter.can_handle(data) is True
-
-def test_pulumi_rejects_cfn():
-    adapter = PulumiAdapter()
-    assert adapter.can_handle({"Changes": []}) is False
-    assert adapter.can_handle({}) is False</code></pre>
-
-          <h3 style="margin-top:24px;color:var(--accent)">Unit tests for <code>normalize_change</code></h3>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>def test_pulumi_normalize_create():
-    adapter = PulumiAdapter()
-    raw = {
-        "Action": "CREATE",
-        "LogicalResourceId": "my-bucket",
-        "ResourceType": "aws:s3/bucket:Bucket"
-    }
-    rc = adapter.normalize_change(raw)
-    assert rc.actions == ("create",)
-    assert rc.risk == "safe"
-    assert rc.resource_type == "aws_s3_bucket"
-
-def test_pulumi_normalize_delete_replace():
-    adapter = PulumiAdapter()
-    raw = {
-        "Action": "DELETE-REPLACE",
-        "LogicalResourceId": "my-role",
-        "ResourceType": "aws:iam/role:Role"
-    }
-    rc = adapter.normalize_change(raw)
-    assert rc.actions == ("delete", "create")
-    assert rc.risk == "dangerous"</code></pre>
-
-          <h3 style="margin-top:24px;color:var(--accent)">Integration test with <code>extract_changes</code> + <code>analyze</code></h3>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>def test_pulumi_analyze_rules_escalation():
-    adapter = PulumiAdapter()
-    data = {
-        "steps": [
-            {
-                "op": "DELETE",
-                "urn": "urn:pulumi:prod::app::aws:rds/instance:Instance::my-db",
-            }
-        ]
-    }
-    changes = adapter.analyze(data, tool_name="Pulumi")
-    rc = changes[0]
-    # The rules engine should escalate RDS deletion to irreversible
-    assert rc.risk == "irreversible"
-    assert "RDS" in rc.explanation</code></pre>
-
-          <h3 style="margin-top:24px;color:var(--accent)">Fixture-based tests</h3>
-          <p style="color:var(--muted);margin:8px 0 0">
-            Save a sample Pulumi preview JSON to <code>tests/fixtures/pulumi_preview_mixed.json</code>
-            and write a test that validates the full agent-gate contract:
-          </p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>import json
-from pathlib import Path
-
-def test_pulumi_fixture_gate_contract():
-    fixture = Path("tests/fixtures/pulumi_preview_mixed.json")
-    data = json.loads(fixture.read_text())
-    adapter = PulumiAdapter()
-    changes = adapter.analyze(data, tool_name="Pulumi")
-    assert len(changes) &gt; 0
-    # Verify risk classifications on each change
-    for c in changes:
-        assert c.risk in ("safe", "review", "dangerous", "irreversible")</code></pre>
-
-          <h3 style="margin-top:24px;color:var(--accent)">Detection registration test</h3>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px;margin-top:8px"><code>def test_detect_pulumi_adapter():
-    data = {"steps": [{"op": "CREATE", "urn": "..."}]}
-    adapter = detect_adapter(data)
-    from readtheplan.adapters.pulumi import PulumiAdapter
-    assert isinstance(adapter, PulumiAdapter)</code></pre>
-
-          <p style="color:var(--muted);margin:16px 0 0">
-            Run all adapter tests with:
-          </p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pytest tests/test_pulumi_adapter.py -v</code></pre>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>pytest tests/test_pulumi_adapter.py -v
+pytest tests/test_jenkins_adapter.py -v</code></pre>
         </div>
       </section>
 

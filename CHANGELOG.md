@@ -7,6 +7,9 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Built-in Pulumi preview adapter, CLI gate, and local MCP tool. It accepts
+  preview digest JSON and streaming JSON events, normalizes provider types and
+  input property names, and reuses deep resource-aware risk rules.
 - Built-in local adapters and CLI gates for Ansible playbooks, Jenkins pipelines,
   Chef recipes, and Puppet manifests. Scripted formats use conservative static
   analysis and never execute user infrastructure code.

@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Run readtheplan as a local MCP server so AI coding agents can review Terraform plan risk and SOC 2 evidence context without uploading raw plans."
+      content="Run readtheplan as a local MCP server so AI agents can review Terraform, CloudFormation, Kubernetes, and Pulumi changes without uploading raw inputs."
     />
-    <title>Local MCP Terraform Reviewer | readtheplan</title>
+    <title>Local MCP Infrastructure Reviewer | readtheplan</title>
     <link rel="canonical" href="https://readtheplan.dev/mcp/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Local MCP Terraform Reviewer | readtheplan" />
+    <meta property="og:title" content="Local MCP Infrastructure Reviewer | readtheplan" />
     <meta
       property="og:description"
-      content="Give your AI coding agent a Terraform/SOC 2 reviewer that runs locally and never uploads raw plans."
+      content="Give your AI coding agent a deterministic infrastructure reviewer that runs locally and never uploads raw plans."
     />
     <meta property="og:url" content="https://readtheplan.dev/mcp/" />
     <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
@@ -48,11 +48,12 @@
       <section class="hero g utility-hero" aria-labelledby="mcp-title">
         <div class="gc hero-content">
           <p class="eyebrow">Secure AI-agent integrations</p>
-          <h1 id="mcp-title">Local MCP Terraform reviewer.</h1>
+          <h1 id="mcp-title">Local MCP infrastructure reviewer.</h1>
           <p class="intro-copy">
-            Give your AI coding agent a Terraform/SOC 2 reviewer that runs locally
-            and never uploads raw plans. The preview exposes readtheplan analysis to
-            MCP clients over stdio, so plan JSON stays on your workstation or inside CI.
+            Give your AI coding agent deterministic Terraform, CloudFormation, Kubernetes,
+            and Pulumi review that runs locally and never uploads raw inputs. The preview
+            exposes readtheplan analysis to MCP clients over stdio, so change artifacts
+            stay on your workstation or inside CI.
           </p>
         </div>
         <div class="gc trust-strip" aria-label="Product boundaries">
@@ -94,8 +95,10 @@ readtheplan mcp</pre>
           <p class="eyebrow">Tool surface today</p>
           <h2>Analyze and gate.</h2>
           <p class="utility-copy">
-            The preview exposes two MCP tools: <code>analyze_plan</code> and
-            <code>agent_gate</code>. Both accept a local <code>plan_path</code>.
+            The preview exposes Terraform <code>analyze_plan</code> and
+            <code>agent_gate</code>, plus <code>agent_gate_cloudformation</code>,
+            <code>agent_gate_kubernetes</code>, and <code>agent_gate_pulumi</code>.
+            Every tool accepts a local input path.
             <code>analyze_plan</code> returns the same JSON summary as
             <code>readtheplan analyze --format json plan.json</code>, while
             <code>agent_gate</code> returns the <code>rtp-agent-gate-v1</code> contract
@@ -221,9 +224,9 @@ readtheplan mcp</pre>
             Pilot setup can help an infra or compliance team connect a local MCP client
             to one Terraform repository, tune review prompts, and decide which workflows
             belong in CLI evidence rather than the preview MCP tool.
-            Future adapters can normalize CloudFormation, Packer, Ansible, Kubernetes,
-            Pulumi, AWS CDK, and Azure/GCP/Oracle IaC into the gate contract, but this
-            preview is Terraform-first today.
+            Current MCP gates normalize Terraform/OpenTofu, CloudFormation, Kubernetes,
+            and Pulumi into the same contract. Packer, Ansible, AWS CDK, and additional
+            Azure/GCP/Oracle inputs can follow the same local-first boundary.
           </p>
           <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20MCP%20pilot%20setup">
             Request pilot setup
@@ -242,7 +245,7 @@ readtheplan mcp</pre>
       <footer class="g footer-grid">
         <div class="gc">MIT License</div>
         <div class="gc">Local MCP over stdio</div>
-        <div class="gc">analyze_plan + agent_gate</div>
+        <div class="gc">plan analysis + cross-tool agent gates</div>
         <div class="gc"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></div>
       </footer>
     </main>
