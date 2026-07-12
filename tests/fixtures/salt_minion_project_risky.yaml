@@ -1,0 +1,17 @@
+master:
+  - salt-a.example.test
+  - salt-b.example.test
+master_type: func
+verify_master_pubkey_sign: false
+startup_states: highstate
+sls_list:
+  - baseline
+mine_functions:
+  cmd.run:
+    - uptime
+beacons:
+  inotify:
+    - files:
+        /etc/important.conf: {}
+include:
+  - /etc/salt/minion.d/*.conf

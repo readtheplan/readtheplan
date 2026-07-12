@@ -1,0 +1,43 @@
+open_mode: true
+auto_accept: true
+permissive_pki_access: true
+file_recv: true
+token_expire_user_override: true
+pillar_opts: true
+gitfs_ssl_verify: false
+gitfs_insecure_auth: true
+publisher_acl:
+  deploy:
+    - '*'
+external_auth:
+  pam:
+    ops:
+      - 'cmd.*'
+file_roots:
+  base:
+    - /srv/salt
+pillar_roots:
+  base:
+    - /srv/pillar
+module_dirs:
+  - /srv/salt/_modules
+gitfs_remotes:
+  - http://deploy:literal-token@git.example.test/states.git:
+      - base: main
+  - https://git.example.test/reviewed-states.git:
+      - ref: 0123456789abcdef0123456789abcdef01234567
+ext_pillar:
+  - cmd_yaml: cat /run/pillar.yaml
+reactor:
+  - 'salt/minion/*/start':
+      - salt://reactor/bootstrap.sls
+schedule:
+  fleet-highstate:
+    function: state.highstate
+    minutes: 15
+engines:
+  - webhook: {}
+pillar_cache: true
+pillar_cache_backend: disk
+gitfs_password: literal-password
+gitfs_privkey: /etc/salt/gitfs.key

@@ -34,6 +34,7 @@ matrix makes those boundaries explicit.
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles; privilege, controller delegation, check/error controls, includes, identity/host security, supply-chain inputs, TLS, and secret-bearing environments | Built-in |
 | Ansible project | `ansible.cfg` or Galaxy requirements YAML | `readtheplan ansible-project ansible.cfg` | Controller transport/privilege, plugins, callbacks, inventory, Galaxy endpoints and credentials, roles/collections, version pinning, SCM transport, signatures, and parse boundaries | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
+| Salt project | Master/minion YAML config, top files, or Salt SSH rosters | `readtheplan salt-project master` | PKI trust, remote authorization, state/Pillar/module roots, GitFS provenance, reactors/schedules/startup execution, fleet targeting, SSH privilege, credentials, proxies, and host verification | Built-in |
 | Jenkins | Jenkinsfile | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step scanner covering agents/images/host arguments, libraries, credentials, commands/dynamic Groovy, triggers, approvals, checkout/HTTP/artifacts, and cleanup | Conservative |
 | Jenkins Configuration as Code | JCasC YAML | `readtheplan jenkins-jcasc jenkins.yaml` | Security realms, authorization, credentials, controller executors, nodes/clouds, agent images/privilege, libraries, script approval, Job DSL, endpoints/TLS, and plugin boundaries | Built-in |
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
@@ -178,6 +179,11 @@ the same optional `framework` parameter through its MCP tool.
 - Salt analysis parses static SLS YAML with duplicate-key rejection. Jinja-templated
   SLS files receive conservative line-based state discovery plus an unresolved
   renderer finding; calls such as `salt['cmd.run'](...)` during rendering block.
+- Salt project analysis strictly parses rendered master/minion configuration,
+  top files, and Salt SSH rosters without loading modules or contacting a master.
+  Included config, accepted keys, custom modules/renderers, Pillar/grains,
+  fileserver precedence, roster plugins, and rendered highstate remain an
+  explicit review boundary.
 - Vagrant analysis scans the documented Ruby DSL without executing it. Arbitrary
   Ruby, plugins, box Vagrantfiles, provider configuration, and configuration from
   the Vagrant home directory remain an explicit review boundary.

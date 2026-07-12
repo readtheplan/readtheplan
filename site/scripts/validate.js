@@ -364,6 +364,7 @@ for (const token of [
   "ansible-project",
   "chef-project",
   "puppet-project",
+  "salt-project",
   "proceed/warn/block",
   "PR reviewer",
   "SOC 2 evidence prep",

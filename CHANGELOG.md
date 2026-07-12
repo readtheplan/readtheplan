@@ -9,6 +9,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Salt project gates across the CLI, GitHub Action, and MCP. Strict parsing of
+  master/minion configuration, top files, and Salt SSH rosters now covers PKI
+  trust, remote authorization, state/Pillar/module sources, GitFS provenance,
+  automatic reactors/schedules/startup execution, fleet targeting, SSH
+  privilege and host verification, credentials, and project boundaries.
 - Native AWS CDK gates across the CLI, GitHub Action, and MCP. Strict parsing of
   Cloud Assembly and asset manifests now covers schema/runtime compatibility,
   stacks, target environments, deployment roles, missing context, artifact graphs,

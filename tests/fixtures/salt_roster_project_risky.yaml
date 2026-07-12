@@ -1,0 +1,16 @@
+edge-01:
+  host: 203.0.113.10
+  user: root
+  passwd: literal-password
+  priv: /etc/salt/pki/master/ssh/salt-ssh.rsa
+  sudo: true
+  ssh_options:
+    - StrictHostKeyChecking=no
+    - UserKnownHostsFile=/dev/null
+  proxy_host: bastion.example.test
+  proxy_passwd: literal-proxy-password
+  ssh_pre_flight: /usr/local/bin/bootstrap-salt
+worker-01:
+  host: worker-01.example.test
+  user: deploy
+  priv: /run/keys/deploy
