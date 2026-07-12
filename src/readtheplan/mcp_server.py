@@ -611,6 +611,45 @@ def agent_gate_cloud_init(
     return analyze_cloud_init(data, catalog=catalog)
 
 
+def agent_gate_systemd(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for a local systemd unit file."""
+    from readtheplan.adapters.systemd import (
+        SystemdUnitAdapter,
+        SystemdUnitInputError,
+        analyze_systemd,
+        parse_systemd_unit,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read systemd input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_systemd_unit(source)
+    except SystemdUnitInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid systemd unit in {input_path}: {exc}",
+        ) from exc
+    if not SystemdUnitAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as a systemd unit",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_systemd(data, catalog=catalog)
+
+
 def agent_gate_dockerfile(
     input_path: str,
     framework: str | None = None,
@@ -728,6 +767,7 @@ def create_server() -> Any:
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_vagrant_handler = agent_gate_vagrant
     agent_gate_cloud_init_handler = agent_gate_cloud_init
+    agent_gate_systemd_handler = agent_gate_systemd
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
     @mcp.tool(name="analyze_plan")
@@ -892,6 +932,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_cloud_init_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_systemd")
+    def _agent_gate_systemd_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for a systemd unit without invoking systemd.
+
+        Args:
+            input_path: Local path to a systemd unit file.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_systemd_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_dockerfile")
     def _agent_gate_dockerfile_tool(

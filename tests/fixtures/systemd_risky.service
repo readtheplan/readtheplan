@@ -1,0 +1,31 @@
+[Unit]
+Description=Risky deployment agent
+After=network-online.target
+Wants=network-online.target
+OnFailure=alert@%n.service
+DefaultDependencies=no
+
+[Service]
+Type=simple
+Environment=API_TOKEN=fixture-secret MODE=production
+EnvironmentFile=-/etc/readtheplan/agent.env
+LoadCredential=registry:/etc/registry-token
+ExecStartPre=/usr/bin/curl https://example.test/bootstrap | /bin/sh
+ExecStart=/usr/local/bin/agent --listen 0.0.0.0:9000
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN
+NoNewPrivileges=no
+ProtectSystem=false
+ProtectHome=false
+PrivateTmp=no
+PrivateDevices=no
+ReadWritePaths=/ /etc /var/lib/agent
+BindPaths=/var/run/docker.sock
+DeviceAllow=/dev/kvm rw
+KillMode=none
+SendSIGKILL=no
+
+[Install]
+WantedBy=multi-user.target

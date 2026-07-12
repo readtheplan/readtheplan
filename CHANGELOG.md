@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native systemd unit gates across the CLI, generalized Action, and local MCP
+  server. Static parsing preserves repeated/reset directives and surfaces host
+  commands, runtime identity, capabilities, credentials, sandboxing, filesystem
+  and device access, sockets, timers, mounts, restart loops, activation targets,
+  and effective merged-unit boundaries without invoking systemd.
 - Tekton-aware Kubernetes rules for Tasks, Pipelines, Runs, remote resolvers,
   workspaces, ServiceAccounts, pod security, EventListeners, TriggerTemplates,
   Triggers, bindings, and ResolutionRequests. Rendered Tekton YAML now receives

@@ -24,6 +24,7 @@ from readtheplan.mcp_server import (
     agent_gate_pipeline,
     agent_gate_pulumi,
     agent_gate_salt,
+    agent_gate_systemd,
     agent_gate_vagrant,
     agent_gate_workload,
     analyze_plan,
@@ -224,6 +225,14 @@ def test_agent_gate_cloud_init_supports_framework_checks() -> None:
     assert result["adapter"] == "cloud-init"
     assert result["decision"] == "block"
     assert result["total_changes"] == 20
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_systemd_supports_framework_checks() -> None:
+    result = agent_gate_systemd(str(FIXTURES / "systemd_risky.service"), "soc2")
+    assert result["adapter"] == "systemd"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 30
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
@@ -701,6 +710,19 @@ def test_agent_gate_cloud_init_rejects_path_outside_root(monkeypatch, tmp_path) 
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_systemd_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "example.service"
+    outside.write_text("[Service]\nExecStart=/usr/bin/true\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_systemd(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_dockerfile_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -887,6 +909,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
+        assert "agent_gate_systemd" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -907,6 +930,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]
         assert {"input_path", "framework"} <= set(cloud_init_schema["properties"])
+        systemd_schema = tools_by_name["agent_gate_systemd"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(systemd_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 
