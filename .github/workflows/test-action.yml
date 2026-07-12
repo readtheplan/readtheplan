@@ -81,6 +81,35 @@ jobs:
           assert any(item.startswith("rtp.control.soc2.") for item in payload["required_checks"])
           PY
 
+      - name: Run action on AWS CDK Cloud Assembly
+        id: cdk
+        uses: ./
+        with:
+          tool: cdk
+          input-file: tests/fixtures/cdk_assembly_risky.json
+          framework: soc2
+
+      - name: Assert AWS CDK outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.cdk.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.cdk.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.cdk.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "16"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "cdk"
+          assert payload["artifact_type"] == "assembly"
+          assert payload["decision"] == "block"
+          assert "missing context" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Reject unsupported tool
         id: unsupported_tool
         uses: ./

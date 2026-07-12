@@ -7,6 +7,7 @@ on:
     paths:
       - "infra/**"
       - "**/*.bicep"
+      - "cdk.out/**"
       - "ansible/**"
       - "ansible.cfg"
       - "Jenkinsfile"
@@ -28,6 +29,8 @@ jobs:
         include:
           - tool: bicep
             input: infra/main.bicep
+          - tool: cdk
+            input: cdk.out/manifest.json
           - tool: azure
             input: build/azure-whatif.json
           - tool: kubernetes

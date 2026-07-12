@@ -47,7 +47,7 @@
           <h1 id="title">One risk gate for every infrastructure tool.</h1>
           <p class="intro-copy">
             readtheplan ships cross-tool infrastructure gates and a public adapter system for adding
-            CDK, Packer, or custom in-house plan formats. This guide covers the built-in integrations
+            Packer, CloudFormation, or custom in-house plan formats. This guide covers the built-in integrations
             and the <code>BaseAdapter</code> extension contract.
           </p>
         </div>
@@ -63,17 +63,18 @@
           </p>
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively with first-party AWS, GCP, Azure,
-            complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation</strong>,
+            complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation and AWS CDK</strong>,
             <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible playbooks and project configuration</strong>, <strong>Salt</strong>, <strong>Jenkins pipelines/JCasC</strong>,
             <strong>Pulumi</strong>, <strong>Chef recipes and projects</strong>, <strong>Puppet manifests and projects</strong>, <strong>GitHub Actions</strong>,
             <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
             <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, <strong>Dockerfiles</strong>, <strong>Azure Pipelines</strong>, and <strong>Bitbucket Pipelines</strong>. Rendered Helm,
-            Kustomize, and Crossplane resources flow through the Kubernetes gate. AWS CDK,
-            Terragrunt, and internal tools can use the same public adapter interface.
+            Kustomize, and Crossplane resources flow through the Kubernetes gate. Terragrunt
+            and internal tools can use the same public adapter interface.
           </p>
 
           <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
+readtheplan cdk cdk.out/manifest.json
 readtheplan azure whatif.json
 readtheplan bicep main.bicep
 readtheplan kubernetes rendered.yaml
@@ -99,7 +100,8 @@ readtheplan docker-compose compose.yml
 readtheplan nomad plan-response.json
 readtheplan packer inspect.txt</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Bicep
+            CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
+            consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
             source receives conservative static analysis before compilation. Ansible playbooks,
             Galaxy requirements, and static Salt SLS input consume YAML structurally;
             <code>ansible.cfg</code> is parsed as INI, while templated Salt input falls back to a
@@ -114,7 +116,7 @@ readtheplan packer inspect.txt</code></pre>
 
           <h3 style="margin-top:28px;color:var(--accent)">Why write one?</h3>
           <ul style="color:var(--muted);margin:8px 0 0;padding-left:20px">
-            <li style="margin-bottom:6px">You use CDK or an internal provisioning tool and want readtheplan's risk analysis on its plans.</li>
+            <li style="margin-bottom:6px">You use an internal provisioning tool and want readtheplan's risk analysis on its plans.</li>
             <li style="margin-bottom:6px">You have a custom IaC tool and want compliance gates and audit evidence.</li>
             <li style="margin-bottom:6px">You want to extend the type-map for CloudFormation or Kubernetes resources not yet covered.</li>
           </ul>

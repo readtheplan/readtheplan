@@ -1,0 +1,64 @@
+{
+  "version": "38.0.1",
+  "files": {
+    "0123456789abcdef0123456789abcdef": {
+      "source": {
+        "path": "asset.0123456789abcdef",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "111111111111-us-east-1": {
+          "bucketName": "cdk-assets-111111111111-us-east-1",
+          "objectKey": "assets/0123456789abcdef.zip",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:aws:iam::111111111111:role/cdk-file-publishing-role"
+        }
+      }
+    },
+    "external-producer": {
+      "source": {
+        "path": "../outside-assembly",
+        "packaging": "file",
+        "executable": ["bash", "./package.sh"]
+      },
+      "destinations": {}
+    }
+  },
+  "dockerImages": {
+    "mutable-container": {
+      "source": {
+        "directory": "docker/app",
+        "dockerFile": "Dockerfile",
+        "dockerBuildArgs": {
+          "API_TOKEN": "literal-build-token"
+        },
+        "dockerBuildSecrets": {
+          "npmrc": "src=.npmrc"
+        },
+        "dockerBuildSsh": "default",
+        "dockerBuildContexts": {
+          "base": "docker-image://alpine:latest"
+        },
+        "networkMode": "host"
+      },
+      "destinations": {
+        "111111111111-us-east-1": {
+          "repositoryName": "cdk/app",
+          "imageTag": "latest"
+        }
+      }
+    },
+    "immutable-container": {
+      "source": {
+        "directory": "docker/worker",
+        "dockerFile": "Dockerfile"
+      },
+      "destinations": {
+        "111111111111-us-east-1": {
+          "repositoryName": "cdk/worker",
+          "imageTag": "0123456789abcdef0123456789abcdef"
+        }
+      }
+    }
+  }
+}

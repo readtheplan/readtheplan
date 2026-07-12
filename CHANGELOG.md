@@ -9,6 +9,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native AWS CDK gates across the CLI, GitHub Action, and MCP. Strict parsing of
+  Cloud Assembly and asset manifests now covers schema/runtime compatibility,
+  stacks, target environments, deployment roles, missing context, artifact graphs,
+  synthesis diagnostics, nested assemblies, file/Docker asset producers,
+  build secrets/SSH/networking, publishing destinations, and deployment boundaries.
 - Puppet project gates across the CLI, GitHub Action, and MCP. Strict parsing of
   `Puppetfile`, module `metadata.json`, and `hiera.yaml` now covers Forge/Git
   provenance, immutable revisions, install paths, dependency bounds, Hiera
