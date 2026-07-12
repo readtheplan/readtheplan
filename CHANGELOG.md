@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for Cloudflare provider v5 and important v4
+  aliases. Zones/DNS/DNSSEC, edge rules and settings, Workers, Zero Trust,
+  tunnels, R2/D1/KV/Queues, load balancing, TLS, API identity, Logpush, and
+  Pages now receive resource-specific risk semantics through every native plan
+  surface instead of the generic Terraform baseline.
 - Deeper configuration-management gates for Ansible, Jenkins, Chef, and Puppet.
   Privilege/delegation and task controls, agent supply chain and dynamic Groovy,
   remote cookbook artifacts/guards/notifications, and Puppet classes/data,

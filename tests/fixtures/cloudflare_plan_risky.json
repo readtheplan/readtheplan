@@ -1,0 +1,206 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.11.4",
+  "resource_changes": [
+    {
+      "address": "cloudflare_zone.production",
+      "type": "cloudflare_zone",
+      "name": "production",
+      "change": {
+        "actions": ["update"],
+        "before": {"name": "example.com", "paused": false, "type": "full"},
+        "after": {"name": "example.com", "paused": true, "type": "full"}
+      }
+    },
+    {
+      "address": "cloudflare_dns_record.origin",
+      "type": "cloudflare_dns_record",
+      "name": "origin",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"name": "origin.example.com", "type": "A", "content": "203.0.113.10", "proxied": false, "ttl": 300}
+      }
+    },
+    {
+      "address": "cloudflare_dns_record.mail",
+      "type": "cloudflare_dns_record",
+      "name": "mail",
+      "change": {
+        "actions": ["update"],
+        "before": {"name": "example.com", "type": "MX", "content": "mail1.example.com"},
+        "after": {"name": "example.com", "type": "MX", "content": "mail2.example.com"}
+      }
+    },
+    {
+      "address": "cloudflare_zone_dnssec.production",
+      "type": "cloudflare_zone_dnssec",
+      "name": "production",
+      "change": {"actions": ["delete"], "before": {"status": "active"}, "after": null}
+    },
+    {
+      "address": "cloudflare_ruleset.waf",
+      "type": "cloudflare_ruleset",
+      "name": "waf",
+      "change": {
+        "actions": ["update"],
+        "before": {"phase": "http_request_firewall_managed", "rules": []},
+        "after": {"phase": "http_request_firewall_managed", "rules": [{"action": "skip", "expression": "ip.src in $trusted"}]}
+      }
+    },
+    {
+      "address": "cloudflare_zone_setting.min_tls",
+      "type": "cloudflare_zone_setting",
+      "name": "min_tls",
+      "change": {
+        "actions": ["update"],
+        "before": {"setting_id": "min_tls_version", "value": "1.2"},
+        "after": {"setting_id": "min_tls_version", "value": "1.0"}
+      }
+    },
+    {
+      "address": "cloudflare_workers_script.api",
+      "type": "cloudflare_workers_script",
+      "name": "api",
+      "change": {
+        "actions": ["update"],
+        "before": {"script_name": "api", "content": "export default {}", "observability": {"enabled": true}},
+        "after": {"script_name": "api", "content": "export default {fetch(){}}", "observability": {"enabled": false}, "bindings": [{"type": "secret_text", "name": "API_TOKEN"}]}
+      }
+    },
+    {
+      "address": "cloudflare_workers_route.api",
+      "type": "cloudflare_workers_route",
+      "name": "api",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"pattern": "example.com/api/*", "script": "api"}
+      }
+    },
+    {
+      "address": "cloudflare_zero_trust_access_policy.everyone",
+      "type": "cloudflare_zero_trust_access_policy",
+      "name": "everyone",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"name": "bypass", "decision": "bypass", "include": [{"everyone": {}}]}
+      }
+    },
+    {
+      "address": "cloudflare_zero_trust_tunnel_cloudflared_config.origin",
+      "type": "cloudflare_zero_trust_tunnel_cloudflared_config",
+      "name": "origin",
+      "change": {
+        "actions": ["update"],
+        "before": {"ingress_rule": [{"hostname": "app.example.com", "service": "http://localhost:8080"}]},
+        "after": {"ingress_rule": [{"hostname": "*.example.com", "service": "http://localhost:8080"}, {"service": "http_status:404"}]}
+      }
+    },
+    {
+      "address": "cloudflare_r2_bucket.backups",
+      "type": "cloudflare_r2_bucket",
+      "name": "backups",
+      "change": {"actions": ["delete"], "before": {"name": "backups"}, "after": null}
+    },
+    {
+      "address": "cloudflare_d1_database.production",
+      "type": "cloudflare_d1_database",
+      "name": "production",
+      "change": {"actions": ["delete"], "before": {"name": "production"}, "after": null}
+    },
+    {
+      "address": "cloudflare_workers_kv_namespace.sessions",
+      "type": "cloudflare_workers_kv_namespace",
+      "name": "sessions",
+      "change": {"actions": ["create"], "before": null, "after": {"title": "sessions"}}
+    },
+    {
+      "address": "cloudflare_queue.deployments",
+      "type": "cloudflare_queue",
+      "name": "deployments",
+      "change": {"actions": ["delete"], "before": {"queue_name": "deployments"}, "after": null}
+    },
+    {
+      "address": "cloudflare_load_balancer.www",
+      "type": "cloudflare_load_balancer",
+      "name": "www",
+      "change": {
+        "actions": ["update"],
+        "before": {"default_pools": ["pool-a"], "fallback_pool": "pool-a"},
+        "after": {"default_pools": ["pool-b"], "fallback_pool": "pool-b"}
+      }
+    },
+    {
+      "address": "cloudflare_custom_ssl.production",
+      "type": "cloudflare_custom_ssl",
+      "name": "production",
+      "change": {"actions": ["delete"], "before": {"bundle_method": "ubiquitous"}, "after": null}
+    },
+    {
+      "address": "cloudflare_api_token.deploy",
+      "type": "cloudflare_api_token",
+      "name": "deploy",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"name": "deploy", "policies": [{"permission_groups": [{"name": "Account Settings Write"}], "resources": {"com.cloudflare.api.account.*": "*"}}]}
+      }
+    },
+    {
+      "address": "cloudflare_logpush_job.security",
+      "type": "cloudflare_logpush_job",
+      "name": "security",
+      "change": {
+        "actions": ["update"],
+        "before": {"enabled": true, "destination_conf": "s3://security-a"},
+        "after": {"enabled": false, "destination_conf": "s3://security-b"}
+      }
+    },
+    {
+      "address": "cloudflare_pages_project.site",
+      "type": "cloudflare_pages_project",
+      "name": "site",
+      "change": {
+        "actions": ["update"],
+        "before": {"production_branch": "main", "build_config": {"build_command": "npm run build"}},
+        "after": {"production_branch": "develop", "build_config": {"build_command": "npm run deploy"}}
+      }
+    },
+    {
+      "address": "cloudflare_zone_setting.cache_ttl",
+      "type": "cloudflare_zone_setting",
+      "name": "cache_ttl",
+      "change": {
+        "actions": ["update"],
+        "before": {"setting_id": "browser_cache_ttl", "value": 14400},
+        "after": {"setting_id": "browser_cache_ttl", "value": 3600}
+      }
+    },
+    {
+      "address": "cloudflare_zone.preview",
+      "type": "cloudflare_zone",
+      "name": "preview",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "preview.example", "paused": false, "type": "full"}}
+    },
+    {
+      "address": "cloudflare_dns_record.verification",
+      "type": "cloudflare_dns_record",
+      "name": "verification",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "example.com", "type": "TXT", "content": "verification", "ttl": 300}}
+    },
+    {
+      "address": "cloudflare_logpush_job.http",
+      "type": "cloudflare_logpush_job",
+      "name": "http",
+      "change": {"actions": ["create"], "before": null, "after": {"enabled": true, "dataset": "http_requests", "destination_conf": "s3://logs"}}
+    },
+    {
+      "address": "cloudflare_d1_database.analytics",
+      "type": "cloudflare_d1_database",
+      "name": "analytics",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "analytics", "primary_location_hint": "wnam"}}
+    }
+  ]
+}

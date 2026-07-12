@@ -1,4 +1,5 @@
 """Tests for plugin provenance (Task A) and entry-point discovery (Task B)."""
+
 from __future__ import annotations
 
 import readtheplan.rules._shared as shared
@@ -85,5 +86,5 @@ def test_entry_point_discovery_finds_builtins() -> None:
     assert ADAPTER_ENTRY_POINT_GROUP == "readtheplan.adapters"
     rules = load_entry_point_rules()
     adapters = load_entry_point_adapters()
-    assert {"aws", "gcp", "azure", "k8s"} <= set(rules)
+    assert {"aws", "gcp", "azure", "cloudflare", "k8s"} <= set(rules)
     assert {"cloudformation", "kubernetes"} <= set(adapters)

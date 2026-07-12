@@ -7,6 +7,7 @@ matrix makes those boundaries explicit.
 | Ecosystem | Input | Command | Analysis depth | Maturity |
 |---|---|---|---|---|
 | Terraform / OpenTofu | `terraform show -json` plan | `readtheplan analyze plan.json` | Native plan diff, old/new state, resource-aware rules, evidence and signing | Stable |
+| Cloudflare Terraform provider | Provider v5 plan resources plus important v4 aliases | `readtheplan analyze plan.json` | Zones/DNS/DNSSEC, rulesets/WAF and settings, Workers/routes, Zero Trust/tunnels, R2/D1/KV/Queues, load balancing, TLS, API identity, Logpush, and Pages | Built-in |
 | CloudFormation | Change Set JSON or old/new template wrapper | `readtheplan cloudformation changes.json` | Structured operations; template wrappers include deep old/new properties | Built-in |
 | Serverless Framework | `serverless.yml` service source | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity and artifacts, IAM, functions, events, plugins, external variables, packaging, extensions and embedded CloudFormation | Built-in |
 | AWS SAM | SAM template YAML/JSON | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code sources, policies, event ingress, APIs, state machines, nested apps, Connectors, custom builds and lifecycle policies | Built-in |
@@ -108,6 +109,11 @@ the same optional `framework` parameter through its MCP tool.
   schemas, invoking functions, or contacting Kubernetes or external cloud APIs.
   Package signature-verification feature flags, RBAC, admission, provider runtime
   state, and external-resource state remain deployment-side trust boundaries.
+- Cloudflare rules inspect provider plan values without contacting the account or
+  resolving dashboard/runtime state. Referenced rulesets/lists, Worker source
+  artifacts, secret values, identity-provider groups, tunnel connectors, origin
+  health, registrar DS records, and Logpush destinations remain external trust
+  boundaries to verify before apply.
 - Serverless Framework and AWS SAM analysis parses source without resolving
   variables, loading external files, downloading code/application artifacts,
   executing plugins or custom builders, or applying CloudFormation macros. Run
