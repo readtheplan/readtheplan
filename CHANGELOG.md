@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Deeper configuration-management gates for Ansible, Jenkins, Chef, and Puppet.
+  Privilege/delegation and task controls, agent supply chain and dynamic Groovy,
+  remote cookbook artifacts/guards/notifications, and Puppet classes/data,
+  custom, virtual, exported, and collected resources now receive explicit
+  semantics. A shared local MCP gate and real Action fixtures cover all four.
 - First-party Kubernetes rules for Istio, Kyverno, OPA Gatekeeper, KEDA, and
   Knative Serving/Eventing. Mesh traffic and identity, admission policy code and
   exceptions, external scaler credentials, event-driven Jobs, serverless

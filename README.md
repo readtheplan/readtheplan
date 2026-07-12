@@ -86,11 +86,11 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Kustomize source | `readtheplan kustomize kustomization.yaml` | Resources/bases, remote pinning, patches, generators, image overrides, Helm inflation, plugins, and transforms |
 | Crossplane | `readtheplan crossplane resources.yaml` | Packages/functions, image policy, runtime configuration, XRDs, Compositions, provider credentials, managed-resource lifecycle, and composite selection |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
-| Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |
+| Ansible | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles plus privilege, delegation, check-mode, error, secret-environment, include, identity, and supply-chain semantics |
 | Salt | `readtheplan salt state.sls` | Structured SLS states, destructive functions, command/module execution, secrets, includes, and Jinja rendering |
-| Jenkins | `readtheplan jenkins Jenkinsfile` | Conservative pipeline-step analysis |
-| Chef | `readtheplan chef default.rb` | Conservative recipe-resource analysis |
-| Puppet | `readtheplan puppet site.pp` | Conservative manifest-resource analysis |
+| Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
+| Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
+| Puppet | `readtheplan puppet site.pp` | Built-in/custom resources, state, identities, classes, lookups/templates, virtual/exported resources, collectors, refresh relationships, and sources/permissions |
 | GitHub Actions | `readtheplan github-actions workflow.yml` | Token permissions, action pinning, secrets, environments, and run steps |
 | GitLab CI | `readtheplan gitlab-ci .gitlab-ci.yml` | Includes, tokens, downstream pipelines, environments, and scripts |
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |

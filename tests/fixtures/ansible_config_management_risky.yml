@@ -1,0 +1,38 @@
+- name: production rollout
+  hosts: all
+  become: true
+  become_user: root
+  strategy: free
+  vars_files:
+    - secrets.yml
+  tasks:
+    - name: run controller-side deployment
+      local_action: ansible.builtin.shell ./deploy.sh
+      run_once: true
+    - name: download unsigned installer
+      ansible.builtin.get_url:
+        url: http://downloads.example.com/install.sh
+        dest: /tmp/install.sh
+        validate_certs: false
+    - name: add deployment key
+      ansible.posix.authorized_key:
+        user: deploy
+        key: ssh-ed25519 AAAAexample
+    - name: force mutation during check mode
+      ansible.builtin.command: /srv/migrate
+      check_mode: false
+      ignore_errors: true
+    - name: expose token to task
+      ansible.builtin.debug:
+        msg: deploying
+      environment:
+        DEPLOY_TOKEN: plaintext-token
+    - name: load external role
+      ansible.builtin.include_role:
+        name: organization.production
+  handlers:
+    - name: restart application
+      ansible.builtin.systemd:
+        name: application
+        state: restarted
+- import_playbook: hardening.yml

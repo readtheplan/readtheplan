@@ -1,0 +1,38 @@
+@Library('platform@main') _
+pipeline {
+  agent {
+    docker {
+      image 'registry.example.com/platform/deployer:latest'
+      args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
+  triggers {
+    cron('H/15 * * * *')
+  }
+  environment {
+    DEPLOY_TOKEN = credentials('production-deploy-token')
+  }
+  stages {
+    stage('Deploy') {
+      steps {
+        checkout scm
+        script {
+          load 'pipelines/deploy.groovy'
+        }
+        withCredentials([]) {
+          sh './deploy.sh'
+        }
+        httpRequest url: 'https://control.example.com/deploy'
+        input message: 'Promote production?', submitter: 'release-managers'
+        build job: 'smoke-tests'
+        archiveArtifacts artifacts: 'dist/**'
+        junit 'reports/*.xml'
+      }
+    }
+  }
+  post {
+    always {
+      cleanWs()
+    }
+  }
+}
