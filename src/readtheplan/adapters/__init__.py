@@ -3,9 +3,13 @@ from __future__ import annotations
 from importlib.metadata import entry_points
 from typing import Any
 
+from readtheplan.adapters.ansible import AnsibleAdapter
 from readtheplan.adapters.base import BaseAdapter
+from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
+from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
+from readtheplan.adapters.puppet import PuppetAdapter
 
 #: Entry point group external packages use to contribute adapters.
 ADAPTER_ENTRY_POINT_GROUP = "readtheplan.adapters"
@@ -55,13 +59,21 @@ def load_entry_point_adapters() -> list[str]:
 # Auto-register builtin adapters, then discover external plugins (best-effort).
 register_adapter(CloudFormationAdapter())
 register_adapter(KubernetesAdapter())
+register_adapter(AnsibleAdapter())
+register_adapter(JenkinsAdapter())
+register_adapter(ChefAdapter())
+register_adapter(PuppetAdapter())
 load_entry_point_adapters()
 
 __all__ = [
     "ADAPTER_ENTRY_POINT_GROUP",
+    "AnsibleAdapter",
     "BaseAdapter",
+    "ChefAdapter",
     "CloudFormationAdapter",
+    "JenkinsAdapter",
     "KubernetesAdapter",
+    "PuppetAdapter",
     "register_adapter",
     "get_adapter",
     "detect_adapter",
