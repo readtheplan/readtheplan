@@ -39,7 +39,7 @@
         <a href="/docs/">Docs</a>
         <a href="#install">Install</a>
         <a href="#prompts">Prompts</a>
-        <a href="#pilot">Pilot</a>
+        <a href="#community">Community</a>
       </nav>
       <div class="version-cell gc">local MCP preview</div>
     </header>
@@ -69,13 +69,8 @@
           </p>
         </div>
         <div class="gc">
-          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20MCP%20pilot%20setup">
-            Request pilot setup
-          </a>
-          <p class="handoff-note">
-            Placeholder inbox: info@readtheplan.dev. Replace the configured pilot
-            handoff address before production use.
-          </p>
+          <a class="primary-link" href="/docs/">Read the free setup docs</a>
+          <p class="handoff-note">No account, subscription, or hosted plan upload.</p>
         </div>
       </section>
 
@@ -211,29 +206,26 @@ readtheplan mcp</pre>
         </div>
       </section>
 
-      <section id="pilot" class="g pilot-panel" aria-labelledby="pilot-title">
+      <section id="community" class="g pilot-panel" aria-labelledby="community-title">
         <div class="gc">
-          <p class="eyebrow">Custom MCP pilots</p>
-          <h2 id="pilot-title">Productized integrations stay local-first.</h2>
+          <p class="eyebrow">Community integrations</p>
+          <h2 id="community-title">Extend the local tools in public.</h2>
         </div>
         <div class="gc pilot-copy">
           <p>
-            Pilot setup can help an infra or compliance team connect a local MCP client
-            to one Terraform repository, tune review prompts, and decide which workflows
-            belong in CLI evidence rather than the preview MCP tool.
+            The docs show how to connect a local MCP client, tune review prompts, and
+            decide which workflows belong in CLI evidence rather than the preview tool.
             Future adapters can normalize CloudFormation, Packer, Ansible, Kubernetes,
             Pulumi, AWS CDK, and Azure/GCP/Oracle IaC into the gate contract, but this
             preview is Terraform-first today.
           </p>
-          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20MCP%20pilot%20setup">
-            Request pilot setup
-          </a>
-          <p class="handoff-note">No raw Terraform plan is attached or submitted.</p>
+          <a class="primary-link" href="https://github.com/readtheplan/readtheplan/discussions">Ask in GitHub Discussions</a>
+          <p class="handoff-note">No raw Terraform plan needs to be attached or submitted.</p>
         </div>
         <div class="gc pilot-checks">
-          <ul class="checklist" aria-label="MCP pilot boundaries">
-            <li>Custom engagement items can include auth design, least privilege, audit logs, deployment guidance, and support.</li>
-            <li>The OSS preview does not include those production controls by default.</li>
+          <ul class="checklist" aria-label="MCP community boundaries">
+            <li>Community contributions can cover auth design, least privilege, audit logs, deployment guidance, adapters, and prompts.</li>
+            <li>Proposals and implementations are reviewed in the public repository.</li>
             <li>No hosted MCP service. No hosted plan analysis. No raw Terraform plan upload, no accounts, and no billing.</li>
           </ul>
         </div>

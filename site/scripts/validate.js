@@ -270,7 +270,7 @@ for (const token of [
   "Terraform Security Group 0.0.0.0/0 Risk",
   "Terraform CloudWatch Log Retention Risk",
   'itemscope itemtype="https://schema.org/FAQPage"',
-  "info@readtheplan.dev",
+  "Open the free quickstart",
 ]) {
   requireIncludes(seoHtml, token, "SEO/tool copy token");
 }
@@ -291,11 +291,11 @@ if (/<form[^>]+action=/i.test(seoHtml)) {
   throw new Error("SEO tools must not submit forms to a backend.");
 }
 
-// Brief page: paid output loop, no upload/backend/billing/automation claims.
+// Brief page: free community digest, no upload/backend/billing/automation claims.
 for (const token of [
   "Weekly Terraform/SOC 2 change intelligence for platform teams",
-  "repeated paid output loop",
-  "monitor, filter, analyze, package, deliver",
+  "free editorial digest",
+  "monitor, filter, analyze, package, and publish",
   "platform/SRE teams",
   "DevOps consultancies",
   "SOC 2 consultants",
@@ -305,12 +305,11 @@ for (const token of [
   "Terraform/SOC2 risk angle",
   "Action checklist",
   "readtheplan CTA",
-  "First sample/free",
-  "Private weekly brief",
-  "Custom company-specific monitoring",
-  "MCP/custom integration upsell",
-  "Request first brief / private pilot",
-  "info@readtheplan.dev",
+  "Every issue and every shipped readtheplan feature stays free",
+  "Future sponsorships must be clearly labeled",
+  "Machine traffic may be monetized through Cloudflare",
+  "No behavioral ads",
+  "Join GitHub Discussions",
   "Terraform/OpenTofu",
   "AWS logging",
   "AWS IAM",
@@ -334,6 +333,8 @@ for (const token of [
   "Stripe",
   "Checkout",
   "Subscribe now",
+  "private pilot",
+  "paid output",
   "storage bucket",
   "store uploaded",
   "stored plan",
@@ -368,11 +369,11 @@ for (const token of [
   "CloudFormation",
   "Kubernetes",
   "Terraform-first today",
-  "info@readtheplan.dev",
+  "Ask in GitHub Discussions",
   "auth design",
   "least privilege",
   "audit logs",
-  "Custom engagement",
+  "Community contributions",
 ]) {
   requireIncludes(mcpHtml, token, "MCP landing page token");
 }
