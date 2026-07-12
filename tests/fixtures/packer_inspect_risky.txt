@@ -1,0 +1,46 @@
+Packer Inspect: HCL2 mode
+
+> input-variables:
+
+var.aws_access_key: "<sensitive>"
+var.region: "<unknown>"
+
+> local-variables:
+
+local.name: "example"
+
+> builds:
+
+  > cloud-image:
+
+    sources:
+
+      amazon-ebs.production
+
+    provisioners:
+
+      file
+      shell
+      ansible
+
+    post-processors:
+
+      0:
+        manifest
+
+      1:
+        docker-push
+
+  > validation-only:
+
+    sources:
+
+      null.builder
+
+    provisioners:
+
+      sleep
+
+    post-processors:
+
+      <no post-processor>

@@ -88,6 +88,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |
+| Packer | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and inspect limitations |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
@@ -96,6 +97,9 @@ immutable references for reusable third-party code.
 Docker Compose parsing follows Docker's documented trust boundary without resolving
 external files. Nomad consumes the JSON response from the job plan HTTP API so
 scheduler decisions remain structured rather than being inferred from HCL text.
+Packer consumes saved output from `packer inspect` or
+`packer inspect -machine-readable`; it enumerates executable components without
+running a build and explicitly reminds reviewers that inspect is not validation.
 
 ## How it looks
 
