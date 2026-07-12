@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Changed
+- Terraform-provider GitHub Action dogfood now runs as a bounded parallel matrix,
+  preserving every provider-specific output assertion while shortening the CI critical path.
 - Self-improving evolution analysis now stays local and deterministic;
   candidate generation never spawns external model tooling.
 

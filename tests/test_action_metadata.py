@@ -52,10 +52,27 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     workflow = (ROOT / ".github" / "workflows" / "test-action.yml").read_text(encoding="utf-8")
 
     assert "tests/fixtures/valid_plan.json" in workflow
-    assert "input-file: tests/fixtures/cloudflare_plan_risky.json" in workflow
-    assert "input-file: tests/fixtures/kubernetes_helm_provider_plan_risky.json" in workflow
-    assert "input-file: tests/fixtures/pagerduty_provider_plan_risky.json" in workflow
-    assert "input-file: tests/fixtures/newrelic_provider_plan_risky.json" in workflow
+    provider_fixtures = (
+        "cloudflare_plan_risky.json",
+        "github_provider_plan_risky.json",
+        "gitlab_provider_plan_risky.json",
+        "datadog_provider_plan_risky.json",
+        "vault_provider_plan_risky.json",
+        "grafana_provider_plan_risky.json",
+        "tfe_provider_plan_risky.json",
+        "kubernetes_helm_provider_plan_risky.json",
+        "pagerduty_provider_plan_risky.json",
+        "newrelic_provider_plan_risky.json",
+    )
+    for fixture in provider_fixtures:
+        assert f"fixture: tests/fixtures/{fixture}" in workflow
+    assert "provider-action:" in workflow
+    assert "name: provider-action (${{ matrix.provider }})" in workflow
+    assert "fail-fast: false" in workflow
+    assert "max-parallel: 5" in workflow
+    assert "input-file: ${{ matrix.fixture }}" in workflow
+    serial_workflow = workflow.split("\n  provider-action:", maxsplit=1)[0]
+    assert all(fixture not in serial_workflow for fixture in provider_fixtures)
     assert "tests/fixtures/invalid_plan.json" in workflow
     assert "tests/fixtures/does-not-exist.json" in workflow
     assert 'fail-on-any-change: "true"' in workflow
