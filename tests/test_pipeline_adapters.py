@@ -6,6 +6,7 @@ import pytest
 
 from readtheplan.adapters import detect_adapter
 from readtheplan.adapters.pipelines import (
+    AzurePipelinesAdapter,
     CircleCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
@@ -105,6 +106,116 @@ jobs:
     ]
 
 
+def test_azure_pipelines_flags_protected_resources_and_deployment_steps() -> None:
+    data = parse_pipeline_yaml(
+        """
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform/Templates
+      ref: refs/heads/main
+      endpoint: external-git
+  containers:
+    - container: builder
+      image: ubuntu:latest
+variables:
+  - group: production-secrets
+  - name: API_TOKEN
+    value: inline-secret
+stages:
+  - stage: Deploy
+    jobs:
+      - deployment: production
+        environment: production
+        pool: private-agents
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: production-subscription
+                - bash: ./deploy.sh
+                  env:
+                    API_TOKEN: $(PRODUCTION_TOKEN)
+""",
+        "azure-pipelines",
+    )
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, AzurePipelinesAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+
+    assert by_type["azure_pipelines_repository"] == ["dangerous"]
+    assert by_type["azure_pipelines_service_connection"] == [
+        "dangerous",
+        "dangerous",
+    ]
+    assert by_type["azure_pipelines_image"] == ["dangerous"]
+    assert by_type["azure_pipelines_variable_group"] == ["dangerous"]
+    assert by_type["azure_pipelines_inline_secret"] == ["dangerous"]
+    assert by_type["azure_pipelines_environment"] == ["review"]
+    assert by_type["azure_pipelines_pool"] == ["dangerous"]
+    assert by_type["azure_pipelines_task"] == ["dangerous"]
+    assert by_type["azure_pipelines_script"] == ["dangerous"]
+    assert by_type["azure_pipelines_secret_input"] == ["dangerous"]
+    assert by_type["azure_pipelines_protected_resources"] == ["review"]
+
+
+def test_azure_pipelines_pinned_repository_reduces_template_risk() -> None:
+    sha = "a" * 40
+    data = parse_pipeline_yaml(
+        f"""
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform/Templates
+      ref: {sha}
+extends:
+  template: secure.yml@templates
+steps:
+  - checkout: self
+    persistCredentials: false
+""",
+        "azure-pipelines",
+    )
+    changes = AzurePipelinesAdapter().analyze(data, use_rules=False)
+    assert [change.risk for change in changes] == [
+        "review",
+        "review",
+        "review",
+        "review",
+    ]
+
+
+def test_azure_pipelines_triggers_and_failure_hooks_are_discovered() -> None:
+    data = parse_pipeline_yaml(
+        """
+pr:
+  branches:
+    include: [main]
+jobs:
+  - deployment: production
+    environment: production
+    strategy:
+      runOnce:
+        on:
+          failure:
+            steps:
+              - pwsh: ./rollback.ps1
+""",
+        "azure-pipelines",
+    )
+    changes = AzurePipelinesAdapter().analyze(data, use_rules=False)
+    by_type = {change.resource_type: change for change in changes}
+    assert by_type["azure_pipelines_trigger"].risk == "review"
+    assert by_type["azure_pipelines_script"].risk == "dangerous"
+
+
 @pytest.mark.parametrize(
     ("tool", "source", "expected_code", "expected_adapter"),
     [
@@ -120,6 +231,12 @@ jobs:
             "version: 2.1\njobs:\n  docs:\n    steps:\n      - checkout\n",
             0,
             "circleci",
+        ),
+        (
+            "azure-pipelines",
+            "steps:\n  - script: ./deploy.sh\n",
+            2,
+            "azure-pipelines",
         ),
     ],
 )

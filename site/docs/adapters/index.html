@@ -66,7 +66,7 @@
             <strong>Azure Bicep/ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Salt</strong>, <strong>Jenkins</strong>,
             <strong>Pulumi</strong>, <strong>Chef</strong>, <strong>Puppet</strong>, <strong>GitHub Actions</strong>,
             <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
-            <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, and <strong>Dockerfiles</strong>. Rendered Helm,
+            <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, <strong>Dockerfiles</strong>, and <strong>Azure Pipelines</strong>. Rendered Helm,
             Kustomize, and Crossplane resources flow through the Kubernetes gate. AWS CDK,
             Terragrunt, and internal tools can use the same public adapter interface.
           </p>
@@ -81,6 +81,7 @@ readtheplan salt state.sls
 readtheplan vagrant Vagrantfile
 readtheplan cloud-init user-data.yml
 readtheplan dockerfile Dockerfile
+readtheplan azure-pipelines azure-pipelines.yml
 readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
 readtheplan puppet site.pp

@@ -87,6 +87,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | GitHub Actions | `readtheplan github-actions workflow.yml` | Token permissions, action pinning, secrets, environments, and run steps |
 | GitLab CI | `readtheplan gitlab-ci .gitlab-ci.yml` | Includes, tokens, downstream pipelines, environments, and scripts |
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |
+| Azure Pipelines | `readtheplan azure-pipelines azure-pipelines.yml` | Repositories, templates, variable groups, pools, containers, environments, service connections, tasks, and scripts |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |
 | Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |

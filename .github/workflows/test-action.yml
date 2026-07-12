@@ -125,6 +125,35 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Azure Pipelines
+        id: azure_pipelines
+        uses: ./
+        with:
+          tool: azure-pipelines
+          input-file: tests/fixtures/azure_pipelines_deploy.yml
+          framework: soc2
+
+      - name: Assert Azure Pipelines outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.azure_pipelines.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.azure_pipelines.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.azure_pipelines.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "21"
+          test "$RISK_COUNTS" = '{"dangerous":14,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "azure-pipelines"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

@@ -300,6 +300,16 @@ def _build_parser() -> argparse.ArgumentParser:
     circleci.add_argument("input_file", help="Path to .circleci/config.yml.")
     circleci.set_defaults(func=_pipeline_gate)
 
+    azure_pipelines = subparsers.add_parser(
+        "azure-pipelines",
+        help="Emit the agent-gate decision for an Azure Pipelines YAML configuration.",
+    )
+    azure_pipelines.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    azure_pipelines.add_argument("input_file", help="Path to azure-pipelines.yml.")
+    azure_pipelines.set_defaults(func=_pipeline_gate)
+
     docker_compose = subparsers.add_parser(
         "docker-compose",
         help="Emit the agent-gate decision for a Docker Compose configuration.",
@@ -937,6 +947,7 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
     """Emit the shared agent-gate contract for supported CI workflow YAML."""
     from readtheplan.adapters import detect_adapter
     from readtheplan.adapters.pipelines import (
+        AzurePipelinesAdapter,
         CircleCIAdapter,
         GitHubActionsAdapter,
         GitLabCIAdapter,
@@ -949,6 +960,7 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
         "github-actions": GitHubActionsAdapter,
         "gitlab-ci": GitLabCIAdapter,
         "circleci": CircleCIAdapter,
+        "azure-pipelines": AzurePipelinesAdapter,
     }
     try:
         source = Path(args.input_file).read_text(encoding="utf-8")
