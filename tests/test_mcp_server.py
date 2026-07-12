@@ -152,6 +152,18 @@ def test_agent_gate_pipeline_supports_azure_pipelines() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_pipeline_supports_bitbucket_pipelines() -> None:
+    result = agent_gate_pipeline(
+        str(FIXTURES / "bitbucket_pipelines_deploy.yml"),
+        "bitbucket-pipelines",
+        "soc2",
+    )
+    assert result["adapter"] == "bitbucket-pipelines"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 27
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
     with pytest.raises(MCPToolInputError) as exc_info:
         agent_gate_pipeline("pipeline.yml", "unknown")

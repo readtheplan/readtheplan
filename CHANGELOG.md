@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Bitbucket Pipelines YAML gates across the CLI, generalized Action, and
+  local MCP server. Images, self-hosted runners, OIDC, deployments, service
+  containers, Docker access, caches, scripts, Pipes, artifacts, custom variables,
+  shared imports, and external settings feed the shared gate contract.
 - Native Azure Pipelines YAML gates across the CLI, generalized Action, and local
   MCP server. Repository/container resources, templates, variable groups, inline
   secrets, pools, deployment environments, service connections, tasks, scripts,

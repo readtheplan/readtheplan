@@ -1,0 +1,52 @@
+image: atlassian/default-image:4
+clone:
+  depth: full
+
+definitions:
+  services:
+    postgres:
+      image: postgres:16
+      variables:
+        POSTGRES_PASSWORD: $DB_PASSWORD
+    docker:
+      image: docker:27-dind
+      type: docker
+  caches:
+    terraform:
+      key:
+        files: [terraform.lock.hcl]
+      path: ~/.terraform.d/plugin-cache
+
+pipelines:
+  default:
+    - step:
+        name: Deploy
+        image: alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        runs-on: [self.hosted, linux]
+        deployment: production
+        oidc: true
+        services: [docker]
+        caches: [terraform]
+        script:
+          - terraform apply -auto-approve -var token=$API_TOKEN
+          - pipe: atlassian/aws-s3-deploy:1.6.1
+            variables:
+              AWS_OIDC_ROLE_ARN: $AWS_ROLE_ARN
+              API_TOKEN: $DEPLOY_TOKEN
+        after-script:
+          - ./notify.sh $WEBHOOK_TOKEN
+        artifacts:
+          upload:
+            - name: deployment-record
+              type: shared
+              paths: [out/**]
+  branches:
+    main:
+      - step:
+          name: Manual release
+          trigger: manual
+          script:
+            - ./release.sh
+  custom:
+    shared-release:
+      import: platform/shared-pipelines:main:release

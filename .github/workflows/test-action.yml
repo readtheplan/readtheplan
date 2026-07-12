@@ -154,6 +154,35 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Bitbucket Pipelines
+        id: bitbucket_pipelines
+        uses: ./
+        with:
+          tool: bitbucket-pipelines
+          input-file: tests/fixtures/bitbucket_pipelines_deploy.yml
+          framework: soc2
+
+      - name: Assert Bitbucket Pipelines outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.bitbucket_pipelines.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.bitbucket_pipelines.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.bitbucket_pipelines.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "27"
+          test "$RISK_COUNTS" = '{"dangerous":15,"irreversible":0,"review":12,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "bitbucket-pipelines"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./
