@@ -1,0 +1,50 @@
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform/PipelineTemplates
+      ref: refs/heads/main
+      endpoint: external-git
+  containers:
+    - container: builder
+      image: ubuntu:latest
+      endpoint: production-registry
+  pipelines:
+    - pipeline: upstream
+      source: application-build
+
+extends:
+  template: secure-root.yml@templates
+
+variables:
+  - group: production-secrets
+  - name: API_TOKEN
+    value: fixture-inline-secret
+  - template: variables/common.yml
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Deploy
+    lockBehavior: sequential
+    jobs:
+      - deployment: production
+        environment: production.web
+        pool: private-production-agents
+        container: builder
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: production-subscription
+                    scriptType: bash
+                    inlineScript: az deployment group create --resource-group prod
+                - bash: ./deploy.sh
+                  env:
+                    API_TOKEN: $(PRODUCTION_TOKEN)
+                - template: steps/release.yml@templates
+                - publish: $(Build.ArtifactStagingDirectory)
+                  artifact: deployment-record

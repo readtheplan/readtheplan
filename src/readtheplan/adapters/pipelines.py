@@ -59,6 +59,7 @@ def parse_pipeline_yaml(source: str, ecosystem: str) -> dict[str, Any]:
         raise PipelineInputError("pipeline YAML must be an object")
 
     wrappers = {
+        "azure-pipelines": "azure_pipelines",
         "github-actions": "github_actions",
         "gitlab-ci": "gitlab_ci",
         "circleci": "circleci",
@@ -538,6 +539,483 @@ class CircleCIAdapter(_PipelineAdapter):
         return changes
 
 
+_AZURE_SCRIPT_KEYS = {"bash", "powershell", "pwsh", "script"}
+_AZURE_SERVICE_CONNECTION_KEYS = {
+    "azureSubscription",
+    "connectedServiceName",
+    "connectedServiceNameARM",
+    "containerRegistry",
+    "dockerRegistryEndpoint",
+    "environmentServiceName",
+    "kubernetesServiceConnection",
+    "serviceConnection",
+    "sshEndpoint",
+}
+_AZURE_INFRA_TASKS = (
+    "azurecli",
+    "azurepowershell",
+    "azurefunctionapp",
+    "azurewebapp",
+    "docker",
+    "helmdeploy",
+    "kubernetes",
+    "kubectl",
+    "sshoverssh",
+    "terraform",
+)
+_SENSITIVE_VARIABLE_NAME = re.compile(
+    r"(?:^|[_-])(?:api[_-]?key|credential|passwd|password|private[_-]?key|secret|token)(?:$|[_-])",
+    re.IGNORECASE,
+)
+
+
+def _azure_template_risk(template: Any, repository_pins: dict[str, bool]) -> str:
+    reference = str(template)
+    _, separator, repository = reference.rpartition("@")
+    if not separator:
+        return "review"
+    return "review" if repository_pins.get(repository, False) else "dangerous"
+
+
+class AzurePipelinesAdapter(_PipelineAdapter):
+    wrapper_key = "azure_pipelines"
+    tool_name = "Azure Pipelines"
+
+    @property
+    def adapter_name(self) -> str:
+        return "azure-pipelines"
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        pipeline = input_data[self.wrapper_key]
+        changes: list[dict[str, Any]] = []
+        repository_pins = self._resources(pipeline.get("resources"), changes)
+
+        if isinstance(pipeline.get("extends"), dict):
+            template = pipeline["extends"].get("template", "<dynamic>")
+            changes.append(
+                _change(
+                    "extends.template",
+                    "template",
+                    _azure_template_risk(template, repository_pins),
+                    "Azure Pipelines extends imports executable pipeline structure; "
+                    "verify required-template enforcement and pin external repositories.",
+                )
+            )
+
+        self._variables(pipeline.get("variables"), "variables", changes, repository_pins)
+        for trigger_key in ("trigger", "pr", "schedules"):
+            if pipeline.get(trigger_key) is not None:
+                changes.append(
+                    _change(
+                        trigger_key,
+                        "trigger",
+                        "review",
+                        "Pipeline trigger controls which source changes or schedules can "
+                        "reach agents and protected resources; verify branch and path filters.",
+                    )
+                )
+        if pipeline.get("pool") is not None:
+            self._pool(pipeline["pool"], "pool", changes)
+        self._steps(pipeline.get("steps"), "steps", changes, repository_pins)
+        self._jobs(pipeline.get("jobs"), "jobs", changes, repository_pins)
+
+        stages = pipeline.get("stages")
+        if isinstance(stages, list):
+            for index, stage in enumerate(stages):
+                address = f"stages[{index}]"
+                if not isinstance(stage, dict):
+                    changes.append(
+                        _change(
+                            address,
+                            "unresolved",
+                            "review",
+                            "Azure Pipelines stage is generated or malformed.",
+                        )
+                    )
+                    continue
+                if "template" in stage:
+                    self._template(stage["template"], address, changes, repository_pins)
+                    continue
+                if stage.get("lockBehavior") is not None:
+                    changes.append(
+                        _change(
+                            f"{address}.lockBehavior",
+                            "lock_behavior",
+                            "review",
+                            "Stage lock behavior controls concurrent deployment execution.",
+                        )
+                    )
+                self._variables(
+                    stage.get("variables"), f"{address}.variables", changes, repository_pins
+                )
+                self._jobs(stage.get("jobs"), f"{address}.jobs", changes, repository_pins)
+
+        changes.append(
+            _change(
+                "pipeline.protected_resources",
+                "protected_resources",
+                "review",
+                "Approvals, checks, variable-group authorization, service-connection "
+                "permissions, and environment protections live outside pipeline YAML.",
+            )
+        )
+        return changes
+
+    def _resources(
+        self, resources: Any, changes: list[dict[str, Any]]
+    ) -> dict[str, bool]:
+        pins: dict[str, bool] = {}
+        if not isinstance(resources, dict):
+            return pins
+        repositories = resources.get("repositories", [])
+        if isinstance(repositories, list):
+            for index, repository in enumerate(repositories):
+                if not isinstance(repository, dict):
+                    continue
+                alias = str(repository.get("repository") or f"repository-{index}")
+                ref = str(repository.get("ref") or "")
+                pinned = bool(_SHA_REF.fullmatch(ref.removeprefix("refs/heads/")))
+                pins[alias] = pinned
+                changes.append(
+                    _change(
+                        f"resources.repositories[{index}]",
+                        "repository",
+                        "review" if pinned else "dangerous",
+                        "Repository resources import pipeline or source code; require "
+                        "a trusted endpoint and immutable commit reference.",
+                    )
+                )
+                if repository.get("endpoint") is not None:
+                    changes.append(
+                        _change(
+                            f"resources.repositories[{index}].endpoint",
+                            "service_connection",
+                            "dangerous",
+                            "Repository resource uses a service connection with "
+                            "external credentials.",
+                        )
+                    )
+        containers = resources.get("containers", [])
+        if isinstance(containers, list):
+            for index, container in enumerate(containers):
+                if not isinstance(container, dict):
+                    continue
+                image = container.get("image", "")
+                changes.append(
+                    _change(
+                        f"resources.containers[{index}].image",
+                        "image",
+                        "review" if _is_digest_pinned_image(image) else "dangerous",
+                        "Pipeline container executes job code; pin the image to a trusted digest.",
+                    )
+                )
+                if container.get("endpoint") is not None:
+                    changes.append(
+                        _change(
+                            f"resources.containers[{index}].endpoint",
+                            "service_connection",
+                            "dangerous",
+                            "Container resource uses registry credentials from a "
+                            "service connection.",
+                        )
+                    )
+        for resource_kind in ("builds", "packages", "pipelines", "webhooks"):
+            values = resources.get(resource_kind)
+            if isinstance(values, list):
+                for index, _ in enumerate(values):
+                    changes.append(
+                        _change(
+                            f"resources.{resource_kind}[{index}]",
+                            f"resource_{resource_kind.rstrip('s')}",
+                            "review",
+                            "Pipeline resource can import artifacts, packages, triggers, "
+                            "or external event data; verify source and authorization.",
+                        )
+                    )
+        return pins
+
+    def _variables(
+        self,
+        variables: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        repository_pins: dict[str, bool],
+    ) -> None:
+        if isinstance(variables, dict):
+            items = variables.items()
+            for name, _ in items:
+                if _SENSITIVE_VARIABLE_NAME.search(str(name)):
+                    changes.append(
+                        _change(
+                            f"{address}.{name}",
+                            "inline_secret",
+                            "dangerous",
+                            "Credential-like variable is declared inline in versioned YAML.",
+                        )
+                    )
+            return
+        if not isinstance(variables, list):
+            return
+        for index, variable in enumerate(variables):
+            if not isinstance(variable, dict):
+                continue
+            item_address = f"{address}[{index}]"
+            if variable.get("group") is not None:
+                changes.append(
+                    _change(
+                        item_address,
+                        "variable_group",
+                        "dangerous",
+                        "Variable group may expose protected secrets; verify pipeline "
+                        "authorization, approvals, checks, and least-privilege scope.",
+                    )
+                )
+            elif variable.get("template") is not None:
+                self._template(
+                    variable["template"], item_address, changes, repository_pins
+                )
+            elif _SENSITIVE_VARIABLE_NAME.search(str(variable.get("name", ""))):
+                changes.append(
+                    _change(
+                        item_address,
+                        "inline_secret",
+                        "dangerous",
+                        "Credential-like variable is declared inline in versioned YAML.",
+                    )
+                )
+
+    def _pool(self, pool: Any, address: str, changes: list[dict[str, Any]]) -> None:
+        managed_image = isinstance(pool, dict) and pool.get("vmImage") is not None
+        changes.append(
+            _change(
+                address,
+                "pool",
+                "review" if managed_image else "dangerous",
+                "Agent pool executes pipeline code with access to its host and network; "
+                "verify image provenance, isolation, and self-hosted agent trust.",
+            )
+        )
+
+    def _jobs(
+        self,
+        jobs: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        repository_pins: dict[str, bool],
+    ) -> None:
+        if not isinstance(jobs, list):
+            return
+        for index, job in enumerate(jobs):
+            job_address = f"{address}[{index}]"
+            if not isinstance(job, dict):
+                changes.append(
+                    _change(
+                        job_address,
+                        "unresolved",
+                        "review",
+                        "Azure Pipelines job is generated or malformed.",
+                    )
+                )
+                continue
+            if "template" in job:
+                self._template(job["template"], job_address, changes, repository_pins)
+                continue
+            if "deployment" in job:
+                changes.append(
+                    _change(
+                        f"{job_address}.environment",
+                        "environment",
+                        "review",
+                        "Deployment job targets an environment; verify resource ownership, "
+                        "exclusive locks, approvals, and checks.",
+                    )
+                )
+            if job.get("pool") is not None:
+                self._pool(job["pool"], f"{job_address}.pool", changes)
+            if job.get("container") is not None:
+                container = job["container"]
+                risk = "review" if _is_digest_pinned_image(container) else "dangerous"
+                changes.append(
+                    _change(
+                        f"{job_address}.container",
+                        "image",
+                        risk,
+                        "Job container executes pipeline code; pin direct images to a digest "
+                        "and review named container resources.",
+                    )
+                )
+            self._variables(
+                job.get("variables"),
+                f"{job_address}.variables",
+                changes,
+                repository_pins,
+            )
+            self._steps(job.get("steps"), f"{job_address}.steps", changes, repository_pins)
+            strategy = job.get("strategy")
+            if isinstance(strategy, dict):
+                self._strategy_steps(
+                    strategy,
+                    f"{job_address}.strategy",
+                    changes,
+                    repository_pins,
+                )
+
+    def _strategy_steps(
+        self,
+        value: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        repository_pins: dict[str, bool],
+    ) -> None:
+        if not isinstance(value, dict):
+            return
+        for key, item in value.items():
+            item_address = f"{address}.{key}"
+            if key == "steps":
+                self._steps(item, item_address, changes, repository_pins)
+            elif isinstance(item, dict):
+                self._strategy_steps(item, item_address, changes, repository_pins)
+
+    def _steps(
+        self,
+        steps: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        repository_pins: dict[str, bool],
+    ) -> None:
+        if not isinstance(steps, list):
+            return
+        for index, step in enumerate(steps):
+            step_address = f"{address}[{index}]"
+            if not isinstance(step, dict):
+                changes.append(
+                    _change(
+                        step_address,
+                        "unresolved",
+                        "review",
+                        "Azure Pipelines step is generated or malformed.",
+                    )
+                )
+                continue
+            if step.get("template") is not None:
+                self._template(step["template"], step_address, changes, repository_pins)
+                continue
+            script_key = next((key for key in _AZURE_SCRIPT_KEYS if key in step), None)
+            if script_key:
+                changes.append(
+                    _change(
+                        step_address,
+                        "script",
+                        "dangerous",
+                        f"Azure Pipelines {script_key} step executes arbitrary agent commands.",
+                    )
+                )
+            elif step.get("task") is not None:
+                task = str(step["task"])
+                infra = any(token in task.lower() for token in _AZURE_INFRA_TASKS)
+                changes.append(
+                    _change(
+                        step_address,
+                        "task",
+                        "dangerous" if infra else "review",
+                        "Azure Pipelines task executes built-in or extension code; verify "
+                        "publisher, major version, inputs, and deployment scope.",
+                    )
+                )
+                inputs = step.get("inputs")
+                if isinstance(inputs, dict):
+                    for key in _AZURE_SERVICE_CONNECTION_KEYS & inputs.keys():
+                        changes.append(
+                            _change(
+                                f"{step_address}.inputs.{key}",
+                                "service_connection",
+                                "dangerous",
+                                "Task receives a service connection capable of authenticating "
+                                "to infrastructure or an external service.",
+                            )
+                        )
+            elif step.get("checkout") is not None:
+                persist = str(step.get("persistCredentials", "false")).lower() == "true"
+                changes.append(
+                    _change(
+                        step_address,
+                        "checkout",
+                        "dangerous" if persist else "review",
+                        "Checkout imports repository content into the agent; persisted "
+                        "credentials allow later steps to reuse the OAuth token.",
+                    )
+                )
+            elif any(key in step for key in ("download", "downloadBuild", "getPackage")):
+                changes.append(
+                    _change(
+                        step_address,
+                        "download",
+                        "review",
+                        "Download step imports pipeline artifacts or packages; verify provenance.",
+                    )
+                )
+            elif "publish" in step:
+                changes.append(
+                    _change(
+                        step_address,
+                        "publish",
+                        "review",
+                        "Publish step exports files from the agent; verify content and retention.",
+                    )
+                )
+            else:
+                changes.append(
+                    _change(
+                        step_address,
+                        "unresolved",
+                        "review",
+                        "Azure Pipelines step has no recognized execution directive.",
+                    )
+                )
+            if self._secret_input(step):
+                changes.append(
+                    _change(
+                        f"{step_address}.secrets",
+                        "secret_input",
+                        "dangerous",
+                        "Step receives a credential-like variable; verify explicit environment "
+                        "mapping, masking, command-line exposure, and log handling.",
+                    )
+                )
+
+    def _template(
+        self,
+        template: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        repository_pins: dict[str, bool],
+    ) -> None:
+        changes.append(
+            _change(
+                address,
+                "template",
+                _azure_template_risk(template, repository_pins),
+                "Azure Pipelines template imports executable configuration; review "
+                "parameters and pin external repository resources immutably.",
+            )
+        )
+
+    def _secret_input(self, value: Any) -> bool:
+        if isinstance(value, dict):
+            return any(
+                _SENSITIVE_VARIABLE_NAME.search(str(key)) is not None
+                or self._secret_input(item)
+                for key, item in value.items()
+            )
+        if isinstance(value, list):
+            return any(self._secret_input(item) for item in value)
+        text = str(value)
+        return any(
+            _SENSITIVE_VARIABLE_NAME.search(name) is not None
+            for name in re.findall(r"\$\(([^)]+)\)", text)
+        )
+
+
 def analyze_pipeline(
     adapter: _PipelineAdapter, data: dict[str, Any], *, catalog=None
 ) -> dict[str, Any]:
@@ -563,3 +1041,7 @@ def analyze_gitlab_ci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
 
 def analyze_circleci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
     return analyze_pipeline(CircleCIAdapter(), data, catalog=catalog)
+
+
+def analyze_azure_pipelines(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(AzurePipelinesAdapter(), data, catalog=catalog)

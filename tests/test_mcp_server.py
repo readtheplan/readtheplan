@@ -140,6 +140,18 @@ def test_agent_gate_pipeline_supports_framework_checks() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_pipeline_supports_azure_pipelines() -> None:
+    result = agent_gate_pipeline(
+        str(FIXTURES / "azure_pipelines_deploy.yml"),
+        "azure-pipelines",
+        "soc2",
+    )
+    assert result["adapter"] == "azure-pipelines"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 21
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
     with pytest.raises(MCPToolInputError) as exc_info:
         agent_gate_pipeline("pipeline.yml", "unknown")

@@ -356,7 +356,7 @@ def agent_gate_pipeline(
     ecosystem: str,
     framework: str | None = None,
 ) -> dict[str, object]:
-    """Return the gate decision for GitHub Actions, GitLab CI, or CircleCI YAML."""
+    """Return the gate decision for supported CI pipeline YAML."""
     from readtheplan.adapters import detect_adapter
     from readtheplan.adapters.pipelines import (
         PipelineInputError,
@@ -364,10 +364,13 @@ def agent_gate_pipeline(
         parse_pipeline_yaml,
     )
 
-    if ecosystem not in {"github-actions", "gitlab-ci", "circleci"}:
+    if ecosystem not in {"github-actions", "gitlab-ci", "circleci", "azure-pipelines"}:
         raise MCPToolInputError(
             code="INVALID_INPUT",
-            message="ecosystem must be github-actions, gitlab-ci, or circleci",
+            message=(
+                "ecosystem must be github-actions, gitlab-ci, circleci, "
+                "or azure-pipelines"
+            ),
         )
     if not isinstance(input_path, str) or not input_path.strip():
         raise MCPToolInputError(
@@ -799,11 +802,11 @@ def create_server() -> Any:
         ecosystem: str,
         framework: str | None = None,
     ) -> dict[str, object]:
-        """Return a gate for GitHub Actions, GitLab CI, or CircleCI YAML.
+        """Return a gate for GitHub Actions, GitLab CI, CircleCI, or Azure Pipelines.
 
         Args:
             input_path: Local path to the pipeline YAML file.
-            ecosystem: github-actions, gitlab-ci, or circleci.
+            ecosystem: github-actions, gitlab-ci, circleci, or azure-pipelines.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_pipeline_handler(

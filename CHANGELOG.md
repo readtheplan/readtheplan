@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Azure Pipelines YAML gates across the CLI, generalized Action, and local
+  MCP server. Repository/container resources, templates, variable groups, inline
+  secrets, pools, deployment environments, service connections, tasks, scripts,
+  and protected-resource boundaries feed the shared gate contract.
 - Native Dockerfile/Containerfile gates across the CLI, generalized Action, and
   local MCP server. Multi-stage builds, heredocs, mutable base images, commands,
   BuildKit secret/SSH mounts, secret ARG/ENV, sensitive COPY/remote ADD, root

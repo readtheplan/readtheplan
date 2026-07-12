@@ -14,6 +14,7 @@ from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
 from readtheplan.adapters.packer import PackerInspectAdapter
 from readtheplan.adapters.pipelines import (
+    AzurePipelinesAdapter,
     CircleCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
@@ -86,6 +87,7 @@ register_adapter(PuppetAdapter())
 register_adapter(PulumiAdapter())
 register_adapter(AzureWhatIfAdapter())
 register_adapter(GitHubActionsAdapter())
+register_adapter(AzurePipelinesAdapter())
 register_adapter(GitLabCIAdapter())
 register_adapter(CircleCIAdapter())
 register_adapter(DockerComposeAdapter())
@@ -100,6 +102,7 @@ __all__ = [
     "AnsibleAdapter",
     "BaseAdapter",
     "AzureWhatIfAdapter",
+    "AzurePipelinesAdapter",
     "ChefAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",

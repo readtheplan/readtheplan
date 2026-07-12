@@ -4,7 +4,7 @@ author: readtheplan maintainers
 
 inputs:
   tool:
-    description: "Input tool: terraform, cloudformation, azure, kubernetes, pulumi, ansible, jenkins, chef, puppet, github-actions, gitlab-ci, circleci, docker-compose, dockerfile, nomad, packer, salt, vagrant, or cloud-init."
+    description: "Input tool: terraform, cloudformation, azure, kubernetes, pulumi, ansible, jenkins, chef, puppet, github-actions, gitlab-ci, circleci, azure-pipelines, docker-compose, dockerfile, nomad, packer, salt, vagrant, or cloud-init."
     required: false
     default: "terraform"
   input-file:
@@ -77,7 +77,7 @@ runs:
 
         TOOL="${TOOL,,}"
         case "$TOOL" in
-          terraform|cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet|github-actions|gitlab-ci|circleci|docker-compose|dockerfile|nomad|packer|salt|vagrant|cloud-init) ;;
+          terraform|cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet|github-actions|gitlab-ci|circleci|azure-pipelines|docker-compose|dockerfile|nomad|packer|salt|vagrant|cloud-init) ;;
           *) echo "::error::unsupported tool: $TOOL"; exit 1 ;;
         esac
 
