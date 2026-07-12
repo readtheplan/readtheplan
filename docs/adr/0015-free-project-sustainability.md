@@ -13,7 +13,10 @@ conflict with that boundary and make the public site promise harder to trust.
 The website still has operating costs and attracts both human readers and
 automated crawlers. Cloudflare AI Crawl Control already reports crawler traffic
 for `readtheplan.dev`, but Pay Per Crawl remains a closed beta and the current
-account exposes allow/block controls rather than a charge control.
+account exposes allow/block controls rather than a charge control. Cloudflare
+announced Monetization Gateway in July 2026 for usage-based payments on web
+pages, APIs, datasets, and MCP tools, but it is currently waitlist-only and does
+not appear in this account's dashboard.
 
 ## Decision
 
@@ -25,10 +28,11 @@ Project sustainability may use these channels, in order:
 
 1. Clearly labeled project sponsorships and donations.
 2. Clearly labeled, context-relevant sponsorship placements on editorial pages.
-3. Cloudflare Pay Per Crawl for machine traffic after beta access is granted.
-4. Cloudflare's machine-payment tooling for future public APIs or hosted MCP
-   resources only if those resources are additive and the local equivalent
-   remains free.
+3. Cloudflare Pay Per Crawl for verified crawler traffic after beta access is
+   granted.
+4. Cloudflare Monetization Gateway for unauthenticated machine calls to future
+   public APIs or hosted MCP resources after early access is granted, only when
+   those resources are additive and the local equivalent remains free.
 
 ## Guardrails
 
@@ -46,16 +50,21 @@ Project sustainability may use these channels, in order:
 ## Cloudflare Rollout
 
 1. Keep AI Crawl Control analytics enabled and preserve search/referral crawlers.
-2. Apply to the Pay Per Crawl closed beta as a publisher.
-3. After acceptance, connect the required payout account and start with the
-   minimum supported price on training crawlers only.
-4. Leave search crawlers and user-initiated assistants allowed unless traffic
-   data shows abuse.
-5. Review crawl revenue, referral loss, and false positives before expanding.
+2. Join the Monetization Gateway early-access waitlist for `readtheplan.dev`,
+   its public API, and hosted MCP endpoints.
+3. Apply separately to the Pay Per Crawl closed beta as a publisher.
+4. After acceptance, require owner approval before connecting a wallet or payout
+   account, accepting stablecoin settlement, or publishing a price. Start with
+   the minimum supported price on training crawlers or anonymous machine calls.
+5. Leave human traffic, search crawlers, authenticated community integrations,
+   and user-initiated assistants free unless traffic data shows abuse.
+6. Review revenue, referral loss, failed payments, geographic/tax obligations,
+   and false positives before expanding.
 
-The beta application requires contact details, country, and consent to receive
-Cloudflare product communications. It must be submitted by an authorized project
-owner rather than silently automated.
+The early-access applications require project-owner contact and business details,
+and activation may require wallet, payout, tax, and pricing decisions. Those
+steps must be completed or explicitly approved by an authorized project owner
+rather than silently automated.
 
 ## Consequences
 
@@ -63,3 +72,11 @@ The business model is aligned with broad adoption rather than feature scarcity.
 Revenue will be modest until readership or machine traffic is substantial, but
 the project avoids undermining the local-first trust boundary to create a sales
 funnel.
+
+## References
+
+- [Cloudflare AI Crawl Control](https://developers.cloudflare.com/ai-crawl-control/)
+- [Cloudflare Pay Per Crawl][pay-per-crawl]
+- [Cloudflare Monetization Gateway announcement](https://blog.cloudflare.com/monetization-gateway/)
+
+[pay-per-crawl]: https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/what-is-pay-per-crawl/
