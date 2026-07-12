@@ -1,0 +1,13 @@
+name "production_app"
+version "2.0.0"
+depends "nginx"
+depends "database", "~> 4.0"
+depends "audit", "= 1.2.3"
+gem "chef-vault"
+gem "addressable", "= 2.8.7"
+chef_version ">= 18.0"
+ohai_version "~> 18.0"
+supports "ubuntu", ">= 22.04"
+privacy false
+source_url "http://git.example.test/production_app"
+system "./generate-metadata"

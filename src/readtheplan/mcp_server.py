@@ -1368,7 +1368,7 @@ def agent_gate_configuration_management(
     ecosystem: str,
     framework: str | None = None,
 ) -> dict[str, object]:
-    """Return a gate for Ansible project/playbook, Jenkins/JCasC, Chef, or Puppet source."""
+    """Return a gate for Ansible, Jenkins, Chef, or Puppet project source."""
     from readtheplan.adapters.ansible import AnsibleAdapter, analyze_ansible
     from readtheplan.adapters.ansible_project import (
         AnsibleProjectAdapter,
@@ -1377,6 +1377,12 @@ def agent_gate_configuration_management(
         parse_ansible_project,
     )
     from readtheplan.adapters.chef import ChefAdapter, analyze_chef
+    from readtheplan.adapters.chef_project import (
+        ChefProjectAdapter,
+        ChefProjectInputError,
+        analyze_chef_project,
+        parse_chef_project,
+    )
     from readtheplan.adapters.jenkins import JenkinsAdapter, analyze_jenkins
     from readtheplan.adapters.jenkins_jcasc import (
         JenkinsJCasCAdapter,
@@ -1386,7 +1392,15 @@ def agent_gate_configuration_management(
     )
     from readtheplan.adapters.puppet import PuppetAdapter, analyze_puppet
 
-    supported = {"ansible", "ansible-project", "jenkins", "jenkins-jcasc", "chef", "puppet"}
+    supported = {
+        "ansible",
+        "ansible-project",
+        "jenkins",
+        "jenkins-jcasc",
+        "chef",
+        "chef-project",
+        "puppet",
+    }
     if ecosystem not in supported:
         raise MCPToolInputError(
             code="INVALID_INPUT",
@@ -1434,6 +1448,16 @@ def agent_gate_configuration_management(
             ) from exc
         adapter = AnsibleProjectAdapter()
         analyze = analyze_ansible_project
+    elif ecosystem == "chef-project":
+        try:
+            data = parse_chef_project(source)
+        except ChefProjectInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Chef project input {input_path}: {exc}",
+            ) from exc
+        adapter = ChefProjectAdapter()
+        analyze = analyze_chef_project
     elif ecosystem == "jenkins-jcasc":
         try:
             data = parse_jenkins_jcasc(source)
@@ -1936,11 +1960,12 @@ def create_server() -> Any:
         ecosystem: str,
         framework: str | None = None,
     ) -> dict[str, object]:
-        """Return a gate for Ansible, Jenkins/JCasC, Chef, or Puppet source.
+        """Return a gate for Ansible, Jenkins/JCasC, Chef, or Puppet project source.
 
         Args:
             input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
-            ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, chef, or puppet.
+            ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, chef,
+                chef-project, or puppet.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(

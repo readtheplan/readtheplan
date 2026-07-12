@@ -361,6 +361,7 @@ for (const token of [
   "agent_gate_bicep",
   "jenkins-jcasc",
   "ansible-project",
+  "chef-project",
   "proceed/warn/block",
   "PR reviewer",
   "SOC 2 evidence prep",

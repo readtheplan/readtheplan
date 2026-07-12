@@ -22,7 +22,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "tool:" in action
     assert (
         "terraform-config|terragrunt|cloudformation|azure|bicep|kubernetes|helm|kustomize|crossplane|serverless|sam|pulumi|"
-        "ansible|ansible-project|jenkins|jenkins-jcasc|chef|puppet|"
+        "ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|puppet|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "atlantis|"
         "docker-compose|"
@@ -158,6 +158,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "tool: jenkins-jcasc" in workflow
     assert "input-file: tests/fixtures/jenkins_jcasc_risky.yml" in workflow
     assert "input-file: tests/fixtures/chef_config_management_risky.rb" in workflow
+    assert "tool: chef-project" in workflow
+    assert "input-file: tests/fixtures/chef_policyfile_risky.rb" in workflow
     assert "input-file: tests/fixtures/puppet_config_management_risky.pp" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow

@@ -819,6 +819,35 @@ jobs:
           assert "no checksum" in payload["pr_comment"]
           PY
 
+      - name: Run action on Chef project configuration
+        id: chef_project
+        uses: ./
+        with:
+          tool: chef-project
+          input-file: tests/fixtures/chef_policyfile_risky.rb
+          framework: soc2
+
+      - name: Assert Chef project outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef_project.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef_project.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef_project.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "14"
+          test "$RISK_COUNTS" = '{"dangerous":8,"irreversible":0,"review":6,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "chef-project"
+          assert payload["artifact_type"] == "policyfile"
+          assert payload["decision"] == "block"
+          assert "not pinned" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Puppet manifest
         id: puppet
         uses: ./

@@ -104,6 +104,7 @@ def test_entry_point_discovery_finds_builtins() -> None:
     assert {
         "ansible-project",
         "bicep",
+        "chef-project",
         "cloudformation",
         "jenkins-jcasc",
         "kubernetes",

@@ -1,0 +1,35 @@
+{
+  "name": "production-web",
+  "run_list": ["recipe[web::default]"],
+  "cookbook_locks": {
+    "mutable-git": {
+      "version": "1.0.0",
+      "identifier": "abc123",
+      "source_options": {
+        "git": "https://github.com/example/mutable.git",
+        "revision": "main"
+      }
+    },
+    "plaintext": {
+      "version": "2.0.0",
+      "identifier": "def456",
+      "source_options": {
+        "remote": "http://cookbooks.example.test/plaintext.tgz"
+      }
+    },
+    "missing-identity": {
+      "version": "3.0.0",
+      "source_options": {
+        "path": "../missing-identity"
+      }
+    }
+  },
+  "solution_dependencies": {
+    "Policyfile": [["mutable-git", "= 1.0.0"]]
+  },
+  "override_attributes": {
+    "database": {
+      "api_token": "literal-token"
+    }
+  }
+}

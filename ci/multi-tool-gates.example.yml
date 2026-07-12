@@ -40,6 +40,8 @@ jobs:
             input: jenkins.yaml
           - tool: chef
             input: chef/recipes/default.rb
+          - tool: chef-project
+            input: chef/Policyfile.lock.json
           - tool: puppet
             input: puppet/site.pp
     steps:
