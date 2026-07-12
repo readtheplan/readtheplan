@@ -155,6 +155,8 @@ def test_site_ui_handoff_contracts() -> None:
 
     assert "$499" not in pricing
     assert "Managed" not in pricing
+    assert "Enterprise" not in pricing
+    assert "Free. No tiers. No lock-in." in pricing
     assert "Six built-in catalogs" in pricing
     assert "DeepSeek" in privacy
     assert "third-party processor" in privacy
