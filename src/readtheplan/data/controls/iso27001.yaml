@@ -2,6 +2,12 @@ framework: iso27001
 framework_version: '2022'
 schema_version: 1
 mappings:
+- resource_type: "*"
+  actions: ["*"]
+  controls:
+  - id: A.8.32
+    title: Change management
+    rationale: Every infrastructure or delivery-system change requires controlled planning, testing, approval, and review.
 - resource_type: aws_kms_key
   actions:
   - create

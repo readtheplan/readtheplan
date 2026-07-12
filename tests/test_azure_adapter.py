@@ -173,7 +173,7 @@ def test_gate_cli_and_mcp_contract(capsys) -> None:
 
     mcp_gate = agent_gate_azure(str(FIXTURE), "soc2")
     assert mcp_gate["adapter"] == "azure"
-    assert any("soc2 catalog" in item for item in mcp_gate["evidence_checklist"])
+    assert "rtp.control.soc2.CC8.1" in mcp_gate["required_checks"]
 
 
 def test_cli_and_mcp_reject_unrelated_json(tmp_path, capsys) -> None:

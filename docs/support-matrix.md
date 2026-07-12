@@ -54,6 +54,13 @@ The action installs its bundled Python source by default so its metadata and CLI
 always come from the same tag or commit. Set `install-source: readtheplan` only
 when intentionally selecting the latest PyPI release instead.
 
+Every built-in adapter accepts the same six packaged compliance catalogs: SOC 2,
+ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST. Exact resource mappings
+provide detailed controls where available; an exact-first framework baseline ensures
+new providers, pipeline steps, and custom resources still receive change-management
+evidence instead of an empty control set. CloudFormation, Azure, Kubernetes, and
+Pulumi expose the same optional `framework` parameter through their MCP tools.
+
 ## Deliberate boundaries
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Helm, Kustomize,

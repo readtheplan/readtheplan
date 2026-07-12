@@ -29,6 +29,12 @@ framework_version: 2013-omnibus
 schema_version: 1
 
 mappings:
+  - resource_type: "*"
+    actions: ["*"]
+    controls:
+      - id: 164.308(a)(1)
+        title: Security Management Process
+        rationale: Every infrastructure or delivery-system change must be included in the ongoing security management process for ePHI.
   # ── KMS ─────────────────────────────────────────────────────────────────
   - resource_type: aws_kms_key
     actions: [create]

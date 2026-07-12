@@ -21,6 +21,12 @@ framework_version: v11
 schema_version: 1
 
 mappings:
+  - resource_type: "*"
+    actions: ["*"]
+    controls:
+      - id: 11.a
+        title: Operations Security — Configuration Management
+        rationale: Every infrastructure or delivery-system change must follow the configuration-management baseline for in-scope systems.
   # ── KMS ─────────────────────────────────────────────────────────────────
   - resource_type: aws_kms_key
     actions: [create]

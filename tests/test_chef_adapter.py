@@ -36,8 +36,10 @@ def test_chef_gate_and_cli(tmp_path, capsys) -> None:
 
     recipe = tmp_path / "default.rb"
     recipe.write_text("log 'hello'\n", encoding="utf-8")
-    assert main(["chef", str(recipe)]) == 0
-    assert json.loads(capsys.readouterr().out)["decision"] == "proceed"
+    assert main(["chef", "--framework", "soc2", str(recipe)]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["decision"] == "proceed"
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
 
 
 def test_chef_cli_rejects_plain_ruby(tmp_path, capsys) -> None:

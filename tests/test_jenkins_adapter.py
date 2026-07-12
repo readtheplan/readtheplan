@@ -58,9 +58,10 @@ def test_jenkins_gate_uses_shared_contract() -> None:
 def test_jenkins_cli_reads_jenkinsfile(tmp_path, capsys) -> None:
     source = tmp_path / "Jenkinsfile"
     source.write_text("pipeline {\n  stages {\n    echo 'ok'\n  }\n}\n", encoding="utf-8")
-    assert main(["jenkins", str(source)]) == 0
+    assert main(["jenkins", "--framework", "soc2", str(source)]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["decision"] == "proceed"
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
 
 
 def test_jenkins_cli_rejects_unrecognized_text(tmp_path, capsys) -> None:

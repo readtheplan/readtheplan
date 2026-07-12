@@ -88,9 +88,10 @@ def test_cli_and_mcp_accept_rendered_yaml(tmp_path, capsys) -> None:
     assert main(["kubernetes", str(rendered)]) == 0
     assert json.loads(capsys.readouterr().out)["adapter"] == "kubernetes"
 
-    mcp_gate = agent_gate_kubernetes(str(rendered))
+    mcp_gate = agent_gate_kubernetes(str(rendered), "soc2")
     assert mcp_gate["adapter"] == "kubernetes"
     assert mcp_gate["decision"] == "proceed"
+    assert "rtp.control.soc2.CC8.1" in mcp_gate["required_checks"]
 
 
 def test_crossplane_custom_resource_defaults_to_review() -> None:
