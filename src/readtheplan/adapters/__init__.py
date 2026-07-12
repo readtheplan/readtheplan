@@ -30,6 +30,7 @@ from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
 from readtheplan.adapters.salt import SaltAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
+from readtheplan.adapters.traefik import TraefikAdapter
 from readtheplan.adapters.vagrant import VagrantAdapter
 from readtheplan.adapters.workloads import DockerComposeAdapter, NomadPlanAdapter
 
@@ -112,6 +113,7 @@ register_adapter(NomadPlanAdapter())
 register_adapter(PackerInspectAdapter())
 register_adapter(SaltAdapter())
 register_adapter(SystemdUnitAdapter())
+register_adapter(TraefikAdapter())
 register_adapter(VagrantAdapter())
 load_entry_point_adapters()
 
@@ -146,6 +148,7 @@ __all__ = [
     "PuppetAdapter",
     "SaltAdapter",
     "SystemdUnitAdapter",
+    "TraefikAdapter",
     "VagrantAdapter",
     "register_adapter",
     "get_adapter",

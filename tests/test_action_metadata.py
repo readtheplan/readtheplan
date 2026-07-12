@@ -26,7 +26,8 @@ def test_action_uses_json_cli_contract() -> None:
         "atlantis|"
         "docker-compose|"
         "dockerfile|nomad|packer|salt|vagrant|"
-        "cloud-init|systemd|nginx|haproxy|envoy|prometheus|alertmanager|otel-collector"
+        "cloud-init|systemd|nginx|haproxy|envoy|traefik|prometheus|alertmanager|"
+        "otel-collector"
     ) in action
     assert "RESOLVED_INPUT_FILE" in action
     assert "p.get('risks', p.get('risk_counts', {}))" in action
@@ -97,6 +98,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/alertmanager_risky.yml" in workflow
     assert "tool: otel-collector" in workflow
     assert "input-file: tests/fixtures/otel_collector_risky.yml" in workflow
+    assert "tool: traefik" in workflow
+    assert "input-file: tests/fixtures/traefik_risky.yml" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow

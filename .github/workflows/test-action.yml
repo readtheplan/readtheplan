@@ -343,6 +343,33 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Traefik configuration
+        id: traefik
+        uses: ./
+        with:
+          tool: traefik
+          input-file: tests/fixtures/traefik_risky.yml
+          framework: soc2
+
+      - name: Assert Traefik outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.traefik.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.traefik.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.traefik.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "23"
+          test "$RISK_COUNTS" = '{"dangerous":17,"irreversible":0,"review":6,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "traefik"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

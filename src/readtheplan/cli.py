@@ -411,6 +411,14 @@ def _build_parser() -> argparse.ArgumentParser:
     envoy.add_argument("input_file", help="Path to Envoy YAML/JSON or config_dump JSON.")
     envoy.set_defaults(func=_envoy_gate)
 
+    traefik = subparsers.add_parser(
+        "traefik",
+        help="Emit the agent-gate decision for Traefik YAML/JSON/TOML configuration.",
+    )
+    traefik.add_argument("--framework", help="Include checks from a compliance framework.")
+    traefik.add_argument("input_file", help="Path to Traefik static or dynamic configuration.")
+    traefik.set_defaults(func=_traefik_gate)
+
     prometheus = subparsers.add_parser(
         "prometheus",
         help="Emit the agent-gate decision for Prometheus configuration YAML.",
@@ -1278,6 +1286,35 @@ def _systemd_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_systemd(data, catalog=catalog))
+
+
+def _traefik_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Traefik YAML, JSON, or TOML."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.traefik import (
+        TraefikInputError,
+        analyze_traefik,
+        parse_traefik_config,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_traefik_config(source)
+    except TraefikInputError as exc:
+        print(f"Error: invalid Traefik configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "traefik":
+        print("Error: input not recognized as Traefik configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_traefik(data, catalog=catalog))
 
 
 def _otel_collector_gate(args: argparse.Namespace) -> int:
