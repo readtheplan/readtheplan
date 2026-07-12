@@ -48,309 +48,6 @@ jobs:
           assert payload["changes"][0]["address"] == "aws_s3_bucket.logs"
           PY
 
-      - name: Run action on Cloudflare Terraform plan
-        id: cloudflare
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/cloudflare_plan_risky.json
-          framework: soc2
-
-      - name: Assert Cloudflare Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.cloudflare.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.cloudflare.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.cloudflare.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.cloudflare.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "24"
-          test "$ACTION_COUNTS" = '{"create":9,"delete":5,"update":10}'
-          test "$RISK_COUNTS" = '{"dangerous":13,"irreversible":5,"review":6}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 24
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "cloudflare_zone"
-          assert "pause Cloudflare proxying" in payload["changes"][0]["explanation"]
-          PY
-
-      - name: Run action on GitHub Terraform plan
-        id: github_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/github_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert GitHub Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.github_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.github_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.github_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.github_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":16,"delete":4,"update":16}'
-          test "$RISK_COUNTS" = '{"dangerous":22,"irreversible":4,"review":10}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "github_repository"
-          assert "public Internet" in payload["changes"][0]["explanation"]
-          PY
-
-      - name: Run action on GitLab Terraform plan
-        id: gitlab_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/gitlab_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert GitLab Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.gitlab_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.gitlab_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.gitlab_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.gitlab_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":21,"delete":4,"update":11}'
-          test "$RISK_COUNTS" = '{"dangerous":24,"irreversible":4,"review":8}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "gitlab_project"
-          assert "public Internet" in payload["changes"][0]["explanation"]
-          PY
-
-      - name: Run action on Datadog Terraform plan
-        id: datadog_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/datadog_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert Datadog Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.datadog_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.datadog_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.datadog_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.datadog_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":26,"delete":5,"update":5}'
-          test "$RISK_COUNTS" = '{"dangerous":25,"irreversible":5,"review":6}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "datadog_api_key"
-          assert "credential" in payload["changes"][0]["explanation"]
-          PY
-
-      - name: Run action on Vault Terraform plan
-        id: vault_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/vault_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert Vault Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.vault_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.vault_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.vault_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.vault_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":31,"delete":4,"update":1}'
-          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "vault_generic_secret"
-          assert "Terraform plan/state" in payload["changes"][0]["explanation"]
-          PY
-
-      - name: Run action on Grafana Terraform plan
-        id: grafana_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/grafana_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert Grafana Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.grafana_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.grafana_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.grafana_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.grafana_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":30,"delete":4,"update":2}'
-          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "grafana_cloud_access_policy_token"
-          assert "Terraform plan/state" in payload["changes"][0]["explanation"]
-          PY
-
-      - name: Run action on TFE Terraform plan
-        id: tfe_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/tfe_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert TFE Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.tfe_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.tfe_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.tfe_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.tfe_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":30,"delete":4,"update":2}'
-          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "tfe_agent_token"
-          assert "bearer credential" in payload["changes"][0]["explanation"]
-          PY
-
-      - name: Run action on Kubernetes and Helm Terraform plan
-        id: kubernetes_helm_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/kubernetes_helm_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert Kubernetes and Helm Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.kubernetes_helm_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.kubernetes_helm_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.kubernetes_helm_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.kubernetes_helm_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":32,"delete":4}'
-          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "kubernetes_pod_v1"
-          assert "privileged or host-level access" in payload["changes"][0]["explanation"]
-          assert any(change["type"] == "helm_release" for change in payload["changes"])
-          PY
-
-      - name: Run action on PagerDuty Terraform plan
-        id: pagerduty_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/pagerduty_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert PagerDuty Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.pagerduty_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.pagerduty_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.pagerduty_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.pagerduty_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":32,"delete":4}'
-          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "pagerduty_user"
-          assert "administrative or managerial role" in payload["changes"][0]["explanation"]
-          assert any(change["type"] == "pagerduty_service" for change in payload["changes"])
-          PY
-
-      - name: Run action on New Relic Terraform plan
-        id: newrelic_provider
-        uses: ./
-        with:
-          tool: terraform
-          input-file: tests/fixtures/newrelic_provider_plan_risky.json
-          framework: soc2
-
-      - name: Assert New Relic Terraform outputs
-        shell: bash
-        env:
-          SUMMARY_JSON: ${{ steps.newrelic_provider.outputs['summary-json'] }}
-          CHANGE_COUNT: ${{ steps.newrelic_provider.outputs['change-count'] }}
-          ACTION_COUNTS: ${{ steps.newrelic_provider.outputs['action-counts'] }}
-          RISK_COUNTS: ${{ steps.newrelic_provider.outputs['risk-counts'] }}
-        run: |
-          set -euo pipefail
-          test "$CHANGE_COUNT" = "36"
-          test "$ACTION_COUNTS" = '{"create":32,"delete":4}'
-          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
-          python - <<'PY'
-          import json
-          import os
-          payload = json.loads(os.environ["SUMMARY_JSON"])
-          assert payload["resource_change_count"] == 36
-          assert payload["framework"]["name"] == "soc2"
-          assert payload["changes"][0]["type"] == "newrelic_account_management"
-          assert "billable sub-account" in payload["changes"][0]["explanation"]
-          assert any(change["type"] == "newrelic_api_access_key" for change in payload["changes"])
-          PY
-
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./
@@ -1577,3 +1274,136 @@ jobs:
         run: |
           echo "Expected fail-on-threshold to fail for a dangerous plan"
           exit 1
+
+  provider-action:
+    name: provider-action (${{ matrix.provider }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - provider: cloudflare
+            fixture: tests/fixtures/cloudflare_plan_risky.json
+            change_count: "24"
+            action_counts: '{"create":9,"delete":5,"update":10}'
+            risk_counts: '{"dangerous":13,"irreversible":5,"review":6}'
+            first_type: cloudflare_zone
+            explanation: pause Cloudflare proxying
+            required_type: ""
+          - provider: github
+            fixture: tests/fixtures/github_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":16,"delete":4,"update":16}'
+            risk_counts: '{"dangerous":22,"irreversible":4,"review":10}'
+            first_type: github_repository
+            explanation: public Internet
+            required_type: ""
+          - provider: gitlab
+            fixture: tests/fixtures/gitlab_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":21,"delete":4,"update":11}'
+            risk_counts: '{"dangerous":24,"irreversible":4,"review":8}'
+            first_type: gitlab_project
+            explanation: public Internet
+            required_type: ""
+          - provider: datadog
+            fixture: tests/fixtures/datadog_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":26,"delete":5,"update":5}'
+            risk_counts: '{"dangerous":25,"irreversible":5,"review":6}'
+            first_type: datadog_api_key
+            explanation: credential
+            required_type: ""
+          - provider: vault
+            fixture: tests/fixtures/vault_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":31,"delete":4,"update":1}'
+            risk_counts: '{"dangerous":28,"irreversible":4,"review":4}'
+            first_type: vault_generic_secret
+            explanation: Terraform plan/state
+            required_type: ""
+          - provider: grafana
+            fixture: tests/fixtures/grafana_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":30,"delete":4,"update":2}'
+            risk_counts: '{"dangerous":28,"irreversible":4,"review":4}'
+            first_type: grafana_cloud_access_policy_token
+            explanation: Terraform plan/state
+            required_type: ""
+          - provider: tfe
+            fixture: tests/fixtures/tfe_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":30,"delete":4,"update":2}'
+            risk_counts: '{"dangerous":28,"irreversible":4,"review":4}'
+            first_type: tfe_agent_token
+            explanation: bearer credential
+            required_type: ""
+          - provider: kubernetes-helm
+            fixture: tests/fixtures/kubernetes_helm_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":32,"delete":4}'
+            risk_counts: '{"dangerous":28,"irreversible":4,"review":4}'
+            first_type: kubernetes_pod_v1
+            explanation: privileged or host-level access
+            required_type: helm_release
+          - provider: pagerduty
+            fixture: tests/fixtures/pagerduty_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":32,"delete":4}'
+            risk_counts: '{"dangerous":28,"irreversible":4,"review":4}'
+            first_type: pagerduty_user
+            explanation: administrative or managerial role
+            required_type: pagerduty_service
+          - provider: newrelic
+            fixture: tests/fixtures/newrelic_provider_plan_risky.json
+            change_count: "36"
+            action_counts: '{"create":32,"delete":4}'
+            risk_counts: '{"dangerous":28,"irreversible":4,"review":4}'
+            first_type: newrelic_account_management
+            explanation: billable sub-account
+            required_type: newrelic_api_access_key
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Run action on ${{ matrix.provider }} Terraform plan
+        id: provider
+        uses: ./
+        with:
+          tool: terraform
+          input-file: ${{ matrix.fixture }}
+          framework: soc2
+
+      - name: Assert ${{ matrix.provider }} Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.provider.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.provider.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.provider.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.provider.outputs['risk-counts'] }}
+          EXPECTED_CHANGE_COUNT: ${{ matrix.change_count }}
+          EXPECTED_ACTION_COUNTS: ${{ matrix.action_counts }}
+          EXPECTED_RISK_COUNTS: ${{ matrix.risk_counts }}
+          EXPECTED_FIRST_TYPE: ${{ matrix.first_type }}
+          EXPECTED_EXPLANATION: ${{ matrix.explanation }}
+          REQUIRED_TYPE: ${{ matrix.required_type }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "$EXPECTED_CHANGE_COUNT"
+          test "$ACTION_COUNTS" = "$EXPECTED_ACTION_COUNTS"
+          test "$RISK_COUNTS" = "$EXPECTED_RISK_COUNTS"
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == int(os.environ["EXPECTED_CHANGE_COUNT"])
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == os.environ["EXPECTED_FIRST_TYPE"]
+          assert os.environ["EXPECTED_EXPLANATION"] in payload["changes"][0]["explanation"]
+          required_type = os.environ["REQUIRED_TYPE"]
+          if required_type:
+              assert any(change["type"] == required_type for change in payload["changes"])
+          PY
