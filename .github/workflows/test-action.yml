@@ -1253,6 +1253,37 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on NixOS module
+        id: nix
+        uses: ./
+        with:
+          tool: nix
+          input-file: tests/fixtures/nixos_module_risky.nix
+          framework: soc2
+
+      - name: Assert Nix outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.nix.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.nix.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.nix.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "33"
+          test "$RISK_COUNTS" = '{"dangerous":21,"irreversible":0,"review":12,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "nix"
+          assert payload["artifact_type"] == "module"
+          assert payload["decision"] == "block"
+          assert "sandboxing is disabled" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Vagrantfile
         id: vagrant
         uses: ./

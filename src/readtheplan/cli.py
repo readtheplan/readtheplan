@@ -465,6 +465,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     salt_project.set_defaults(func=_salt_project_gate)
 
+    nix = subparsers.add_parser(
+        "nix",
+        help="Emit the agent-gate decision for Nix flakes, locks, or NixOS modules.",
+    )
+    nix.add_argument("--framework", help="Include checks from a compliance framework.")
+    nix.add_argument("input_file", help="Path to flake.nix, flake.lock, or a NixOS module.")
+    nix.set_defaults(func=_nix_gate)
+
     vagrant = subparsers.add_parser(
         "vagrant",
         help="Emit the agent-gate decision for a Vagrantfile.",
@@ -1594,6 +1602,34 @@ def _salt_project_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_salt_project(data, catalog=catalog))
+
+
+def _nix_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Nix flakes, locks, and NixOS modules."""
+    from readtheplan.adapters.nix import (
+        NixInputError,
+        NixProjectAdapter,
+        analyze_nix_project,
+        parse_nix_project,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_nix_project(source)
+    except NixInputError as exc:
+        print(f"Error: invalid Nix input: {exc}", file=sys.stderr)
+        return 1
+    if not NixProjectAdapter().can_handle(data):
+        print("Error: input not recognized as Nix project data", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_nix_project(data, catalog=catalog))
 
 
 def _vagrant_gate(args: argparse.Namespace) -> int:

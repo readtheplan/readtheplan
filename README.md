@@ -97,6 +97,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Ansible project | `readtheplan ansible-project ansible.cfg` | Controller transport, privilege, plugins, callbacks, inventory, Galaxy servers, role/collection requirements, credentials, and dependency provenance |
 | Salt | `readtheplan salt state.sls` | Structured SLS states, destructive functions, command/module execution, secrets, includes, and Jinja rendering |
 | Salt project | `readtheplan salt-project master` | Master/minion trust and execution settings, roots and remote sources, reactors/schedules, top targeting, Salt SSH rosters, credentials, and unresolved project boundaries |
+| Nix / NixOS | `readtheplan nix flake.nix` | Flake inputs and lock graphs, cache/daemon trust, fetch provenance, impure evaluation, NixOS users/SSH/firewall/services/systemd/kernel/containers/secrets, and module-merge boundaries |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
 | Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |

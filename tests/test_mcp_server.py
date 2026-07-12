@@ -33,6 +33,7 @@ from readtheplan.mcp_server import (
     agent_gate_kustomize,
     agent_gate_loki,
     agent_gate_monitoring,
+    agent_gate_nix,
     agent_gate_otel_collector,
     agent_gate_packer,
     agent_gate_pipeline,
@@ -384,6 +385,15 @@ def test_agent_gate_salt_supports_framework_checks() -> None:
     assert result["adapter"] == "salt"
     assert result["decision"] == "block"
     assert result["total_changes"] == 6
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_nix_supports_framework_checks() -> None:
+    result = agent_gate_nix(str(FIXTURES / "nixos_module_risky.nix"), "soc2")
+    assert result["adapter"] == "nix"
+    assert result["artifact_type"] == "module"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 33
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
@@ -905,6 +915,19 @@ def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> Non
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_nix_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "configuration.nix"
+    outside.write_text("{ ... }: { services.openssh.enable = true; }\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_nix(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_vagrant_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1143,6 +1166,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_workload" in tool_names
         assert "agent_gate_packer" in tool_names
         assert "agent_gate_salt" in tool_names
+        assert "agent_gate_nix" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
@@ -1183,6 +1207,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(packer_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
+        nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(nix_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]

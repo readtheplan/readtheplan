@@ -35,6 +35,7 @@ matrix makes those boundaries explicit.
 | Ansible project | `ansible.cfg` or Galaxy requirements YAML | `readtheplan ansible-project ansible.cfg` | Controller transport/privilege, plugins, callbacks, inventory, Galaxy endpoints and credentials, roles/collections, version pinning, SCM transport, signatures, and parse boundaries | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
 | Salt project | Master/minion YAML config, top files, or Salt SSH rosters | `readtheplan salt-project master` | PKI trust, remote authorization, state/Pillar/module roots, GitFS provenance, reactors/schedules/startup execution, fleet targeting, SSH privilege, credentials, proxies, and host verification | Built-in |
+| Nix / NixOS | `flake.nix`, `flake.lock`, or NixOS module source | `readtheplan nix flake.nix` | Input/lock provenance and graph integrity, substituters/trusted users/signatures/sandbox, fetchers/impurity/build code, users/SSH/sudo/firewall/services/systemd/kernel/storage/network/containers/secrets, and evaluation boundaries | Built-in |
 | Jenkins | Jenkinsfile | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step scanner covering agents/images/host arguments, libraries, credentials, commands/dynamic Groovy, triggers, approvals, checkout/HTTP/artifacts, and cleanup | Conservative |
 | Jenkins Configuration as Code | JCasC YAML | `readtheplan jenkins-jcasc jenkins.yaml` | Security realms, authorization, credentials, controller executors, nodes/clouds, agent images/privilege, libraries, script approval, Job DSL, endpoints/TLS, and plugin boundaries | Built-in |
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
@@ -184,6 +185,11 @@ the same optional `framework` parameter through its MCP tool.
   Included config, accepted keys, custom modules/renderers, Pillar/grains,
   fileserver precedence, roster plugins, and rendered highstate remain an
   explicit review boundary.
+- Nix analysis strictly parses `flake.lock` JSON and scans Nix expressions
+  without evaluating them. Lazy functions, overlays, imports, option merging,
+  platform/daemon state, package definitions, and command-line overrides remain
+  an explicit review boundary; callers should run `nix flake check`/`eval` or
+  `nixos-rebuild build` inside their existing Nix trust boundary.
 - Vagrant analysis scans the documented Ruby DSL without executing it. Arbitrary
   Ruby, plugins, box Vagrantfiles, provider configuration, and configuration from
   the Vagrant home directory remain an explicit review boundary.

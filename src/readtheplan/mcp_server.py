@@ -646,6 +646,45 @@ def agent_gate_salt(
     return analyze_salt(data, catalog=catalog)
 
 
+def agent_gate_nix(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for a local Nix flake, lock, or NixOS module."""
+    from readtheplan.adapters.nix import (
+        NixInputError,
+        NixProjectAdapter,
+        analyze_nix_project,
+        parse_nix_project,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Nix input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_nix_project(source)
+    except NixInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Nix input in {input_path}: {exc}",
+        ) from exc
+    if not NixProjectAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Nix project data",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_nix_project(data, catalog=catalog)
+
+
 def agent_gate_vagrant(
     input_path: str,
     framework: str | None = None,
@@ -1632,6 +1671,7 @@ def create_server() -> Any:
     agent_gate_workload_handler = agent_gate_workload
     agent_gate_packer_handler = agent_gate_packer
     agent_gate_salt_handler = agent_gate_salt
+    agent_gate_nix_handler = agent_gate_nix
     agent_gate_vagrant_handler = agent_gate_vagrant
     agent_gate_cloud_init_handler = agent_gate_cloud_init
     agent_gate_systemd_handler = agent_gate_systemd
@@ -1820,6 +1860,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_salt_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_nix")
+    def _agent_gate_nix_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for flake.nix, flake.lock, or a NixOS module.
+
+        Args:
+            input_path: Local path to Nix source or a flake lock file.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_nix_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_vagrant")
     def _agent_gate_vagrant_tool(
