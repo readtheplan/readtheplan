@@ -138,6 +138,36 @@ jobs:
           assert "public Internet" in payload["changes"][0]["explanation"]
           PY
 
+      - name: Run action on Datadog Terraform plan
+        id: datadog_provider
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/datadog_provider_plan_risky.json
+          framework: soc2
+
+      - name: Assert Datadog Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.datadog_provider.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.datadog_provider.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.datadog_provider.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.datadog_provider.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "36"
+          test "$ACTION_COUNTS" = '{"create":26,"delete":5,"update":5}'
+          test "$RISK_COUNTS" = '{"dangerous":25,"irreversible":5,"review":6}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 36
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == "datadog_api_key"
+          assert "credential" in payload["changes"][0]["explanation"]
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./
