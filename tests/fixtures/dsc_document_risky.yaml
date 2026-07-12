@@ -1,0 +1,37 @@
+$schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.json
+parameters:
+  adminPassword:
+    type: secureString
+    defaultValue: not-a-real-password
+resources:
+  - name: bootstrap application
+    type: Microsoft.DSC/PowerShell
+    properties:
+      resources:
+        - name: imperative bootstrap
+          type: PSDscResources/Script
+          properties:
+            SetScript: Start-Process installer.exe
+            Credential: "[parameters('adminCredential')]"
+  - name: remove old configuration
+    type: Microsoft.Windows/File
+    dependsOn:
+      - "[resourceId('Microsoft.DSC/PowerShell', 'bootstrap application')]"
+    properties:
+      destinationPath: C:\ProgramData\legacy
+      ensure: Absent
+  - name: stop endpoint protection
+    type: Microsoft.Windows/Service
+    properties:
+      name: SecurityAgent
+      state: Stopped
+  - name: open management port
+    type: Microsoft.Windows/Firewall
+    properties:
+      action: Allow
+      remoteAddress: 0.0.0.0/0
+  - name: fetch package
+    type: Contoso/Package
+    properties:
+      uri: http://user:password@example.invalid/agent.msi
+      ensure: Present

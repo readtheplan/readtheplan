@@ -473,6 +473,17 @@ def _build_parser() -> argparse.ArgumentParser:
     nix.add_argument("input_file", help="Path to flake.nix, flake.lock, or a NixOS module.")
     nix.set_defaults(func=_nix_gate)
 
+    dsc = subparsers.add_parser(
+        "dsc",
+        help="Emit the agent-gate decision for DSC configuration.",
+    )
+    dsc.add_argument("--framework", help="Include checks from a compliance framework.")
+    dsc.add_argument(
+        "input_file",
+        help="Path to a DSC JSON/YAML document or PowerShell DSC configuration.",
+    )
+    dsc.set_defaults(func=_dsc_gate)
+
     vagrant = subparsers.add_parser(
         "vagrant",
         help="Emit the agent-gate decision for a Vagrantfile.",
@@ -1630,6 +1641,34 @@ def _nix_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_nix_project(data, catalog=catalog))
+
+
+def _dsc_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for DSC configuration."""
+    from readtheplan.adapters.dsc import (
+        DscAdapter,
+        DscInputError,
+        analyze_dsc,
+        parse_dsc,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_dsc(source)
+    except DscInputError as exc:
+        print(f"Error: invalid DSC input: {exc}", file=sys.stderr)
+        return 1
+    if not DscAdapter().can_handle(data):
+        print("Error: input not recognized as DSC configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_dsc(data, catalog=catalog))
 
 
 def _vagrant_gate(args: argparse.Namespace) -> int:

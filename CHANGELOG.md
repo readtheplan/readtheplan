@@ -9,6 +9,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Microsoft DSC and PowerShell DSC gates across the CLI, GitHub Action,
+  and MCP. Strict DSC v3 JSON/YAML parsing and non-executing PowerShell source
+  scanning cover nested resource adapters, destructive and executable resources,
+  software/content provenance, secrets, dependency ordering, node targeting,
+  resource-module pinning, LCM pull/remediation/reboot policy, plaintext MOF
+  credentials, and explicit runtime/compilation boundaries.
 - Native Nix/NixOS gates across the CLI, GitHub Action, and MCP. Strict
   `flake.lock` graph parsing plus conservative flake/module source scanning now
   covers input provenance and pinning, caches/daemon trust, signatures and

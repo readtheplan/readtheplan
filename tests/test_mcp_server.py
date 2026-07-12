@@ -26,6 +26,7 @@ from readtheplan.mcp_server import (
     agent_gate_consul,
     agent_gate_crossplane,
     agent_gate_dockerfile,
+    agent_gate_dsc,
     agent_gate_envoy,
     agent_gate_grafana,
     agent_gate_helm,
@@ -397,6 +398,15 @@ def test_agent_gate_nix_supports_framework_checks() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_dsc_supports_framework_checks() -> None:
+    result = agent_gate_dsc(str(FIXTURES / "powershell_dsc_risky.ps1"), "soc2")
+    assert result["adapter"] == "dsc"
+    assert result["artifact_type"] == "powershell"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 18
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_salt_project() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "salt_master_project_risky.yaml"),
@@ -408,6 +418,17 @@ def test_agent_gate_configuration_management_supports_salt_project() -> None:
     assert result["decision"] == "block"
     assert result["total_changes"] == 25
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_configuration_management_supports_dsc() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "powershell_dsc_risky.ps1"),
+        "dsc",
+        "soc2",
+    )
+    assert result["adapter"] == "dsc"
+    assert result["artifact_type"] == "powershell"
+    assert result["decision"] == "block"
 
 
 def test_agent_gate_configuration_management_rejects_unknown_ecosystem() -> None:
@@ -928,6 +949,19 @@ def test_agent_gate_nix_rejects_path_outside_root(monkeypatch, tmp_path) -> None
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_dsc_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "configuration.ps1"
+    outside.write_text("Configuration Example { Node localhost {} }\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_dsc(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_vagrant_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1167,6 +1201,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_packer" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
+        assert "agent_gate_dsc" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
@@ -1209,6 +1244,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]
         assert {"input_path", "framework"} <= set(nix_schema["properties"])
+        dsc_schema = tools_by_name["agent_gate_dsc"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(dsc_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]
