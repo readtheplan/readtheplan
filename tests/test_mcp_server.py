@@ -36,6 +36,8 @@ from readtheplan.mcp_server import (
     agent_gate_proxy_config,
     agent_gate_pulumi,
     agent_gate_salt,
+    agent_gate_sam,
+    agent_gate_serverless,
     agent_gate_systemd,
     agent_gate_terraform_config,
     agent_gate_terragrunt,
@@ -315,6 +317,8 @@ def test_agent_gate_terraform_source_supports_config_and_terragrunt(
         (agent_gate_helm, "helm_template_risky.yaml", "helm"),
         (agent_gate_kustomize, "kustomization_risky.yml", "kustomize"),
         (agent_gate_crossplane, "crossplane_risky.yml", "crossplane"),
+        (agent_gate_serverless, "serverless_framework_risky.yml", "serverless"),
+        (agent_gate_sam, "sam_template_risky.yml", "sam"),
     ],
 )
 def test_agent_gate_cloud_native_source(handler, fixture: str, adapter: str) -> None:
@@ -674,6 +678,8 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
         (agent_gate_helm, "helm_template_risky.yaml", "adapter", "helm"),
         (agent_gate_kustomize, "kustomization_risky.yml", "adapter", "kustomize"),
         (agent_gate_crossplane, "crossplane_risky.yml", "adapter", "crossplane"),
+        (agent_gate_serverless, "serverless_framework_risky.yml", "adapter", "serverless"),
+        (agent_gate_sam, "sam_template_risky.yml", "adapter", "sam"),
     ],
 )
 def test_non_kubernetes_handlers_use_confined_read_boundary(
@@ -724,6 +730,8 @@ def test_non_kubernetes_handlers_use_confined_read_boundary(
         (agent_gate_helm, "helm_template_risky.yaml", "adapter", "helm"),
         (agent_gate_kustomize, "kustomization_risky.yml", "adapter", "kustomize"),
         (agent_gate_crossplane, "crossplane_risky.yml", "adapter", "crossplane"),
+        (agent_gate_serverless, "serverless_framework_risky.yml", "adapter", "serverless"),
+        (agent_gate_sam, "sam_template_risky.yml", "adapter", "sam"),
     ],
 )
 def test_non_kubernetes_handlers_allow_path_inside_root(
@@ -756,6 +764,8 @@ def test_non_kubernetes_handlers_allow_path_inside_root(
         (agent_gate_helm, "helm_template_risky.yaml"),
         (agent_gate_kustomize, "kustomization_risky.yml"),
         (agent_gate_crossplane, "crossplane_risky.yml"),
+        (agent_gate_serverless, "serverless_framework_risky.yml"),
+        (agent_gate_sam, "sam_template_risky.yml"),
     ],
 )
 def test_non_kubernetes_handlers_reject_validate_open_swap(
@@ -1119,6 +1129,8 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_helm" in tool_names
         assert "agent_gate_kustomize" in tool_names
         assert "agent_gate_crossplane" in tool_names
+        assert "agent_gate_serverless" in tool_names
+        assert "agent_gate_sam" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1173,6 +1185,10 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(kustomize_schema["properties"])
         crossplane_schema = tools_by_name["agent_gate_crossplane"]["inputSchema"]
         assert {"input_path", "framework"} <= set(crossplane_schema["properties"])
+        serverless_schema = tools_by_name["agent_gate_serverless"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(serverless_schema["properties"])
+        sam_schema = tools_by_name["agent_gate_sam"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(sam_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 

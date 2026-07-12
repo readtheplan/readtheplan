@@ -1054,6 +1054,69 @@ def agent_gate_crossplane(
     return analyze_crossplane(data, catalog=_load_catalog_for_tool(framework))
 
 
+def _agent_gate_serverless_source(
+    input_path: str,
+    ecosystem: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Serverless Framework or AWS SAM source."""
+    from readtheplan.adapters.serverless import (
+        SamTemplateAdapter,
+        ServerlessFrameworkAdapter,
+        ServerlessInputError,
+        analyze_sam,
+        analyze_serverless,
+        parse_sam_template,
+        parse_serverless_source,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read {ecosystem} input {input_path}: {exc}"
+        ) from exc
+    if ecosystem == "serverless":
+        parser, adapter, analyze = (
+            parse_serverless_source,
+            ServerlessFrameworkAdapter(),
+            analyze_serverless,
+        )
+    else:
+        parser, adapter, analyze = parse_sam_template, SamTemplateAdapter(), analyze_sam
+    try:
+        data = parser(source)
+    except ServerlessInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Invalid {ecosystem} source in {input_path}: {exc}"
+        ) from exc
+    if not adapter.can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Input is not recognized as {ecosystem} source"
+        )
+    return analyze(data, catalog=_load_catalog_for_tool(framework))
+
+
+def agent_gate_serverless(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Serverless Framework service source."""
+    return _agent_gate_serverless_source(input_path, "serverless", framework)
+
+
+def agent_gate_sam(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for AWS SAM template source."""
+    return _agent_gate_serverless_source(input_path, "sam", framework)
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -1353,6 +1416,8 @@ def create_server() -> Any:
     agent_gate_helm_handler = agent_gate_helm
     agent_gate_kustomize_handler = agent_gate_kustomize
     agent_gate_crossplane_handler = agent_gate_crossplane
+    agent_gate_serverless_handler = agent_gate_serverless
+    agent_gate_sam_handler = agent_gate_sam
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1645,6 +1710,22 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return a gate for Crossplane package and resource source."""
         return agent_gate_crossplane_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_serverless")
+    def _agent_gate_serverless_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Serverless Framework service source."""
+        return agent_gate_serverless_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_sam")
+    def _agent_gate_sam_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for AWS SAM template source."""
+        return agent_gate_sam_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(

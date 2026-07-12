@@ -503,6 +503,22 @@ def _build_parser() -> argparse.ArgumentParser:
     crossplane.add_argument("input_file", help="Path to Crossplane YAML or JSON resources.")
     crossplane.set_defaults(func=_crossplane_gate)
 
+    serverless = subparsers.add_parser(
+        "serverless",
+        help="Emit the agent-gate decision for Serverless Framework service YAML.",
+    )
+    serverless.add_argument("--framework", help="Include checks from a compliance framework.")
+    serverless.add_argument("input_file", help="Path to serverless.yml.")
+    serverless.set_defaults(func=_serverless_source_gate)
+
+    sam = subparsers.add_parser(
+        "sam",
+        help="Emit the agent-gate decision for an AWS SAM template.",
+    )
+    sam.add_argument("--framework", help="Include checks from a compliance framework.")
+    sam.add_argument("input_file", help="Path to an AWS SAM template YAML or JSON file.")
+    sam.set_defaults(func=_serverless_source_gate)
+
     prometheus = subparsers.add_parser(
         "prometheus",
         help="Emit the agent-gate decision for Prometheus configuration YAML.",
@@ -1619,6 +1635,39 @@ def _crossplane_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_crossplane(data, catalog=catalog))
+
+
+def _serverless_source_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Serverless Framework or AWS SAM source."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.serverless import (
+        ServerlessInputError,
+        analyze_sam,
+        analyze_serverless,
+        parse_sam_template,
+        parse_serverless_source,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    parser = parse_serverless_source if args.command == "serverless" else parse_sam_template
+    try:
+        data = parser(source)
+    except ServerlessInputError as exc:
+        print(f"Error: invalid {args.command} source: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != args.command:
+        print(f"Error: input not recognized as {args.command} source", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    analyze = analyze_serverless if args.command == "serverless" else analyze_sam
+    return _write_adapter_gate(analyze(data, catalog=catalog))
 
 
 def _otel_collector_gate(args: argparse.Namespace) -> int:

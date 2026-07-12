@@ -1,0 +1,102 @@
+service: checkout-api
+frameworkVersion: latest
+org: example-org
+app: commerce
+configValidationMode: warn
+provider:
+  name: aws
+  stage: ${opt:stage, 'prod'}
+  region: us-east-1
+  profile: production-admin
+  deploymentRole: arn:aws:iam::123456789012:role/serverless-deployer
+  deploymentMethod: direct
+  deploymentBucket:
+    name: shared-deployment-artifacts
+    blockPublicAccess: false
+    skipPolicySetup: true
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: "*"
+          Resource: "*"
+      managedPolicies:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+  environment:
+    DATABASE_PASSWORD: plaintext-production-password
+  vpc:
+    securityGroupIds: [sg-123456]
+    subnetIds: [subnet-123456]
+  logs:
+    httpApi: false
+functions:
+  api:
+    handler: src/api.handler
+    role: arn:aws:iam::123456789012:role/api-runtime
+    environment:
+      API_TOKEN: ${ssm:/checkout/api-token}
+    vpc:
+      securityGroupIds: [sg-123456]
+      subnetIds: [subnet-123456]
+    fileSystemConfig:
+      localMountPath: /mnt/data
+      arn: arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-123
+    layers:
+      - arn:aws:lambda:us-east-1:123456789012:layer:shared:4
+    destinations:
+      onFailure: arn:aws:sqs:us-east-1:123456789012:failed
+    provisionedConcurrency: 2
+    reservedConcurrency: 10
+    package:
+      patterns:
+        - src/**
+    events:
+      - httpApi:
+          path: /checkout
+          method: POST
+      - sqs:
+          arn: arn:aws:sqs:us-east-1:123456789012:orders
+      - schedule:
+          rate: rate(5 minutes)
+  worker:
+    image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/worker:latest
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+package:
+  individually: true
+  patterns:
+    - "!tests/**"
+layers:
+  shared:
+    path: layers/shared
+resources:
+  Resources:
+    DeploymentAdministrator:
+      Type: AWS::IAM::Role
+      Properties:
+        Policies:
+          - PolicyDocument:
+              Statement:
+                - Effect: Allow
+                  Action: "*"
+                  Resource: "*"
+  extensions:
+    ApiLambdaFunction:
+      Properties:
+        Timeout: 900
+constructs:
+  queue:
+    type: queue
+params:
+  prod:
+    DEPLOY_TOKEN: literal-deployment-token
+custom:
+  imported: ${file(./config/production.yml)}
+stages:
+  prod:
+    resolvers:
+      account:
+        type: aws
+        profile: production-admin
+        securityGroupId: ${ssm:/network/security-group}

@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Serverless Framework service and AWS SAM template gates across the CLI,
+  generalized Action, and local MCP server. Deployment identities and artifacts,
+  wildcard IAM, functions, public events, plugins, variables, packaging,
+  transforms/macros, code sources, APIs, state machines, nested applications,
+  Connectors, custom builds, and lifecycle policies are visible before synthesis.
 - Native Crossplane package and resource gates across the CLI, generalized
   Action, and local MCP server. Providers, Functions, Configurations, image
   policy, runtime overrides, XRDs, Compositions, one-way MRD activation,

@@ -36,6 +36,7 @@ from readtheplan.adapters.proxy_configs import HAProxyAdapter, NginxAdapter
 from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
 from readtheplan.adapters.salt import SaltAdapter
+from readtheplan.adapters.serverless import SamTemplateAdapter, ServerlessFrameworkAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
 from readtheplan.adapters.terraform_config import TerraformConfigAdapter, TerragruntAdapter
 from readtheplan.adapters.traefik import TraefikAdapter
@@ -128,6 +129,8 @@ register_adapter(DockerComposeAdapter())
 register_adapter(NomadPlanAdapter())
 register_adapter(PackerInspectAdapter())
 register_adapter(SaltAdapter())
+register_adapter(ServerlessFrameworkAdapter())
+register_adapter(SamTemplateAdapter())
 register_adapter(SystemdUnitAdapter())
 register_adapter(TerraformConfigAdapter())
 register_adapter(TerragruntAdapter())
@@ -173,6 +176,8 @@ __all__ = [
     "PulumiAdapter",
     "PuppetAdapter",
     "SaltAdapter",
+    "SamTemplateAdapter",
+    "ServerlessFrameworkAdapter",
     "SystemdUnitAdapter",
     "TerraformConfigAdapter",
     "TerragruntAdapter",
