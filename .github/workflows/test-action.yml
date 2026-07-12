@@ -1311,7 +1311,7 @@ jobs:
           assert payload["adapter"] == "dsc"
           assert payload["artifact_type"] == "powershell"
           assert payload["decision"] == "block"
-          assert "auto-corrects drift" in payload["pr_comment"]
+          assert "without an explicit version pin" in payload["pr_comment"]
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
