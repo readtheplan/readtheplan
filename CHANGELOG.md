@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Kubernetes gates now accept individual JSON/YAML manifests, `kind: List`,
+  multi-document YAML, and diff wrappers. This enables rendered Helm and
+  Kustomize output directly; unknown Crossplane/controller resources require
+  review, while control-plane extension kinds classify as dangerous.
 - Built-in Pulumi preview adapter, CLI gate, and local MCP tool. It accepts
   preview digest JSON and streaming JSON events, normalizes provider types and
   input property names, and reuses deep resource-aware risk rules.

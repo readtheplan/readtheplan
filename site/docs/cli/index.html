@@ -134,13 +134,13 @@
         <div class="gc utility-panel-wide">
           <h2 id="adapters-title">Configuration and pipeline adapters</h2>
           <p style="color:var(--muted);margin:8px 0 16px">Use the same <code>rtp-agent-gate-v1</code> output and <code>proceed</code> / <code>warn</code> / <code>block</code> decisions across popular infrastructure tools.</p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan kubernetes manifests.json
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan kubernetes rendered.yaml
 readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
 readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
 readtheplan puppet site.pp</code></pre>
-          <p style="color:var(--muted);margin-top:16px">Pulumi accepts structured preview digest JSON and streaming JSON events; generate the default format with <code>pulumi preview --json &gt; preview.json</code>. Ansible input is parsed as structured YAML, including nested task blocks and handlers. Jenkins, Chef, and Puppet use conservative syntax-aware scanners: recognized execution or destructive operations block, and unknown or dynamic constructs require review. None of the adapters execute user configuration.</p>
+          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, and Crossplane artifacts work directly. Pulumi accepts structured preview digest JSON and streaming JSON events; generate the default format with <code>pulumi preview --json &gt; preview.json</code>. Ansible input is parsed as structured YAML, including nested task blocks and handlers. Jenkins, Chef, and Puppet use conservative syntax-aware scanners: recognized execution or destructive operations block, and unknown or dynamic constructs require review. None of the adapters execute user configuration.</p>
           <p style="color:var(--muted);margin-top:12px">Adapter exit codes are <code>0</code> for proceed, <code>1</code> for warn, and <code>2</code> for block. Add <code>--framework soc2</code>, <code>--framework iso27001</code>, or <code>--framework hipaa</code> to include required control checks.</p>
         </div>
       </section>
