@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Gate your CI pipeline with readtheplan's GitHub Action. Block dangerous Terraform changes before they reach production." />
+    <meta name="description" content="Gate Terraform, Pulumi, Kubernetes, Ansible, Jenkins, Chef, Puppet, and CloudFormation changes with one GitHub Action." />
     <title>GitHub Action — readtheplan</title>
     <link rel="canonical" href="https://readtheplan.dev/docs/github-action/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -45,21 +45,40 @@
         <div class="gc hero-content">
           <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / GitHub Action</p>
           <h1 id="title">Gate your CI pipeline.</h1>
-          <p class="intro-copy">Block dangerous Terraform changes before they reach production. One YAML block to copy-paste.</p>
+          <p class="intro-copy">Block dangerous infrastructure changes before they reach production. One action contract across every built-in gate.</p>
         </div>
       </section>
 
       <section class="g" aria-labelledby="basic-title">
         <div class="gc utility-panel-wide">
           <h2 id="basic-title">Basic setup</h2>
-          <p style="color:var(--muted);margin:8px 0 16px">Add this step to any GitHub Actions workflow that has a Terraform plan:</p>
+          <p style="color:var(--muted);margin:8px 0 16px">Set <code>tool</code> and <code>input-file</code> for any supported infrastructure artifact. Terraform remains the default for backward compatibility:</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Analyze Terraform plan
   id: rtp
   uses: readtheplan/readtheplan@v0.3.0
   with:
-    plan-file: plan.json
+    tool: terraform
+    input-file: plan.json
     fail-on-threshold: dangerous</code></pre>
-          <p style="color:var(--muted);margin-top:16px">The action reads <code>plan-file</code>, runs the full analysis, writes outputs such as <code>summary-json</code> and <code>risk-counts</code>, and fails only when the configured threshold is met. Leave <code>fail-on-threshold</code> empty for report-only mode.</p>
+          <p style="color:var(--muted);margin-top:16px">The action writes <code>summary-json</code>, <code>change-count</code>, <code>risk-counts</code>, and <code>action-counts</code>, then fails only when the configured threshold is met. Leave <code>fail-on-threshold</code> empty for report-only mode. The old <code>plan-file</code> and <code>resource-change-count</code> names remain compatibility aliases.</p>
+          <p style="color:var(--muted);margin-top:12px">By default the action installs the CLI bundled at the same tag or commit, preventing action/package version skew. Set <code>install-source: readtheplan</code> only when you intentionally want the latest PyPI package instead.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="cross-tool-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="cross-tool-title">Cross-tool gates</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Use the same action step for structured plans and conservative configuration scanners:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- uses: readtheplan/readtheplan@&lt;release-tag-or-commit-sha&gt;
+  with:
+    tool: pulumi
+    input-file: infra/preview.json
+    framework: soc2
+    fail-on-threshold: dangerous
+
+# Other tool values:
+# cloudformation, kubernetes, ansible, jenkins, chef, puppet</code></pre>
+          <p style="color:var(--muted);margin-top:12px">Generate structured plans or rendered manifests with their upstream tools first. For example, run <code>helm template</code> or <code>kubectl kustomize</code> before the action, then select <code>tool: kubernetes</code>. The action never executes infrastructure source code itself.</p>
         </div>
       </section>
 

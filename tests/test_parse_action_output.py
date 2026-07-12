@@ -104,3 +104,49 @@ def test_parse_action_output_skips_oversized_summary_json(
     assert "summary-json=\n" in output
     assert "summary-json<<READTHEPLAN_JSON" not in output
     assert 'action-counts={"update":1000}' in output
+
+
+def test_parse_action_output_accepts_agent_gate_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "schema": "rtp-agent-gate-v1",
+        "adapter": "pulumi",
+        "total_changes": 3,
+        "decision": "block",
+        "risk": "irreversible",
+        "risk_counts": {"safe": 1, "dangerous": 1, "irreversible": 1},
+        "pr_comment": "**readtheplan agent gate:** BLOCK\n\nHuman approval required.",
+    }
+
+    github_output, step_summary, count_file = _run_parser(tmp_path, payload, monkeypatch)
+
+    output = github_output.read_text(encoding="utf-8")
+    assert "resource-change-count=3" in output
+    assert "action-counts={}" in output
+    assert 'risk-counts={"dangerous":1,"irreversible":1,"safe":1}' in output
+    assert "readtheplan agent gate:** BLOCK" in step_summary.read_text(encoding="utf-8")
+    assert count_file.read_text(encoding="utf-8") == "3"
+
+
+def test_parse_action_output_rejects_malformed_agent_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parser = _load_parser()
+    output_json = tmp_path / "output.json"
+    output_json.write_text('{"schema":"rtp-agent-gate-v1"}', encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "parse_action_output.py",
+            str(output_json),
+            str(tmp_path / "outputs"),
+            str(tmp_path / "summary"),
+            str(tmp_path / "count"),
+        ],
+    )
+    with pytest.raises(SystemExit):
+        parser.main()

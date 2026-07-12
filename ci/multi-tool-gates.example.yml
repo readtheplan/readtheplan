@@ -1,0 +1,63 @@
+# Example cross-tool GitHub Actions gate. Pin the action to a released tag or
+# full commit SHA before production use.
+name: infrastructure-risk-gates
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - "ansible/**"
+      - "Jenkinsfile"
+      - "chef/**"
+      - "puppet/**"
+
+permissions:
+  contents: read
+
+jobs:
+  review-static-inputs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tool: kubernetes
+            input: build/rendered-kubernetes.yaml
+          - tool: ansible
+            input: ansible/site.yml
+          - tool: jenkins
+            input: Jenkinsfile
+          - tool: chef
+            input: chef/recipes/default.rb
+          - tool: puppet
+            input: puppet/site.pp
+    steps:
+      - uses: actions/checkout@v7
+      - uses: readtheplan/readtheplan@main
+        with:
+          tool: ${{ matrix.tool }}
+          input-file: ${{ matrix.input }}
+          framework: soc2
+          fail-on-threshold: dangerous
+
+  # Generate structured previews in the same trusted jobs that already hold
+  # provider credentials, then gate the resulting local artifacts.
+  review-pulumi-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pulumi/setup-pulumi@v2
+      - name: Install Pulumi program dependencies
+        run: npm ci
+        working-directory: infra
+      - name: Produce Pulumi preview JSON
+        run: pulumi preview --stack organization/project/production --json > preview.json
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - uses: readtheplan/readtheplan@main
+        with:
+          tool: pulumi
+          input-file: infra/preview.json
+          framework: soc2
+          fail-on-threshold: dangerous

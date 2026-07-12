@@ -48,6 +48,54 @@ jobs:
           assert payload["changes"][0]["address"] == "aws_s3_bucket.logs"
           PY
 
+      - name: Run action on Pulumi preview
+        id: pulumi
+        uses: ./
+        with:
+          tool: pulumi
+          input-file: tests/fixtures/pulumi_preview_mixed.json
+          framework: soc2
+
+      - name: Assert Pulumi action outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.pulumi.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.pulumi.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.pulumi.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.pulumi.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "3"
+          test "$ACTION_COUNTS" = '{}'
+          test "$RISK_COUNTS" = '{"dangerous":1,"irreversible":1,"review":0,"safe":1}'
+
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "pulumi"
+          assert payload["decision"] == "block"
+          assert payload["total_changes"] == 3
+          assert any(item.startswith("rtp.control.soc2.") for item in payload["required_checks"])
+          PY
+
+      - name: Reject unsupported tool
+        id: unsupported_tool
+        uses: ./
+        continue-on-error: true
+        with:
+          tool: unsupported
+          input-file: tests/fixtures/valid_plan.json
+
+      - name: Assert unsupported tool failed
+        if: ${{ steps.unsupported_tool.outcome != 'failure' }}
+        shell: bash
+        run: |
+          echo "Expected unsupported tool validation to fail"
+          exit 1
+
       - name: Fail on invalid plan JSON
         id: invalid
         uses: ./

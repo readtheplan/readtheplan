@@ -13,9 +13,16 @@ def test_action_uses_json_cli_contract() -> None:
     assert "summary-json" in action
     assert "$GITHUB_ACTION_PATH" in action
     assert "install-source" in action
+    assert 'default: ""' in action
+    assert "action and CLI versions match" in action
     assert "parse_action_output.py" in action
     assert "fail-on-any-change" in action
     assert "fail-on-threshold" in action
+    assert "input-file" in action
+    assert "tool:" in action
+    assert "cloudformation|kubernetes|pulumi|ansible|jenkins|chef|puppet" in action
+    assert "RESOLVED_INPUT_FILE" in action
+    assert "p.get('risks', p.get('risk_counts', {}))" in action
     assert "deprecationMessage" in action
     assert "risk_counts=" in action
     assert "threshold_reached" in action
@@ -24,8 +31,9 @@ def test_action_uses_json_cli_contract() -> None:
     assert "resource_change_count" in parser
     assert "### Changes" in parser
     assert "_markdown_cell" in parser
-    assert "payload[\"changes\"][:20]" in parser
+    assert "changes[:20]" in parser
     assert "MAX_GITHUB_OUTPUT_BYTES" in parser
+    assert '"rtp-agent-gate-v1"' in parser
     assert "grep" not in action
     assert "pip install readtheplan" not in action
 
@@ -40,6 +48,9 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "tests/fixtures/does-not-exist.json" in workflow
     assert "fail-on-any-change: \"true\"" in workflow
     assert "fail-on-threshold: \"dangerous\"" in workflow
+    assert "tool: pulumi" in workflow
+    assert "input-file: tests/fixtures/pulumi_preview_mixed.json" in workflow
+    assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow
     assert "steps.fail_on_threshold.outcome != 'failure'" in workflow

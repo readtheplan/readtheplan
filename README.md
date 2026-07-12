@@ -361,6 +361,8 @@ evaluation/demo material, not runtime code.
 - [Docs](https://readtheplan.dev/docs/) — tutorials, API reference, examples
 - [`examples/`](examples/) — sample plans with rendered output
 - [Authoring rules & overlays](docs/authoring-rules.md) — add resource rules, control mappings, overlays, and adapters
+- [Infrastructure support matrix](docs/support-matrix.md) — input formats, maturity, limitations, and shared CI outputs
+- [Cross-tool GitHub Actions example](ci/multi-tool-gates.example.yml) — one gate contract across supported ecosystems
 - [`docs/adr/`](docs/adr/) — architecture decision records
 - [Corpus feedback loop](docs/corpus/README.md) — scan real plans, improve rules
 
