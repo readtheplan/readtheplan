@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terragrunt", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -76,6 +76,8 @@ prometheus = "readtheplan.adapters.monitoring:PrometheusAdapter"
 puppet = "readtheplan.adapters.puppet:PuppetAdapter"
 salt = "readtheplan.adapters.salt:SaltAdapter"
 systemd = "readtheplan.adapters.systemd:SystemdUnitAdapter"
+terraform-config = "readtheplan.adapters.terraform_config:TerraformConfigAdapter"
+terragrunt = "readtheplan.adapters.terraform_config:TerragruntAdapter"
 traefik = "readtheplan.adapters.traefik:TraefikAdapter"
 vagrant = "readtheplan.adapters.vagrant:VagrantAdapter"
 vault = "readtheplan.adapters.hashicorp:VaultAdapter"

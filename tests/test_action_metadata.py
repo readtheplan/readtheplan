@@ -21,7 +21,8 @@ def test_action_uses_json_cli_contract() -> None:
     assert "input-file" in action
     assert "tool:" in action
     assert (
-        "cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet|"
+        "terraform-config|terragrunt|cloudformation|azure|kubernetes|pulumi|"
+        "ansible|jenkins|chef|puppet|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "atlantis|"
         "docker-compose|"
@@ -111,6 +112,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/loki_risky.yml" in workflow
     assert "tool: caddy" in workflow
     assert "input-file: tests/fixtures/Caddyfile.risky" in workflow
+    assert "tool: terraform-config" in workflow
+    assert "input-file: tests/fixtures/terraform_config_risky.tf" in workflow
+    assert "tool: terragrunt" in workflow
+    assert "input-file: tests/fixtures/terragrunt_risky.hcl" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow

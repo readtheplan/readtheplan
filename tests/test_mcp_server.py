@@ -34,6 +34,8 @@ from readtheplan.mcp_server import (
     agent_gate_pulumi,
     agent_gate_salt,
     agent_gate_systemd,
+    agent_gate_terraform_config,
+    agent_gate_terragrunt,
     agent_gate_traefik,
     agent_gate_vagrant,
     agent_gate_vault,
@@ -284,6 +286,22 @@ def test_agent_gate_loki_supports_framework_checks() -> None:
 def test_agent_gate_caddy_supports_caddyfile_and_json(fixture: str) -> None:
     result = agent_gate_caddy(str(FIXTURES / fixture), "soc2")
     assert result["adapter"] == "caddy"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize(
+    ("handler", "fixture", "adapter"),
+    [
+        (agent_gate_terraform_config, "terraform_config_risky.tf", "terraform-config"),
+        (agent_gate_terragrunt, "terragrunt_risky.hcl", "terragrunt"),
+    ],
+)
+def test_agent_gate_terraform_source_supports_config_and_terragrunt(
+    handler, fixture: str, adapter: str
+) -> None:
+    result = handler(str(FIXTURES / fixture), "soc2")
+    assert result["adapter"] == adapter
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -1069,6 +1087,8 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_consul" in tool_names
         assert "agent_gate_loki" in tool_names
         assert "agent_gate_caddy" in tool_names
+        assert "agent_gate_terraform_config" in tool_names
+        assert "agent_gate_terragrunt" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1113,6 +1133,10 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(loki_schema["properties"])
         caddy_schema = tools_by_name["agent_gate_caddy"]["inputSchema"]
         assert {"input_path", "framework"} <= set(caddy_schema["properties"])
+        tf_config_schema = tools_by_name["agent_gate_terraform_config"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(tf_config_schema["properties"])
+        terragrunt_schema = tools_by_name["agent_gate_terragrunt"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(terragrunt_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 

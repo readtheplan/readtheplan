@@ -501,6 +501,58 @@ jobs:
           assert payload["decision"] == "block"
           PY
 
+      - name: Run action on Terraform configuration
+        id: terraform_config
+        uses: ./
+        with:
+          tool: terraform-config
+          input-file: tests/fixtures/terraform_config_risky.tf
+          framework: soc2
+
+      - name: Assert Terraform configuration outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.terraform_config.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.terraform_config.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.terraform_config.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "39"
+          test "$RISK_COUNTS" = '{"dangerous":23,"irreversible":1,"review":15,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "terraform-config"
+          assert payload["decision"] == "block"
+          PY
+
+      - name: Run action on Terragrunt configuration
+        id: terragrunt
+        uses: ./
+        with:
+          tool: terragrunt
+          input-file: tests/fixtures/terragrunt_risky.hcl
+          framework: soc2
+
+      - name: Assert Terragrunt outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.terragrunt.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.terragrunt.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.terragrunt.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "44"
+          test "$RISK_COUNTS" = '{"dangerous":25,"irreversible":0,"review":19,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "terragrunt"
+          assert payload["decision"] == "block"
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./
