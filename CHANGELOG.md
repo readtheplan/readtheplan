@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for all 111 resources in Grafana provider
+  v4.40.1. Tokens and secure values, RBAC/permissions/SSO/SCIM, dashboards and
+  public sharing, data sources and cloud integrations, alerting and OnCall,
+  GitSync, assistant MCP servers, k6, ML and Asserts, hosted stacks/plugins,
+  Synthetic Monitoring, and fleet/frontend telemetry now receive explicit
+  control-plane semantics.
 - First-party Terraform rules for all 198 resources in HashiCorp Vault provider
   v5.10.1. Secret values and generated tokens, auth methods and identity, ACL,
   Sentinel/RGP and quota policy, dynamic-secret engines, PKI/SSH/KMIP/transit
