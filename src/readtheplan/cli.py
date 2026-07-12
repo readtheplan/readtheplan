@@ -411,6 +411,22 @@ def _build_parser() -> argparse.ArgumentParser:
     envoy.add_argument("input_file", help="Path to Envoy YAML/JSON or config_dump JSON.")
     envoy.set_defaults(func=_envoy_gate)
 
+    prometheus = subparsers.add_parser(
+        "prometheus",
+        help="Emit the agent-gate decision for Prometheus configuration YAML.",
+    )
+    prometheus.add_argument("--framework", help="Include checks from a compliance framework.")
+    prometheus.add_argument("input_file", help="Path to prometheus.yml.")
+    prometheus.set_defaults(func=_monitoring_gate)
+
+    alertmanager = subparsers.add_parser(
+        "alertmanager",
+        help="Emit the agent-gate decision for Alertmanager configuration YAML.",
+    )
+    alertmanager.add_argument("--framework", help="Include checks from a compliance framework.")
+    alertmanager.add_argument("input_file", help="Path to alertmanager.yml.")
+    alertmanager.set_defaults(func=_monitoring_gate)
+
     cloud_init = subparsers.add_parser(
         "cloud-init",
         help="Emit the agent-gate decision for cloud-init user-data.",
@@ -1252,6 +1268,35 @@ def _systemd_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_systemd(data, catalog=catalog))
+
+
+def _monitoring_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Prometheus or Alertmanager YAML."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.monitoring import (
+        MonitoringInputError,
+        analyze_monitoring,
+        parse_monitoring_config,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_monitoring_config(source, args.command)
+    except MonitoringInputError as exc:
+        print(f"Error: invalid {args.command} configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != args.command:
+        print(f"Error: input not recognized as {args.command} configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_monitoring(data, catalog=catalog))
 
 
 def _envoy_gate(args: argparse.Namespace) -> int:

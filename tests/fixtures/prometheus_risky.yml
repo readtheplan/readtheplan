@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+rule_files:
+  - rules/*.yml
+scrape_configs:
+  - job_name: kubernetes-api
+    scheme: http
+    honor_labels: true
+    static_configs:
+      - targets: ["10.0.0.10:9090"]
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+    basic_auth:
+      username: admin
+      password: fixture-secret
+    tls_config:
+      insecure_skip_verify: true
+remote_write:
+  - url: https://metrics.example.test/api/v1/write
+    authorization:
+      credentials: fixture-token
+    tls_config:
+      insecure_skip_verify: true
+remote_read:
+  - url: https://metrics.example.test/api/v1/read
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+otlp:
+  promote_resource_attributes: [service.name]
