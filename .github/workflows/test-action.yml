@@ -210,6 +210,33 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Atlantis configuration
+        id: atlantis
+        uses: ./
+        with:
+          tool: atlantis
+          input-file: tests/fixtures/atlantis_risky.yaml
+          framework: soc2
+
+      - name: Assert Atlantis outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.atlantis.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.atlantis.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.atlantis.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "18"
+          test "$RISK_COUNTS" = '{"dangerous":10,"irreversible":0,"review":7,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "atlantis"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

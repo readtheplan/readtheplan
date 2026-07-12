@@ -1,0 +1,25 @@
+repos:
+  - id: /.*/
+    branch: /.*/
+    plan_requirements: []
+    apply_requirements: []
+    import_requirements: []
+    allowed_overrides:
+      - apply_requirements
+      - workflow
+      - custom_policy_check
+    allowed_workflows: [custom]
+    allow_custom_workflows: true
+    policy_check: false
+workflows:
+  custom:
+    plan:
+      steps:
+        - run: terraform plan -out $PLANFILE
+    apply:
+      steps:
+        - run: terraform apply $PLANFILE
+pre_workflow_hooks:
+  - run: ./hooks/pre-workflow.sh
+post_workflow_hooks:
+  - run: ./hooks/post-workflow.sh

@@ -1,0 +1,30 @@
+version: 3
+parallel_plan: true
+parallel_apply: true
+abort_on_execution_order_fail: false
+projects:
+  - name: production
+    dir: infrastructure/production
+    workspace: production
+    terraform_version: v1.11.0
+    plan_requirements: []
+    apply_requirements: [mergeable]
+    import_requirements: []
+    workflow: custom
+    repo_locks:
+      mode: disabled
+    autoplan:
+      enabled: false
+      when_modified: ["**/*.tf", "../shared/**"]
+    execution_order_group: 1
+workflows:
+  custom:
+    plan:
+      steps:
+        - env:
+            name: CLOUD_API_TOKEN
+            value: fixture-secret
+        - run: terraform plan -out $PLANFILE
+    apply:
+      steps:
+        - run: terraform apply $PLANFILE

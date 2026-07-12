@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -41,6 +41,7 @@ readtheplan = "readtheplan.cli:main"
 # canonical examples (discovery is idempotent).
 [project.entry-points."readtheplan.adapters"]
 ansible = "readtheplan.adapters.ansible:AnsibleAdapter"
+atlantis = "readtheplan.adapters.atlantis:AtlantisAdapter"
 azure = "readtheplan.adapters.azure:AzureWhatIfAdapter"
 azure-pipelines = "readtheplan.adapters.pipelines:AzurePipelinesAdapter"
 bitbucket-pipelines = "readtheplan.adapters.pipelines:BitbucketPipelinesAdapter"

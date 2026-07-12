@@ -15,6 +15,7 @@ from readtheplan.mcp_server import (
     _validate_path,
     _working_root,
     agent_gate,
+    agent_gate_atlantis,
     agent_gate_azure,
     agent_gate_cloud_init,
     agent_gate_cloudformation,
@@ -175,6 +176,20 @@ def test_agent_gate_pipeline_supports_buildkite() -> None:
     assert result["adapter"] == "buildkite"
     assert result["decision"] == "block"
     assert result["total_changes"] == 18
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize(
+    ("fixture", "total"),
+    [("atlantis_risky.yaml", 18), ("atlantis_server_risky.yaml", 11)],
+)
+def test_agent_gate_atlantis_supports_repo_and_server_config(
+    fixture: str, total: int
+) -> None:
+    result = agent_gate_atlantis(str(FIXTURES / fixture), "soc2")
+    assert result["adapter"] == "atlantis"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == total
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
@@ -951,6 +966,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
         assert "agent_gate_proxy_config" in tool_names
+        assert "agent_gate_atlantis" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -975,6 +991,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(systemd_schema["properties"])
         proxy_schema = tools_by_name["agent_gate_proxy_config"]["inputSchema"]
         assert {"input_path", "ecosystem", "framework"} <= set(proxy_schema["properties"])
+        atlantis_schema = tools_by_name["agent_gate_atlantis"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(atlantis_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 
