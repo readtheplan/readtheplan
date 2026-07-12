@@ -1,0 +1,222 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.11.4",
+  "resource_changes": [
+    {
+      "address": "github_repository.public_api",
+      "type": "github_repository",
+      "name": "public_api",
+      "change": {"actions": ["update"], "before": {"name": "api", "visibility": "private"}, "after": {"name": "api", "visibility": "public"}}
+    },
+    {
+      "address": "github_repository.archived_service",
+      "type": "github_repository",
+      "name": "archived_service",
+      "change": {"actions": ["update"], "before": {"name": "service", "archived": false}, "after": {"name": "service", "archived": true}}
+    },
+    {
+      "address": "github_repository.legacy",
+      "type": "github_repository",
+      "name": "legacy",
+      "change": {"actions": ["delete"], "before": {"name": "legacy", "visibility": "private", "archive_on_destroy": false}, "after": null}
+    },
+    {
+      "address": "github_branch.release",
+      "type": "github_branch",
+      "name": "release",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "api", "branch": "release", "source_branch": "main"}}
+    },
+    {
+      "address": "github_branch_default.api",
+      "type": "github_branch_default",
+      "name": "api",
+      "change": {"actions": ["update"], "before": {"repository": "api", "branch": "main"}, "after": {"repository": "api", "branch": "release"}}
+    },
+    {
+      "address": "github_branch_protection.main",
+      "type": "github_branch_protection",
+      "name": "main",
+      "change": {"actions": ["update"], "before": {"pattern": "main", "enforce_admins": true, "allows_force_pushes": false}, "after": {"pattern": "main", "enforce_admins": false, "allows_force_pushes": true, "allows_deletions": true, "required_status_checks": [{"strict": false, "contexts": ["test"]}]}}
+    },
+    {
+      "address": "github_repository_ruleset.main",
+      "type": "github_repository_ruleset",
+      "name": "main",
+      "change": {"actions": ["update"], "before": {"name": "main", "enforcement": "active"}, "after": {"name": "main", "enforcement": "disabled", "target": "branch", "bypass_actors": [{"actor_type": "OrganizationAdmin", "bypass_mode": "always"}]}}
+    },
+    {
+      "address": "github_organization_ruleset.baseline",
+      "type": "github_organization_ruleset",
+      "name": "baseline",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "baseline", "enforcement": "active", "target": "branch", "rules": [{"required_signatures": true}]}}
+    },
+    {
+      "address": "github_membership.platform_admin",
+      "type": "github_membership",
+      "name": "platform_admin",
+      "change": {"actions": ["create"], "before": null, "after": {"username": "octocat", "role": "admin"}}
+    },
+    {
+      "address": "github_team.platform",
+      "type": "github_team",
+      "name": "platform",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "platform", "privacy": "closed"}}
+    },
+    {
+      "address": "github_team_repository.platform_api",
+      "type": "github_team_repository",
+      "name": "platform_api",
+      "change": {"actions": ["create"], "before": null, "after": {"team_id": 42, "repository": "api", "permission": "push"}}
+    },
+    {
+      "address": "github_organization_settings.security",
+      "type": "github_organization_settings",
+      "name": "security",
+      "change": {"actions": ["update"], "before": {"default_repository_permission": "read"}, "after": {"default_repository_permission": "admin", "members_can_create_public_repositories": true, "members_can_fork_private_repositories": true, "secret_scanning_enabled_for_new_repositories": false}}
+    },
+    {
+      "address": "github_actions_repository_permissions.api",
+      "type": "github_actions_repository_permissions",
+      "name": "api",
+      "change": {"actions": ["update"], "before": {"repository": "api", "allowed_actions": "selected", "sha_pinning_required": true}, "after": {"repository": "api", "allowed_actions": "all", "enabled": true, "sha_pinning_required": false}}
+    },
+    {
+      "address": "github_actions_organization_workflow_permissions.default",
+      "type": "github_actions_organization_workflow_permissions",
+      "name": "default",
+      "change": {"actions": ["update"], "before": {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false}, "after": {"default_workflow_permissions": "write", "can_approve_pull_request_reviews": true}}
+    },
+    {
+      "address": "github_actions_secret.deploy",
+      "type": "github_actions_secret",
+      "name": "deploy",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "api", "secret_name": "DEPLOY_TOKEN", "plaintext_value": "(sensitive)"}}
+    },
+    {
+      "address": "github_dependabot_organization_secret.npm",
+      "type": "github_dependabot_organization_secret",
+      "name": "npm",
+      "change": {"actions": ["delete"], "before": {"secret_name": "NPM_TOKEN", "visibility": "selected"}, "after": null}
+    },
+    {
+      "address": "github_actions_variable.region",
+      "type": "github_actions_variable",
+      "name": "region",
+      "change": {"actions": ["update"], "before": {"variable_name": "REGION", "value": "us-east-1"}, "after": {"variable_name": "REGION", "value": "us-west-2"}}
+    },
+    {
+      "address": "github_repository_environment.production",
+      "type": "github_repository_environment",
+      "name": "production",
+      "change": {"actions": ["update"], "before": {"environment": "production", "prevent_self_review": true, "can_admins_bypass": false}, "after": {"environment": "production", "prevent_self_review": false, "can_admins_bypass": true, "deployment_branch_policy": [{"protected_branches": false, "custom_branch_policies": false}]}}
+    },
+    {
+      "address": "github_repository_deployment_branch_policy.release",
+      "type": "github_repository_deployment_branch_policy",
+      "name": "release",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "api", "environment_name": "production", "name": "release/*"}}
+    },
+    {
+      "address": "github_repository_deploy_key.release",
+      "type": "github_repository_deploy_key",
+      "name": "release",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "api", "title": "release", "key": "ssh-ed25519 AAAA...", "read_only": false}}
+    },
+    {
+      "address": "github_repository_webhook.deploy",
+      "type": "github_repository_webhook",
+      "name": "deploy",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "api", "active": true, "events": ["push"], "configuration": [{"url": "https://deploy.example.com/hook", "content_type": "json", "insecure_ssl": false}]}}
+    },
+    {
+      "address": "github_organization_webhook.audit",
+      "type": "github_organization_webhook",
+      "name": "audit",
+      "change": {"actions": ["create"], "before": null, "after": {"active": false, "events": ["repository"], "configuration": [{"url": "https://audit.example.com/hook", "content_type": "json", "insecure_ssl": false}]}}
+    },
+    {
+      "address": "github_actions_runner_group.shared",
+      "type": "github_actions_runner_group",
+      "name": "shared",
+      "change": {"actions": ["update"], "before": {"visibility": "selected", "restricted_to_workflows": true}, "after": {"name": "shared", "visibility": "all", "allows_public_repositories": true, "restricted_to_workflows": false}}
+    },
+    {
+      "address": "github_actions_hosted_runner.large",
+      "type": "github_actions_hosted_runner",
+      "name": "large",
+      "change": {"actions": ["create"], "before": null, "after": {"name": "large", "image": [{"id": "2306", "source": "github"}], "size": "8-core", "runner_group_id": 7, "maximum_runners": 5, "public_ip_enabled": false}}
+    },
+    {
+      "address": "github_actions_repository_oidc_subject_claim_customization_template.api",
+      "type": "github_actions_repository_oidc_subject_claim_customization_template",
+      "name": "api",
+      "change": {"actions": ["update"], "before": {"use_default": true}, "after": {"repository": "api", "use_default": false, "include_claim_keys": ["repo", "environment"]}}
+    },
+    {
+      "address": "github_app_installation_repository.release_bot",
+      "type": "github_app_installation_repository",
+      "name": "release_bot",
+      "change": {"actions": ["create"], "before": null, "after": {"installation_id": 123, "repository": "api"}}
+    },
+    {
+      "address": "github_repository_file.release_workflow",
+      "type": "github_repository_file",
+      "name": "release_workflow",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "api", "branch": "main", "file": ".github/workflows/release.yml", "content": "name: release", "overwrite_on_create": true}}
+    },
+    {
+      "address": "github_repository_file.readme",
+      "type": "github_repository_file",
+      "name": "readme",
+      "change": {"actions": ["update"], "before": {"file": "README.md", "content": "old"}, "after": {"repository": "api", "branch": "docs", "file": "README.md", "content": "new"}}
+    },
+    {
+      "address": "github_repository_vulnerability_alerts.api",
+      "type": "github_repository_vulnerability_alerts",
+      "name": "api",
+      "change": {"actions": ["update"], "before": {"repository": "api", "enabled": true}, "after": {"repository": "api", "enabled": false}}
+    },
+    {
+      "address": "github_repository_dependabot_security_updates.api",
+      "type": "github_repository_dependabot_security_updates",
+      "name": "api",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "api", "enabled": true}}
+    },
+    {
+      "address": "github_repository_pages.docs",
+      "type": "github_repository_pages",
+      "name": "docs",
+      "change": {"actions": ["create"], "before": null, "after": {"repository": "docs", "build_type": "workflow", "cname": "docs.example.com"}}
+    },
+    {
+      "address": "github_organization_security_manager.security",
+      "type": "github_organization_security_manager",
+      "name": "security",
+      "change": {"actions": ["create"], "before": null, "after": {"team_slug": "security"}}
+    },
+    {
+      "address": "github_repository_collaborator.contractor",
+      "type": "github_repository_collaborator",
+      "name": "contractor",
+      "change": {"actions": ["delete"], "before": {"repository": "api", "username": "contractor", "permission": "push"}, "after": null}
+    },
+    {
+      "address": "github_actions_organization_secret_repositories.deploy",
+      "type": "github_actions_organization_secret_repositories",
+      "name": "deploy",
+      "change": {"actions": ["update"], "before": {"secret_name": "DEPLOY", "selected_repository_ids": [1]}, "after": {"secret_name": "DEPLOY", "selected_repository_ids": [1, 2, 3]}}
+    },
+    {
+      "address": "github_actions_environment_variable.legacy",
+      "type": "github_actions_environment_variable",
+      "name": "legacy",
+      "change": {"actions": ["delete"], "before": {"repository": "api", "environment": "production", "variable_name": "LEGACY"}, "after": null}
+    },
+    {
+      "address": "github_enterprise_security_analysis_settings.defaults",
+      "type": "github_enterprise_security_analysis_settings",
+      "name": "defaults",
+      "change": {"actions": ["update"], "before": {"secret_scanning_default_new_repositories": "enabled"}, "after": {"secret_scanning_default_new_repositories": "disabled"}}
+    }
+  ]
+}

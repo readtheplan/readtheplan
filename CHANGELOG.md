@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for the GitHub provider. Repository lifecycle and
+  visibility, branches and rulesets, organization/team/collaborator access,
+  Actions execution and workflow-token policy, secrets and variables,
+  environments, deploy keys, webhooks, hosted runners, OIDC trust, GitHub Apps,
+  repository files, and security-analysis settings now receive control-plane
+  semantics instead of the generic Terraform baseline.
 - First-party Terraform rules for Cloudflare provider v5 and important v4
   aliases. Zones/DNS/DNSSEC, edge rules and settings, Workers, Zero Trust,
   tunnels, R2/D1/KV/Queues, load balancing, TLS, API identity, Logpush, and
