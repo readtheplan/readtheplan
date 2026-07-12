@@ -820,6 +820,78 @@ def agent_gate_consul(
     return _agent_gate_hashicorp(input_path, "consul", framework)
 
 
+def agent_gate_loki(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Grafana Loki YAML configuration."""
+    from readtheplan.adapters.loki import (
+        LokiAdapter,
+        LokiInputError,
+        analyze_loki,
+        parse_loki_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Loki input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_loki_config(source)
+    except LokiInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Invalid Loki configuration in {input_path}: {exc}"
+        ) from exc
+    if not LokiAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Loki configuration"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_loki(data, catalog=catalog)
+
+
+def agent_gate_caddy(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Caddyfile or native Caddy JSON."""
+    from readtheplan.adapters.caddy import (
+        CaddyAdapter,
+        CaddyInputError,
+        analyze_caddy,
+        parse_caddy_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Caddy input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_caddy_config(source)
+    except CaddyInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Invalid Caddy configuration in {input_path}: {exc}"
+        ) from exc
+    if not CaddyAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Caddy configuration"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_caddy(data, catalog=catalog)
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -1112,6 +1184,8 @@ def create_server() -> Any:
     agent_gate_grafana_handler = agent_gate_grafana
     agent_gate_vault_handler = agent_gate_vault
     agent_gate_consul_handler = agent_gate_consul
+    agent_gate_loki_handler = agent_gate_loki
+    agent_gate_caddy_handler = agent_gate_caddy
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1348,6 +1422,22 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return a gate for Consul agent HCL/JSON configuration."""
         return agent_gate_consul_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_loki")
+    def _agent_gate_loki_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Grafana Loki YAML configuration."""
+        return agent_gate_loki_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_caddy")
+    def _agent_gate_caddy_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Caddyfile or native Caddy JSON."""
+        return agent_gate_caddy_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(

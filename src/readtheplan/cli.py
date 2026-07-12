@@ -445,6 +445,22 @@ def _build_parser() -> argparse.ArgumentParser:
     consul.add_argument("input_file", help="Path to Consul agent HCL or JSON configuration.")
     consul.set_defaults(func=_hashicorp_gate)
 
+    loki = subparsers.add_parser(
+        "loki",
+        help="Emit the agent-gate decision for Grafana Loki configuration YAML.",
+    )
+    loki.add_argument("--framework", help="Include checks from a compliance framework.")
+    loki.add_argument("input_file", help="Path to loki.yaml.")
+    loki.set_defaults(func=_loki_gate)
+
+    caddy = subparsers.add_parser(
+        "caddy",
+        help="Emit the agent-gate decision for Caddyfile or native Caddy JSON.",
+    )
+    caddy.add_argument("--framework", help="Include checks from a compliance framework.")
+    caddy.add_argument("input_file", help="Path to a Caddyfile or native Caddy JSON.")
+    caddy.set_defaults(func=_caddy_gate)
+
     prometheus = subparsers.add_parser(
         "prometheus",
         help="Emit the agent-gate decision for Prometheus configuration YAML.",
@@ -1399,6 +1415,56 @@ def _hashicorp_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_hashicorp(data, catalog=catalog))
+
+
+def _loki_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Grafana Loki YAML configuration."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.loki import LokiInputError, analyze_loki, parse_loki_config
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_loki_config(source)
+    except LokiInputError as exc:
+        print(f"Error: invalid Loki configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "loki":
+        print("Error: input not recognized as Loki configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_loki(data, catalog=catalog))
+
+
+def _caddy_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Caddyfile or native Caddy JSON."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.caddy import CaddyInputError, analyze_caddy, parse_caddy_config
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_caddy_config(source)
+    except CaddyInputError as exc:
+        print(f"Error: invalid Caddy configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "caddy":
+        print("Error: input not recognized as Caddy configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_caddy(data, catalog=catalog))
 
 
 def _otel_collector_gate(args: argparse.Namespace) -> int:

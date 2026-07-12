@@ -17,6 +17,7 @@ from readtheplan.mcp_server import (
     agent_gate,
     agent_gate_atlantis,
     agent_gate_azure,
+    agent_gate_caddy,
     agent_gate_cloud_init,
     agent_gate_cloudformation,
     agent_gate_consul,
@@ -24,6 +25,7 @@ from readtheplan.mcp_server import (
     agent_gate_envoy,
     agent_gate_grafana,
     agent_gate_kubernetes,
+    agent_gate_loki,
     agent_gate_monitoring,
     agent_gate_otel_collector,
     agent_gate_packer,
@@ -190,9 +192,7 @@ def test_agent_gate_pipeline_supports_buildkite() -> None:
     ("fixture", "total"),
     [("atlantis_risky.yaml", 18), ("atlantis_server_risky.yaml", 11)],
 )
-def test_agent_gate_atlantis_supports_repo_and_server_config(
-    fixture: str, total: int
-) -> None:
+def test_agent_gate_atlantis_supports_repo_and_server_config(fixture: str, total: int) -> None:
     result = agent_gate_atlantis(str(FIXTURES / fixture), "soc2")
     assert result["adapter"] == "atlantis"
     assert result["decision"] == "block"
@@ -232,9 +232,7 @@ def test_agent_gate_monitoring_supports_both_ecosystems(
 
 
 def test_agent_gate_otel_collector_supports_framework_checks() -> None:
-    result = agent_gate_otel_collector(
-        str(FIXTURES / "otel_collector_risky.yml"), "soc2"
-    )
+    result = agent_gate_otel_collector(str(FIXTURES / "otel_collector_risky.yml"), "soc2")
     assert result["adapter"] == "otel-collector"
     assert result["decision"] == "block"
     assert result["total_changes"] == 26
@@ -271,6 +269,21 @@ def test_agent_gate_hashicorp_supports_vault_and_consul(
 ) -> None:
     result = handler(str(FIXTURES / fixture), "soc2")
     assert result["adapter"] == adapter
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_loki_supports_framework_checks() -> None:
+    result = agent_gate_loki(str(FIXTURES / "loki_risky.yml"), "soc2")
+    assert result["adapter"] == "loki"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize("fixture", ["Caddyfile.risky", "caddy_risky.json"])
+def test_agent_gate_caddy_supports_caddyfile_and_json(fixture: str) -> None:
+    result = agent_gate_caddy(str(FIXTURES / fixture), "soc2")
+    assert result["adapter"] == "caddy"
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -350,9 +363,7 @@ def test_agent_gate_systemd_supports_framework_checks() -> None:
     ("ecosystem", "fixture"),
     [("nginx", "nginx_risky.conf"), ("haproxy", "haproxy_risky.cfg")],
 )
-def test_agent_gate_proxy_config_supports_framework_checks(
-    ecosystem: str, fixture: str
-) -> None:
+def test_agent_gate_proxy_config_supports_framework_checks(ecosystem: str, fixture: str) -> None:
     result = agent_gate_proxy_config(str(FIXTURES / fixture), ecosystem, "soc2")
     assert result["adapter"] == ecosystem
     assert result["decision"] == "block"
@@ -1056,6 +1067,8 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_grafana" in tool_names
         assert "agent_gate_vault" in tool_names
         assert "agent_gate_consul" in tool_names
+        assert "agent_gate_loki" in tool_names
+        assert "agent_gate_caddy" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1085,9 +1098,7 @@ def test_stdio_server_tools_list() -> None:
         envoy_schema = tools_by_name["agent_gate_envoy"]["inputSchema"]
         assert {"input_path", "framework"} <= set(envoy_schema["properties"])
         monitoring_schema = tools_by_name["agent_gate_monitoring"]["inputSchema"]
-        assert {"input_path", "ecosystem", "framework"} <= set(
-            monitoring_schema["properties"]
-        )
+        assert {"input_path", "ecosystem", "framework"} <= set(monitoring_schema["properties"])
         collector_schema = tools_by_name["agent_gate_otel_collector"]["inputSchema"]
         assert {"input_path", "framework"} <= set(collector_schema["properties"])
         traefik_schema = tools_by_name["agent_gate_traefik"]["inputSchema"]
@@ -1098,6 +1109,10 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(vault_schema["properties"])
         consul_schema = tools_by_name["agent_gate_consul"]["inputSchema"]
         assert {"input_path", "framework"} <= set(consul_schema["properties"])
+        loki_schema = tools_by_name["agent_gate_loki"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(loki_schema["properties"])
+        caddy_schema = tools_by_name["agent_gate_caddy"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(caddy_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 

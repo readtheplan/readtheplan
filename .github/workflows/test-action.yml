@@ -449,6 +449,58 @@ jobs:
           assert payload["decision"] == "block"
           PY
 
+      - name: Run action on Loki configuration
+        id: loki
+        uses: ./
+        with:
+          tool: loki
+          input-file: tests/fixtures/loki_risky.yml
+          framework: soc2
+
+      - name: Assert Loki outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.loki.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.loki.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.loki.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "41"
+          test "$RISK_COUNTS" = '{"dangerous":23,"irreversible":0,"review":18,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "loki"
+          assert payload["decision"] == "block"
+          PY
+
+      - name: Run action on Caddyfile
+        id: caddy
+        uses: ./
+        with:
+          tool: caddy
+          input-file: tests/fixtures/Caddyfile.risky
+          framework: soc2
+
+      - name: Assert Caddy outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.caddy.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.caddy.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.caddy.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "24"
+          test "$RISK_COUNTS" = '{"dangerous":17,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "caddy"
+          assert payload["decision"] == "block"
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

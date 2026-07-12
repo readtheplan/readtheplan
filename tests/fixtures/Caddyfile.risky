@@ -1,0 +1,38 @@
+{
+  debug
+  admin :2019 {
+    origins *
+  }
+  auto_https off
+  persist_config off
+  storage redis {
+    address redis.internal:6379
+  }
+  acme_eab {
+    key_id account
+    mac_key {env.ACME_MAC_KEY}
+  }
+  on_demand_tls {
+  }
+  servers {
+    trusted_proxies static 0.0.0.0/0
+    strict_sni_host insecure_off
+    log_credentials
+  }
+}
+
+http://example.com {
+  reverse_proxy http://backend.example:8080 {
+    transport http {
+      tls_insecure_skip_verify
+      tls_client_auth /tls/client.pem /tls/client-key.pem
+    }
+  }
+  forward_auth auth.internal:9091
+  root * /srv/www
+  file_server browse
+  php_fastcgi php-fpm:9000
+  header X-Frame-Options DENY
+  import snippets/*.caddy
+  acme_server
+}

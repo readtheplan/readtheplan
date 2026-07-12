@@ -7,6 +7,7 @@ from readtheplan.adapters.ansible import AnsibleAdapter
 from readtheplan.adapters.atlantis import AtlantisAdapter
 from readtheplan.adapters.azure import AzureWhatIfAdapter
 from readtheplan.adapters.base import BaseAdapter
+from readtheplan.adapters.caddy import CaddyAdapter
 from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloud_init import CloudInitAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
@@ -16,6 +17,7 @@ from readtheplan.adapters.grafana import GrafanaAdapter
 from readtheplan.adapters.hashicorp import ConsulAdapter, VaultAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
+from readtheplan.adapters.loki import LokiAdapter
 from readtheplan.adapters.monitoring import AlertmanagerAdapter, PrometheusAdapter
 from readtheplan.adapters.otel_collector import OTelCollectorAdapter
 from readtheplan.adapters.packer import PackerInspectAdapter
@@ -88,6 +90,7 @@ def load_entry_point_adapters() -> list[str]:
 
 # Auto-register builtin adapters, then discover external plugins (best-effort).
 register_adapter(CloudFormationAdapter())
+register_adapter(CaddyAdapter())
 register_adapter(AtlantisAdapter())
 register_adapter(CloudInitAdapter())
 register_adapter(DockerfileAdapter())
@@ -96,6 +99,7 @@ register_adapter(GrafanaAdapter())
 register_adapter(VaultAdapter())
 register_adapter(ConsulAdapter())
 register_adapter(KubernetesAdapter())
+register_adapter(LokiAdapter())
 register_adapter(PrometheusAdapter())
 register_adapter(AlertmanagerAdapter())
 register_adapter(OTelCollectorAdapter())
@@ -131,6 +135,7 @@ __all__ = [
     "AzurePipelinesAdapter",
     "BitbucketPipelinesAdapter",
     "BuildkiteAdapter",
+    "CaddyAdapter",
     "ChefAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",
@@ -145,6 +150,7 @@ __all__ = [
     "GitHubActionsAdapter",
     "GitLabCIAdapter",
     "KubernetesAdapter",
+    "LokiAdapter",
     "PrometheusAdapter",
     "AlertmanagerAdapter",
     "OTelCollectorAdapter",
