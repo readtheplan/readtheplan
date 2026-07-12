@@ -27,6 +27,7 @@ matrix makes those boundaries explicit.
 | Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
 | HashiCorp Nomad | `/v1/job/:id/plan` JSON response | `readtheplan nomad plan-response.json` | Scheduler diff, allocation placement/replacement/stops, failures, task drivers, images, commands, and secret-bearing fields | Built-in |
 | HashiCorp Packer | Human or `-machine-readable` inspect output | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and explicit inspect limitations | Conservative |
+| HashiCorp Vagrant | Vagrantfile Ruby source | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and unresolved Ruby/configuration merging | Conservative |
 
 ## Maturity meanings
 
@@ -72,7 +73,8 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 ## Deliberate boundaries
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
-  Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, Packer, or provider code.
+  Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, Packer,
+  Vagrant, or provider code.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
@@ -97,3 +99,6 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 - Salt analysis parses static SLS YAML with duplicate-key rejection. Jinja-templated
   SLS files receive conservative line-based state discovery plus an unresolved
   renderer finding; calls such as `salt['cmd.run'](...)` during rendering block.
+- Vagrant analysis scans the documented Ruby DSL without executing it. Arbitrary
+  Ruby, plugins, box Vagrantfiles, provider configuration, and configuration from
+  the Vagrant home directory remain an explicit review boundary.

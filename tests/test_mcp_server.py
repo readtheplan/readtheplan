@@ -22,6 +22,7 @@ from readtheplan.mcp_server import (
     agent_gate_pipeline,
     agent_gate_pulumi,
     agent_gate_salt,
+    agent_gate_vagrant,
     agent_gate_workload,
     analyze_plan,
     create_server,
@@ -181,6 +182,14 @@ def test_agent_gate_salt_supports_framework_checks() -> None:
     assert result["adapter"] == "salt"
     assert result["decision"] == "block"
     assert result["total_changes"] == 6
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_vagrant_supports_framework_checks() -> None:
+    result = agent_gate_vagrant(str(FIXTURES / "Vagrantfile.risky"), "soc2")
+    assert result["adapter"] == "vagrant"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 17
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
@@ -624,6 +633,19 @@ def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> Non
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_vagrant_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "Vagrantfile"
+    outside.write_text('Vagrant.configure("2") do |config|\nend\n', encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_vagrant(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_kubernetes_allows_path_inside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -795,6 +817,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_workload" in tool_names
         assert "agent_gate_packer" in tool_names
         assert "agent_gate_salt" in tool_names
+        assert "agent_gate_vagrant" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
             "agent_gate_azure",
@@ -810,6 +833,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(packer_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
+        vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
 
         # --- tools/call: analyze_plan ---
         call_req = {

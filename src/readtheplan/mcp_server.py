@@ -523,6 +523,45 @@ def agent_gate_salt(
     return analyze_salt(data, catalog=catalog)
 
 
+def agent_gate_vagrant(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for a local Vagrantfile."""
+    from readtheplan.adapters.vagrant import (
+        VagrantAdapter,
+        VagrantInputError,
+        analyze_vagrant,
+        parse_vagrantfile,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Vagrant input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_vagrantfile(source)
+    except VagrantInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Vagrantfile in {input_path}: {exc}",
+        ) from exc
+    if not VagrantAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as a Vagrantfile",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_vagrant(data, catalog=catalog)
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -598,6 +637,7 @@ def create_server() -> Any:
     agent_gate_workload_handler = agent_gate_workload
     agent_gate_packer_handler = agent_gate_packer
     agent_gate_salt_handler = agent_gate_salt
+    agent_gate_vagrant_handler = agent_gate_vagrant
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -734,6 +774,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_salt_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_vagrant")
+    def _agent_gate_vagrant_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for a Vagrantfile without evaluating its Ruby code.
+
+        Args:
+            input_path: Local path to a Vagrantfile.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_vagrant_handler(input_path, framework=framework)
 
     @mcp.tool(name="evolution_status")
     def _evolution_status_tool() -> dict[str, object]:
