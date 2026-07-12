@@ -48,6 +48,36 @@ jobs:
           assert payload["changes"][0]["address"] == "aws_s3_bucket.logs"
           PY
 
+      - name: Run action on Cloudflare Terraform plan
+        id: cloudflare
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/cloudflare_plan_risky.json
+          framework: soc2
+
+      - name: Assert Cloudflare Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.cloudflare.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.cloudflare.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.cloudflare.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.cloudflare.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "24"
+          test "$ACTION_COUNTS" = '{"create":9,"delete":5,"update":10}'
+          test "$RISK_COUNTS" = '{"dangerous":13,"irreversible":5,"review":6}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 24
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == "cloudflare_zone"
+          assert "pause Cloudflare proxying" in payload["changes"][0]["explanation"]
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./

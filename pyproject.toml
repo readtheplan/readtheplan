@@ -91,6 +91,7 @@ vault = "readtheplan.adapters.hashicorp:VaultAdapter"
 aws = "readtheplan.rules.aws"
 gcp = "readtheplan.rules.gcp"
 azure = "readtheplan.rules.azure"
+cloudflare = "readtheplan.rules.cloudflare"
 k8s = "readtheplan.rules.k8s"
 
 [project.optional-dependencies]
