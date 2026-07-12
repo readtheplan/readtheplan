@@ -1,0 +1,43 @@
+{
+  "admin": {
+    "listen": ":2019",
+    "origins": ["*"]
+  },
+  "storage": {
+    "module": "redis",
+    "address": "redis.internal:6379",
+    "password": "${REDIS_PASSWORD}"
+  },
+  "apps": {
+    "http": {
+      "servers": {
+        "public": {
+          "listen": [":443"],
+          "trusted_proxies": {"source": "static", "ranges": ["0.0.0.0/0"]},
+          "logs": {"should_log_credentials": true},
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [{"dial": "http://backend.example:8080"}],
+                  "transport": {
+                    "protocol": "http",
+                    "tls": {"insecure_skip_verify": true}
+                  }
+                },
+                {"handler": "file_server", "browse": {}},
+                {"handler": "custom_security_plugin"}
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tls": {
+      "automation": {
+        "policies": [{"on_demand": true}]
+      }
+    }
+  }
+}

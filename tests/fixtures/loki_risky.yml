@@ -1,0 +1,64 @@
+auth_enabled: false
+target: all
+server:
+  http_listen_address: 0.0.0.0
+  grpc_listen_address: "::"
+  http_tls_config:
+    cert_file: /tls/loki.pem
+    key_file: /tls/loki-key.pem
+    client_auth_type: NoClientCert
+common:
+  replication_factor: 1
+  storage:
+    s3:
+      endpoint: http://s3.internal:9000
+      access_key_id: ${S3_ACCESS_KEY}
+      secret_access_key: ${S3_SECRET_KEY}
+storage_config:
+  aws:
+    s3: http://s3.internal:9000/logs
+    access_key_id: ${S3_ACCESS_KEY}
+    secret_access_key: ${S3_SECRET_KEY}
+    insecure: true
+schema_config:
+  configs:
+    - from: "2026-01-01"
+      store: tsdb
+      object_store: s3
+      schema: v13
+memberlist:
+  join_members: [loki-gossip:7946]
+  cluster_label_verification_disabled: true
+limits_config:
+  ingestion_rate_mb: 0
+  max_query_series: 0
+  retention_period: 168h
+  reject_old_samples: false
+runtime_config:
+  file: /etc/loki/runtime.yml
+overrides:
+  tenant-a:
+    retention_period: 24h
+ruler:
+  enable_api: true
+  alertmanager_url: http://alertmanager.internal:9093
+  remote_write:
+    client:
+      url: http://prometheus.internal/api/v1/write
+      basic_auth:
+        password: ${REMOTE_WRITE_PASSWORD}
+      tls_config:
+        insecure_skip_verify: true
+compactor:
+  retention_enabled: true
+  delete_request_store: s3
+frontend:
+  downstream_url: http://querier.internal:3100
+querier:
+  multi_tenant_queries_enabled: true
+query_range:
+  cache_results: true
+tracing:
+  enabled: true
+analytics:
+  reporting_enabled: true

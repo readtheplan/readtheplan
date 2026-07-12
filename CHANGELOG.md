@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Grafana Loki YAML and Caddyfile/native JSON gates across the CLI,
+  generalized Action, and local MCP server. Loki tenancy, listeners, storage,
+  schemas, limits, runtime overrides, rules, retention, and query paths join
+  Caddy admin/TLS, proxy trust, upstream, authentication, filesystem,
+  application execution, and module boundaries in the shared risk contract.
 - Native HashiCorp Vault and Consul HCL/JSON gates across the CLI, generalized
   Action, and local MCP server. Vault listeners, storage/HA, seals, plugins,
   telemetry, service registration, and lockout join Consul quorum, ACL, TLS,

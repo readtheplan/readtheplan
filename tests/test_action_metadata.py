@@ -26,7 +26,7 @@ def test_action_uses_json_cli_contract() -> None:
         "atlantis|"
         "docker-compose|"
         "dockerfile|nomad|packer|salt|vagrant|"
-        "cloud-init|systemd|nginx|haproxy|envoy|traefik|grafana|vault|consul|"
+        "cloud-init|systemd|nginx|haproxy|envoy|traefik|caddy|grafana|loki|vault|consul|"
         "prometheus|alertmanager|"
         "otel-collector"
     ) in action
@@ -107,6 +107,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/vault_risky.hcl" in workflow
     assert "tool: consul" in workflow
     assert "input-file: tests/fixtures/consul_risky.hcl" in workflow
+    assert "tool: loki" in workflow
+    assert "input-file: tests/fixtures/loki_risky.yml" in workflow
+    assert "tool: caddy" in workflow
+    assert "input-file: tests/fixtures/Caddyfile.risky" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow
