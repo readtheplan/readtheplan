@@ -15,6 +15,7 @@ matrix makes those boundaries explicit.
 | Crossplane | Rendered Kubernetes custom resources | `readtheplan kubernetes rendered.yaml` | Known Kubernetes kinds use deep rules; controller-dependent custom resources require review | Conservative |
 | Argo CD | Application, ApplicationSet, and AppProject YAML | `readtheplan kubernetes argocd.yaml` | Automated-prune, wildcard project-boundary, source/destination, and deletion semantics | Built-in |
 | Flux CD | Source, Kustomization, HelmRelease, image automation, and notification YAML | `readtheplan kubernetes flux.yaml` | Source trust/immutability, pruning/force, remote targets, decryption, Helm remediation, Git writes, webhook triggers, and deletion semantics | Built-in |
+| Tekton | Task, Pipeline, Run, and Triggers YAML | `readtheplan kubernetes tekton.yaml` | Scripts/commands, image provenance, privileged settings, identities, workspaces, remote resolvers, event ingress, resource templates, and bindings | Built-in |
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays, tasks, nested blocks, handlers, and roles | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
@@ -88,9 +89,13 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 - AWS CDK currently flows through synthesized CloudFormation. Terragrunt flows
   through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
   those tools expose additional structured semantics worth preserving.
-- Argo CD and Flux receive first-party GitOps semantics. Other controller custom
+- Argo CD, Flux, and Tekton receive first-party controller semantics. Other custom
   resources remain conservative because their reconciliation effects depend on
   code and runtime configuration outside the submitted manifest.
+- Tekton analysis covers Pipeline and Triggers API groups without contacting the
+  cluster or resolving remote Tasks. Resolver installation/configuration, RBAC,
+  admission, ServiceAccount credentials, and EventListener network exposure remain
+  external trust boundaries that must be verified in the target cluster.
 - Docker Compose analysis deliberately does not resolve `include`, `extends`,
   `env_file`, secret files, build contexts, or Dockerfiles. Those external trust
   boundaries remain review or dangerous.

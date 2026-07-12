@@ -62,6 +62,7 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "tool: nomad" in workflow
     assert "input-file: tests/fixtures/nomad_plan_risky.json" in workflow
     assert "input-file: tests/fixtures/flux_gitops_risky.yml" in workflow
+    assert "input-file: tests/fixtures/tekton_risky.yml" in workflow
     assert "tool: packer" in workflow
     assert "input-file: tests/fixtures/packer_inspect_risky.txt" in workflow
     assert "tool: salt" in workflow

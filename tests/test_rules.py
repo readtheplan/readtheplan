@@ -65,6 +65,22 @@ _EXPECTED_RULE_FUNCTIONS = {
     "kubernetes_flux_helm_release": "_flux_helm_release_candidates",
     "kubernetes_flux_image_update_automation": "_flux_image_update_automation_candidates",
     "kubernetes_flux_receiver": "_flux_receiver_candidates",
+    "kubernetes_tekton_task": "_tekton_task_candidates",
+    "kubernetes_tekton_cluster_task": "_tekton_task_candidates",
+    "kubernetes_tekton_step_action": "_tekton_task_candidates",
+    "kubernetes_tekton_pipeline": "_tekton_pipeline_candidates",
+    "kubernetes_tekton_task_run": "_tekton_run_candidates",
+    "kubernetes_tekton_pipeline_run": "_tekton_run_candidates",
+    "kubernetes_tekton_run": "_tekton_run_candidates",
+    "kubernetes_tekton_custom_run": "_tekton_run_candidates",
+    "kubernetes_tekton_event_listener": "_tekton_event_listener_candidates",
+    "kubernetes_tekton_trigger_template": "_tekton_trigger_template_candidates",
+    "kubernetes_tekton_trigger": "_tekton_trigger_candidates",
+    "kubernetes_tekton_trigger_binding": "_tekton_trigger_binding_candidates",
+    "kubernetes_tekton_cluster_trigger_binding": "_tekton_trigger_binding_candidates",
+    "kubernetes_tekton_pipeline_resource": "_tekton_pipeline_resource_candidates",
+    "kubernetes_tekton_cluster_interceptor": "_tekton_cluster_interceptor_candidates",
+    "kubernetes_tekton_resolution_request": "_tekton_resolution_request_candidates",
 }
 
 

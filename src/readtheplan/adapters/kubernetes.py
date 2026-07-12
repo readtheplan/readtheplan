@@ -75,6 +75,34 @@ _FLUX_KIND_MAP: dict[tuple[str, str], str] = {
     ("notification.toolkit.fluxcd.io", "Alert"): "kubernetes_flux_alert",
 }
 
+_TEKTON_KIND_MAP: dict[tuple[str, str], str] = {
+    ("tekton.dev", "Task"): "kubernetes_tekton_task",
+    ("tekton.dev", "ClusterTask"): "kubernetes_tekton_cluster_task",
+    ("tekton.dev", "Pipeline"): "kubernetes_tekton_pipeline",
+    ("tekton.dev", "TaskRun"): "kubernetes_tekton_task_run",
+    ("tekton.dev", "PipelineRun"): "kubernetes_tekton_pipeline_run",
+    ("tekton.dev", "Run"): "kubernetes_tekton_run",
+    ("tekton.dev", "CustomRun"): "kubernetes_tekton_custom_run",
+    ("tekton.dev", "StepAction"): "kubernetes_tekton_step_action",
+    ("tekton.dev", "PipelineResource"): "kubernetes_tekton_pipeline_resource",
+    ("triggers.tekton.dev", "EventListener"): "kubernetes_tekton_event_listener",
+    ("triggers.tekton.dev", "Trigger"): "kubernetes_tekton_trigger",
+    ("triggers.tekton.dev", "TriggerTemplate"): "kubernetes_tekton_trigger_template",
+    ("triggers.tekton.dev", "TriggerBinding"): "kubernetes_tekton_trigger_binding",
+    (
+        "triggers.tekton.dev",
+        "ClusterTriggerBinding",
+    ): "kubernetes_tekton_cluster_trigger_binding",
+    (
+        "triggers.tekton.dev",
+        "ClusterInterceptor",
+    ): "kubernetes_tekton_cluster_interceptor",
+    (
+        "resolution.tekton.dev",
+        "ResolutionRequest",
+    ): "kubernetes_tekton_resolution_request",
+}
+
 _CLUSTER_SCOPED_KINDS = frozenset(
     {
         "ClusterRole",
@@ -86,6 +114,9 @@ _CLUSTER_SCOPED_KINDS = frozenset(
         "PriorityClass",
         *_SENSITIVE_CONTROL_PLANE_KINDS,
         "ClusterAnalysisTemplate",
+        "ClusterTask",
+        "ClusterTriggerBinding",
+        "ClusterInterceptor",
     }
 )
 
@@ -404,6 +435,9 @@ class KubernetesAdapter(BaseAdapter):
         flux_type = _FLUX_KIND_MAP.get((api_group, kind)) if separator else None
         if flux_type:
             return flux_type
+        tekton_type = _TEKTON_KIND_MAP.get((api_group, kind)) if separator else None
+        if tekton_type:
+            return tekton_type
         mapped = _K8S_KIND_MAP.get(kind)
         if mapped:
             return mapped
