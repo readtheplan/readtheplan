@@ -15,8 +15,10 @@ from readtheplan.adapters.dockerfile import DockerfileAdapter
 from readtheplan.adapters.envoy import EnvoyAdapter
 from readtheplan.adapters.grafana import GrafanaAdapter
 from readtheplan.adapters.hashicorp import ConsulAdapter, VaultAdapter
+from readtheplan.adapters.helm import HelmAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
+from readtheplan.adapters.kustomize import KustomizeAdapter
 from readtheplan.adapters.loki import LokiAdapter
 from readtheplan.adapters.monitoring import AlertmanagerAdapter, PrometheusAdapter
 from readtheplan.adapters.otel_collector import OTelCollectorAdapter
@@ -100,6 +102,8 @@ register_adapter(GrafanaAdapter())
 register_adapter(VaultAdapter())
 register_adapter(ConsulAdapter())
 register_adapter(KubernetesAdapter())
+register_adapter(HelmAdapter())
+register_adapter(KustomizeAdapter())
 register_adapter(LokiAdapter())
 register_adapter(PrometheusAdapter())
 register_adapter(AlertmanagerAdapter())
@@ -147,12 +151,14 @@ __all__ = [
     "DockerfileAdapter",
     "EnvoyAdapter",
     "GrafanaAdapter",
+    "HelmAdapter",
     "VaultAdapter",
     "ConsulAdapter",
     "JenkinsAdapter",
     "GitHubActionsAdapter",
     "GitLabCIAdapter",
     "KubernetesAdapter",
+    "KustomizeAdapter",
     "LokiAdapter",
     "PrometheusAdapter",
     "AlertmanagerAdapter",

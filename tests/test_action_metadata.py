@@ -21,7 +21,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "input-file" in action
     assert "tool:" in action
     assert (
-        "terraform-config|terragrunt|cloudformation|azure|kubernetes|pulumi|"
+        "terraform-config|terragrunt|cloudformation|azure|kubernetes|helm|kustomize|pulumi|"
         "ansible|jenkins|chef|puppet|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "atlantis|"
@@ -116,6 +116,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/terraform_config_risky.tf" in workflow
     assert "tool: terragrunt" in workflow
     assert "input-file: tests/fixtures/terragrunt_risky.hcl" in workflow
+    assert "tool: helm" in workflow
+    assert "input-file: tests/fixtures/helm_template_risky.yaml" in workflow
+    assert "tool: kustomize" in workflow
+    assert "input-file: tests/fixtures/kustomization_risky.yml" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow

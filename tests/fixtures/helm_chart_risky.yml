@@ -1,0 +1,11 @@
+apiVersion: v1
+name: risky-platform
+version: 1.0.0
+appVersion: latest
+deprecated: true
+dependencies:
+  - name: database
+    repository: http://charts.example.com
+    condition: database.enabled
+    tags: [backend]
+    import-values: [exports]

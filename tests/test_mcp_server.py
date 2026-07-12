@@ -24,7 +24,9 @@ from readtheplan.mcp_server import (
     agent_gate_dockerfile,
     agent_gate_envoy,
     agent_gate_grafana,
+    agent_gate_helm,
     agent_gate_kubernetes,
+    agent_gate_kustomize,
     agent_gate_loki,
     agent_gate_monitoring,
     agent_gate_otel_collector,
@@ -300,6 +302,20 @@ def test_agent_gate_caddy_supports_caddyfile_and_json(fixture: str) -> None:
 def test_agent_gate_terraform_source_supports_config_and_terragrunt(
     handler, fixture: str, adapter: str
 ) -> None:
+    result = handler(str(FIXTURES / fixture), "soc2")
+    assert result["adapter"] == adapter
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize(
+    ("handler", "fixture", "adapter"),
+    [
+        (agent_gate_helm, "helm_template_risky.yaml", "helm"),
+        (agent_gate_kustomize, "kustomization_risky.yml", "kustomize"),
+    ],
+)
+def test_agent_gate_helm_and_kustomize_source(handler, fixture: str, adapter: str) -> None:
     result = handler(str(FIXTURES / fixture), "soc2")
     assert result["adapter"] == adapter
     assert result["decision"] == "block"
@@ -653,6 +669,8 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
         ),
         (agent_gate_azure, "azure_whatif_mixed.json", "adapter", "azure"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
+        (agent_gate_helm, "helm_template_risky.yaml", "adapter", "helm"),
+        (agent_gate_kustomize, "kustomization_risky.yml", "adapter", "kustomize"),
     ],
 )
 def test_non_kubernetes_handlers_use_confined_read_boundary(
@@ -700,6 +718,8 @@ def test_non_kubernetes_handlers_use_confined_read_boundary(
         ),
         (agent_gate_azure, "azure_whatif_mixed.json", "adapter", "azure"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
+        (agent_gate_helm, "helm_template_risky.yaml", "adapter", "helm"),
+        (agent_gate_kustomize, "kustomization_risky.yml", "adapter", "kustomize"),
     ],
 )
 def test_non_kubernetes_handlers_allow_path_inside_root(
@@ -729,6 +749,8 @@ def test_non_kubernetes_handlers_allow_path_inside_root(
         (agent_gate_cloudformation, "cfn_change_set_mixed.json"),
         (agent_gate_azure, "azure_whatif_mixed.json"),
         (agent_gate_pulumi, "pulumi_preview_mixed.json"),
+        (agent_gate_helm, "helm_template_risky.yaml"),
+        (agent_gate_kustomize, "kustomization_risky.yml"),
     ],
 )
 def test_non_kubernetes_handlers_reject_validate_open_swap(
@@ -1089,6 +1111,8 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_caddy" in tool_names
         assert "agent_gate_terraform_config" in tool_names
         assert "agent_gate_terragrunt" in tool_names
+        assert "agent_gate_helm" in tool_names
+        assert "agent_gate_kustomize" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1137,6 +1161,10 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(tf_config_schema["properties"])
         terragrunt_schema = tools_by_name["agent_gate_terragrunt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(terragrunt_schema["properties"])
+        helm_schema = tools_by_name["agent_gate_helm"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(helm_schema["properties"])
+        kustomize_schema = tools_by_name["agent_gate_kustomize"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(kustomize_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 

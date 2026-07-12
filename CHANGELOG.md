@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Helm Chart.yaml, values YAML, template source, and Kustomize source
+  gates across the CLI, generalized Action, and local MCP server. Dependency
+  pinning, hooks, dynamic evaluation, generated secrets, resource composition,
+  remote bases, patches, generators, image overrides, Helm inflation, and
+  plugin execution join the shared risk contract before rendering.
 - Native Terraform configuration and Terragrunt HCL/JSON gates across the CLI,
   generalized Action, and local MCP server. Provider/module supply chain,
   backends, provisioners, lifecycle, remote state, static exposure, hooks,

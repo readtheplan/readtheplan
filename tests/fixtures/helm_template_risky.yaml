@@ -1,0 +1,27 @@
+{{- $existing := lookup "v1" "Secret" .Release.Namespace "database" -}}
+{{- $dynamic := tpl (.Files.Get "dynamic.yaml") . -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "platform.fullname" . }}-migration-{{ randAlphaNum 5 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: migration
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          env:
+            - name: GENERATED_PASSWORD
+              value: {{ derivePassword 1 "long" "password" "user" "example.com" }}
+      restartPolicy: Never
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: capabilities
+data:
+  supportsDeployment: '{{ .Capabilities.APIVersions.Has "apps/v1/Deployment" }}'
+  resolvedHost: '{{ getHostByName "database.internal" }}'
