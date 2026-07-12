@@ -40,6 +40,16 @@ Demonstrates the structured JSON contract and a GitHub Actions workflow.
 - [JSON output](04-agent-gate-ci/agent-gate.json)
 - [GitHub Actions workflow](04-agent-gate-ci/github-actions.yml)
 
+## Infrastructure adapters
+
+Runnable source inputs for the built-in cross-tool agent gates:
+
+- [Ansible playbook](07-ansible-playbook/playbook.yml): `readtheplan ansible examples/07-ansible-playbook/playbook.yml`
+- [Jenkins pipeline](08-jenkins-pipeline/Jenkinsfile): `readtheplan jenkins examples/08-jenkins-pipeline/Jenkinsfile`
+- [Chef recipe](09-chef-recipe/default.rb): `readtheplan chef examples/09-chef-recipe/default.rb`
+- [Puppet manifest](10-puppet-manifest/site.pp): `readtheplan puppet examples/10-puppet-manifest/site.pp`
+- [Pulumi preview](11-pulumi-preview/preview.json): `readtheplan pulumi examples/11-pulumi-preview/preview.json`
+
 ## Regenerate
 
 If the CLI changes, regenerate outputs with:

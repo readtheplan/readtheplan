@@ -273,6 +273,48 @@ def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
     return analyze_kubernetes(data)
 
 
+def agent_gate_pulumi(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the agent-gate decision for Pulumi preview JSON or JSON events."""
+    from readtheplan.adapters.pulumi import (
+        PulumiAdapter,
+        PulumiPreviewError,
+        analyze_pulumi,
+        parse_pulumi_preview,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read {input_path}: {exc}"
+        ) from exc
+
+    try:
+        data = parse_pulumi_preview(source)
+    except PulumiPreviewError as exc:
+        raise MCPToolInputError(
+            code="INVALID_JSON",
+            message=f"Invalid Pulumi preview JSON in {input_path}: {exc}",
+        ) from exc
+    if not isinstance(data, dict) or not PulumiAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Pulumi preview output",
+        )
+
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_pulumi(data, catalog=catalog)
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -345,6 +387,7 @@ def create_server() -> Any:
     agent_gate_handler = agent_gate
     agent_gate_cfn_handler = agent_gate_cloudformation
     agent_gate_k8s_handler = agent_gate_kubernetes
+    agent_gate_pulumi_handler = agent_gate_pulumi
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -388,6 +431,19 @@ def create_server() -> Any:
                 - {"resources": [...]} — single manifest format
         """
         return agent_gate_k8s_handler(input_path)
+
+    @mcp.tool(name="agent_gate_pulumi")
+    def _agent_gate_pulumi_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return the agent-gate decision for local Pulumi preview output.
+
+        Args:
+            input_path: Path to preview digest JSON or streaming JSON events.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_pulumi_handler(input_path, framework=framework)
 
     @mcp.tool(name="evolution_status")
     def _evolution_status_tool() -> dict[str, object]:

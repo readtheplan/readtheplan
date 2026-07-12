@@ -1,0 +1,71 @@
+{
+  "steps": [
+    {
+      "op": "same",
+      "urn": "urn:pulumi:prod::web::pulumi:pulumi:Stack::web-prod",
+      "newState": {
+        "type": "pulumi:pulumi:Stack",
+        "inputs": {}
+      },
+      "detailedDiff": {}
+    },
+    {
+      "op": "create",
+      "urn": "urn:pulumi:prod::web::aws:s3/bucket:Bucket::logs",
+      "newState": {
+        "type": "aws:s3/bucket:Bucket",
+        "inputs": {
+          "bucket": "web-prod-logs"
+        }
+      },
+      "detailedDiff": {}
+    },
+    {
+      "op": "update",
+      "urn": "urn:pulumi:prod::web::aws:ec2/securityGroup:SecurityGroup::web",
+      "oldState": {
+        "type": "aws:ec2/securityGroup:SecurityGroup",
+        "inputs": {
+          "ingress": []
+        }
+      },
+      "newState": {
+        "type": "aws:ec2/securityGroup:SecurityGroup",
+        "inputs": {
+          "ingress": [
+            {
+              "cidrBlocks": ["0.0.0.0/0"],
+              "fromPort": 443,
+              "toPort": 443,
+              "protocol": "tcp"
+            }
+          ]
+        }
+      },
+      "diffReasons": ["ingress"],
+      "detailedDiff": {
+        "ingress[0]": {
+          "kind": "add",
+          "inputDiff": true
+        }
+      }
+    },
+    {
+      "op": "delete",
+      "urn": "urn:pulumi:prod::web::aws:rds/instance:Instance::database",
+      "oldState": {
+        "type": "aws:rds/instance:Instance",
+        "inputs": {
+          "identifier": "web-prod"
+        }
+      },
+      "detailedDiff": {}
+    }
+  ],
+  "changeSummary": {
+    "create": 1,
+    "update": 1,
+    "delete": 1,
+    "same": 1
+  }
+}

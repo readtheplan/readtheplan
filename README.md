@@ -11,7 +11,7 @@
 > [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review Terraform/OpenTofu plans, CloudFormation and Kubernetes changes, Ansible playbooks, Jenkins pipelines, Chef recipes, and Puppet manifests through one deterministic risk gate. Runs locally — no uploads, no accounts, no backend.
+**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review Terraform/OpenTofu and Pulumi plans, CloudFormation and Kubernetes changes, Ansible playbooks, Jenkins pipelines, Chef recipes, and Puppet manifests through one deterministic risk gate. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
 pip install readtheplan && readtheplan analyze plan.json
@@ -77,6 +77,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff + resource-aware rules |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
 | Kubernetes | `readtheplan kubernetes manifests.json` | Structured manifest diff + workload/RBAC rules |
+| Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
 | Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Conservative pipeline-step analysis |
 | Chef | `readtheplan chef default.rb` | Conservative recipe-resource analysis |
@@ -386,7 +387,7 @@ Good first issues are tagged [`good first issue`](https://github.com/readtheplan
 
 **v0.3 — stable CLI + GitHub Action.** The PyPI package ships the Python CLI and composite GitHub Action. Current development includes resource-aware AWS risk rules, compliance framework annotations, evidence envelopes, signed attestation verification, customer rule overlays, infrastructure adapters, MCP preview, examples, benchmarks, and the static onboarding site.
 
-What's shipping next: deeper adapter coverage, Pulumi support, PCI-DSS and NIST 800-53 catalogs, and expanded cloud resource rules.
+What's shipping next: deeper adapter coverage, Helm/Crossplane delivery workflows, PCI-DSS and NIST 800-53 catalogs, and expanded cloud resource rules.
 
 ## License
 

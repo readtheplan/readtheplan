@@ -17,6 +17,7 @@ from readtheplan.mcp_server import (
     agent_gate,
     agent_gate_cloudformation,
     agent_gate_kubernetes,
+    agent_gate_pulumi,
     analyze_plan,
     create_server,
 )
@@ -43,6 +44,24 @@ def test_agent_gate_matches_cli_json(capsys) -> None:
 
     assert exit_code == 2
     assert agent_gate(str(plan)) == json.loads(captured.out)
+
+
+def test_agent_gate_pulumi_supports_framework_checks() -> None:
+    result = agent_gate_pulumi(str(FIXTURES / "pulumi_preview_mixed.json"), "soc2")
+    assert result["adapter"] == "pulumi"
+    assert result["decision"] == "block"
+    assert any(
+        str(check).startswith("rtp.control.soc2.")
+        for check in result["required_checks"]
+    )
+
+
+def test_agent_gate_pulumi_rejects_invalid_preview(tmp_path: Path) -> None:
+    invalid = tmp_path / "preview.json"
+    invalid.write_text("not-json", encoding="utf-8")
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_pulumi(str(invalid))
+    assert exc_info.value.code == "INVALID_JSON"
 
 
 @pytest.mark.parametrize(
@@ -303,6 +322,7 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
             "adapter",
             "cloudformation",
         ),
+        (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
     ],
 )
 def test_non_kubernetes_handlers_use_confined_read_boundary(
@@ -348,6 +368,7 @@ def test_non_kubernetes_handlers_use_confined_read_boundary(
             "adapter",
             "cloudformation",
         ),
+        (agent_gate_pulumi, "pulumi_preview_mixed.json", "adapter", "pulumi"),
     ],
 )
 def test_non_kubernetes_handlers_allow_path_inside_root(
@@ -375,6 +396,7 @@ def test_non_kubernetes_handlers_allow_path_inside_root(
         (analyze_plan, "valid_plan.json"),
         (agent_gate, "valid_plan.json"),
         (agent_gate_cloudformation, "cfn_change_set_mixed.json"),
+        (agent_gate_pulumi, "pulumi_preview_mixed.json"),
     ],
 )
 def test_non_kubernetes_handlers_reject_validate_open_swap(
@@ -594,6 +616,7 @@ def test_stdio_server_tools_list() -> None:
         assert "analyze_plan" in tool_names
         assert "agent_gate" in tool_names
         assert "agent_gate_cloudformation" in tool_names
+        assert "agent_gate_pulumi" in tool_names
 
         # --- tools/call: analyze_plan ---
         call_req = {
