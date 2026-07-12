@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Packer inspect gates across the CLI, generalized Action, and local MCP
+  server. Human and machine-readable inspect output is normalized into builders,
+  provisioners, post-processors, masked/unresolved variables, and an explicit
+  inspection-limit review without running a build.
 - Flux-aware Kubernetes rules for GitRepository/OCIRepository sources,
   Kustomizations, HelmReleases, image update automation, and webhook Receivers.
   The rules cover source authentication and immutability, pruning, force,

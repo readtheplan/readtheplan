@@ -450,6 +450,45 @@ def agent_gate_workload(
     return analyze_workload(adapter, data, catalog=catalog)  # type: ignore[arg-type]
 
 
+def agent_gate_packer(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local Packer inspect output."""
+    from readtheplan.adapters.packer import (
+        PackerInspectAdapter,
+        PackerInspectError,
+        analyze_packer,
+        parse_packer_inspect,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Packer input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_packer_inspect(source)
+    except PackerInspectError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Packer inspect output in {input_path}: {exc}",
+        ) from exc
+    if not PackerInspectAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Packer inspect output",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_packer(data, catalog=catalog)
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -523,6 +562,7 @@ def create_server() -> Any:
     agent_gate_pulumi_handler = agent_gate_pulumi
     agent_gate_pipeline_handler = agent_gate_pipeline
     agent_gate_workload_handler = agent_gate_workload
+    agent_gate_packer_handler = agent_gate_packer
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -633,6 +673,19 @@ def create_server() -> Any:
             ecosystem,
             framework=framework,
         )
+
+    @mcp.tool(name="agent_gate_packer")
+    def _agent_gate_packer_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for human or machine-readable Packer inspect output.
+
+        Args:
+            input_path: Local path to saved `packer inspect` output.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_packer_handler(input_path, framework=framework)
 
     @mcp.tool(name="evolution_status")
     def _evolution_status_tool() -> dict[str, object]:

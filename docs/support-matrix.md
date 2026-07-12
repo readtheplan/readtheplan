@@ -25,6 +25,7 @@ matrix makes those boundaries explicit.
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
 | Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
 | HashiCorp Nomad | `/v1/job/:id/plan` JSON response | `readtheplan nomad plan-response.json` | Scheduler diff, allocation placement/replacement/stops, failures, task drivers, images, commands, and secret-bearing fields | Built-in |
+| HashiCorp Packer | Human or `-machine-readable` inspect output | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and explicit inspect limitations | Conservative |
 
 ## Maturity meanings
 
@@ -70,7 +71,7 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 ## Deliberate boundaries
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Helm, Kustomize,
-  Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, or provider code.
+  Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, Packer, or provider code.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
@@ -88,3 +89,7 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 - Nomad analysis accepts the structured plan response returned by the HTTP API.
   Generate it inside the existing Nomad trust boundary; readtheplan never contacts
   the cluster or submits a job.
+- Packer analysis accepts `packer inspect` output and never starts a build. Inspect
+  enumerates components but does not validate plugin-specific configuration, so
+  the gate always retains an explicit review finding and recommends separate
+  `packer validate` execution in the caller's trust boundary.

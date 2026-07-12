@@ -18,6 +18,7 @@ from readtheplan.mcp_server import (
     agent_gate_azure,
     agent_gate_cloudformation,
     agent_gate_kubernetes,
+    agent_gate_packer,
     agent_gate_pipeline,
     agent_gate_pulumi,
     agent_gate_workload,
@@ -164,6 +165,14 @@ def test_agent_gate_workload_rejects_unknown_ecosystem() -> None:
     with pytest.raises(MCPToolInputError) as exc_info:
         agent_gate_workload("workload.yml", "unknown")
     assert exc_info.value.code == "INVALID_INPUT"
+
+
+def test_agent_gate_packer_supports_framework_checks() -> None:
+    result = agent_gate_packer(str(FIXTURES / "packer_inspect_risky.txt"), "soc2")
+    assert result["adapter"] == "packer"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 11
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
 @pytest.mark.parametrize(
@@ -580,6 +589,19 @@ def test_agent_gate_workload_rejects_path_outside_root(monkeypatch, tmp_path) ->
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_packer_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "packer.txt"
+    outside.write_text("Packer Inspect: HCL2 mode\n> builds:\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_packer(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_kubernetes_allows_path_inside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -749,6 +771,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_pulumi" in tool_names
         assert "agent_gate_pipeline" in tool_names
         assert "agent_gate_workload" in tool_names
+        assert "agent_gate_packer" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
             "agent_gate_azure",
@@ -760,6 +783,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "ecosystem", "framework"} <= set(pipeline_schema["properties"])
         workload_schema = tools_by_name["agent_gate_workload"]["inputSchema"]
         assert {"input_path", "ecosystem", "framework"} <= set(workload_schema["properties"])
+        packer_schema = tools_by_name["agent_gate_packer"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(packer_schema["properties"])
 
         # --- tools/call: analyze_plan ---
         call_req = {

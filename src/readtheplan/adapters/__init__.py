@@ -10,6 +10,7 @@ from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
+from readtheplan.adapters.packer import PackerInspectAdapter
 from readtheplan.adapters.pipelines import (
     CircleCIAdapter,
     GitHubActionsAdapter,
@@ -83,6 +84,7 @@ register_adapter(GitLabCIAdapter())
 register_adapter(CircleCIAdapter())
 register_adapter(DockerComposeAdapter())
 register_adapter(NomadPlanAdapter())
+register_adapter(PackerInspectAdapter())
 load_entry_point_adapters()
 
 __all__ = [
@@ -99,6 +101,7 @@ __all__ = [
     "GitLabCIAdapter",
     "KubernetesAdapter",
     "NomadPlanAdapter",
+    "PackerInspectAdapter",
     "PulumiAdapter",
     "PuppetAdapter",
     "register_adapter",

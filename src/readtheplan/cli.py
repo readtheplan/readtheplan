@@ -316,6 +316,17 @@ def _build_parser() -> argparse.ArgumentParser:
     nomad.add_argument("input_file", help="Path to a Nomad job plan response JSON file.")
     nomad.set_defaults(func=_workload_gate)
 
+    packer = subparsers.add_parser(
+        "packer",
+        help="Emit the agent-gate decision for Packer inspect output.",
+    )
+    packer.add_argument("--framework", help="Include checks from a compliance framework.")
+    packer.add_argument(
+        "input_file",
+        help="Path to human or machine-readable `packer inspect` output.",
+    )
+    packer.set_defaults(func=_packer_gate)
+
     verify = subparsers.add_parser(
         "verify",
         help="Verify a signed rtp-evidence-v1 envelope.",
@@ -961,6 +972,35 @@ def _workload_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_workload(adapter, data, catalog=catalog))
+
+
+def _packer_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Packer inspect output."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.packer import (
+        PackerInspectError,
+        analyze_packer,
+        parse_packer_inspect,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_packer_inspect(source)
+    except PackerInspectError as exc:
+        print(f"Error: invalid Packer inspect input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "packer":
+        print("Error: input not recognized as Packer inspect output", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_packer(data, catalog=catalog))
 
 
 def _adapter_catalog(framework: str | None) -> ControlCatalog | None:

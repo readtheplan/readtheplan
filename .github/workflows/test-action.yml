@@ -241,6 +241,35 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Packer inspect output
+        id: packer
+        uses: ./
+        with:
+          tool: packer
+          input-file: tests/fixtures/packer_inspect_risky.txt
+          framework: soc2
+
+      - name: Assert Packer outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.packer.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.packer.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.packer.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "11"
+          test "$RISK_COUNTS" = '{"dangerous":5,"irreversible":0,"review":4,"safe":2}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "packer"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Fail on invalid plan JSON
         id: invalid
         uses: ./
