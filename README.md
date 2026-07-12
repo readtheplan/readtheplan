@@ -70,7 +70,7 @@ readtheplan analyzes structured Terraform/OpenTofu plans and infrastructure-tool
 
 Terraform/OpenTofu analysis applies **resource-aware rules** across AWS, GCP,
 Azure, the complete HashiCorp Kubernetes and Helm provider catalogs, Cloudflare,
-Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE. Every adapter feeds the same six **compliance
+Datadog, Grafana, PagerDuty, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE. Every adapter feeds the same six **compliance
 framework mappings** with an exact-first change-management baseline and
 deterministic agent-gate schema; native plan analysis can also produce
 **auditable evidence envelopes** with sigstore-backed signed attestations.
@@ -79,7 +79,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 
 | Tool | Command | Analysis level |
 |------|---------|----------------|
-| Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff plus AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE resource-aware rules |
+| Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff plus AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE resource-aware rules |
 | Terraform configuration | `readtheplan terraform-config main.tf` | HCL/JSON providers, backends, modules, resources/data, provisioners, lifecycle, remote state, imports/moves/removals, secrets, and static exposure |
 | Terragrunt | `readtheplan terragrunt terragrunt.hcl` | HCL/JSON root modules, hooks, CLI arguments, remote state, includes, dependencies/mocks, generated files, inputs, assumed identity, engines, and evaluation functions |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
@@ -414,7 +414,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 
 - **CLI-first** — single `pip install`, runs anywhere Python runs
 - **GitHub Action** — copy-paste into any workflow
-- **Resource-aware rules** — first-party AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE semantics for identity, data, compute, networking, edge security, source governance, CI/CD trust, traffic, secrets, security, and observability
+- **Resource-aware rules** — first-party AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE semantics for identity, data, compute, networking, edge security, incident response, source governance, CI/CD trust, traffic, secrets, security, and observability
 - **Compliance evidence** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mappings with signed JSON envelopes
 - **Agent gate** — deterministic proceed/warn/block decisions for CI and AI agents
 - **Customer rule overlays** — org-specific risk escalations via YAML, no code changes needed

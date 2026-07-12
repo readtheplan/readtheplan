@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for all 51 resources in PagerDuty provider v3.33.0.
+  Users/teams/contact paths, schedules and escalation, services/dependencies,
+  event orchestration and legacy rulesets, Automation Actions runners, incident
+  workflows/response plays/maintenance windows, external integrations, webhooks,
+  Slack/ServiceNow/Jira, and custom incident/service schemas now receive explicit
+  incident-routing, credential-state, automation, availability, and recovery semantics.
 - Complete first-party Terraform rules for all 83 resources in HashiCorp's
   Kubernetes provider v3.2.1 and `helm_release` in the Helm provider v3.2.0.
   Versioned workloads, autoscaling, admission webhooks/CEL, arbitrary manifests,
