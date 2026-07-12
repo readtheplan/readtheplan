@@ -260,6 +260,22 @@ def _build_parser() -> argparse.ArgumentParser:
     ansible.add_argument("input_file", help="Path to an Ansible playbook YAML file.")
     ansible.set_defaults(func=_ansible_gate)
 
+    ansible_project = subparsers.add_parser(
+        "ansible-project",
+        help="Emit the agent-gate decision for ansible.cfg or Galaxy requirements YAML.",
+    )
+    ansible_project.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    ansible_project.add_argument(
+        "input_file", help="Path to ansible.cfg or a Galaxy requirements YAML file."
+    )
+    ansible_project.set_defaults(func=_ansible_project_gate)
+
     jenkins = subparsers.add_parser(
         "jenkins",
         help="Emit the agent-gate decision for a declarative or scripted Jenkinsfile.",
@@ -1089,6 +1105,35 @@ def _ansible_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_ansible(data, catalog=catalog))
+
+
+def _ansible_project_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Ansible project configuration."""
+    from readtheplan.adapters.ansible_project import (
+        AnsibleProjectAdapter,
+        AnsibleProjectInputError,
+        analyze_ansible_project,
+        parse_ansible_project,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_ansible_project(source)
+    except AnsibleProjectInputError as exc:
+        print(f"Error: invalid Ansible project input: {exc}", file=sys.stderr)
+        return 1
+    if not AnsibleProjectAdapter().can_handle(data):
+        print("Error: input not recognized as Ansible project configuration", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_ansible_project(data, catalog=catalog))
 
 
 def _pulumi_gate(args: argparse.Namespace) -> int:

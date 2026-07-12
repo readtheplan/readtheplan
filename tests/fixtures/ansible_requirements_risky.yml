@@ -1,0 +1,26 @@
+roles:
+  - name: geerlingguy.apache
+  - name: shared-deploy
+    src: git+https://git.example.test/automation/shared-deploy.git
+    version: main
+  - include: requirements/common.yml
+  - name: plaintext-role
+    src: http://roles.example.test/plaintext-role.tar.gz
+    version: 1.2.0
+  - name: embedded-credential
+    src: https://robot:password@git.example.test/automation/private-role.git
+    version: 2.0.0
+
+collections:
+  - name: community.general
+    version: ">=7.0.0,<8.0.0"
+  - name: ansible.posix
+    version: "==1.5.0"
+  - name: internal.platform
+    type: git
+    source: git+https://git.example.test/automation/platform-collection.git
+    version: 0123456789abcdef0123456789abcdef01234567
+  - name: community.docker
+  - name: insecure.collection
+    source: http://galaxy.example.test
+    version: "==1.0.0"

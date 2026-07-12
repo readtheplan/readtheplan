@@ -8,6 +8,7 @@ on:
       - "infra/**"
       - "**/*.bicep"
       - "ansible/**"
+      - "ansible.cfg"
       - "Jenkinsfile"
       - "jenkins.yaml"
       - "chef/**"
@@ -31,6 +32,8 @@ jobs:
             input: build/rendered-kubernetes.yaml
           - tool: ansible
             input: ansible/site.yml
+          - tool: ansible-project
+            input: ansible/requirements.yml
           - tool: jenkins
             input: Jenkinsfile
           - tool: jenkins-jcasc

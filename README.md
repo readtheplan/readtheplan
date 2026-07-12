@@ -93,6 +93,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Crossplane | `readtheplan crossplane resources.yaml` | Packages/functions, image policy, runtime configuration, XRDs, Compositions, provider credentials, managed-resource lifecycle, and composite selection |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
 | Ansible | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles plus privilege, delegation, check-mode, error, secret-environment, include, identity, and supply-chain semantics |
+| Ansible project | `readtheplan ansible-project ansible.cfg` | Controller transport, privilege, plugins, callbacks, inventory, Galaxy servers, role/collection requirements, credentials, and dependency provenance |
 | Salt | `readtheplan salt state.sls` | Structured SLS states, destructive functions, command/module execution, secrets, includes, and Jinja rendering |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
 | Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |

@@ -4,6 +4,7 @@ from importlib.metadata import entry_points
 from typing import Any
 
 from readtheplan.adapters.ansible import AnsibleAdapter
+from readtheplan.adapters.ansible_project import AnsibleProjectAdapter
 from readtheplan.adapters.atlantis import AtlantisAdapter
 from readtheplan.adapters.azure import AzureWhatIfAdapter
 from readtheplan.adapters.base import BaseAdapter
@@ -114,6 +115,7 @@ register_adapter(PrometheusAdapter())
 register_adapter(AlertmanagerAdapter())
 register_adapter(OTelCollectorAdapter())
 register_adapter(AnsibleAdapter())
+register_adapter(AnsibleProjectAdapter())
 register_adapter(JenkinsAdapter())
 register_adapter(JenkinsJCasCAdapter())
 register_adapter(ChefAdapter())
@@ -145,6 +147,7 @@ load_entry_point_adapters()
 __all__ = [
     "ADAPTER_ENTRY_POINT_GROUP",
     "AnsibleAdapter",
+    "AnsibleProjectAdapter",
     "AtlantisAdapter",
     "BaseAdapter",
     "AzureWhatIfAdapter",

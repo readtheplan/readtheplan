@@ -711,6 +711,34 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Ansible project configuration
+        id: ansible_project
+        uses: ./
+        with:
+          tool: ansible-project
+          input-file: tests/fixtures/ansible_project_risky.cfg
+          framework: soc2
+
+      - name: Assert Ansible project outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.ansible_project.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.ansible_project.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.ansible_project.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "20"
+          test "$RISK_COUNTS" = '{"dangerous":14,"irreversible":0,"review":6,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "ansible-project"
+          assert payload["decision"] == "block"
+          assert "host-key checking" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Jenkinsfile
         id: jenkins
         uses: ./

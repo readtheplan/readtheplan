@@ -64,7 +64,7 @@
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively with first-party AWS, GCP, Azure,
             complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation</strong>,
-            <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Salt</strong>, <strong>Jenkins pipelines/JCasC</strong>,
+            <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible playbooks and project configuration</strong>, <strong>Salt</strong>, <strong>Jenkins pipelines/JCasC</strong>,
             <strong>Pulumi</strong>, <strong>Chef</strong>, <strong>Puppet</strong>, <strong>GitHub Actions</strong>,
             <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
             <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, <strong>Dockerfiles</strong>, <strong>Azure Pipelines</strong>, and <strong>Bitbucket Pipelines</strong>. Rendered Helm,
@@ -79,6 +79,7 @@ readtheplan bicep main.bicep
 readtheplan kubernetes rendered.yaml
 readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
+readtheplan ansible-project ansible.cfg
 readtheplan salt state.sls
 readtheplan vagrant Vagrantfile
 readtheplan cloud-init user-data.yml
@@ -97,8 +98,9 @@ readtheplan nomad plan-response.json
 readtheplan packer inspect.txt</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Bicep
-            source receives conservative static analysis before compilation. Ansible and
-            static Salt SLS input consume YAML structurally; templated Salt input falls back to a
+            source receives conservative static analysis before compilation. Ansible playbooks,
+            Galaxy requirements, and static Salt SLS input consume YAML structurally;
+            <code>ansible.cfg</code> is parsed as INI, while templated Salt input falls back to a
             conservative scanner. Docker Compose is parsed structurally without resolving external
             files, while Nomad consumes the scheduler's structured job-plan API response and
             Packer consumes saved human or machine-readable inspect output.
