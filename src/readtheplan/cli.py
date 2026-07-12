@@ -597,6 +597,19 @@ def _build_parser() -> argparse.ArgumentParser:
     terraform_config.add_argument("input_file", help="Path to a .tf or .tf.json file.")
     terraform_config.set_defaults(func=_terraform_config_gate)
 
+    terraform_lock = subparsers.add_parser(
+        "terraform-lock",
+        help="Emit the agent-gate decision for a Terraform/OpenTofu dependency lock.",
+    )
+    terraform_lock.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    terraform_lock.add_argument(
+        "input_file",
+        help="Path to .terraform.lock.hcl.",
+    )
+    terraform_lock.set_defaults(func=_terraform_lock_gate)
+
     terragrunt = subparsers.add_parser(
         "terragrunt",
         help="Emit the agent-gate decision for Terragrunt configuration HCL/JSON.",
@@ -1963,6 +1976,34 @@ def _terraform_config_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_terraform_config(data, catalog=catalog))
+
+
+def _terraform_lock_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Terraform/OpenTofu lock file."""
+    from readtheplan.adapters.terraform_lock import (
+        TerraformLockAdapter,
+        TerraformLockInputError,
+        analyze_terraform_lock,
+        parse_terraform_lock,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_terraform_lock(source)
+    except TerraformLockInputError as exc:
+        print(f"Error: invalid Terraform/OpenTofu lock input: {exc}", file=sys.stderr)
+        return 1
+    if not TerraformLockAdapter().can_handle(data):
+        print("Error: input not recognized as a dependency lock file", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_terraform_lock(data, catalog=catalog))
 
 
 def _helm_gate(args: argparse.Namespace) -> int:

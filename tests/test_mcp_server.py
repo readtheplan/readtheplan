@@ -46,6 +46,7 @@ from readtheplan.mcp_server import (
     agent_gate_serverless,
     agent_gate_systemd,
     agent_gate_terraform_config,
+    agent_gate_terraform_lock,
     agent_gate_terragrunt,
     agent_gate_traefik,
     agent_gate_vagrant,
@@ -414,6 +415,18 @@ def test_agent_gate_cfengine_supports_framework_checks() -> None:
     assert result["artifact_type"] == "policy"
     assert result["decision"] == "block"
     assert result["total_changes"] == 30
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_terraform_lock_supports_framework_checks() -> None:
+    result = agent_gate_terraform_lock(
+        str(FIXTURES / "terraform_lock_risky.hcl"),
+        "soc2",
+    )
+    assert result["adapter"] == "terraform-lock"
+    assert result["provider_count"] == 3
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 14
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
@@ -996,6 +1009,23 @@ def test_agent_gate_cfengine_rejects_path_outside_root(monkeypatch, tmp_path) ->
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_terraform_lock_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / ".terraform.lock.hcl"
+    outside.write_text(
+        'provider "registry.terraform.io/hashicorp/aws" {'
+        ' version="1.0.0" hashes=[] }\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_terraform_lock(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_vagrant_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1252,6 +1282,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_loki" in tool_names
         assert "agent_gate_caddy" in tool_names
         assert "agent_gate_terraform_config" in tool_names
+        assert "agent_gate_terraform_lock" in tool_names
         assert "agent_gate_terragrunt" in tool_names
         assert "agent_gate_helm" in tool_names
         assert "agent_gate_kustomize" in tool_names
@@ -1313,6 +1344,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(caddy_schema["properties"])
         tf_config_schema = tools_by_name["agent_gate_terraform_config"]["inputSchema"]
         assert {"input_path", "framework"} <= set(tf_config_schema["properties"])
+        tf_lock_schema = tools_by_name["agent_gate_terraform_lock"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(tf_lock_schema["properties"])
         terragrunt_schema = tools_by_name["agent_gate_terragrunt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(terragrunt_schema["properties"])
         helm_schema = tools_by_name["agent_gate_helm"]["inputSchema"]
