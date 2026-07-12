@@ -100,6 +100,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | systemd | `readtheplan systemd example.service` | Commands, identities, capabilities, credentials, sandboxing, filesystems, devices, sockets, timers, mounts, restart behavior, and merged-unit boundaries |
 | NGINX | `readtheplan nginx nginx.conf` | Includes, modules, listeners, TLS, upstreams, authentication, headers, filesystem exposure, and inherited configuration |
 | HAProxy | `readtheplan haproxy haproxy.cfg` | Runtime identity, listeners, TLS verification, upstreams, routing, traffic mutation, management APIs, Lua/program execution, and runtime state |
+| Envoy | `readtheplan envoy envoy.yaml` | Bootstrap/config dumps, listeners, admin, clusters, TLS validation, xDS, runtime layers, secrets, filters, Lua/Wasm, authorization, and active runtime boundaries |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
@@ -125,6 +126,8 @@ systemd units are parsed statically without invoking the manager; repeated/reset
 directives, activation targets, omitted hardening, and merged drop-ins remain visible.
 NGINX and HAProxy configurations are parsed without loading modules, includes,
 certificates, state files, Lua, or starting either proxy.
+Envoy accepts bootstrap YAML/JSON and admin config dumps so statically declared
+resources and active xDS-delivered runtime state share the same review contract.
 Dockerfile analysis understands multi-stage builds, heredocs, BuildKit secret/SSH
 mounts, and runtime metadata without invoking Docker or sending a build context.
 

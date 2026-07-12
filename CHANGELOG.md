@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Envoy bootstrap and admin config-dump gates across the CLI, generalized
+  Action, and local MCP server. Listeners, admin exposure, clusters, xDS sources,
+  runtime layers, TLS identity validation, secrets, routes, access logs, filters,
+  Lua/Wasm/native extension code, external authorization fail-open behavior, and
+  effective runtime boundaries feed the shared risk contract.
 - Native Atlantis repo-level and server-side configuration gates across the CLI,
   generalized Action, and local MCP server. Plan/apply/import requirements,
   custom commands, environment steps, workflow hooks, override permissions,
