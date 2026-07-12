@@ -95,5 +95,6 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "github",
         "gitlab",
         "k8s",
+        "vault",
     } <= set(rules)
     assert {"cloudformation", "kubernetes"} <= set(adapters)
