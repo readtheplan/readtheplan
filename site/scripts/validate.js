@@ -362,6 +362,7 @@ for (const token of [
   "jenkins-jcasc",
   "ansible-project",
   "chef-project",
+  "puppet-project",
   "proceed/warn/block",
   "PR reviewer",
   "SOC 2 evidence prep",

@@ -1,0 +1,20 @@
+forge 'http://forge.example.test'
+
+mod 'puppetlabs/stdlib'
+mod 'puppetlabs/concat', '9.0.2'
+mod 'profile',
+  :git => 'https://github.com/example/profile.git',
+  :branch => 'main'
+mod 'role',
+  :git => 'https://github.com/example/role.git',
+  :ref => '0123456789abcdef0123456789abcdef01234567'
+mod 'legacy',
+  :git => 'git://git.example.test/legacy.git',
+  :commit => '1123456789abcdef0123456789abcdef01234567'
+mod 'escaped',
+  :git => 'https://github.com/example/escaped.git',
+  :commit => '2123456789abcdef0123456789abcdef01234567',
+  :install_path => '../outside-environment'
+
+moduledir '../shared-modules'
+system './generate-puppetfile'

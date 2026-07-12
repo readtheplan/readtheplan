@@ -329,6 +329,18 @@ def _build_parser() -> argparse.ArgumentParser:
     puppet.add_argument("input_file", help="Path to a Puppet manifest (.pp).")
     puppet.set_defaults(func=_puppet_gate)
 
+    puppet_project = subparsers.add_parser(
+        "puppet-project",
+        help="Emit the agent-gate decision for Puppet project dependency or Hiera files.",
+    )
+    puppet_project.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    puppet_project.add_argument(
+        "input_file", help="Path to Puppetfile, module metadata.json, or hiera.yaml."
+    )
+    puppet_project.set_defaults(func=_puppet_project_gate)
+
     github_actions = subparsers.add_parser(
         "github-actions",
         help="Emit the agent-gate decision for a GitHub Actions workflow YAML file.",
@@ -1301,6 +1313,35 @@ def _puppet_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_puppet(data, catalog=catalog))
+
+
+def _puppet_project_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Puppet project dependencies and Hiera."""
+    from readtheplan.adapters.puppet_project import (
+        PuppetProjectAdapter,
+        PuppetProjectInputError,
+        analyze_puppet_project,
+        parse_puppet_project,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_puppet_project(source)
+    except PuppetProjectInputError as exc:
+        print(f"Error: invalid Puppet project input: {exc}", file=sys.stderr)
+        return 1
+    if not PuppetProjectAdapter().can_handle(data):
+        print("Error: input not recognized as Puppet project configuration", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_puppet_project(data, catalog=catalog))
 
 
 def _pipeline_gate(args: argparse.Namespace) -> int:

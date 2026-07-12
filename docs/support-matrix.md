@@ -38,6 +38,7 @@ matrix makes those boundaries explicit.
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
 | Chef project | `Policyfile.rb`, `Policyfile.lock.json`, or `metadata.rb` | `readtheplan chef-project Policyfile.rb` | Policy/run lists, cookbook sources and immutable revisions, included policies, resolved lock identity, attributes/secrets, cookbook/gem dependencies, compatibility, privacy, and dynamic Ruby boundaries | Built-in |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Built-in and namespaced resource/state scanner covering execution/identity/connectivity, classes, dynamic data/templates, custom types, virtual/exported resources, collectors, refresh relationships, sources, and permissions | Conservative |
+| Puppet project | `Puppetfile`, module `metadata.json`, or `hiera.yaml` | `readtheplan puppet-project Puppetfile` | Forge/Git source provenance, immutable revisions, module/install paths, metadata identity and bounded dependencies, Hiera hierarchy/backend/data paths/options/secrets, and dynamic Ruby boundaries | Built-in |
 | GitHub Actions | Workflow YAML | `readtheplan github-actions workflow.yml` | Token permissions, action/reusable-workflow pinning, secret inputs, environments, and run steps | Built-in |
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
@@ -102,7 +103,9 @@ the same optional `framework` parameter through its MCP tool.
 - Ansible configuration precedence, inventory/plugin execution, transitive Galaxy
   dependencies, includes/roles, and Jenkins shared libraries remain external code
   boundaries. Chef policy-group/node assignment, credentials, config.rb,
-  cookbook contents, server-side state, Puppet Ruby extensions, custom providers/types, dynamic
+  cookbook contents, server-side state, Puppet module contents and transitive dependencies,
+  Code Manager/r10k deployment settings, Hiera data, eyaml keys, Ruby extensions,
+  custom providers/types, dynamic
   language expressions, Hiera/data bindings, and compiled catalogs are not
   evaluated; recognized boundaries are surfaced for review instead.
 - Jenkins JCasC analysis parses one YAML file without resolving supplementary

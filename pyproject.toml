@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terragrunt", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "ansible-project", "salt", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "kubernetes", "helm", "kustomize", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terragrunt", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "ansible-project", "salt", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "kustomize", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -81,6 +81,7 @@ packer = "readtheplan.adapters.packer:PackerInspectAdapter"
 pulumi = "readtheplan.adapters.pulumi:PulumiAdapter"
 prometheus = "readtheplan.adapters.monitoring:PrometheusAdapter"
 puppet = "readtheplan.adapters.puppet:PuppetAdapter"
+puppet-project = "readtheplan.adapters.puppet_project:PuppetProjectAdapter"
 salt = "readtheplan.adapters.salt:SaltAdapter"
 sam = "readtheplan.adapters.serverless:SamTemplateAdapter"
 serverless = "readtheplan.adapters.serverless:ServerlessFrameworkAdapter"

@@ -9,6 +9,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Puppet project gates across the CLI, GitHub Action, and MCP. Strict parsing of
+  `Puppetfile`, module `metadata.json`, and `hiera.yaml` now covers Forge/Git
+  provenance, immutable revisions, install paths, dependency bounds, Hiera
+  hierarchy/backends/data paths/options, literal secrets, and Ruby boundaries.
 - Chef project gates across the CLI, GitHub Action, and MCP. Static parsing of
   `Policyfile.rb`, `Policyfile.lock.json`, and cookbook `metadata.rb` now covers
   run lists, cookbook sources and resolved identity, immutable Git revisions,

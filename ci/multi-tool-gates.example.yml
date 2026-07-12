@@ -13,6 +13,8 @@ on:
       - "jenkins.yaml"
       - "chef/**"
       - "puppet/**"
+      - "Puppetfile"
+      - "hiera.yaml"
 
 permissions:
   contents: read
@@ -44,6 +46,8 @@ jobs:
             input: chef/Policyfile.lock.json
           - tool: puppet
             input: puppet/site.pp
+          - tool: puppet-project
+            input: puppet/Puppetfile
     steps:
       - uses: actions/checkout@v7
       - uses: readtheplan/readtheplan@main

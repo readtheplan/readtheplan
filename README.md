@@ -100,6 +100,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
 | Chef project | `readtheplan chef-project Policyfile.rb` | Policyfiles, resolved locks, cookbook metadata, run lists, source provenance, immutable revisions, attributes, gems, compatibility, privacy, and Ruby boundaries |
 | Puppet | `readtheplan puppet site.pp` | Built-in/custom resources, state, identities, classes, lookups/templates, virtual/exported resources, collectors, refresh relationships, and sources/permissions |
+| Puppet project | `readtheplan puppet-project Puppetfile` | Forge/Git modules, immutable revisions, install paths, module metadata and dependency bounds, Hiera hierarchy/backends/data paths/options, secrets, and Ruby boundaries |
 | GitHub Actions | `readtheplan github-actions workflow.yml` | Token permissions, action pinning, secrets, environments, and run steps |
 | GitLab CI | `readtheplan gitlab-ci .gitlab-ci.yml` | Includes, tokens, downstream pipelines, environments, and scripts |
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |
