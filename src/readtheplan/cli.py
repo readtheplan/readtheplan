@@ -182,6 +182,23 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cloudformation.set_defaults(func=_cloudformation_gate)
 
+    azure = subparsers.add_parser(
+        "azure",
+        help="Emit the agent-gate decision for Azure Bicep/ARM What-If JSON.",
+    )
+    azure.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    azure.add_argument(
+        "input_file",
+        help="Path to Azure deployment What-If JSON.",
+    )
+    azure.set_defaults(func=_azure_gate)
+
     kubernetes = subparsers.add_parser(
         "kubernetes",
         help="Emit the agent-gate decision for a Kubernetes manifest diff.",
@@ -671,6 +688,31 @@ def _kubernetes_gate(args: argparse.Namespace) -> int:
     if decision == "warn":
         return 1
     return 0
+
+
+def _azure_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Azure Bicep/ARM What-If JSON."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.azure import analyze_azure_whatif
+
+    try:
+        data = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    if not isinstance(data, dict):
+        print("Error: Azure What-If input must be a JSON object", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "azure":
+        print("Error: input not recognized as Azure deployment What-If output", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_azure_whatif(data, catalog=catalog))
 
 
 def _ansible_gate(args: argparse.Namespace) -> int:

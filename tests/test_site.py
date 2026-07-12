@@ -197,7 +197,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
 
     for expected in [
         "Local MCP infrastructure reviewer",
-        "Give your AI coding agent deterministic Terraform, CloudFormation, Kubernetes",
+        "Give your AI coding agent deterministic Terraform, CloudFormation, Azure, Kubernetes",
         "Local-first",
         "No raw plan upload",
         "No hosted MCP service",
@@ -207,6 +207,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "analyze_plan",
         "agent_gate",
         "agent_gate_pulumi",
+        "agent_gate_azure",
         "proceed/warn/block",
         "PR reviewer",
         "SOC 2 evidence prep",

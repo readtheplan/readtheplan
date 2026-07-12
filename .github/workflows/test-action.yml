@@ -96,6 +96,33 @@ jobs:
           echo "Expected unsupported tool validation to fail"
           exit 1
 
+      - name: Run action on Azure What-If
+        id: azure
+        uses: ./
+        with:
+          tool: azure
+          input-file: tests/fixtures/azure_whatif_mixed.json
+
+      - name: Assert Azure action outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.azure.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.azure.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.azure.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "5"
+          test "$RISK_COUNTS" = '{"dangerous":1,"irreversible":1,"review":2,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "azure"
+          assert payload["decision"] == "block"
+          PY
+
       - name: Fail on invalid plan JSON
         id: invalid
         uses: ./
