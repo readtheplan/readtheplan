@@ -22,7 +22,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "tool:" in action
     assert (
         "cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet|"
-        "github-actions|gitlab-ci|circleci|docker-compose|nomad|packer|salt|vagrant|"
+        "github-actions|gitlab-ci|circleci|docker-compose|dockerfile|nomad|packer|salt|vagrant|"
         "cloud-init"
     ) in action
     assert "RESOLVED_INPUT_FILE" in action
@@ -69,6 +69,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/Vagrantfile.risky" in workflow
     assert "tool: cloud-init" in workflow
     assert "input-file: tests/fixtures/cloud_init_risky.yml" in workflow
+    assert "tool: dockerfile" in workflow
+    assert "input-file: tests/fixtures/Dockerfile.risky" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow

@@ -88,6 +88,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | GitLab CI | `readtheplan gitlab-ci .gitlab-ci.yml` | Includes, tokens, downstream pipelines, environments, and scripts |
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
+| Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |
 | Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |
 | Packer | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and inspect limitations |
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
@@ -109,6 +110,8 @@ Vagrantfiles are scanned as Ruby source without evaluation; known DSL operations
 host-command escape hatches, and merged configuration boundaries remain visible.
 cloud-init user-data is parsed without executing guest code; scripts, boothooks,
 commands, credentials, and first-boot system changes use the same gate contract.
+Dockerfile analysis understands multi-stage builds, heredocs, BuildKit secret/SSH
+mounts, and runtime metadata without invoking Docker or sending a build context.
 
 ## How it looks
 

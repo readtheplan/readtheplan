@@ -25,6 +25,7 @@ matrix makes those boundaries explicit.
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
 | Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
+| Dockerfile / Containerfile | Dockerfile source | `readtheplan dockerfile Dockerfile` | Frontends, base-image pinning, stages, commands/heredocs, BuildKit mounts, secret ARG/ENV, COPY/ADD, users, health, deferred instructions, and context boundaries | Built-in |
 | HashiCorp Nomad | `/v1/job/:id/plan` JSON response | `readtheplan nomad plan-response.json` | Scheduler diff, allocation placement/replacement/stops, failures, task drivers, images, commands, and secret-bearing fields | Built-in |
 | HashiCorp Packer | Human or `-machine-readable` inspect output | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and explicit inspect limitations | Conservative |
 | HashiCorp Vagrant | Vagrantfile Ruby source | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and unresolved Ruby/configuration merging | Conservative |
@@ -74,7 +75,7 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 ## Deliberate boundaries
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
-  Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, Packer,
+  Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Dockerfiles, Nomad, Packer,
   Vagrant, cloud-init user-data, or provider code.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
@@ -90,6 +91,10 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 - Docker Compose analysis deliberately does not resolve `include`, `extends`,
   `env_file`, secret files, build contexts, or Dockerfiles. Those external trust
   boundaries remain review or dangerous.
+- Dockerfile analysis parses instructions, continuations, and common heredocs but
+  never invokes a frontend or builder. The build context, `.dockerignore`, supplied
+  arguments/secrets, remote cache, and BuildKit entitlements remain explicit review
+  boundaries; callers can additionally run `docker build --check` upstream.
 - Nomad analysis accepts the structured plan response returned by the HTTP API.
   Generate it inside the existing Nomad trust boundary; readtheplan never contacts
   the cluster or submits a job.
