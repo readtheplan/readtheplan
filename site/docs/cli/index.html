@@ -143,6 +143,7 @@ readtheplan vagrant Vagrantfile
 readtheplan cloud-init user-data.yml
 readtheplan dockerfile Dockerfile
 readtheplan azure-pipelines azure-pipelines.yml
+readtheplan bitbucket-pipelines bitbucket-pipelines.yml
 readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
 readtheplan puppet site.pp
@@ -152,7 +153,7 @@ readtheplan circleci .circleci/config.yml
 readtheplan docker-compose compose.yml
 readtheplan nomad plan-response.json
 readtheplan packer packer-inspect.txt</code></pre>
-          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, Crossplane, Argo CD, and Flux artifacts work directly. Argo CD and Flux receive native GitOps rules. Azure accepts Bicep/ARM deployment What-If JSON; use FullResourcePayloads for property-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events. Ansible, static Salt SLS, and cloud-init cloud-config input are parsed as structured YAML; templated inputs receive conservative scanning. Jenkins, Chef, Puppet, Vagrant, and Dockerfiles use conservative syntax-aware scanners. GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, and Docker Compose parse YAML structurally; external templates, protected-resource settings, Compose files, and build contexts are not resolved. Nomad accepts the structured job-plan HTTP API response. Packer accepts saved human or machine-readable inspect output. None of the adapters execute user configuration or contact infrastructure services.</p>
+          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, Crossplane, Argo CD, and Flux artifacts work directly. Argo CD and Flux receive native GitOps rules. Azure accepts Bicep/ARM deployment What-If JSON; use FullResourcePayloads for property-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events. Ansible, static Salt SLS, and cloud-init cloud-config input are parsed as structured YAML; templated inputs receive conservative scanning. Jenkins, Chef, Puppet, Vagrant, and Dockerfiles use conservative syntax-aware scanners. GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines, and Docker Compose parse YAML structurally; external templates, protected-resource settings, secured variables, Compose files, and build contexts are not resolved. Nomad accepts the structured job-plan HTTP API response. Packer accepts saved human or machine-readable inspect output. None of the adapters execute user configuration or contact infrastructure services.</p>
           <p style="color:var(--muted);margin-top:12px">Adapter exit codes are <code>0</code> for proceed, <code>1</code> for warn, and <code>2</code> for block. Add <code>--framework soc2</code>, <code>--framework iso27001</code>, or <code>--framework hipaa</code> to include required control checks.</p>
         </div>
       </section>

@@ -310,6 +310,16 @@ def _build_parser() -> argparse.ArgumentParser:
     azure_pipelines.add_argument("input_file", help="Path to azure-pipelines.yml.")
     azure_pipelines.set_defaults(func=_pipeline_gate)
 
+    bitbucket_pipelines = subparsers.add_parser(
+        "bitbucket-pipelines",
+        help="Emit the agent-gate decision for bitbucket-pipelines.yml.",
+    )
+    bitbucket_pipelines.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    bitbucket_pipelines.add_argument("input_file", help="Path to bitbucket-pipelines.yml.")
+    bitbucket_pipelines.set_defaults(func=_pipeline_gate)
+
     docker_compose = subparsers.add_parser(
         "docker-compose",
         help="Emit the agent-gate decision for a Docker Compose configuration.",
@@ -948,6 +958,7 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
     from readtheplan.adapters import detect_adapter
     from readtheplan.adapters.pipelines import (
         AzurePipelinesAdapter,
+        BitbucketPipelinesAdapter,
         CircleCIAdapter,
         GitHubActionsAdapter,
         GitLabCIAdapter,
@@ -961,6 +972,7 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
         "gitlab-ci": GitLabCIAdapter,
         "circleci": CircleCIAdapter,
         "azure-pipelines": AzurePipelinesAdapter,
+        "bitbucket-pipelines": BitbucketPipelinesAdapter,
     }
     try:
         source = Path(args.input_file).read_text(encoding="utf-8")

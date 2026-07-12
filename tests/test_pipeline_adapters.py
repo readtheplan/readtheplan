@@ -7,6 +7,7 @@ import pytest
 from readtheplan.adapters import detect_adapter
 from readtheplan.adapters.pipelines import (
     AzurePipelinesAdapter,
+    BitbucketPipelinesAdapter,
     CircleCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
@@ -216,6 +217,105 @@ jobs:
     assert by_type["azure_pipelines_script"].risk == "dangerous"
 
 
+def test_bitbucket_pipelines_classifies_runners_oidc_pipes_and_deployments() -> None:
+    data = parse_pipeline_yaml(
+        """
+image: atlassian/default-image:4
+definitions:
+  services:
+    docker:
+      image: docker:27-dind
+      type: docker
+pipelines:
+  default:
+    - step:
+        runs-on: [self.hosted, linux]
+        deployment: production
+        oidc: true
+        services: [docker]
+        script:
+          - terraform apply -var token=$API_TOKEN
+          - pipe: atlassian/aws-s3-deploy:1.6.1
+            variables:
+              API_TOKEN: $DEPLOY_TOKEN
+""",
+        "bitbucket-pipelines",
+    )
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, BitbucketPipelinesAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+
+    assert by_type["bitbucket_pipelines_image"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_service_image"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_docker_service"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_trigger"] == ["review"]
+    assert by_type["bitbucket_pipelines_runner"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_deployment"] == ["review"]
+    assert by_type["bitbucket_pipelines_oidc"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_service"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_script"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_pipe"] == ["review"]
+    assert by_type["bitbucket_pipelines_secret_input"] == [
+        "dangerous",
+        "dangerous",
+    ]
+    assert by_type["bitbucket_pipelines_external_settings"] == ["review"]
+
+
+def test_bitbucket_pipeline_import_and_custom_secret_variable_block() -> None:
+    data = parse_pipeline_yaml(
+        """
+pipelines:
+  custom:
+    release:
+      - variables:
+          - name: DEPLOY_TOKEN
+      - step:
+          type: pipeline
+          custom: child-release
+          input-variables:
+            API_TOKEN: $DEPLOY_TOKEN
+    shared:
+      import: workspace/shared:main:release
+""",
+        "bitbucket-pipelines",
+    )
+    changes = BitbucketPipelinesAdapter().analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+    assert by_type["bitbucket_pipelines_custom_variable"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_child_pipeline"] == ["review"]
+    assert by_type["bitbucket_pipelines_secret_input"] == ["dangerous"]
+    assert by_type["bitbucket_pipelines_import"] == ["dangerous"]
+
+
+def test_bitbucket_stage_environment_condition_and_empty_step_require_review() -> None:
+    data = parse_pipeline_yaml(
+        """
+pipelines:
+  branches:
+    main:
+      - stage:
+          environment: production
+          steps:
+            - step:
+                condition:
+                  changesets:
+                    includePaths: [infra/**]
+""",
+        "bitbucket-pipelines",
+    )
+    changes = BitbucketPipelinesAdapter().analyze(data, use_rules=False)
+    by_type = {change.resource_type: change for change in changes}
+    assert by_type["bitbucket_pipelines_deployment"].risk == "review"
+    assert by_type["bitbucket_pipelines_condition"].risk == "review"
+    assert by_type["bitbucket_pipelines_unresolved"].risk == "review"
+
+
 @pytest.mark.parametrize(
     ("tool", "source", "expected_code", "expected_adapter"),
     [
@@ -237,6 +337,12 @@ jobs:
             "steps:\n  - script: ./deploy.sh\n",
             2,
             "azure-pipelines",
+        ),
+        (
+            "bitbucket-pipelines",
+            "pipelines:\n  default:\n    - step:\n        script: [echo hello]\n",
+            2,
+            "bitbucket-pipelines",
         ),
     ],
 )

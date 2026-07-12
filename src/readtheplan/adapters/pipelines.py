@@ -60,6 +60,7 @@ def parse_pipeline_yaml(source: str, ecosystem: str) -> dict[str, Any]:
 
     wrappers = {
         "azure-pipelines": "azure_pipelines",
+        "bitbucket-pipelines": "bitbucket_pipelines",
         "github-actions": "github_actions",
         "gitlab-ci": "gitlab_ci",
         "circleci": "circleci",
@@ -1016,6 +1017,454 @@ class AzurePipelinesAdapter(_PipelineAdapter):
         )
 
 
+_BITBUCKET_VARIABLE = re.compile(
+    r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<plain>[A-Za-z_][A-Za-z0-9_]*))"
+)
+_EXACT_PIPE_VERSION = re.compile(r"^\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?$")
+
+
+class BitbucketPipelinesAdapter(_PipelineAdapter):
+    wrapper_key = "bitbucket_pipelines"
+    tool_name = "Bitbucket Pipelines"
+
+    @property
+    def adapter_name(self) -> str:
+        return "bitbucket-pipelines"
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        pipeline = input_data[self.wrapper_key]
+        changes: list[dict[str, Any]] = []
+
+        if pipeline.get("image") is not None:
+            self._image(pipeline["image"], "image", changes)
+        if pipeline.get("clone") is not None:
+            changes.append(
+                _change(
+                    "clone",
+                    "clone",
+                    "review",
+                    "Clone options control source history, LFS, submodules, and repository "
+                    "content made available to every step.",
+                )
+            )
+        if str(pipeline.get("export", "false")).lower() == "true":
+            changes.append(
+                _change(
+                    "export",
+                    "export",
+                    "review",
+                    "Exported pipeline configuration can be imported by other repositories; "
+                    "review its compatibility and trust boundary.",
+                )
+            )
+        self._definitions(pipeline.get("definitions"), changes)
+
+        pipelines = pipeline.get("pipelines")
+        if not isinstance(pipelines, dict) or not pipelines:
+            changes.append(
+                _change(
+                    "pipelines",
+                    "unresolved",
+                    "review",
+                    "Bitbucket configuration has no statically analyzable pipelines object.",
+                )
+            )
+        else:
+            for selector, body in pipelines.items():
+                selector_address = f"pipelines.{selector}"
+                changes.append(
+                    _change(
+                        selector_address,
+                        "trigger",
+                        "review",
+                        "Pipeline selector controls which branches, tags, pull requests, "
+                        "custom invocations, or schedules can reach deployment resources.",
+                    )
+                )
+                if isinstance(body, list):
+                    self._entries(body, selector_address, changes)
+                elif isinstance(body, dict):
+                    for pattern, entries in body.items():
+                        pattern_address = f"{selector_address}.{pattern}"
+                        if isinstance(entries, list):
+                            self._entries(entries, pattern_address, changes)
+                        elif isinstance(entries, dict) and "import" in entries:
+                            self._import(entries["import"], pattern_address, changes)
+                        else:
+                            changes.append(
+                                _change(
+                                    pattern_address,
+                                    "unresolved",
+                                    "review",
+                                    "Pipeline selector is generated, imported, or malformed.",
+                                )
+                            )
+
+        changes.append(
+            _change(
+                "pipeline.external_settings",
+                "external_settings",
+                "review",
+                "Secured workspace/repository/deployment variables, deployment permissions, "
+                "runner registration, dynamic pipeline providers, and SSH keys live outside YAML.",
+            )
+        )
+        return changes
+
+    def _definitions(self, definitions: Any, changes: list[dict[str, Any]]) -> None:
+        if not isinstance(definitions, dict):
+            return
+        services = definitions.get("services")
+        if isinstance(services, dict):
+            for name, service in services.items():
+                address = f"definitions.services.{name}"
+                image = service.get("image") if isinstance(service, dict) else service
+                self._image(image, address, changes, kind="service_image")
+                if str(name).lower() == "docker" or (
+                    isinstance(service, dict) and service.get("type") == "docker"
+                ):
+                    changes.append(
+                        _change(
+                            f"{address}.docker",
+                            "docker_service",
+                            "dangerous",
+                            "Docker service permits container builds or daemon operations from "
+                            "pipeline commands.",
+                        )
+                    )
+                if self._secret_reference(service):
+                    changes.append(self._secret_change(f"{address}.secrets"))
+        caches = definitions.get("caches")
+        if isinstance(caches, dict):
+            for name in caches:
+                changes.append(
+                    _change(
+                        f"definitions.caches.{name}",
+                        "cache",
+                        "review",
+                        "Custom cache persists files between builds; verify keys, paths, "
+                        "poisoning resistance, and secret exclusion.",
+                    )
+                )
+
+    def _entries(
+        self, entries: list[Any], address: str, changes: list[dict[str, Any]]
+    ) -> None:
+        for index, entry in enumerate(entries):
+            entry_address = f"{address}[{index}]"
+            if not isinstance(entry, dict):
+                changes.append(
+                    _change(
+                        entry_address,
+                        "unresolved",
+                        "review",
+                        "Pipeline entry is an unresolved YAML alias or malformed value.",
+                    )
+                )
+                continue
+            if "step" in entry:
+                self._step(entry["step"], f"{entry_address}.step", changes)
+            elif "variables" in entry:
+                variables = entry["variables"]
+                if isinstance(variables, list):
+                    for variable_index, variable in enumerate(variables):
+                        variable_address = (
+                            f"{entry_address}.variables[{variable_index}]"
+                        )
+                        name = (
+                            variable.get("name", "")
+                            if isinstance(variable, dict)
+                            else ""
+                        )
+                        sensitive = _SENSITIVE_VARIABLE_NAME.search(str(name)) is not None
+                        changes.append(
+                            _change(
+                                variable_address,
+                                "custom_variable",
+                                "dangerous" if sensitive else "review",
+                                "Custom pipeline variable is supplied at invocation time; "
+                                "verify allowed values, defaults, and secret handling.",
+                            )
+                        )
+            elif "parallel" in entry:
+                parallel = entry["parallel"]
+                parallel_steps = (
+                    parallel.get("steps") if isinstance(parallel, dict) else parallel
+                )
+                if isinstance(parallel_steps, list):
+                    self._entries(parallel_steps, f"{entry_address}.parallel", changes)
+                else:
+                    changes.append(
+                        _change(
+                            f"{entry_address}.parallel",
+                            "unresolved",
+                            "review",
+                            "Parallel step group is generated or malformed.",
+                        )
+                    )
+            elif "stage" in entry:
+                stage = entry["stage"]
+                if not isinstance(stage, dict):
+                    changes.append(
+                        _change(
+                            f"{entry_address}.stage",
+                            "unresolved",
+                            "review",
+                            "Pipeline stage is generated or malformed.",
+                        )
+                    )
+                    continue
+                if stage.get("deployment") is not None or stage.get("environment") is not None:
+                    changes.append(self._deployment(f"{entry_address}.stage.deployment"))
+                stage_steps = stage.get("steps")
+                if isinstance(stage_steps, list):
+                    self._entries(stage_steps, f"{entry_address}.stage.steps", changes)
+            elif "import" in entry:
+                self._import(entry["import"], entry_address, changes)
+            else:
+                changes.append(
+                    _change(
+                        entry_address,
+                        "unresolved",
+                        "review",
+                        "Pipeline entry has no recognized step, stage, parallel, or import key.",
+                    )
+                )
+
+    def _step(self, step: Any, address: str, changes: list[dict[str, Any]]) -> None:
+        if not isinstance(step, dict):
+            changes.append(
+                _change(
+                    address,
+                    "unresolved",
+                    "review",
+                    "Bitbucket pipeline step is generated or malformed.",
+                )
+            )
+            return
+        if step.get("image") is not None:
+            self._image(step["image"], f"{address}.image", changes)
+        runs_on = step.get("runs-on")
+        if runs_on is not None:
+            labels = runs_on if isinstance(runs_on, list) else [runs_on]
+            self_hosted = any(str(label).lower() == "self.hosted" for label in labels)
+            changes.append(
+                _change(
+                    f"{address}.runs-on",
+                    "runner",
+                    "dangerous" if self_hosted else "review",
+                    "Runner labels select execution infrastructure; self-hosted runners "
+                    "can access the host and private network.",
+                )
+            )
+        if step.get("deployment") is not None:
+            changes.append(self._deployment(f"{address}.deployment"))
+        if str(step.get("oidc", "false")).lower() == "true":
+            changes.append(
+                _change(
+                    f"{address}.oidc",
+                    "oidc",
+                    "dangerous",
+                    "OIDC issues a workload identity token; verify resource-server audience, "
+                    "repository, branch, environment, and subject policies.",
+                )
+            )
+        if step.get("type") == "pipeline":
+            changes.append(
+                _change(
+                    f"{address}.type",
+                    "child_pipeline",
+                    "review",
+                    "Child pipeline executes additional pipeline configuration and passes "
+                    "selected variables or artifacts.",
+                )
+            )
+        if step.get("trigger") is not None:
+            changes.append(
+                _change(
+                    f"{address}.trigger",
+                    "manual_trigger",
+                    "review",
+                    "Manual trigger changes the approval and execution boundary for this step.",
+                )
+            )
+        if step.get("condition") is not None:
+            changes.append(
+                _change(
+                    f"{address}.condition",
+                    "condition",
+                    "review",
+                    "Step condition changes which commits and file changes can reach "
+                    "commands, credentials, or deployment resources.",
+                )
+            )
+        for service_index, service in enumerate(self._as_list(step.get("services"))):
+            changes.append(
+                _change(
+                    f"{address}.services[{service_index}]",
+                    "service",
+                    "dangerous" if str(service).lower() == "docker" else "review",
+                    "Service container shares the step network; verify image, credentials, "
+                    "ports, data, and Docker daemon access.",
+                )
+            )
+        for cache_index, _ in enumerate(self._as_list(step.get("caches"))):
+            changes.append(
+                _change(
+                    f"{address}.caches[{cache_index}]",
+                    "cache",
+                    "review",
+                    "Step restores a persistent cache; verify key isolation and poisoning risk.",
+                )
+            )
+        scripts = self._as_list(step.get("script"))
+        for index, command in enumerate(scripts):
+            script_address = f"{address}.script[{index}]"
+            if isinstance(command, dict) and command.get("pipe") is not None:
+                self._pipe(command, script_address, changes)
+            else:
+                changes.append(
+                    _change(
+                        script_address,
+                        "script",
+                        "dangerous",
+                        "Bitbucket Pipelines script executes arbitrary commands in the step.",
+                    )
+                )
+                if self._secret_reference(command):
+                    changes.append(self._secret_change(f"{script_address}.secrets"))
+        if not scripts and step.get("type") != "pipeline":
+            changes.append(
+                _change(
+                    f"{address}.script",
+                    "unresolved",
+                    "review",
+                    "Bitbucket pipeline step has no statically analyzable script commands.",
+                )
+            )
+        for index, command in enumerate(self._as_list(step.get("after-script"))):
+            after_address = f"{address}.after-script[{index}]"
+            changes.append(
+                _change(
+                    after_address,
+                    "after_script",
+                    "dangerous",
+                    "Bitbucket after-script executes commands even after the main script phase.",
+                )
+            )
+            if self._secret_reference(command):
+                changes.append(self._secret_change(f"{after_address}.secrets"))
+        if step.get("artifacts") is not None:
+            changes.append(
+                _change(
+                    f"{address}.artifacts",
+                    "artifacts",
+                    "review",
+                    "Artifacts persist or transfer step files; verify paths, capture type, "
+                    "retention, and secret exclusion.",
+                )
+            )
+        for variable_key in ("input-variables", "variables"):
+            if variable_key in step and self._secret_reference(step[variable_key]):
+                changes.append(
+                    self._secret_change(f"{address}.{variable_key}.secrets")
+                )
+
+    def _pipe(
+        self, pipe: dict[str, Any], address: str, changes: list[dict[str, Any]]
+    ) -> None:
+        reference = str(pipe.get("pipe") or "")
+        _, separator, version = reference.rpartition(":")
+        pinned = bool(separator and _EXACT_PIPE_VERSION.fullmatch(version))
+        changes.append(
+            _change(
+                address,
+                "pipe",
+                "review" if pinned else "dangerous",
+                "Bitbucket Pipe executes reusable container code; verify publisher and "
+                "use an exact reviewed production version.",
+            )
+        )
+        if self._secret_reference(pipe.get("variables")):
+            changes.append(self._secret_change(f"{address}.secrets"))
+
+    def _image(
+        self,
+        image: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        *,
+        kind: str = "image",
+    ) -> None:
+        changes.append(
+            _change(
+                address,
+                kind,
+                "review" if _is_digest_pinned_image(image) else "dangerous",
+                "Pipeline image executes build or service code; pin it to a trusted digest "
+                "and review private-registry credentials.",
+            )
+        )
+        if isinstance(image, dict) and any(
+            key in image for key in ("password", "username", "aws", "aws-oidc-role")
+        ):
+            changes.append(self._secret_change(f"{address}.credentials"))
+
+    def _import(
+        self, reference: Any, address: str, changes: list[dict[str, Any]]
+    ) -> None:
+        pinned = any(_SHA_REF.fullmatch(part) for part in str(reference).split(":"))
+        changes.append(
+            _change(
+                address,
+                "import",
+                "review" if pinned else "dangerous",
+                "Shared pipeline import executes configuration with the importing "
+                "repository's variables and secrets; pin and review the exported pipeline.",
+            )
+        )
+
+    def _deployment(self, address: str) -> dict[str, str]:
+        return _change(
+            address,
+            "deployment",
+            "review",
+            "Deployment step or stage receives environment-scoped variables and targets "
+            "a protected environment; verify branch restrictions and admin permissions.",
+        )
+
+    def _secret_reference(self, value: Any) -> bool:
+        if isinstance(value, dict):
+            return any(
+                _SENSITIVE_VARIABLE_NAME.search(str(key)) is not None
+                or self._secret_reference(item)
+                for key, item in value.items()
+            )
+        if isinstance(value, list):
+            return any(self._secret_reference(item) for item in value)
+        return any(
+            _SENSITIVE_VARIABLE_NAME.search(
+                match.group("braced") or match.group("plain") or ""
+            )
+            is not None
+            for match in _BITBUCKET_VARIABLE.finditer(str(value))
+        )
+
+    def _secret_change(self, address: str) -> dict[str, str]:
+        return _change(
+            address,
+            "secret_input",
+            "dangerous",
+            "Step, pipe, service, or image references credential-like variables; verify "
+            "secured-variable scope, command-line exposure, and log masking.",
+        )
+
+    def _as_list(self, value: Any) -> list[Any]:
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
+
+
 def analyze_pipeline(
     adapter: _PipelineAdapter, data: dict[str, Any], *, catalog=None
 ) -> dict[str, Any]:
@@ -1045,3 +1494,7 @@ def analyze_circleci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
 
 def analyze_azure_pipelines(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
     return analyze_pipeline(AzurePipelinesAdapter(), data, catalog=catalog)
+
+
+def analyze_bitbucket_pipelines(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(BitbucketPipelinesAdapter(), data, catalog=catalog)

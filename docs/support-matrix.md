@@ -25,6 +25,7 @@ matrix makes those boundaries explicit.
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
 | Azure Pipelines | `azure-pipelines.yml` | `readtheplan azure-pipelines azure-pipelines.yml` | Repository/container resources, templates, variable groups, inline secrets, pools, deployment environments, service connections, tasks, scripts, and protected-resource boundaries | Built-in |
+| Bitbucket Pipelines | `bitbucket-pipelines.yml` | `readtheplan bitbucket-pipelines bitbucket-pipelines.yml` | Images, self-hosted runners, OIDC, deployments, services, Docker daemon access, caches, scripts, pipes, artifacts, custom variables, imports, and external settings | Built-in |
 | Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
 | Dockerfile / Containerfile | Dockerfile source | `readtheplan dockerfile Dockerfile` | Frontends, base-image pinning, stages, commands/heredocs, BuildKit mounts, secret ARG/ENV, COPY/ADD, users, health, deferred instructions, and context boundaries | Built-in |
 | HashiCorp Nomad | `/v1/job/:id/plan` JSON response | `readtheplan nomad plan-response.json` | Scheduler diff, allocation placement/replacement/stops, failures, task drivers, images, commands, and secret-bearing fields | Built-in |
@@ -76,8 +77,8 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 ## Deliberate boundaries
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
-  Pulumi, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Docker Compose,
-  Dockerfiles, Nomad, Packer,
+  Pulumi, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,
+  Docker Compose, Dockerfiles, Nomad, Packer,
   Vagrant, cloud-init user-data, or provider code.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
@@ -101,6 +102,10 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
   Azure DevOps. Approvals/checks, variable-group authorization, environments,
   agent-pool permissions, and service-connection permissions live outside YAML
   and therefore remain an explicit protected-resource review boundary.
+- Bitbucket Pipelines analysis parses YAML aliases and nested pipeline structures
+  without contacting Bitbucket or executing Pipes. Secured variables, deployment
+  permissions, SSH keys, runner registration, and workspace/repository dynamic
+  pipeline providers live outside YAML and remain an explicit review boundary.
 - Nomad analysis accepts the structured plan response returned by the HTTP API.
   Generate it inside the existing Nomad trust boundary; readtheplan never contacts
   the cluster or submits a job.
