@@ -452,6 +452,19 @@ def _build_parser() -> argparse.ArgumentParser:
     salt.add_argument("input_file", help="Path to a Salt SLS YAML/Jinja state file.")
     salt.set_defaults(func=_salt_gate)
 
+    salt_project = subparsers.add_parser(
+        "salt-project",
+        help="Emit the agent-gate decision for Salt project configuration.",
+    )
+    salt_project.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    salt_project.add_argument(
+        "input_file",
+        help="Path to Salt master/minion config, a top file, or a salt-ssh roster.",
+    )
+    salt_project.set_defaults(func=_salt_project_gate)
+
     vagrant = subparsers.add_parser(
         "vagrant",
         help="Emit the agent-gate decision for a Vagrantfile.",
@@ -1553,6 +1566,34 @@ def _salt_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_salt(data, catalog=catalog))
+
+
+def _salt_project_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Salt project configuration."""
+    from readtheplan.adapters.salt_project import (
+        SaltProjectAdapter,
+        SaltProjectInputError,
+        analyze_salt_project,
+        parse_salt_project,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_salt_project(source)
+    except SaltProjectInputError as exc:
+        print(f"Error: invalid Salt project input: {exc}", file=sys.stderr)
+        return 1
+    if not SaltProjectAdapter().can_handle(data):
+        print("Error: input not recognized as Salt project configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_salt_project(data, catalog=catalog))
 
 
 def _vagrant_gate(args: argparse.Namespace) -> int:

@@ -1404,7 +1404,7 @@ def agent_gate_configuration_management(
     ecosystem: str,
     framework: str | None = None,
 ) -> dict[str, object]:
-    """Return a gate for Ansible, Jenkins, Chef, or Puppet project source."""
+    """Return a gate for Ansible, Jenkins, Chef, Puppet, or Salt source."""
     from readtheplan.adapters.ansible import AnsibleAdapter, analyze_ansible
     from readtheplan.adapters.ansible_project import (
         AnsibleProjectAdapter,
@@ -1433,6 +1433,12 @@ def agent_gate_configuration_management(
         analyze_puppet_project,
         parse_puppet_project,
     )
+    from readtheplan.adapters.salt_project import (
+        SaltProjectAdapter,
+        SaltProjectInputError,
+        analyze_salt_project,
+        parse_salt_project,
+    )
 
     supported = {
         "ansible",
@@ -1443,6 +1449,7 @@ def agent_gate_configuration_management(
         "chef-project",
         "puppet",
         "puppet-project",
+        "salt-project",
     }
     if ecosystem not in supported:
         raise MCPToolInputError(
@@ -1511,6 +1518,16 @@ def agent_gate_configuration_management(
             ) from exc
         adapter = PuppetProjectAdapter()
         analyze = analyze_puppet_project
+    elif ecosystem == "salt-project":
+        try:
+            data = parse_salt_project(source)
+        except SaltProjectInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Salt project input {input_path}: {exc}",
+            ) from exc
+        adapter = SaltProjectAdapter()
+        analyze = analyze_salt_project
     elif ecosystem == "jenkins-jcasc":
         try:
             data = parse_jenkins_jcasc(source)
@@ -2022,12 +2039,12 @@ def create_server() -> Any:
         ecosystem: str,
         framework: str | None = None,
     ) -> dict[str, object]:
-        """Return a gate for Ansible, Jenkins/JCasC, Chef, or Puppet project source.
+        """Return a gate for Ansible, Jenkins/JCasC, Chef, Puppet, or Salt source.
 
         Args:
             input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
             ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, chef,
-                chef-project, puppet, or puppet-project.
+                chef-project, puppet, puppet-project, or salt-project.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(

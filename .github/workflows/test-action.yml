@@ -1222,6 +1222,37 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Salt project configuration
+        id: salt_project
+        uses: ./
+        with:
+          tool: salt-project
+          input-file: tests/fixtures/salt_master_project_risky.yaml
+          framework: soc2
+
+      - name: Assert Salt project outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.salt_project.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.salt_project.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.salt_project.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "25"
+          test "$RISK_COUNTS" = '{"dangerous":19,"irreversible":0,"review":6,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "salt-project"
+          assert payload["artifact_type"] == "config"
+          assert payload["decision"] == "block"
+          assert "open_mode" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Vagrantfile
         id: vagrant
         uses: ./

@@ -22,6 +22,7 @@ from readtheplan.mcp_server import (
     agent_gate_cdk,
     agent_gate_cloud_init,
     agent_gate_cloudformation,
+    agent_gate_configuration_management,
     agent_gate_consul,
     agent_gate_crossplane,
     agent_gate_dockerfile,
@@ -384,6 +385,25 @@ def test_agent_gate_salt_supports_framework_checks() -> None:
     assert result["decision"] == "block"
     assert result["total_changes"] == 6
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_configuration_management_supports_salt_project() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "salt_master_project_risky.yaml"),
+        "salt-project",
+        "soc2",
+    )
+    assert result["adapter"] == "salt-project"
+    assert result["artifact_type"] == "config"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 25
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_configuration_management_rejects_unknown_ecosystem() -> None:
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_configuration_management("source.yml", "unknown")
+    assert exc_info.value.code == "INVALID_INPUT"
 
 
 def test_agent_gate_vagrant_supports_framework_checks() -> None:

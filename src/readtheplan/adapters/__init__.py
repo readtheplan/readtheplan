@@ -42,6 +42,7 @@ from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
 from readtheplan.adapters.puppet_project import PuppetProjectAdapter
 from readtheplan.adapters.salt import SaltAdapter
+from readtheplan.adapters.salt_project import SaltProjectAdapter
 from readtheplan.adapters.serverless import SamTemplateAdapter, ServerlessFrameworkAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
 from readtheplan.adapters.terraform_config import TerraformConfigAdapter, TerragruntAdapter
@@ -141,6 +142,7 @@ register_adapter(DockerComposeAdapter())
 register_adapter(NomadPlanAdapter())
 register_adapter(PackerInspectAdapter())
 register_adapter(SaltAdapter())
+register_adapter(SaltProjectAdapter())
 register_adapter(ServerlessFrameworkAdapter())
 register_adapter(SamTemplateAdapter())
 register_adapter(SystemdUnitAdapter())
@@ -194,6 +196,7 @@ __all__ = [
     "PuppetAdapter",
     "PuppetProjectAdapter",
     "SaltAdapter",
+    "SaltProjectAdapter",
     "SamTemplateAdapter",
     "ServerlessFrameworkAdapter",
     "SystemdUnitAdapter",
