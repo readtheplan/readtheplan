@@ -41,12 +41,20 @@ def main():
         print("::error::readtheplan JSON output must be an object", file=sys.stderr)
         raise SystemExit(1)
 
-    expected_types = {
-        "resource_change_count": int,
-        "actions": dict,
-        "risks": dict,
-        "changes": list,
-    }
+    is_agent_gate = payload.get("schema") == "rtp-agent-gate-v1"
+    if is_agent_gate:
+        expected_types = {
+            "risk_counts": dict,
+            "pr_comment": str,
+        }
+    else:
+        expected_types = {
+            "resource_change_count": int,
+            "actions": dict,
+            "risks": dict,
+            "changes": list,
+        }
+
     for key, expected_type in expected_types.items():
         value = payload.get(key)
         if not isinstance(value, expected_type):
@@ -58,9 +66,29 @@ def main():
             )
             raise SystemExit(1)
 
-    resource_change_count = payload["resource_change_count"]
-    action_counts = json.dumps(payload["actions"], sort_keys=True, separators=(",", ":"))
-    risk_counts = json.dumps(payload["risks"], sort_keys=True, separators=(",", ":"))
+    if is_agent_gate:
+        resource_change_count = payload.get("total_changes")
+        if resource_change_count is None:
+            resource_change_count = sum(payload["risk_counts"].values())
+        if not isinstance(resource_change_count, int):
+            print(
+                "::error::readtheplan agent gate total_changes must be an integer",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        action_values: dict[str, int] = {}
+        risk_values = payload["risk_counts"]
+        changes: list[dict[str, object]] = []
+        gate_comment = payload["pr_comment"]
+    else:
+        resource_change_count = payload["resource_change_count"]
+        action_values = payload["actions"]
+        risk_values = payload["risks"]
+        changes = payload["changes"]
+        gate_comment = None
+
+    action_counts = json.dumps(action_values, sort_keys=True, separators=(",", ":"))
+    risk_counts = json.dumps(risk_values, sort_keys=True, separators=(",", ":"))
     summary_json = json.dumps(payload, indent=2, sort_keys=True)
 
     with github_output.open("a", encoding="utf-8") as output:
@@ -81,15 +109,19 @@ def main():
         output.write(f"risk-counts={risk_counts}\n")
 
     with step_summary.open("a", encoding="utf-8") as summary:
-        summary.write("## readtheplan\n\n")
-        summary.write(f"- Resource changes: {resource_change_count}\n")
-        summary.write(f"- Actions: `{action_counts}`\n")
-        summary.write(f"- Risks: `{risk_counts}`\n")
-        if payload["changes"]:
+        if gate_comment is not None:
+            summary.write(gate_comment)
+            summary.write("\n")
+        else:
+            summary.write("## readtheplan\n\n")
+            summary.write(f"- Resource changes: {resource_change_count}\n")
+            summary.write(f"- Actions: `{action_counts}`\n")
+            summary.write(f"- Risks: `{risk_counts}`\n")
+        if changes:
             summary.write("\n### Changes\n\n")
             summary.write("| Risk | Actions | Resource | Type | Explanation |\n")
             summary.write("| --- | --- | --- | --- | --- |\n")
-            for change in payload["changes"][:20]:
+            for change in changes[:20]:
                 actions = "/".join(str(action) for action in change.get("actions", []))
                 summary.write(
                     "| "
@@ -104,13 +136,13 @@ def main():
                     )
                     + " |\n"
                 )
-            remaining = len(payload["changes"]) - 20
+            remaining = len(changes) - 20
             if remaining > 0:
                 summary.write(f"\n_{remaining} additional changes omitted from summary._\n")
 
     print(f"::notice::readtheplan analyzed {resource_change_count} resource changes")
     for risk in ("dangerous", "irreversible"):
-        count = int(payload["risks"].get(risk, 0))
+        count = int(risk_values.get(risk, 0))
         if count:
             print(f"::warning::readtheplan found {count} {risk} changes")
 

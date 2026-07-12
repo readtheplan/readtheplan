@@ -1,11 +1,25 @@
-name: readtheplan Terraform Plan Analysis
-description: Analyze Terraform JSON plans with readtheplan and expose machine-readable outputs.
+name: readtheplan Infrastructure Risk Gate
+description: Analyze infrastructure plans and configuration with one local risk contract.
 author: readtheplan maintainers
 
 inputs:
+  tool:
+    description: "Input tool: terraform, cloudformation, kubernetes, pulumi, ansible, jenkins, chef, or puppet."
+    required: false
+    default: "terraform"
+  input-file:
+    description: Path to the plan, manifest, playbook, pipeline, recipe, or other supported input.
+    required: false
+    default: ""
   plan-file:
-    description: Path to a Terraform JSON plan file, usually from terraform show -json.
-    required: true
+    description: "Deprecated Terraform-specific alias for input-file."
+    required: false
+    default: ""
+    deprecationMessage: "Use input-file. plan-file remains supported for backward compatibility."
+  framework:
+    description: Optional packaged compliance framework name, such as soc2, iso27001, or hipaa.
+    required: false
+    default: ""
   fail-on-any-change:
     description: "Fail when the plan contains ANY resource changes (including safe ones like tag updates). Use only for strict zero-diff policies. Ignored when fail-on-threshold is set."
     required: false
@@ -24,16 +38,19 @@ inputs:
     required: false
     default: "3.11"
   install-source:
-    description: Pip install source for the CLI. Defaults to the latest stable PyPI release (readtheplan). Set to empty to use this action's bundled source.
+    description: Pip install source for the CLI. Defaults to this action's bundled source so action and CLI versions match. Set to readtheplan to use the latest PyPI release.
     required: false
-    default: "readtheplan"
+    default: ""
 
 outputs:
   summary-json:
-    description: Full JSON emitted by readtheplan analyze --format json, unless the payload is too large for GitHub Actions outputs.
+    description: Full readtheplan JSON result unless it is too large for GitHub Actions outputs.
     value: ${{ steps.analyze.outputs['summary-json'] }}
   resource-change-count:
-    description: Number of Terraform resource changes reported by readtheplan.
+    description: Backward-compatible alias for the number of analyzed changes.
+    value: ${{ steps.analyze.outputs['resource-change-count'] }}
+  change-count:
+    description: Number of analyzed changes.
     value: ${{ steps.analyze.outputs['resource-change-count'] }}
   action-counts:
     description: Compact JSON object of action counts.
@@ -48,12 +65,31 @@ runs:
     - name: Validate inputs
       shell: bash
       env:
+        TOOL: ${{ inputs.tool }}
+        INPUT_FILE: ${{ inputs.input-file }}
         PLAN_FILE: ${{ inputs.plan-file }}
+        FRAMEWORK: ${{ inputs.framework }}
         FAIL_ON_ANY_CHANGE: ${{ inputs.fail-on-any-change }}
         FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
         FAIL_ON_THRESHOLD: ${{ inputs.fail-on-threshold }}
       run: |
         set -euo pipefail
+
+        TOOL="${TOOL,,}"
+        case "$TOOL" in
+          terraform|cloudformation|kubernetes|pulumi|ansible|jenkins|chef|puppet) ;;
+          *) echo "::error::tool must be one of: terraform, cloudformation, kubernetes, pulumi, ansible, jenkins, chef, puppet; got: $TOOL"; exit 1 ;;
+        esac
+
+        if [ -n "$INPUT_FILE" ] && [ -n "$PLAN_FILE" ] && [ "$INPUT_FILE" != "$PLAN_FILE" ]; then
+          echo "::error::input-file and plan-file cannot name different files"
+          exit 1
+        fi
+        INPUT_FILE="${INPUT_FILE:-$PLAN_FILE}"
+        if [ -z "$INPUT_FILE" ]; then
+          echo "::error::input-file is required (plan-file remains a deprecated alias)"
+          exit 1
+        fi
 
         # Support deprecated fail-on-changes (map to fail-on-any-change)
         FAIL_ON_ANY_CHANGE="${FAIL_ON_ANY_CHANGE:-false}"
@@ -82,9 +118,12 @@ runs:
         # Export resolved values so downstream steps don't re-read raw inputs
         echo "RESOLVED_FAIL_ON_ANY_CHANGE=$FAIL_ON_ANY_CHANGE" >> "$GITHUB_ENV"
         echo "RESOLVED_FAIL_ON_THRESHOLD=${FAIL_ON_THRESHOLD:-}" >> "$GITHUB_ENV"
+        echo "RESOLVED_TOOL=$TOOL" >> "$GITHUB_ENV"
+        echo "RESOLVED_INPUT_FILE=$INPUT_FILE" >> "$GITHUB_ENV"
+        echo "RESOLVED_FRAMEWORK=${FRAMEWORK:-}" >> "$GITHUB_ENV"
 
-        if [ ! -f "$PLAN_FILE" ]; then
-          echo "::error::Plan file not found: $PLAN_FILE"
+        if [ ! -f "$INPUT_FILE" ]; then
+          echo "::error::Input file not found: $INPUT_FILE"
           exit 1
         fi
 
@@ -109,11 +148,13 @@ runs:
         python -m pip install --upgrade pip
         python -m pip install "$source"
 
-    - name: Analyze plan
+    - name: Analyze infrastructure input
       id: analyze
       shell: bash
       env:
-        PLAN_FILE: ${{ inputs.plan-file }}
+        TOOL: ${{ env.RESOLVED_TOOL }}
+        INPUT_FILE: ${{ env.RESOLVED_INPUT_FILE }}
+        FRAMEWORK: ${{ env.RESOLVED_FRAMEWORK }}
         FAIL_ON_ANY_CHANGE: ${{ env.RESOLVED_FAIL_ON_ANY_CHANGE }}
         FAIL_ON_THRESHOLD: ${{ env.RESOLVED_FAIL_ON_THRESHOLD }}
       run: |
@@ -123,12 +164,21 @@ runs:
         error_file="$(mktemp)"
         count_file="$(mktemp)"
 
+        if [ "$TOOL" = "terraform" ]; then
+          command=(readtheplan analyze --format json)
+        else
+          command=(readtheplan "$TOOL")
+        fi
+        if [ -n "$FRAMEWORK" ]; then
+          command+=(--framework "$FRAMEWORK")
+        fi
+
         set +e
-        readtheplan analyze --format json "$PLAN_FILE" >"$output_file" 2>"$error_file"
+        "${command[@]}" "$INPUT_FILE" >"$output_file" 2>"$error_file"
         cli_status=$?
         set -e
 
-        if [ "$cli_status" -ne 0 ]; then
+        if [ ! -s "$output_file" ] || { [ "$TOOL" = "terraform" ] && [ "$cli_status" -ne 0 ]; } || [ "$cli_status" -gt 2 ]; then
           echo "::error::readtheplan failed with exit code $cli_status"
           if [ -s "$error_file" ]; then
             while IFS= read -r line; do
@@ -145,7 +195,7 @@ runs:
         FAIL_ON_THRESHOLD="${FAIL_ON_THRESHOLD:-}"
 
         resource_change_count="$(cat "$count_file")"
-        risk_counts="$(python -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding='utf-8'))['risks'], sort_keys=True, separators=(',', ':')))" "$output_file")"
+        risk_counts="$(python -c "import json,sys; p=json.load(open(sys.argv[1], encoding='utf-8')); print(json.dumps(p.get('risks', p.get('risk_counts', {})), sort_keys=True, separators=(',', ':')))" "$output_file")"
 
         if [ -n "$FAIL_ON_THRESHOLD" ]; then
           threshold_reached=false
