@@ -92,6 +92,7 @@ aws = "readtheplan.rules.aws"
 gcp = "readtheplan.rules.gcp"
 azure = "readtheplan.rules.azure"
 cloudflare = "readtheplan.rules.cloudflare"
+github = "readtheplan.rules.github"
 k8s = "readtheplan.rules.k8s"
 
 [project.optional-dependencies]

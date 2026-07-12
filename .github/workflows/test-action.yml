@@ -78,6 +78,36 @@ jobs:
           assert "pause Cloudflare proxying" in payload["changes"][0]["explanation"]
           PY
 
+      - name: Run action on GitHub Terraform plan
+        id: github_provider
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/github_provider_plan_risky.json
+          framework: soc2
+
+      - name: Assert GitHub Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.github_provider.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.github_provider.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.github_provider.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.github_provider.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "36"
+          test "$ACTION_COUNTS" = '{"create":16,"delete":4,"update":16}'
+          test "$RISK_COUNTS" = '{"dangerous":22,"irreversible":4,"review":10}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 36
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == "github_repository"
+          assert "public Internet" in payload["changes"][0]["explanation"]
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./
