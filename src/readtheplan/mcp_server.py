@@ -562,6 +562,46 @@ def agent_gate_vagrant(
     return analyze_vagrant(data, catalog=catalog)
 
 
+def agent_gate_cloud_init(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local cloud-init user-data."""
+    from readtheplan.adapters.cloud_init import (
+        CloudInitAdapter,
+        CloudInitInputError,
+        analyze_cloud_init,
+        parse_cloud_init,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read cloud-init input {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_cloud_init(source)
+    except CloudInitInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid cloud-init user-data in {input_path}: {exc}",
+        ) from exc
+    if not CloudInitAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as cloud-init user-data",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_cloud_init(data, catalog=catalog)
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -638,6 +678,7 @@ def create_server() -> Any:
     agent_gate_packer_handler = agent_gate_packer
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_vagrant_handler = agent_gate_vagrant
+    agent_gate_cloud_init_handler = agent_gate_cloud_init
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -787,6 +828,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_vagrant_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_cloud_init")
+    def _agent_gate_cloud_init_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for cloud-init user-data without executing guest code.
+
+        Args:
+            input_path: Local path to cloud-init user-data.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_cloud_init_handler(input_path, framework=framework)
 
     @mcp.tool(name="evolution_status")
     def _evolution_status_tool() -> dict[str, object]:

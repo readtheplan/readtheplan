@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native cloud-init user-data gates across the CLI, generalized Action, and local
+  MCP server. Cloud-config YAML, scripts, boothooks, URL includes, and MIME
+  boundaries surface users, SSH trust, files, secrets, commands, storage,
+  package, power-state, Jinja, and merged-configuration risks without execution.
 - Native Vagrantfile gates across the CLI, generalized Action, and local MCP
   server. Static scanning covers boxes, providers, provisioners, networks,
   synced folders, triggers, private keys, host commands, and unresolved Ruby or

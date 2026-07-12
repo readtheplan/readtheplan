@@ -28,6 +28,7 @@ matrix makes those boundaries explicit.
 | HashiCorp Nomad | `/v1/job/:id/plan` JSON response | `readtheplan nomad plan-response.json` | Scheduler diff, allocation placement/replacement/stops, failures, task drivers, images, commands, and secret-bearing fields | Built-in |
 | HashiCorp Packer | Human or `-machine-readable` inspect output | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and explicit inspect limitations | Conservative |
 | HashiCorp Vagrant | Vagrantfile Ruby source | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and unresolved Ruby/configuration merging | Conservative |
+| cloud-init | Cloud-config YAML, scripts, boothooks, includes, or MIME user-data | `readtheplan cloud-init user-data.yml` | Packages, users, SSH trust, files, commands, storage, power state, external content, templates, and merged configuration | Built-in |
 
 ## Maturity meanings
 
@@ -74,7 +75,7 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
   Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, Packer,
-  Vagrant, or provider code.
+  Vagrant, cloud-init user-data, or provider code.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
@@ -102,3 +103,7 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 - Vagrant analysis scans the documented Ruby DSL without executing it. Arbitrary
   Ruby, plugins, box Vagrantfiles, provider configuration, and configuration from
   the Vagrant home directory remain an explicit review boundary.
+- cloud-init analysis requires a documented user-data header, rejects duplicate
+  cloud-config keys, and never executes guest code. MIME parts remain a review
+  boundary until decoded, and callers should additionally run `cloud-init schema`
+  inside their existing validation environment.

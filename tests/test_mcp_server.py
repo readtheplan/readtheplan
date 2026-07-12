@@ -16,6 +16,7 @@ from readtheplan.mcp_server import (
     _working_root,
     agent_gate,
     agent_gate_azure,
+    agent_gate_cloud_init,
     agent_gate_cloudformation,
     agent_gate_kubernetes,
     agent_gate_packer,
@@ -190,6 +191,14 @@ def test_agent_gate_vagrant_supports_framework_checks() -> None:
     assert result["adapter"] == "vagrant"
     assert result["decision"] == "block"
     assert result["total_changes"] == 17
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_cloud_init_supports_framework_checks() -> None:
+    result = agent_gate_cloud_init(str(FIXTURES / "cloud_init_risky.yml"), "soc2")
+    assert result["adapter"] == "cloud-init"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 20
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
@@ -646,6 +655,19 @@ def test_agent_gate_vagrant_rejects_path_outside_root(monkeypatch, tmp_path) -> 
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_cloud_init_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "user-data.yml"
+    outside.write_text("#cloud-config\npackages: [curl]\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_cloud_init(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_kubernetes_allows_path_inside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -818,6 +840,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_packer" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_vagrant" in tool_names
+        assert "agent_gate_cloud_init" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
             "agent_gate_azure",
@@ -835,6 +858,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
+        cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(cloud_init_schema["properties"])
 
         # --- tools/call: analyze_plan ---
         call_req = {

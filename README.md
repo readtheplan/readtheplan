@@ -91,6 +91,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |
 | Packer | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and inspect limitations |
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
+| cloud-init | `readtheplan cloud-init user-data.yml` | Users, SSH, packages, files, commands, storage, power state, includes, scripts, and merged configuration |
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
@@ -106,6 +107,8 @@ Packer consumes saved output from `packer inspect` or
 running a build and explicitly reminds reviewers that inspect is not validation.
 Vagrantfiles are scanned as Ruby source without evaluation; known DSL operations,
 host-command escape hatches, and merged configuration boundaries remain visible.
+cloud-init user-data is parsed without executing guest code; scripts, boothooks,
+commands, credentials, and first-boot system changes use the same gate contract.
 
 ## How it looks
 

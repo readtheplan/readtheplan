@@ -7,6 +7,7 @@ from readtheplan.adapters.ansible import AnsibleAdapter
 from readtheplan.adapters.azure import AzureWhatIfAdapter
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.chef import ChefAdapter
+from readtheplan.adapters.cloud_init import CloudInitAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
@@ -74,6 +75,7 @@ def load_entry_point_adapters() -> list[str]:
 
 # Auto-register builtin adapters, then discover external plugins (best-effort).
 register_adapter(CloudFormationAdapter())
+register_adapter(CloudInitAdapter())
 register_adapter(KubernetesAdapter())
 register_adapter(AnsibleAdapter())
 register_adapter(JenkinsAdapter())
@@ -99,6 +101,7 @@ __all__ = [
     "ChefAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",
+    "CloudInitAdapter",
     "DockerComposeAdapter",
     "JenkinsAdapter",
     "GitHubActionsAdapter",
