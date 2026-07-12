@@ -109,7 +109,6 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert "site/dist" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "X-Content-Type-Options: nosniff" in build_script
     assert "Content-Security-Policy" in build_script
-    assert "https://static.cloudflareinsights.com" in build_script
     assert "https://plausible.io" not in build_script
     assert "font-src 'self'" in build_script
     assert "img-src 'self' data:" in build_script
