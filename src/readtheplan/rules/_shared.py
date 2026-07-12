@@ -543,6 +543,7 @@ from readtheplan.rules import (  # noqa: E402, F401, I001
     grafana,
     k8s,
     kubernetes_provider,
+    newrelic,
     pagerduty,
     tfe,
     vault,

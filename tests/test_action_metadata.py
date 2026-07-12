@@ -55,6 +55,7 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/cloudflare_plan_risky.json" in workflow
     assert "input-file: tests/fixtures/kubernetes_helm_provider_plan_risky.json" in workflow
     assert "input-file: tests/fixtures/pagerduty_provider_plan_risky.json" in workflow
+    assert "input-file: tests/fixtures/newrelic_provider_plan_risky.json" in workflow
     assert "tests/fixtures/invalid_plan.json" in workflow
     assert "tests/fixtures/does-not-exist.json" in workflow
     assert 'fail-on-any-change: "true"' in workflow

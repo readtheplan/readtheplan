@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for all 63 resources in New Relic provider v3.94.0.
+  Account identity and API/Synthetics credentials, alerting/muting, notification
+  workflows and Workflow Automation, dashboards, Synthetics/private locations,
+  cloud-account links, telemetry pipelines/drop/obfuscation/retention, federated
+  logs, fleet agents/configuration, APM settings, SLOs, workloads, and downtime
+  now receive explicit blind-spot, secret-state, data-loss, execution, and recovery semantics.
 - First-party Terraform rules for all 51 resources in PagerDuty provider v3.33.0.
   Users/teams/contact paths, schedules and escalation, services/dependencies,
   event orchestration and legacy rulesets, Automation Actions runners, incident
