@@ -1019,6 +1019,41 @@ def agent_gate_kustomize(
     return analyze_kustomize(data, catalog=_load_catalog_for_tool(framework))
 
 
+def agent_gate_crossplane(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Crossplane package and resource source."""
+    from readtheplan.adapters.crossplane import (
+        CrossplaneAdapter,
+        CrossplaneInputError,
+        analyze_crossplane,
+        parse_crossplane_input,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Crossplane input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_crossplane_input(source)
+    except CrossplaneInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Invalid Crossplane source in {input_path}: {exc}"
+        ) from exc
+    if not CrossplaneAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Crossplane source"
+        )
+    return analyze_crossplane(data, catalog=_load_catalog_for_tool(framework))
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -1317,6 +1352,7 @@ def create_server() -> Any:
     agent_gate_terragrunt_handler = agent_gate_terragrunt
     agent_gate_helm_handler = agent_gate_helm
     agent_gate_kustomize_handler = agent_gate_kustomize
+    agent_gate_crossplane_handler = agent_gate_crossplane
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1601,6 +1637,14 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return a gate for Kustomize source configuration."""
         return agent_gate_kustomize_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_crossplane")
+    def _agent_gate_crossplane_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Crossplane package and resource source."""
+        return agent_gate_crossplane_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(

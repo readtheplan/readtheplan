@@ -11,6 +11,7 @@ from readtheplan.adapters.caddy import CaddyAdapter
 from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloud_init import CloudInitAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
+from readtheplan.adapters.crossplane import CrossplaneAdapter
 from readtheplan.adapters.dockerfile import DockerfileAdapter
 from readtheplan.adapters.envoy import EnvoyAdapter
 from readtheplan.adapters.grafana import GrafanaAdapter
@@ -93,6 +94,7 @@ def load_entry_point_adapters() -> list[str]:
 
 # Auto-register builtin adapters, then discover external plugins (best-effort).
 register_adapter(CloudFormationAdapter())
+register_adapter(CrossplaneAdapter())
 register_adapter(CaddyAdapter())
 register_adapter(AtlantisAdapter())
 register_adapter(CloudInitAdapter())
@@ -146,6 +148,7 @@ __all__ = [
     "ChefAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",
+    "CrossplaneAdapter",
     "CloudInitAdapter",
     "DockerComposeAdapter",
     "DockerfileAdapter",

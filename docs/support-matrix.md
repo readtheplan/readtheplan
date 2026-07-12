@@ -10,9 +10,9 @@ matrix makes those boundaries explicit.
 | CloudFormation | Change Set JSON or old/new template wrapper | `readtheplan cloudformation changes.json` | Structured operations; template wrappers include deep old/new properties | Built-in |
 | Azure Bicep / ARM | Deployment What-If JSON | `readtheplan azure whatif.json` | FullResourcePayloads operations and old/new resource state; conservative ResourceIdOnly handling | Built-in |
 | Kubernetes | JSON/YAML, `kind: List`, multi-doc YAML, or diff wrapper | `readtheplan kubernetes rendered.yaml` | Workload, RBAC, secret, network, storage, custom-resource, and control-plane rules | Built-in |
-| Helm | Rendered manifests from `helm template` | `readtheplan kubernetes rendered.yaml` | Same analysis as Kubernetes; chart template execution stays outside readtheplan | Rendered workflow |
-| Kustomize | Rendered manifests from `kubectl kustomize` | `readtheplan kubernetes rendered.yaml` | Same analysis as Kubernetes | Rendered workflow |
-| Crossplane | Rendered Kubernetes custom resources | `readtheplan kubernetes rendered.yaml` | Known Kubernetes kinds use deep rules; controller-dependent custom resources require review | Conservative |
+| Helm | `Chart.yaml`, values YAML, Go-template source, or rendered manifests | `readtheplan helm Chart.yaml` / `readtheplan kubernetes rendered.yaml` | Dependencies, hooks, dynamic evaluation, files, generated secrets, images, exposure and privilege before rendering; rendered objects receive Kubernetes rules | Built-in |
+| Kustomize | `kustomization.yaml` or rendered manifests | `readtheplan kustomize kustomization.yaml` / `readtheplan kubernetes rendered.yaml` | Resources/bases, remote pinning, patches, generators, images, Helm inflation, plugins and transforms before rendering; rendered objects receive Kubernetes rules | Built-in |
+| Crossplane | Package and resource YAML/JSON | `readtheplan crossplane resources.yaml` | Packages/functions, OCI mutability, image policy, runtime configuration, XRDs, Compositions, MRD activation, provider credentials, managed-resource lifecycle and composite selection | Built-in |
 | Argo CD | Application, ApplicationSet, and AppProject YAML | `readtheplan kubernetes argocd.yaml` | Automated-prune, wildcard project-boundary, source/destination, and deletion semantics | Built-in |
 | Flux CD | Source, Kustomization, HelmRelease, image automation, and notification YAML | `readtheplan kubernetes flux.yaml` | Source trust/immutability, pruning/force, remote targets, decryption, Helm remediation, Git writes, webhook triggers, and deletion semantics | Built-in |
 | Tekton | Task, Pipeline, Run, and Triggers YAML | `readtheplan kubernetes tekton.yaml` | Scripts/commands, image provenance, privileged settings, identities, workspaces, remote resolvers, event ingress, resource templates, and bindings | Built-in |
@@ -72,12 +72,13 @@ Every built-in adapter accepts the same six packaged compliance catalogs: SOC 2,
 ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST. Exact resource mappings
 provide detailed controls where available; an exact-first framework baseline ensures
 new providers, pipeline steps, and custom resources still receive change-management
-evidence instead of an empty control set. CloudFormation, Azure, Kubernetes, and
-Pulumi expose the same optional `framework` parameter through their MCP tools.
+evidence instead of an empty control set. Every file-backed built-in gate exposes
+the same optional `framework` parameter through its MCP tool.
 
 ## Deliberate boundaries
 
 - readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
+  Crossplane packages, providers, or Composition functions,
   Pulumi, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,
   Docker Compose, Dockerfiles, Nomad, Packer,
   Vagrant, cloud-init user-data, or provider code.
@@ -86,6 +87,11 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
   be resolved statically. Those cases must remain `review` rather than receiving
   false-safe classifications.
+- Crossplane analysis recognizes control-plane APIs and common managed/composite
+  resource conventions without pulling OCI packages, resolving provider-specific
+  schemas, invoking functions, or contacting Kubernetes or external cloud APIs.
+  Package signature-verification feature flags, RBAC, admission, provider runtime
+  state, and external-resource state remain deployment-side trust boundaries.
 - AWS CDK currently flows through synthesized CloudFormation. Terragrunt flows
   through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
   those tools expose additional structured semantics worth preserving.

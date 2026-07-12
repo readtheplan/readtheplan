@@ -1,0 +1,203 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+  package: xpkg.crossplane.io/upbound/provider-aws:latest
+  packagePullPolicy: Always
+  revisionActivationPolicy: Automatic
+  skipDependencyResolution: true
+  ignoreCrossplaneConstraints: true
+  runtimeConfigRef:
+    name: privileged-runtime
+  packagePullSecrets:
+    - name: registry-creds
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: ImageConfig
+metadata:
+  name: global-images
+spec:
+  matchImages:
+    - prefix: xpkg.crossplane.io
+  rewriteImage:
+    prefix: mirror.example.com
+  registry:
+    authentication:
+      pullSecretRef:
+        name: registry-creds
+  verification:
+    provider: Cosign
+  runtime:
+    runtimeConfigRef:
+      name: privileged-runtime
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: privileged-runtime
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          hostNetwork: true
+          containers:
+            - name: package-runtime
+              securityContext:
+                privileged: true
+  serviceAccountTemplate:
+    metadata:
+      annotations:
+        iam.gke.io/gcp-service-account: platform@example.iam.gserviceaccount.com
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabases.platform.example
+spec:
+  group: platform.example
+  names:
+    kind: XDatabase
+    plural: xdatabases
+  claimNames:
+    kind: Database
+    plural: databases
+  conversion:
+    strategy: Webhook
+  defaultCompositionRef:
+    name: database-default
+  enforcedCompositionRef:
+    name: database-enforced
+  defaultCompositionUpdatePolicy: Automatic
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: database
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example/v1alpha1
+    kind: XDatabase
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+      credentials:
+        registry:
+          source: Secret
+          secretRef:
+            namespace: crossplane-system
+            name: function-creds
+  writeConnectionSecretsToNamespace: crossplane-system
+---
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: ManagedResourceDefinition
+metadata:
+  name: buckets.s3.aws.m.upbound.io
+spec:
+  state: Active
+---
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: production
+spec:
+  data:
+    database_password: plaintext-production-password
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: database-usage
+spec:
+  of:
+    apiVersion: database.example/v1
+    kind: Database
+    resourceRef:
+      name: production
+  by:
+    apiVersion: app.example/v1
+    kind: Application
+    resourceRef:
+      name: api
+---
+apiVersion: aws.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: production
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: aws-credentials
+      key: creds
+---
+apiVersion: s3.aws.m.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: application-data
+  annotations:
+    crossplane.io/external-name: production-data
+    crossplane.io/paused: "true"
+spec:
+  managementPolicies: ["*"]
+  deletionPolicy: Delete
+  providerConfigRef:
+    name: production
+    kind: ClusterProviderConfig
+  initProvider:
+    objectLockEnabled: true
+  forProvider:
+    region: us-east-1
+    kmsKeyIdRef:
+      name: data-key
+  writeConnectionSecretToRef:
+    namespace: applications
+    name: bucket-connection
+---
+apiVersion: sql.gcp.m.upbound.io/v1beta1
+kind: DatabaseInstance
+metadata:
+  name: imported-database
+spec:
+  managementPolicies: ["Observe"]
+  deletionPolicy: Orphan
+  forProvider:
+    region: us-central1
+---
+apiVersion: platform.example/v1alpha1
+kind: XDatabase
+metadata:
+  namespace: applications
+  name: checkout
+spec:
+  crossplane:
+    compositionSelector:
+      matchLabels:
+        environment: production
+    compositionUpdatePolicy: Automatic
+    compositionRevisionRef:
+      name: database-a1b2c3
+---
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: platform-apis
+spec:
+  dependsOn:
+    - provider: xpkg.crossplane.io/upbound/provider-aws
