@@ -1,0 +1,71 @@
+node:
+  id: edge-proxy
+  cluster: production
+dynamic_resources:
+  ads_config:
+    api_type: GRPC
+    grpc_services:
+      - envoy_grpc:
+          cluster_name: xds_cluster
+  lds_config:
+    ads: {}
+  cds_config:
+    ads: {}
+layered_runtime:
+  layers:
+    - name: disk
+      disk_layer:
+        symlink_root: /srv/runtime/current
+        subdirectory: envoy
+static_resources:
+  listeners:
+    - name: public
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8443
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                http_filters:
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      failure_mode_allow: true
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      inline_code: |
+                        function envoy_on_request(handle)
+                          handle:headers():add("x-risky", "true")
+                        end
+                  - name: envoy.filters.http.router
+  clusters:
+    - name: xds_cluster
+      type: STRICT_DNS
+      load_assignment:
+        cluster_name: xds_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: control.example.com
+                      port_value: 18000
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          common_tls_context:
+            tls_certificates:
+              - certificate_chain:
+                  filename: /etc/envoy/client.crt
+                private_key:
+                  filename: /etc/envoy/client.key
+            validation_context:
+              trusted_ca:
+                filename: /etc/ssl/certs/ca-certificates.crt
+admin:
+  access_log_path: /var/log/envoy-admin.log
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901

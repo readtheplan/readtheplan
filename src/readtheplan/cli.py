@@ -403,6 +403,14 @@ def _build_parser() -> argparse.ArgumentParser:
     haproxy.add_argument("input_file", help="Path to an HAProxy configuration file.")
     haproxy.set_defaults(func=_proxy_config_gate)
 
+    envoy = subparsers.add_parser(
+        "envoy",
+        help="Emit the agent-gate decision for Envoy bootstrap or config_dump data.",
+    )
+    envoy.add_argument("--framework", help="Include checks from a compliance framework.")
+    envoy.add_argument("input_file", help="Path to Envoy YAML/JSON or config_dump JSON.")
+    envoy.set_defaults(func=_envoy_gate)
+
     cloud_init = subparsers.add_parser(
         "cloud-init",
         help="Emit the agent-gate decision for cloud-init user-data.",
@@ -1244,6 +1252,31 @@ def _systemd_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_systemd(data, catalog=catalog))
+
+
+def _envoy_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Envoy bootstrap or config_dump data."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.envoy import EnvoyInputError, analyze_envoy, parse_envoy_config
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_envoy_config(source)
+    except EnvoyInputError as exc:
+        print(f"Error: invalid Envoy configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "envoy":
+        print("Error: input not recognized as Envoy configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_envoy(data, catalog=catalog))
 
 
 def _proxy_config_gate(args: argparse.Namespace) -> int:

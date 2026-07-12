@@ -20,6 +20,7 @@ from readtheplan.mcp_server import (
     agent_gate_cloud_init,
     agent_gate_cloudformation,
     agent_gate_dockerfile,
+    agent_gate_envoy,
     agent_gate_kubernetes,
     agent_gate_packer,
     agent_gate_pipeline,
@@ -189,6 +190,20 @@ def test_agent_gate_atlantis_supports_repo_and_server_config(
     result = agent_gate_atlantis(str(FIXTURES / fixture), "soc2")
     assert result["adapter"] == "atlantis"
     assert result["decision"] == "block"
+    assert result["total_changes"] == total
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize(
+    ("fixture", "total", "decision"),
+    [("envoy_risky.yaml", 20, "block"), ("envoy_config_dump.json", 4, "warn")],
+)
+def test_agent_gate_envoy_supports_bootstrap_and_config_dump(
+    fixture: str, total: int, decision: str
+) -> None:
+    result = agent_gate_envoy(str(FIXTURES / fixture), "soc2")
+    assert result["adapter"] == "envoy"
+    assert result["decision"] == decision
     assert result["total_changes"] == total
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -967,6 +982,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_systemd" in tool_names
         assert "agent_gate_proxy_config" in tool_names
         assert "agent_gate_atlantis" in tool_names
+        assert "agent_gate_envoy" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -993,6 +1009,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "ecosystem", "framework"} <= set(proxy_schema["properties"])
         atlantis_schema = tools_by_name["agent_gate_atlantis"]["inputSchema"]
         assert {"input_path", "framework"} <= set(atlantis_schema["properties"])
+        envoy_schema = tools_by_name["agent_gate_envoy"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(envoy_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 

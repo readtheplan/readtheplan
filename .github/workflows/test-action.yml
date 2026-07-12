@@ -237,6 +237,33 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Envoy configuration
+        id: envoy
+        uses: ./
+        with:
+          tool: envoy
+          input-file: tests/fixtures/envoy_risky.yaml
+          framework: soc2
+
+      - name: Assert Envoy outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.envoy.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.envoy.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.envoy.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "20"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":10,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "envoy"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./
