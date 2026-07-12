@@ -1,0 +1,71 @@
+jenkins:
+  systemMessage: "controller secret: ${ADMIN_PASSWORD}"
+  numExecutors: 2
+  slaveAgentPort: 50000
+  securityRealm:
+    local:
+      allowsSignup: true
+      users:
+        - id: admin
+          password: admin123
+  authorizationStrategy: unsecured
+  crumbIssuer: none
+  nodes:
+    - permanent:
+        name: static-agent
+        remoteFS: /home/jenkins
+        launcher:
+          ssh:
+            host: agent.internal
+            hostKeyVerificationStrategy:
+              nonVerifyingKeyVerificationStrategy: {}
+  clouds:
+    - kubernetes:
+        name: production
+        templates:
+          - name: deploy
+            containers:
+              - name: agent
+                image: jenkins/inbound-agent:latest
+                privileged: true
+                runAsUser: 0
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: AWS_SECRET_ACCESS_KEY
+            value: literal-aws-secret
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: production-admin
+              username: admin
+              password: plaintext-password
+
+unclassified:
+  location:
+    url: http://jenkins.example.test/
+  globalLibraries:
+    libraries:
+      - name: shared-deploy
+        defaultVersion: main
+        implicit: true
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: http://git.example.test/shared-deploy.git
+  scriptApproval:
+    approvedSignatures:
+      - method java.lang.Runtime exec java.lang.String
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+  pluginTransport:
+    skipCertificateCheck: true
+
+jobs:
+  - script: >
+      pipelineJob('deploy') { definition { cps { script('node { sh "./deploy" }') } } }

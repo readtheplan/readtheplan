@@ -64,7 +64,7 @@
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively with first-party AWS, GCP, Azure,
             complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation</strong>,
-            <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Salt</strong>, <strong>Jenkins</strong>,
+            <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Salt</strong>, <strong>Jenkins pipelines/JCasC</strong>,
             <strong>Pulumi</strong>, <strong>Chef</strong>, <strong>Puppet</strong>, <strong>GitHub Actions</strong>,
             <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
             <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, <strong>Dockerfiles</strong>, <strong>Azure Pipelines</strong>, and <strong>Bitbucket Pipelines</strong>. Rendered Helm,
@@ -86,6 +86,7 @@ readtheplan dockerfile Dockerfile
 readtheplan azure-pipelines azure-pipelines.yml
 readtheplan bitbucket-pipelines bitbucket-pipelines.yml
 readtheplan jenkins Jenkinsfile
+readtheplan jenkins-jcasc jenkins.yaml
 readtheplan chef default.rb
 readtheplan puppet site.pp
 readtheplan github-actions .github/workflows/deploy.yml
@@ -101,7 +102,8 @@ readtheplan packer inspect.txt</code></pre>
             conservative scanner. Docker Compose is parsed structurally without resolving external
             files, while Nomad consumes the scheduler's structured job-plan API response and
             Packer consumes saved human or machine-readable inspect output.
-            Jenkins, Chef, Puppet, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning:
+            Jenkinsfiles, Chef, Puppet, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning;
+            Jenkins JCasC YAML is parsed structurally for controller identity, credentials, agents, libraries, and script authority:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
           </p>

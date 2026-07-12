@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terragrunt", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "helm", "kustomize", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terragrunt", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "jenkins-jcasc", "chef", "puppet", "kubernetes", "helm", "kustomize", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -67,6 +67,7 @@ github-actions = "readtheplan.adapters.pipelines:GitHubActionsAdapter"
 gitlab-ci = "readtheplan.adapters.pipelines:GitLabCIAdapter"
 haproxy = "readtheplan.adapters.proxy_configs:HAProxyAdapter"
 jenkins = "readtheplan.adapters.jenkins:JenkinsAdapter"
+jenkins-jcasc = "readtheplan.adapters.jenkins_jcasc:JenkinsJCasCAdapter"
 helm = "readtheplan.adapters.helm:HelmAdapter"
 kubernetes = "readtheplan.adapters.kubernetes:KubernetesAdapter"
 kustomize = "readtheplan.adapters.kustomize:KustomizeAdapter"

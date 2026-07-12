@@ -95,6 +95,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Ansible | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles plus privilege, delegation, check-mode, error, secret-environment, include, identity, and supply-chain semantics |
 | Salt | `readtheplan salt state.sls` | Structured SLS states, destructive functions, command/module execution, secrets, includes, and Jinja rendering |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
+| Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
 | Puppet | `readtheplan puppet site.pp` | Built-in/custom resources, state, identities, classes, lookups/templates, virtual/exported resources, collectors, refresh relationships, and sources/permissions |
 | GitHub Actions | `readtheplan github-actions workflow.yml` | Token permissions, action pinning, secrets, environments, and run steps |

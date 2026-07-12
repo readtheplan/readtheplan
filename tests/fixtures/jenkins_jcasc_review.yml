@@ -1,0 +1,47 @@
+jenkins:
+  systemMessage: "literal interpolation example: ^${ADMIN_PASSWORD}"
+  numExecutors: 0
+  slaveAgentPort: -1
+  securityRealm:
+    ldap:
+      configurations:
+        - server: ldaps://ldap.example.test:636
+          rootDN: dc=example,dc=test
+  authorizationStrategy:
+    globalMatrix:
+      entries:
+        - user:
+            name: admin
+            permissions:
+              - Overall/Administer
+  clouds:
+    - kubernetes:
+        name: production
+        templates:
+          - name: deploy
+            containers:
+              - name: agent
+                image: jenkins/inbound-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                privileged: false
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: SYSTEM
+              id: registry
+              username: robot
+              password: ${REGISTRY_PASSWORD}
+
+unclassified:
+  globalLibraries:
+    libraries:
+      - name: shared-deploy
+        defaultVersion: 0123456789abcdef0123456789abcdef01234567
+        implicit: false
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: https://git.example.test/shared-deploy.git

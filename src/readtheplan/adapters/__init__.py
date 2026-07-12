@@ -19,6 +19,7 @@ from readtheplan.adapters.grafana import GrafanaAdapter
 from readtheplan.adapters.hashicorp import ConsulAdapter, VaultAdapter
 from readtheplan.adapters.helm import HelmAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
+from readtheplan.adapters.jenkins_jcasc import JenkinsJCasCAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
 from readtheplan.adapters.kustomize import KustomizeAdapter
 from readtheplan.adapters.loki import LokiAdapter
@@ -114,6 +115,7 @@ register_adapter(AlertmanagerAdapter())
 register_adapter(OTelCollectorAdapter())
 register_adapter(AnsibleAdapter())
 register_adapter(JenkinsAdapter())
+register_adapter(JenkinsJCasCAdapter())
 register_adapter(ChefAdapter())
 register_adapter(PuppetAdapter())
 register_adapter(PulumiAdapter())
@@ -164,6 +166,7 @@ __all__ = [
     "VaultAdapter",
     "ConsulAdapter",
     "JenkinsAdapter",
+    "JenkinsJCasCAdapter",
     "GitHubActionsAdapter",
     "GitLabCIAdapter",
     "KubernetesAdapter",

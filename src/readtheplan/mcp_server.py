@@ -1368,13 +1368,19 @@ def agent_gate_configuration_management(
     ecosystem: str,
     framework: str | None = None,
 ) -> dict[str, object]:
-    """Return a gate for Ansible, Jenkins, Chef, or Puppet source."""
+    """Return a gate for Ansible, Jenkins/JCasC, Chef, or Puppet source."""
     from readtheplan.adapters.ansible import AnsibleAdapter, analyze_ansible
     from readtheplan.adapters.chef import ChefAdapter, analyze_chef
     from readtheplan.adapters.jenkins import JenkinsAdapter, analyze_jenkins
+    from readtheplan.adapters.jenkins_jcasc import (
+        JenkinsJCasCAdapter,
+        JenkinsJCasCInputError,
+        analyze_jenkins_jcasc,
+        parse_jenkins_jcasc,
+    )
     from readtheplan.adapters.puppet import PuppetAdapter, analyze_puppet
 
-    supported = {"ansible", "jenkins", "chef", "puppet"}
+    supported = {"ansible", "jenkins", "jenkins-jcasc", "chef", "puppet"}
     if ecosystem not in supported:
         raise MCPToolInputError(
             code="INVALID_INPUT",
@@ -1412,6 +1418,16 @@ def agent_gate_configuration_management(
         data = {"plays": plays}
         adapter = AnsibleAdapter()
         analyze = analyze_ansible
+    elif ecosystem == "jenkins-jcasc":
+        try:
+            data = parse_jenkins_jcasc(source)
+        except JenkinsJCasCInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Jenkins JCasC input {input_path}: {exc}",
+            ) from exc
+        adapter = JenkinsJCasCAdapter()
+        analyze = analyze_jenkins_jcasc
     else:
         key, adapter, analyze = {
             "jenkins": ("jenkinsfile", JenkinsAdapter(), analyze_jenkins),
@@ -1904,11 +1920,11 @@ def create_server() -> Any:
         ecosystem: str,
         framework: str | None = None,
     ) -> dict[str, object]:
-        """Return a gate for Ansible, Jenkins, Chef, or Puppet source.
+        """Return a gate for Ansible, Jenkins/JCasC, Chef, or Puppet source.
 
         Args:
             input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
-            ecosystem: ansible, jenkins, chef, or puppet.
+            ecosystem: ansible, jenkins, jenkins-jcasc, chef, or puppet.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(

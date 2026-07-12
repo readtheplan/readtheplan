@@ -33,6 +33,7 @@ matrix makes those boundaries explicit.
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles; privilege, controller delegation, check/error controls, includes, identity/host security, supply-chain inputs, TLS, and secret-bearing environments | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
 | Jenkins | Jenkinsfile | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step scanner covering agents/images/host arguments, libraries, credentials, commands/dynamic Groovy, triggers, approvals, checkout/HTTP/artifacts, and cleanup | Conservative |
+| Jenkins Configuration as Code | JCasC YAML | `readtheplan jenkins-jcasc jenkins.yaml` | Security realms, authorization, credentials, controller executors, nodes/clouds, agent images/privilege, libraries, script approval, Job DSL, endpoints/TLS, and plugin boundaries | Built-in |
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Built-in and namespaced resource/state scanner covering execution/identity/connectivity, classes, dynamic data/templates, custom types, virtual/exported resources, collectors, refresh relationships, sources, and permissions | Conservative |
 | GitHub Actions | Workflow YAML | `readtheplan github-actions workflow.yml` | Token permissions, action/reusable-workflow pinning, secret inputs, environments, and run steps | Built-in |
@@ -100,6 +101,9 @@ the same optional `framework` parameter through its MCP tool.
   boundaries. Chef/Puppet Ruby extensions, custom providers/types, dynamic
   language expressions, Hiera/data bindings, and compiled catalogs are not
   evaluated; recognized boundaries are surfaced for review instead.
+- Jenkins JCasC analysis parses one YAML file without resolving supplementary
+  configuration files, secret-source/environment interpolation, installed-plugin
+  schemas, init hooks, system properties, or live controller state.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
