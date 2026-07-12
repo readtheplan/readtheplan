@@ -1,0 +1,17 @@
+---
+version: 4
+defaults:
+  datadir: ../shared-data
+  data_hash: yaml_data
+hierarchy:
+  - name: Per-node data
+    path: nodes/%{trusted.certname}.yaml
+  - name: External secrets service
+    lookup_key: company_secrets::lookup
+    glob: secrets/%{facts.environment}/*.yaml
+    options:
+      api_token: literal-backend-token
+default_hierarchy:
+  - name: Module defaults
+    data_hash: json_data
+    path: defaults.json

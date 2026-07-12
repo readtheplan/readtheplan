@@ -1391,6 +1391,12 @@ def agent_gate_configuration_management(
         parse_jenkins_jcasc,
     )
     from readtheplan.adapters.puppet import PuppetAdapter, analyze_puppet
+    from readtheplan.adapters.puppet_project import (
+        PuppetProjectAdapter,
+        PuppetProjectInputError,
+        analyze_puppet_project,
+        parse_puppet_project,
+    )
 
     supported = {
         "ansible",
@@ -1400,6 +1406,7 @@ def agent_gate_configuration_management(
         "chef",
         "chef-project",
         "puppet",
+        "puppet-project",
     }
     if ecosystem not in supported:
         raise MCPToolInputError(
@@ -1458,6 +1465,16 @@ def agent_gate_configuration_management(
             ) from exc
         adapter = ChefProjectAdapter()
         analyze = analyze_chef_project
+    elif ecosystem == "puppet-project":
+        try:
+            data = parse_puppet_project(source)
+        except PuppetProjectInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Puppet project input {input_path}: {exc}",
+            ) from exc
+        adapter = PuppetProjectAdapter()
+        analyze = analyze_puppet_project
     elif ecosystem == "jenkins-jcasc":
         try:
             data = parse_jenkins_jcasc(source)
@@ -1965,7 +1982,7 @@ def create_server() -> Any:
         Args:
             input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
             ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, chef,
-                chef-project, or puppet.
+                chef-project, puppet, or puppet-project.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(

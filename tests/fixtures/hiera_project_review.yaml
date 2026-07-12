@@ -1,0 +1,22 @@
+---
+version: 5
+defaults:
+  datadir: data
+  data_hash: yaml_data
+hierarchy:
+  - name: Per-node data
+    path: nodes/%{trusted.certname}.yaml
+  - name: Operating system data
+    paths:
+      - os/%{facts.os.family}.yaml
+      - common.yaml
+  - name: Encrypted secrets
+    lookup_key: eyaml_lookup_key
+    path: secrets.eyaml
+    options:
+      pkcs7_private_key: keys/private_key.pkcs7.pem
+      pkcs7_public_key: keys/public_key.pkcs7.pem
+default_hierarchy:
+  - name: Module defaults
+    data_hash: json_data
+    path: defaults.json

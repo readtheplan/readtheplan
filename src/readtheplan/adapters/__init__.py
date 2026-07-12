@@ -39,6 +39,7 @@ from readtheplan.adapters.pipelines import (
 from readtheplan.adapters.proxy_configs import HAProxyAdapter, NginxAdapter
 from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
+from readtheplan.adapters.puppet_project import PuppetProjectAdapter
 from readtheplan.adapters.salt import SaltAdapter
 from readtheplan.adapters.serverless import SamTemplateAdapter, ServerlessFrameworkAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
@@ -122,6 +123,7 @@ register_adapter(JenkinsJCasCAdapter())
 register_adapter(ChefAdapter())
 register_adapter(ChefProjectAdapter())
 register_adapter(PuppetAdapter())
+register_adapter(PuppetProjectAdapter())
 register_adapter(PulumiAdapter())
 register_adapter(NginxAdapter())
 register_adapter(HAProxyAdapter())
@@ -187,6 +189,7 @@ __all__ = [
     "PackerInspectAdapter",
     "PulumiAdapter",
     "PuppetAdapter",
+    "PuppetProjectAdapter",
     "SaltAdapter",
     "SamTemplateAdapter",
     "ServerlessFrameworkAdapter",

@@ -108,4 +108,5 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "cloudformation",
         "jenkins-jcasc",
         "kubernetes",
+        "puppet-project",
     } <= set(adapters)
