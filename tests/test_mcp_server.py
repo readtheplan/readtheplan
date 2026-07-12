@@ -20,6 +20,7 @@ from readtheplan.mcp_server import (
     agent_gate_bicep,
     agent_gate_caddy,
     agent_gate_cdk,
+    agent_gate_cfengine,
     agent_gate_cloud_init,
     agent_gate_cloudformation,
     agent_gate_configuration_management,
@@ -407,6 +408,15 @@ def test_agent_gate_dsc_supports_framework_checks() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_cfengine_supports_framework_checks() -> None:
+    result = agent_gate_cfengine(str(FIXTURES / "cfengine_policy_risky.cf"), "soc2")
+    assert result["adapter"] == "cfengine"
+    assert result["artifact_type"] == "policy"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 30
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_salt_project() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "salt_master_project_risky.yaml"),
@@ -428,6 +438,17 @@ def test_agent_gate_configuration_management_supports_dsc() -> None:
     )
     assert result["adapter"] == "dsc"
     assert result["artifact_type"] == "powershell"
+    assert result["decision"] == "block"
+
+
+def test_agent_gate_configuration_management_supports_cfengine() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "cfengine_augments_risky.json"),
+        "cfengine",
+        "soc2",
+    )
+    assert result["adapter"] == "cfengine"
+    assert result["artifact_type"] == "augments"
     assert result["decision"] == "block"
 
 
@@ -962,6 +983,19 @@ def test_agent_gate_dsc_rejects_path_outside_root(monkeypatch, tmp_path) -> None
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_cfengine_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "promises.cf"
+    outside.write_text('bundle agent main { reports: "hello"; }\n', encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_cfengine(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_vagrant_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1202,6 +1236,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
+        assert "agent_gate_cfengine" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
@@ -1246,6 +1281,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(nix_schema["properties"])
         dsc_schema = tools_by_name["agent_gate_dsc"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dsc_schema["properties"])
+        cfengine_schema = tools_by_name["agent_gate_cfengine"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(cfengine_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]

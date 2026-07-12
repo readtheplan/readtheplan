@@ -1,0 +1,16 @@
+{
+  "inputs": [
+    "http://user:password@policy.invalid/custom.cf",
+    "services/local.cf"
+  ],
+  "classes": {
+    "services_autorun": ["any::"],
+    "production": ["policy_server::"]
+  },
+  "vars": {
+    "mpf_extra_autorun_inputs": ["$(sys.policy_entry_dirname)/services/custom"],
+    "control_common_bundlesequence_end": ["custom_hardening"],
+    "api_token": "not-a-real-token"
+  },
+  "augments": ["site.json"]
+}

@@ -484,6 +484,19 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     dsc.set_defaults(func=_dsc_gate)
 
+    cfengine = subparsers.add_parser(
+        "cfengine",
+        help="Emit the agent-gate decision for CFEngine policy or Augments data.",
+    )
+    cfengine.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    cfengine.add_argument(
+        "input_file",
+        help="Path to a CFEngine .cf policy or Augments JSON file.",
+    )
+    cfengine.set_defaults(func=_cfengine_gate)
+
     vagrant = subparsers.add_parser(
         "vagrant",
         help="Emit the agent-gate decision for a Vagrantfile.",
@@ -1669,6 +1682,34 @@ def _dsc_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_dsc(data, catalog=catalog))
+
+
+def _cfengine_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for CFEngine policy or Augments data."""
+    from readtheplan.adapters.cfengine import (
+        CFEngineAdapter,
+        CFEngineInputError,
+        analyze_cfengine,
+        parse_cfengine,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_cfengine(source)
+    except CFEngineInputError as exc:
+        print(f"Error: invalid CFEngine input: {exc}", file=sys.stderr)
+        return 1
+    if not CFEngineAdapter().can_handle(data):
+        print("Error: input not recognized as CFEngine configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_cfengine(data, catalog=catalog))
 
 
 def _vagrant_gate(args: argparse.Namespace) -> int:

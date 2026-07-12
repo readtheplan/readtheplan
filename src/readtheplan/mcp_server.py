@@ -724,6 +724,45 @@ def agent_gate_dsc(
     return analyze_dsc(data, catalog=catalog)
 
 
+def agent_gate_cfengine(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local CFEngine policy or Augments data."""
+    from readtheplan.adapters.cfengine import (
+        CFEngineAdapter,
+        CFEngineInputError,
+        analyze_cfengine,
+        parse_cfengine,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read CFEngine input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_cfengine(source)
+    except CFEngineInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid CFEngine input in {input_path}: {exc}",
+        ) from exc
+    if not CFEngineAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as CFEngine configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_cfengine(data, catalog=catalog)
+
+
 def agent_gate_vagrant(
     input_path: str,
     framework: str | None = None,
@@ -1482,13 +1521,19 @@ def agent_gate_configuration_management(
     ecosystem: str,
     framework: str | None = None,
 ) -> dict[str, object]:
-    """Return a gate for Ansible, Jenkins, Chef, Puppet, Salt, or DSC source."""
+    """Return a gate for major configuration-management source formats."""
     from readtheplan.adapters.ansible import AnsibleAdapter, analyze_ansible
     from readtheplan.adapters.ansible_project import (
         AnsibleProjectAdapter,
         AnsibleProjectInputError,
         analyze_ansible_project,
         parse_ansible_project,
+    )
+    from readtheplan.adapters.cfengine import (
+        CFEngineAdapter,
+        CFEngineInputError,
+        analyze_cfengine,
+        parse_cfengine,
     )
     from readtheplan.adapters.chef import ChefAdapter, analyze_chef
     from readtheplan.adapters.chef_project import (
@@ -1535,6 +1580,7 @@ def agent_gate_configuration_management(
         "puppet-project",
         "salt-project",
         "dsc",
+        "cfengine",
     }
     if ecosystem not in supported:
         raise MCPToolInputError(
@@ -1623,6 +1669,16 @@ def agent_gate_configuration_management(
             ) from exc
         adapter = DscAdapter()
         analyze = analyze_dsc
+    elif ecosystem == "cfengine":
+        try:
+            data = parse_cfengine(source)
+        except CFEngineInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid CFEngine input {input_path}: {exc}",
+            ) from exc
+        adapter = CFEngineAdapter()
+        analyze = analyze_cfengine
     elif ecosystem == "jenkins-jcasc":
         try:
             data = parse_jenkins_jcasc(source)
@@ -1729,6 +1785,7 @@ def create_server() -> Any:
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_nix_handler = agent_gate_nix
     agent_gate_dsc_handler = agent_gate_dsc
+    agent_gate_cfengine_handler = agent_gate_cfengine
     agent_gate_vagrant_handler = agent_gate_vagrant
     agent_gate_cloud_init_handler = agent_gate_cloud_init
     agent_gate_systemd_handler = agent_gate_systemd
@@ -1943,6 +2000,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_dsc_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_cfengine")
+    def _agent_gate_cfengine_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for CFEngine policy or Augments JSON without evaluation.
+
+        Args:
+            input_path: Local path to a CFEngine .cf policy or Augments JSON file.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_cfengine_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_vagrant")
     def _agent_gate_vagrant_tool(
@@ -2162,12 +2232,12 @@ def create_server() -> Any:
         ecosystem: str,
         framework: str | None = None,
     ) -> dict[str, object]:
-        """Return a gate for Ansible, Jenkins/JCasC, Chef, Puppet, Salt, or DSC.
+        """Return a gate for supported configuration-management source.
 
         Args:
             input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
             ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, chef,
-                chef-project, puppet, puppet-project, salt-project, or dsc.
+                chef-project, puppet, puppet-project, salt-project, dsc, or cfengine.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(
