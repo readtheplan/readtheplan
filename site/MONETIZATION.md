@@ -24,9 +24,15 @@ License without accounts, subscriptions, usage charges, or feature gates.
 
 ## Cloudflare rollout
 
-As of July 12, 2026, the preferred path is Cloudflare AI Crawl Control. It is
-available on all plans for crawler visibility and allow/block policy, while Pay
-Per Crawl remains a closed beta. The production rollout is:
+As of July 12, 2026, Cloudflare does not provide a conventional display-ad
+network for monetizing human page views. That is a good fit for this policy:
+people remain the audience, not the product. The preferred revenue path is to
+charge selected commercial automation while leaving human access and the open
+source toolchain free.
+
+Cloudflare AI Crawl Control is available on all plans for crawler visibility
+and allow/block policy, while Pay Per Crawl remains a private beta. The
+production rollout is:
 
 1. Confirm `readtheplan.dev` is proxied through Cloudflare and inspect AI Crawl
    Control metrics before changing policy.
@@ -42,15 +48,21 @@ Per Crawl remains a closed beta. The production rollout is:
    reports after launch. Disable charging if it harms human access or project
    discovery.
 
-Do not deploy the x402 proxy merely to imitate Pay Per Crawl. It requires a
-wallet and production payment configuration, and reliable bot-only gating can
-depend on paid Bot Management. Reconsider it only if native Pay Per Crawl is
-unavailable and there is enough crawler volume to justify the added payment and
-security surface.
+Cloudflare's Monetization Gateway is a separate, waitlist-only path for charging
+agents for specific APIs, datasets, or MCP calls over x402. Join the waitlist,
+but do not put the CLI, documentation, public website, or existing MCP tools
+behind it. Reconsider it for new, compute-intensive hosted endpoints only after
+the product is available and wallet ownership, pricing, tax treatment, abuse
+controls, and a permanently free equivalent have been explicitly approved.
+
+Do not deploy a custom x402 proxy merely to imitate either managed product. It
+adds a wallet, payment verification, and production security surface before the
+project has evidence that automated demand will cover those costs.
 
 Official references:
 
 - [AI Crawl Control overview](https://developers.cloudflare.com/ai-crawl-control/)
 - [Manage AI crawlers](https://developers.cloudflare.com/ai-crawl-control/features/manage-ai-crawlers/)
 - [Pay Per Crawl payouts](https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/use-pay-per-crawl-as-site-owner/manage-payouts/)
-- [x402 payment-gated proxy](https://developers.cloudflare.com/agents/tools/payments/x402/charge-for-http-content/)
+- [Monetization Gateway announcement and waitlist](https://blog.cloudflare.com/monetization-gateway/)
+- [x402 payment-gated proxy](https://developers.cloudflare.com/ai-crawl-control/reference/worker-templates/)

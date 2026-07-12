@@ -316,7 +316,7 @@ def test_pricing_is_free_forever_and_has_no_paid_tiers() -> None:
         "$0",
         "No feature or usage paywall",
         "No behavioral advertising",
-        "Optional AI-crawler monetization",
+        "Optional commercial-agent monetization",
     ]:
         assert expected in pricing
 

@@ -353,7 +353,7 @@ for (const token of [
   "$0",
   "No feature or usage paywall",
   "No behavioral advertising",
-  "Optional AI-crawler monetization",
+  "Optional commercial-agent monetization",
 ]) {
   requireIncludes(pricingHtml, token, "free pricing token");
 }
