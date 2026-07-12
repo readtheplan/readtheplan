@@ -1,0 +1,65 @@
+apiVersion: 1
+prune: true
+deleteDatasources:
+  - name: legacy
+    orgId: 1
+datasources:
+  - name: Production Prometheus
+    type: prometheus
+    access: browser
+    url: http://prometheus.internal:9090
+    basicAuth: true
+    editable: true
+    jsonData:
+      tlsSkipVerify: true
+      oauthPassThru: true
+    secureJsonData:
+      basicAuthPassword: ${PROMETHEUS_PASSWORD}
+providers:
+  - name: production
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+groups:
+  - orgId: 1
+    name: production
+    rules: []
+contactPoints:
+  - orgId: 1
+    name: pager
+    receivers:
+      - uid: pager
+        type: webhook
+        secure_settings:
+          url: ${PAGER_WEBHOOK}
+policies:
+  - orgId: 1
+    receiver: pager
+muteTimes:
+  - orgId: 1
+    name: maintenance
+templates:
+  - orgId: 1
+    name: alert-template
+    template: '{{ define "alert" }}alert{{ end }}'
+apps:
+  - type: example-app
+deleteRules:
+  - orgId: 1
+    uid: obsolete
+deleteContactPoints:
+  - orgId: 1
+    uid: old-pager
+deleteMuteTimes:
+  - orgId: 1
+    name: old-window
+roles:
+  - name: super-reader
+    permissions:
+      - action: dashboards:*
+        scope: dashboards:*
+teams:
+  - name: operators
+    roles: [super-reader]

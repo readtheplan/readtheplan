@@ -102,6 +102,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | HAProxy | `readtheplan haproxy haproxy.cfg` | Runtime identity, listeners, TLS verification, upstreams, routing, traffic mutation, management APIs, Lua/program execution, and runtime state |
 | Envoy | `readtheplan envoy envoy.yaml` | Bootstrap/config dumps, listeners, admin, clusters, TLS validation, xDS, runtime layers, secrets, filters, Lua/Wasm, authorization, and active runtime boundaries |
 | Traefik | `readtheplan traefik traefik.yml` | YAML/JSON/TOML static and dynamic config, entry points, providers, API/dashboard, ACME, plugins, routers, middleware, services, and TLS |
+| Grafana | `readtheplan grafana grafana.ini` | Server/auth/security INI plus provisioning YAML/JSON for data sources, dashboards, alerting, plugins, deletion, credentials, and access control |
 | Prometheus | `readtheplan prometheus prometheus.yml` | Scrape jobs, discovery, targets, auth/TLS, relabeling, rule files, remote read/write, Alertmanager delivery, and OTLP ingestion |
 | Alertmanager | `readtheplan alertmanager alertmanager.yml` | Routing, receivers, notification integrations, credentials, TLS, templates, inhibition/time intervals, and event export |
 | OpenTelemetry Collector | `readtheplan otel-collector config.yaml` | Receivers, processors, exporters, connectors, extensions, pipelines, public diagnostics, TLS/auth, credentials, host/file access, and merged config providers |
