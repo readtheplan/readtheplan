@@ -949,6 +949,76 @@ def agent_gate_terragrunt(
     return _agent_gate_terraform_source(input_path, "terragrunt", framework)
 
 
+def agent_gate_helm(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Helm chart metadata, values, or template source."""
+    from readtheplan.adapters.helm import (
+        HelmAdapter,
+        HelmInputError,
+        analyze_helm,
+        parse_helm_source,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Helm input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_helm_source(source)
+    except HelmInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Invalid Helm source in {input_path}: {exc}"
+        ) from exc
+    if not HelmAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Helm source"
+        )
+    return analyze_helm(data, catalog=_load_catalog_for_tool(framework))
+
+
+def agent_gate_kustomize(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Kustomize source configuration."""
+    from readtheplan.adapters.kustomize import (
+        KustomizeAdapter,
+        KustomizeInputError,
+        analyze_kustomize,
+        parse_kustomization,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Kustomize input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_kustomization(source)
+    except KustomizeInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Invalid Kustomize source in {input_path}: {exc}"
+        ) from exc
+    if not KustomizeAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Kustomize source"
+        )
+    return analyze_kustomize(data, catalog=_load_catalog_for_tool(framework))
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -1245,6 +1315,8 @@ def create_server() -> Any:
     agent_gate_caddy_handler = agent_gate_caddy
     agent_gate_terraform_config_handler = agent_gate_terraform_config
     agent_gate_terragrunt_handler = agent_gate_terragrunt
+    agent_gate_helm_handler = agent_gate_helm
+    agent_gate_kustomize_handler = agent_gate_kustomize
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1513,6 +1585,22 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return a gate for Terragrunt HCL/JSON configuration."""
         return agent_gate_terragrunt_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_helm")
+    def _agent_gate_helm_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Helm Chart.yaml, values YAML, or template source."""
+        return agent_gate_helm_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_kustomize")
+    def _agent_gate_kustomize_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Kustomize source configuration."""
+        return agent_gate_kustomize_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(

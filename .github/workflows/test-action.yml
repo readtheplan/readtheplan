@@ -553,6 +553,58 @@ jobs:
           assert payload["decision"] == "block"
           PY
 
+      - name: Run action on Helm template source
+        id: helm
+        uses: ./
+        with:
+          tool: helm
+          input-file: tests/fixtures/helm_template_risky.yaml
+          framework: soc2
+
+      - name: Assert Helm outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.helm.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.helm.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.helm.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "13"
+          test "$RISK_COUNTS" = '{"dangerous":6,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "helm"
+          assert payload["decision"] == "block"
+          PY
+
+      - name: Run action on Kustomize source
+        id: kustomize
+        uses: ./
+        with:
+          tool: kustomize
+          input-file: tests/fixtures/kustomization_risky.yml
+          framework: soc2
+
+      - name: Assert Kustomize outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.kustomize.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.kustomize.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.kustomize.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "29"
+          test "$RISK_COUNTS" = '{"dangerous":15,"irreversible":0,"review":14,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "kustomize"
+          assert payload["decision"] == "block"
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

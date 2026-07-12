@@ -479,6 +479,22 @@ def _build_parser() -> argparse.ArgumentParser:
     terragrunt.add_argument("input_file", help="Path to terragrunt.hcl or JSON configuration.")
     terragrunt.set_defaults(func=_terraform_config_gate)
 
+    helm = subparsers.add_parser(
+        "helm",
+        help="Emit the agent-gate decision for Helm Chart.yaml, values YAML, or template source.",
+    )
+    helm.add_argument("--framework", help="Include checks from a compliance framework.")
+    helm.add_argument("input_file", help="Path to Chart.yaml, values YAML, or a Helm template.")
+    helm.set_defaults(func=_helm_gate)
+
+    kustomize = subparsers.add_parser(
+        "kustomize",
+        help="Emit the agent-gate decision for a kustomization YAML file.",
+    )
+    kustomize.add_argument("--framework", help="Include checks from a compliance framework.")
+    kustomize.add_argument("input_file", help="Path to kustomization.yaml.")
+    kustomize.set_defaults(func=_kustomize_gate)
+
     prometheus = subparsers.add_parser(
         "prometheus",
         help="Emit the agent-gate decision for Prometheus configuration YAML.",
@@ -1512,6 +1528,60 @@ def _terraform_config_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_terraform_config(data, catalog=catalog))
+
+
+def _helm_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Helm chart metadata, values, or template source."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.helm import HelmInputError, analyze_helm, parse_helm_source
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_helm_source(source)
+    except HelmInputError as exc:
+        print(f"Error: invalid Helm source: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "helm":
+        print("Error: input not recognized as Helm source", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_helm(data, catalog=catalog))
+
+
+def _kustomize_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Kustomize source configuration."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.kustomize import (
+        KustomizeInputError,
+        analyze_kustomize,
+        parse_kustomization,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_kustomization(source)
+    except KustomizeInputError as exc:
+        print(f"Error: invalid Kustomize source: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "kustomize":
+        print("Error: input not recognized as Kustomize source", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_kustomize(data, catalog=catalog))
 
 
 def _otel_collector_gate(args: argparse.Namespace) -> int:

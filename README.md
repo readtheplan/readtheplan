@@ -79,7 +79,9 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Terragrunt | `readtheplan terragrunt terragrunt.hcl` | HCL/JSON root modules, hooks, CLI arguments, remote state, includes, dependencies/mocks, generated files, inputs, assumed identity, engines, and evaluation functions |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
 | Azure Bicep / ARM | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
-| Kubernetes / Helm / Kustomize / Crossplane / Argo CD / Flux / Tekton | `readtheplan kubernetes rendered.yaml` | JSON/YAML, multi-doc, RBAC, custom-resource, GitOps, and cloud-native pipeline rules |
+| Kubernetes / Crossplane / Argo CD / Flux / Tekton | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, custom-resource, GitOps, and cloud-native pipeline rules |
+| Helm source | `readtheplan helm Chart.yaml` | Chart metadata, values, and Go-template source with dependencies, hooks, dynamic evaluation, exposure, privilege, and secret rules |
+| Kustomize source | `readtheplan kustomize kustomization.yaml` | Resources/bases, remote pinning, patches, generators, image overrides, Helm inflation, plugins, and transforms |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
 | Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |
 | Salt | `readtheplan salt state.sls` | Structured SLS states, destructive functions, command/module execution, secrets, includes, and Jinja rendering |

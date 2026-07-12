@@ -1,0 +1,20 @@
+image:
+  repository: example/platform
+  tag: latest
+service:
+  type: LoadBalancer
+  loadBalancerSourceRanges:
+    - 0.0.0.0/0
+ingress:
+  enabled: true
+  endpoint: http://gateway.example.com
+securityContext:
+  privileged: true
+  allowPrivilegeEscalation: true
+  runAsNonRoot: false
+  readOnlyRootFilesystem: false
+serviceAccount:
+  automountServiceAccountToken: true
+database:
+  password: development-password
+  existingSecret: production-database

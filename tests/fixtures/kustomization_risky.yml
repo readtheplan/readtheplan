@@ -1,0 +1,64 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: production
+namePrefix: prod-
+resources:
+  - ../base
+  - https://github.com/example/platform//base
+  - https://github.com/example/pinned//base?ref=v1.2.3
+components:
+  - ../components/monitoring
+patches:
+  - path: deployment-patch.yml
+patchesJson6902:
+  - target:
+      version: v1
+      kind: Service
+      name: public
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: LoadBalancer
+replacements:
+  - source:
+      kind: ConfigMap
+      name: settings
+      fieldPath: data.endpoint
+    targets: []
+configMapGenerator:
+  - name: config
+    files: [application.properties]
+    literals:
+      - API_TOKEN=development-token
+secretGenerator:
+  - name: credentials
+    literals:
+      - password=development-password
+    files: [private-key.pem]
+generatorOptions:
+  disableNameSuffixHash: true
+images:
+  - name: platform
+    newName: example/platform
+    newTag: latest
+  - name: sidecar
+    newName: example/sidecar
+    digest: sha256:1234567890abcdef
+helmCharts:
+  - name: ingress
+    repo: http://charts.example.com
+    releaseName: ingress
+    valuesInline:
+      service:
+        type: LoadBalancer
+generators:
+  - plugin-generator.yml
+transformers:
+  - plugin-transformer.yml
+openapi:
+  path: schema.json
+vars:
+  - name: LEGACY_VALUE
+replicas:
+  - name: platform
+    count: 1
