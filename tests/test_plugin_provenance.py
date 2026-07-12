@@ -110,6 +110,7 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "jenkins-jcasc",
         "kubernetes",
         "nix",
+        "dsc",
         "puppet-project",
         "salt-project",
     } <= set(adapters)
