@@ -63,7 +63,7 @@
           </p>
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively. Built-in adapters cover <strong>CloudFormation</strong>,
-            <strong>Azure Bicep/ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
+            <strong>Azure Bicep/ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Salt</strong>, <strong>Jenkins</strong>,
             <strong>Pulumi</strong>, <strong>Chef</strong>, <strong>Puppet</strong>, <strong>GitHub Actions</strong>,
             <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
             <strong>HashiCorp Nomad</strong>, and <strong>HashiCorp Packer</strong>. Rendered Helm,
@@ -77,6 +77,7 @@ readtheplan azure whatif.json
 readtheplan kubernetes rendered.yaml
 readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
+readtheplan salt state.sls
 readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
 readtheplan puppet site.pp
@@ -87,8 +88,9 @@ readtheplan docker-compose compose.yml
 readtheplan nomad plan-response.json
 readtheplan packer inspect.txt</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Ansible consumes
-            YAML structurally. Docker Compose is parsed structurally without resolving external
+            CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Ansible and
+            static Salt SLS input consume YAML structurally; templated Salt input falls back to a
+            conservative scanner. Docker Compose is parsed structurally without resolving external
             files, while Nomad consumes the scheduler's structured job-plan API response and
             Packer consumes saved human or machine-readable inspect output.
             Jenkins, Chef, Puppet, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning:

@@ -17,6 +17,7 @@ matrix makes those boundaries explicit.
 | Flux CD | Source, Kustomization, HelmRelease, image automation, and notification YAML | `readtheplan kubernetes flux.yaml` | Source trust/immutability, pruning/force, remote targets, decryption, Helm remediation, Git writes, webhook triggers, and deletion semantics | Built-in |
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays, tasks, nested blocks, handlers, and roles | Built-in |
+| Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
 | Jenkins | Jenkinsfile | `readtheplan jenkins Jenkinsfile` | Conservative recognized-step scanner; arbitrary execution and credentials block | Conservative |
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Conservative resource/action scanner; arbitrary execution blocks | Conservative |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Conservative resource/state scanner; execution and destructive state block | Conservative |
@@ -70,7 +71,7 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
 
 ## Deliberate boundaries
 
-- readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Helm, Kustomize,
+- readtheplan does not execute Jenkins, Chef, Puppet, Ansible, Salt, Helm, Kustomize,
   Pulumi, GitHub Actions, GitLab CI, CircleCI, Docker Compose, Nomad, Packer, or provider code.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
@@ -93,3 +94,6 @@ Pulumi expose the same optional `framework` parameter through their MCP tools.
   enumerates components but does not validate plugin-specific configuration, so
   the gate always retains an explicit review finding and recommends separate
   `packer validate` execution in the caller's trust boundary.
+- Salt analysis parses static SLS YAML with duplicate-key rejection. Jinja-templated
+  SLS files receive conservative line-based state discovery plus an unresolved
+  renderer finding; calls such as `salt['cmd.run'](...)` during rendering block.
