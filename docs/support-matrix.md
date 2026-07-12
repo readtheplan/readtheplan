@@ -12,6 +12,7 @@ matrix makes those boundaries explicit.
 | Helm | Rendered manifests from `helm template` | `readtheplan kubernetes rendered.yaml` | Same analysis as Kubernetes; chart template execution stays outside readtheplan | Rendered workflow |
 | Kustomize | Rendered manifests from `kubectl kustomize` | `readtheplan kubernetes rendered.yaml` | Same analysis as Kubernetes | Rendered workflow |
 | Crossplane | Rendered Kubernetes custom resources | `readtheplan kubernetes rendered.yaml` | Known Kubernetes kinds use deep rules; controller-dependent custom resources require review | Conservative |
+| Argo CD | Application, ApplicationSet, and AppProject YAML | `readtheplan kubernetes argocd.yaml` | Automated-prune, wildcard project-boundary, source/destination, and deletion semantics | Built-in |
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays, tasks, nested blocks, handlers, and roles | Built-in |
 | Jenkins | Jenkinsfile | `readtheplan jenkins Jenkinsfile` | Conservative recognized-step scanner; arbitrary execution and credentials block | Conservative |
@@ -64,3 +65,6 @@ when intentionally selecting the latest PyPI release instead.
 - AWS CDK currently flows through synthesized CloudFormation. Terragrunt flows
   through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
   those tools expose additional structured semantics worth preserving.
+- Flux custom resources currently receive conservative custom-resource review.
+  Argo CD has deeper first-party GitOps policy semantics because its project and
+  automated-pruning fields materially change deployment boundaries.

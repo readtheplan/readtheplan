@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: payments
+  namespace: argocd
+spec:
+  sourceRepos:
+    - https://github.com/example/payments.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: payments
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payments-production
+  namespace: argocd
+spec:
+  project: payments
+  source:
+    repoURL: https://github.com/example/payments.git
+    targetRevision: main
+    path: deploy/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: payments
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
