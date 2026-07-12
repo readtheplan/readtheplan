@@ -11,7 +11,8 @@ matrix makes those boundaries explicit.
 | CloudFormation | Change Set JSON or old/new template wrapper | `readtheplan cloudformation changes.json` | Structured operations; template wrappers include deep old/new properties | Built-in |
 | Serverless Framework | `serverless.yml` service source | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity and artifacts, IAM, functions, events, plugins, external variables, packaging, extensions and embedded CloudFormation | Built-in |
 | AWS SAM | SAM template YAML/JSON | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code sources, policies, event ingress, APIs, state machines, nested apps, Connectors, custom builds and lifecycle policies | Built-in |
-| Azure Bicep / ARM | Deployment What-If JSON | `readtheplan azure whatif.json` | FullResourcePayloads operations and old/new resource state; conservative ResourceIdOnly handling | Built-in |
+| Azure Bicep source | `.bicep` source | `readtheplan bicep main.bicep` | Resources/modules, broad scopes, RBAC/policy/locks, Deployment Scripts, public access, secure parameters/outputs, secret/file functions, and compiler boundaries | Conservative |
+| Azure Bicep / ARM What-If | Deployment What-If JSON | `readtheplan azure whatif.json` | FullResourcePayloads operations and old/new resource state; conservative ResourceIdOnly handling | Built-in |
 | Kubernetes | JSON/YAML, `kind: List`, multi-doc YAML, or diff wrapper | `readtheplan kubernetes rendered.yaml` | Workload, RBAC, secret, network, storage, custom-resource, and control-plane rules | Built-in |
 | Helm | `Chart.yaml`, values YAML, Go-template source, or rendered manifests | `readtheplan helm Chart.yaml` / `readtheplan kubernetes rendered.yaml` | Dependencies, hooks, dynamic evaluation, files, generated secrets, images, exposure and privilege before rendering; rendered objects receive Kubernetes rules | Built-in |
 | Kustomize | `kustomization.yaml` or rendered manifests | `readtheplan kustomize kustomization.yaml` / `readtheplan kubernetes rendered.yaml` | Resources/bases, remote pinning, patches, generators, images, Helm inflation, plugins and transforms before rendering; rendered objects receive Kubernetes rules | Built-in |
@@ -119,6 +120,10 @@ the same optional `framework` parameter through its MCP tool.
   executing plugins or custom builders, or applying CloudFormation macros. Run
   the corresponding synthesized CloudFormation change set through the existing
   CloudFormation gate for operation-level confirmation before deployment.
+- Bicep source analysis never invokes the compiler, restores registry modules,
+  reads referenced files, or contacts Azure. Run `bicep lint`/`bicep build`, then
+  submit Azure What-If `FullResourcePayloads` JSON to the `azure` gate for the
+  authoritative operation-level create/modify/delete prediction.
 - AWS CDK currently flows through synthesized CloudFormation. Terragrunt flows
   through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
   those tools expose additional structured semantics worth preserving.

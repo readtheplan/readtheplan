@@ -17,6 +17,7 @@ from readtheplan.mcp_server import (
     agent_gate,
     agent_gate_atlantis,
     agent_gate_azure,
+    agent_gate_bicep,
     agent_gate_caddy,
     agent_gate_cloud_init,
     agent_gate_cloudformation,
@@ -78,6 +79,13 @@ def test_agent_gate_pulumi_supports_framework_checks() -> None:
     assert result["adapter"] == "pulumi"
     assert result["decision"] == "block"
     assert any(str(check).startswith("rtp.control.soc2.") for check in result["required_checks"])
+
+
+def test_agent_gate_bicep_supports_source_and_framework_checks() -> None:
+    result = agent_gate_bicep(str(FIXTURES / "bicep_source_risky.bicep"), "soc2")
+    assert result["adapter"] == "bicep"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
 def test_agent_gate_pulumi_unknown_provider_gets_framework_baseline(
@@ -1104,6 +1112,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate" in tool_names
         assert "agent_gate_cloudformation" in tool_names
         assert "agent_gate_azure" in tool_names
+        assert "agent_gate_bicep" in tool_names
         assert "agent_gate_kubernetes" in tool_names
         assert "agent_gate_pulumi" in tool_names
         assert "agent_gate_pipeline" in tool_names
@@ -1136,6 +1145,7 @@ def test_stdio_server_tools_list() -> None:
         for tool_name in (
             "agent_gate_cloudformation",
             "agent_gate_azure",
+            "agent_gate_bicep",
             "agent_gate_kubernetes",
             "agent_gate_pulumi",
         ):

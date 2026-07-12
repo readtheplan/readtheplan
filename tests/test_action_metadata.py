@@ -21,7 +21,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "input-file" in action
     assert "tool:" in action
     assert (
-        "terraform-config|terragrunt|cloudformation|azure|kubernetes|helm|kustomize|crossplane|serverless|sam|pulumi|"
+        "terraform-config|terragrunt|cloudformation|azure|bicep|kubernetes|helm|kustomize|crossplane|serverless|sam|pulumi|"
         "ansible|jenkins|chef|puppet|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "atlantis|"
@@ -81,6 +81,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/pulumi_preview_mixed.json" in workflow
     assert "tool: azure" in workflow
     assert "input-file: tests/fixtures/azure_whatif_mixed.json" in workflow
+    assert "tool: bicep" in workflow
+    assert "input-file: tests/fixtures/bicep_source_risky.bicep" in workflow
     assert "tool: github-actions" in workflow
     assert "input-file: tests/fixtures/github_actions_deploy.yml" in workflow
     assert "tool: docker-compose" in workflow

@@ -876,6 +876,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Bicep source
+        id: bicep
+        uses: ./
+        with:
+          tool: bicep
+          input-file: tests/fixtures/bicep_source_risky.bicep
+          framework: soc2
+
+      - name: Assert Bicep outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.bicep.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.bicep.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.bicep.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "14"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":1,"review":4,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "bicep"
+          assert payload["decision"] == "block"
+          assert "Bicep source analysis" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Flux manifests
         id: flux
         uses: ./

@@ -101,4 +101,4 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "tfe",
         "vault",
     } <= set(rules)
-    assert {"cloudformation", "kubernetes"} <= set(adapters)
+    assert {"bicep", "cloudformation", "kubernetes"} <= set(adapters)

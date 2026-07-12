@@ -97,7 +97,7 @@ readtheplan mcp</pre>
           <p class="utility-copy">
             The preview exposes Terraform <code>analyze_plan</code> and
             <code>agent_gate</code>, plus <code>agent_gate_cloudformation</code>,
-            <code>agent_gate_azure</code>, <code>agent_gate_kubernetes</code>,
+            <code>agent_gate_azure</code>, <code>agent_gate_bicep</code>, <code>agent_gate_kubernetes</code>,
             <code>agent_gate_helm</code>, <code>agent_gate_kustomize</code>,
             <code>agent_gate_crossplane</code>, <code>agent_gate_serverless</code>,
             <code>agent_gate_sam</code>,
@@ -230,7 +230,7 @@ readtheplan mcp</pre>
             to one Terraform repository, tune review prompts, and decide which workflows
             belong in CLI evidence rather than the preview MCP tool.
             Current MCP gates normalize Terraform/OpenTofu plans and configuration,
-            Terragrunt, CloudFormation, Azure What-If,
+            Terragrunt, CloudFormation, Bicep source, Azure What-If,
             Kubernetes (including Tekton), Pulumi, GitHub Actions, GitLab CI, CircleCI,
             Ansible, Jenkins, Chef, Puppet,
             Docker Compose, Nomad, Packer, Salt, Vagrant, cloud-init, systemd,

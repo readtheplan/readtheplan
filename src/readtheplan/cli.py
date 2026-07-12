@@ -198,6 +198,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     azure.set_defaults(func=_azure_gate)
 
+    bicep = subparsers.add_parser(
+        "bicep",
+        help="Emit the agent-gate decision for Azure Bicep source.",
+    )
+    bicep.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    bicep.add_argument("input_file", help="Path to an Azure Bicep source file.")
+    bicep.set_defaults(func=_bicep_gate)
+
     kubernetes = subparsers.add_parser(
         "kubernetes",
         help="Emit the agent-gate decision for a Kubernetes manifest diff.",
@@ -1005,6 +1019,35 @@ def _azure_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_azure_whatif(data, catalog=catalog))
+
+
+def _bicep_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Azure Bicep source."""
+    from readtheplan.adapters.bicep import (
+        BicepAdapter,
+        BicepInputError,
+        analyze_bicep,
+        parse_bicep_source,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_bicep_source(source)
+    except BicepInputError as exc:
+        print(f"Error: invalid Bicep source: {exc}", file=sys.stderr)
+        return 1
+    if not BicepAdapter().can_handle(data):
+        print("Error: input not recognized as Azure Bicep source", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_bicep(data, catalog=catalog))
 
 
 def _ansible_gate(args: argparse.Namespace) -> int:
