@@ -9,6 +9,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Terraform/OpenTofu dependency-lock gates across the CLI, GitHub Action,
+  and MCP. Strict `.terraform.lock.hcl` parsing now covers duplicate or malformed
+  blocks, exact provider selection, constraints, origin registries, pre-release
+  versions, h1/zh checksum validity and coverage, unknown schemes, custom/local
+  origins, and explicit signer/platform/module/read-only-mode boundaries.
 - Native CFEngine gates across the CLI, GitHub Action, and MCP. Non-executing
   policy scanning covers bundles, promise types, policy inputs and execution
   order, commands/files/packages/services/users/storage/access, dynamic

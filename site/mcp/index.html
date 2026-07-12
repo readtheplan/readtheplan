@@ -101,7 +101,7 @@ readtheplan mcp</pre>
             <code>agent_gate_cdk</code>, <code>agent_gate_kubernetes</code>,
             <code>agent_gate_helm</code>, <code>agent_gate_kustomize</code>,
             <code>agent_gate_crossplane</code>, <code>agent_gate_serverless</code>,
-              <code>agent_gate_sam</code>, <code>agent_gate_nix</code>, <code>agent_gate_dsc</code>, <code>agent_gate_cfengine</code>,
+              <code>agent_gate_sam</code>, <code>agent_gate_nix</code>, <code>agent_gate_dsc</code>, <code>agent_gate_cfengine</code>, <code>agent_gate_terraform_lock</code>,
             <code>agent_gate_configuration_management</code>, and
             <code>agent_gate_pulumi</code>.
             Every tool accepts a local input path.
@@ -230,7 +230,7 @@ readtheplan mcp</pre>
             Pilot setup can help an infra or compliance team connect a local MCP client
             to one Terraform repository, tune review prompts, and decide which workflows
             belong in CLI evidence rather than the preview MCP tool.
-            Current MCP gates normalize Terraform/OpenTofu plans and configuration,
+            Current MCP gates normalize Terraform/OpenTofu plans, configuration, and provider locks,
             Terragrunt, CloudFormation, AWS CDK Cloud Assemblies/assets, Bicep source, Azure What-If,
             Kubernetes (including Tekton), Pulumi, GitHub Actions, GitLab CI, CircleCI,
             Ansible playbooks/project configuration (<code>ansible-project</code>), Jenkins pipelines/JCasC (<code>jenkins-jcasc</code>), Chef recipes/projects (<code>chef-project</code>), Puppet manifests/projects (<code>puppet-project</code>), Salt states/project configuration (<code>salt-project</code>),

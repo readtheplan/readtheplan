@@ -556,6 +556,35 @@ jobs:
           assert payload["decision"] == "block"
           PY
 
+      - name: Run action on Terraform/OpenTofu dependency lock
+        id: terraform_lock
+        uses: ./
+        with:
+          tool: terraform-lock
+          input-file: tests/fixtures/terraform_lock_risky.hcl
+          framework: soc2
+
+      - name: Assert Terraform/OpenTofu dependency lock outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.terraform_lock.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.terraform_lock.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.terraform_lock.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "14"
+          test "$RISK_COUNTS" = '{"dangerous":6,"irreversible":0,"review":8,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "terraform-lock"
+          assert payload["provider_count"] == 3
+          assert payload["decision"] == "block"
+          assert "exact version" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Terragrunt configuration
         id: terragrunt
         uses: ./

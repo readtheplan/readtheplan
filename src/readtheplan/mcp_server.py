@@ -1134,6 +1134,46 @@ def agent_gate_terraform_config(
     return _agent_gate_terraform_source(input_path, "terraform-config", framework)
 
 
+def agent_gate_terraform_lock(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for a Terraform/OpenTofu dependency lock."""
+    from readtheplan.adapters.terraform_lock import (
+        TerraformLockAdapter,
+        TerraformLockInputError,
+        analyze_terraform_lock,
+        parse_terraform_lock,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read Terraform/OpenTofu lock input {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_terraform_lock(source)
+    except TerraformLockInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid dependency lock in {input_path}: {exc}",
+        ) from exc
+    if not TerraformLockAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as a Terraform/OpenTofu dependency lock",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_terraform_lock(data, catalog=catalog)
+
+
 def agent_gate_terragrunt(
     input_path: str,
     framework: str | None = None,
@@ -1799,6 +1839,7 @@ def create_server() -> Any:
     agent_gate_loki_handler = agent_gate_loki
     agent_gate_caddy_handler = agent_gate_caddy
     agent_gate_terraform_config_handler = agent_gate_terraform_config
+    agent_gate_terraform_lock_handler = agent_gate_terraform_lock
     agent_gate_terragrunt_handler = agent_gate_terragrunt
     agent_gate_helm_handler = agent_gate_helm
     agent_gate_kustomize_handler = agent_gate_kustomize
@@ -2121,6 +2162,19 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return a gate for Terraform configuration HCL/JSON."""
         return agent_gate_terraform_config_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_terraform_lock")
+    def _agent_gate_terraform_lock_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for a Terraform/OpenTofu dependency lock file.
+
+        Args:
+            input_path: Local path to .terraform.lock.hcl.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_terraform_lock_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_terragrunt")
     def _agent_gate_terragrunt_tool(

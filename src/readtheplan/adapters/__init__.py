@@ -49,6 +49,7 @@ from readtheplan.adapters.salt_project import SaltProjectAdapter
 from readtheplan.adapters.serverless import SamTemplateAdapter, ServerlessFrameworkAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
 from readtheplan.adapters.terraform_config import TerraformConfigAdapter, TerragruntAdapter
+from readtheplan.adapters.terraform_lock import TerraformLockAdapter
 from readtheplan.adapters.traefik import TraefikAdapter
 from readtheplan.adapters.vagrant import VagrantAdapter
 from readtheplan.adapters.workloads import DockerComposeAdapter, NomadPlanAdapter
@@ -153,6 +154,7 @@ register_adapter(ServerlessFrameworkAdapter())
 register_adapter(SamTemplateAdapter())
 register_adapter(SystemdUnitAdapter())
 register_adapter(TerraformConfigAdapter())
+register_adapter(TerraformLockAdapter())
 register_adapter(TerragruntAdapter())
 register_adapter(TraefikAdapter())
 register_adapter(VagrantAdapter())
@@ -210,6 +212,7 @@ __all__ = [
     "ServerlessFrameworkAdapter",
     "SystemdUnitAdapter",
     "TerraformConfigAdapter",
+    "TerraformLockAdapter",
     "TerragruntAdapter",
     "TraefikAdapter",
     "VagrantAdapter",

@@ -62,7 +62,7 @@
             mapping, agent gating, evidence envelopes — works identically regardless of the source tool.
           </p>
           <p style="color:var(--muted);margin:12px 0 0">
-            Terraform and OpenTofu work natively with first-party AWS, GCP, Azure,
+            Terraform and OpenTofu work natively with strict dependency-lock analysis and first-party AWS, GCP, Azure,
             complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation and AWS CDK</strong>,
             <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible playbooks and project configuration</strong>, <strong>Salt states and project configuration</strong>, <strong>Nix flakes/locks and NixOS modules</strong>, <strong>Microsoft DSC and PowerShell DSC</strong>, <strong>CFEngine policy and Augments</strong>, <strong>Jenkins pipelines/JCasC</strong>,
             <strong>Pulumi</strong>, <strong>Chef recipes and projects</strong>, <strong>Puppet manifests and projects</strong>, <strong>GitHub Actions</strong>,
@@ -75,6 +75,7 @@
           <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
 readtheplan cdk cdk.out/manifest.json
+readtheplan terraform-lock .terraform.lock.hcl
 readtheplan azure whatif.json
 readtheplan bicep main.bicep
 readtheplan kubernetes rendered.yaml
@@ -108,7 +109,8 @@ readtheplan packer inspect.txt</code></pre>
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
             source receives conservative static analysis before compilation. Ansible playbooks,
             Galaxy requirements, static Salt SLS input, and rendered Salt master/minion, top, and
-            roster files consume YAML structurally; Nix lock graphs use strict JSON while flake and
+            roster files consume YAML structurally; Terraform/OpenTofu dependency locks use strict
+            literal HCL validation; Nix lock graphs use strict JSON while flake and
             NixOS module source uses a conservative syntax-aware scanner; DSC v3 documents use strict
             JSON/YAML and PowerShell DSC source is scanned without execution; CFEngine policy source
             is scanned without evaluation and Augments use strict JSON; <code>ansible.cfg</code> is parsed as INI,
