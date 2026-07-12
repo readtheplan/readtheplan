@@ -1,0 +1,61 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  filelog/host:
+    include: [/var/log/**/*.log]
+    storage: file_storage
+processors:
+  memory_limiter:
+    limit_mib: 512
+  batch: {}
+  transform/risky:
+    trace_statements:
+      - context: span
+        statements: ['set(attributes["tenant"], "production")']
+exporters:
+  otlp/remote:
+    endpoint: telemetry.example.test:4317
+    headers:
+      Authorization: Bearer fixture-token
+    tls:
+      insecure_skip_verify: true
+  debug:
+    verbosity: detailed
+connectors:
+  routing:
+    default_pipelines: [traces/default]
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  basicauth/server:
+    htpasswd:
+      inline: "admin:fixture-password"
+  file_storage:
+    directory: /var/lib/otelcol
+service:
+  extensions: [health_check, pprof, basicauth/server, missing_extension]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, transform/risky]
+      exporters: [routing, otlp/remote]
+    traces/default:
+      receivers: [routing, missing_receiver]
+      exporters: [debug]
+  telemetry:
+    logs:
+      level: debug
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+config_source: ${file:/etc/otelcol/extra.yaml}

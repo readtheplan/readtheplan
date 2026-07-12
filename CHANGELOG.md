@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native OpenTelemetry Collector configuration gates across the CLI, generalized
+  Action, and local MCP server. Receivers, host/file collection, public endpoints,
+  processors, exporters, connectors, extensions, diagnostics, TLS/auth, secrets,
+  service pipeline references, self-telemetry, and file/HTTP/environment config
+  providers feed the shared risk contract.
 - Native Prometheus and Alertmanager configuration gates across the CLI,
   generalized Action, and local MCP server. Scrape/discovery targets, rule files,
   relabeling, remote read/write, HTTP auth/TLS, OTLP, alert routing, notification

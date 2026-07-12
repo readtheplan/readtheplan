@@ -688,6 +688,43 @@ def agent_gate_systemd(
     return analyze_systemd(data, catalog=catalog)
 
 
+def agent_gate_otel_collector(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for OpenTelemetry Collector YAML."""
+    from readtheplan.adapters.otel_collector import (
+        OTelCollectorAdapter,
+        OTelCollectorInputError,
+        analyze_otel_collector,
+        parse_otel_collector_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Collector input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_otel_collector_config(source)
+    except OTelCollectorInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Collector configuration in {input_path}: {exc}",
+        ) from exc
+    if not OTelCollectorAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Collector configuration"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_otel_collector(data, catalog=catalog)
+
+
 def agent_gate_monitoring(
     input_path: str,
     ecosystem: str,
@@ -938,6 +975,7 @@ def create_server() -> Any:
     agent_gate_systemd_handler = agent_gate_systemd
     agent_gate_envoy_handler = agent_gate_envoy
     agent_gate_monitoring_handler = agent_gate_monitoring
+    agent_gate_otel_collector_handler = agent_gate_otel_collector
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1129,6 +1167,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_systemd_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_otel_collector")
+    def _agent_gate_otel_collector_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for OpenTelemetry Collector YAML.
+
+        Args:
+            input_path: Local path to Collector configuration YAML.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_otel_collector_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(

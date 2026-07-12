@@ -427,6 +427,16 @@ def _build_parser() -> argparse.ArgumentParser:
     alertmanager.add_argument("input_file", help="Path to alertmanager.yml.")
     alertmanager.set_defaults(func=_monitoring_gate)
 
+    otel_collector = subparsers.add_parser(
+        "otel-collector",
+        help="Emit the agent-gate decision for OpenTelemetry Collector YAML.",
+    )
+    otel_collector.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    otel_collector.add_argument("input_file", help="Path to Collector configuration YAML.")
+    otel_collector.set_defaults(func=_otel_collector_gate)
+
     cloud_init = subparsers.add_parser(
         "cloud-init",
         help="Emit the agent-gate decision for cloud-init user-data.",
@@ -1268,6 +1278,35 @@ def _systemd_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_systemd(data, catalog=catalog))
+
+
+def _otel_collector_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for OpenTelemetry Collector YAML."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.otel_collector import (
+        OTelCollectorInputError,
+        analyze_otel_collector,
+        parse_otel_collector_config,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_otel_collector_config(source)
+    except OTelCollectorInputError as exc:
+        print(f"Error: invalid OpenTelemetry Collector configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "otel-collector":
+        print("Error: input not recognized as Collector configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_otel_collector(data, catalog=catalog))
 
 
 def _monitoring_gate(args: argparse.Namespace) -> int:
