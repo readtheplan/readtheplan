@@ -1315,6 +1315,37 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on CFEngine policy
+        id: cfengine
+        uses: ./
+        with:
+          tool: cfengine
+          input-file: tests/fixtures/cfengine_policy_risky.cf
+          framework: soc2
+
+      - name: Assert CFEngine outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.cfengine.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.cfengine.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.cfengine.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "30"
+          test "$RISK_COUNTS" = '{"dangerous":21,"irreversible":0,"review":8,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "cfengine"
+          assert payload["artifact_type"] == "policy"
+          assert payload["decision"] == "block"
+          assert "additional policy inputs" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Vagrantfile
         id: vagrant
         uses: ./

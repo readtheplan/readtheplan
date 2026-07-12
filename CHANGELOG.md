@@ -9,6 +9,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native CFEngine gates across the CLI, GitHub Action, and MCP. Non-executing
+  policy scanning covers bundles, promise types, policy inputs and execution
+  order, commands/files/packages/services/users/storage/access, dynamic
+  functions, server trust, executor schedules, secrets, and dependencies;
+  strict Augments JSON parsing covers autorun, added inputs/bundles, nested
+  Augments, credentials, and Masterfiles Policy Framework boundaries.
 - Native Microsoft DSC and PowerShell DSC gates across the CLI, GitHub Action,
   and MCP. Strict DSC v3 JSON/YAML parsing and non-executing PowerShell source
   scanning cover nested resource adapters, destructive and executable resources,

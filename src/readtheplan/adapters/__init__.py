@@ -11,6 +11,7 @@ from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.bicep import BicepAdapter
 from readtheplan.adapters.caddy import CaddyAdapter
 from readtheplan.adapters.cdk import CdkAdapter
+from readtheplan.adapters.cfengine import CFEngineAdapter
 from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.chef_project import ChefProjectAdapter
 from readtheplan.adapters.cloud_init import CloudInitAdapter
@@ -129,6 +130,7 @@ register_adapter(JenkinsAdapter())
 register_adapter(JenkinsJCasCAdapter())
 register_adapter(ChefAdapter())
 register_adapter(ChefProjectAdapter())
+register_adapter(CFEngineAdapter())
 register_adapter(PuppetAdapter())
 register_adapter(PuppetProjectAdapter())
 register_adapter(PulumiAdapter())
@@ -171,6 +173,7 @@ __all__ = [
     "CdkAdapter",
     "ChefAdapter",
     "ChefProjectAdapter",
+    "CFEngineAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",
     "CrossplaneAdapter",

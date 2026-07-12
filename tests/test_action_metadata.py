@@ -27,7 +27,7 @@ def test_action_uses_json_cli_contract() -> None:
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "atlantis|"
         "docker-compose|"
-        "dockerfile|nomad|packer|salt|salt-project|nix|dsc|vagrant|"
+        "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|vagrant|"
         "cloud-init|systemd|nginx|haproxy|envoy|traefik|caddy|grafana|loki|vault|consul|"
         "prometheus|alertmanager|"
         "otel-collector"
@@ -106,6 +106,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/nixos_module_risky.nix" in workflow
     assert "tool: dsc" in workflow
     assert "input-file: tests/fixtures/powershell_dsc_risky.ps1" in workflow
+    assert "tool: cfengine" in workflow
+    assert "input-file: tests/fixtures/cfengine_policy_risky.cf" in workflow
     assert "tool: vagrant" in workflow
     assert "input-file: tests/fixtures/Vagrantfile.risky" in workflow
     assert "tool: cloud-init" in workflow
