@@ -228,6 +228,36 @@ jobs:
           assert "Terraform plan/state" in payload["changes"][0]["explanation"]
           PY
 
+      - name: Run action on TFE Terraform plan
+        id: tfe_provider
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/tfe_provider_plan_risky.json
+          framework: soc2
+
+      - name: Assert TFE Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.tfe_provider.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.tfe_provider.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.tfe_provider.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.tfe_provider.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "36"
+          test "$ACTION_COUNTS" = '{"create":30,"delete":4,"update":2}'
+          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 36
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == "tfe_agent_token"
+          assert "bearer credential" in payload["changes"][0]["explanation"]
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./

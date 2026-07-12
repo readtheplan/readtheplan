@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for all 72 resources in HashiCorp TFE provider
+  v0.78.0. Workspaces/projects/stacks and remote state, variables and tokens,
+  teams/SAML/SCIM, Sentinel/OPA policy and exclusions, agents/run tasks/triggers,
+  VCS and cloud/Vault OIDC trust, private registry supply chain, notifications,
+  data retention, SMTP, and HYOK now receive explicit infrastructure-governance
+  semantics.
 - First-party Terraform rules for all 111 resources in Grafana provider
   v4.40.1. Tokens and secure values, RBAC/permissions/SSO/SCIM, dashboards and
   public sharing, data sources and cloud integrations, alerting and OnCall,

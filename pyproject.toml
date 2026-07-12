@@ -97,6 +97,7 @@ grafana = "readtheplan.rules.grafana"
 github = "readtheplan.rules.github"
 gitlab = "readtheplan.rules.gitlab"
 k8s = "readtheplan.rules.k8s"
+tfe = "readtheplan.rules.tfe"
 vault = "readtheplan.rules.vault"
 
 [project.optional-dependencies]
