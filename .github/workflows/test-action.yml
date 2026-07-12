@@ -320,6 +320,37 @@ jobs:
           assert any(change["type"] == "pagerduty_service" for change in payload["changes"])
           PY
 
+      - name: Run action on New Relic Terraform plan
+        id: newrelic_provider
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/newrelic_provider_plan_risky.json
+          framework: soc2
+
+      - name: Assert New Relic Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.newrelic_provider.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.newrelic_provider.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.newrelic_provider.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.newrelic_provider.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "36"
+          test "$ACTION_COUNTS" = '{"create":32,"delete":4}'
+          test "$RISK_COUNTS" = '{"dangerous":28,"irreversible":4,"review":4}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 36
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == "newrelic_account_management"
+          assert "billable sub-account" in payload["changes"][0]["explanation"]
+          assert any(change["type"] == "newrelic_api_access_key" for change in payload["changes"])
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./
