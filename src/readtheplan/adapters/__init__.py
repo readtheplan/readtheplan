@@ -20,6 +20,7 @@ from readtheplan.adapters.pipelines import (
     GitHubActionsAdapter,
     GitLabCIAdapter,
 )
+from readtheplan.adapters.proxy_configs import HAProxyAdapter, NginxAdapter
 from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
 from readtheplan.adapters.salt import SaltAdapter
@@ -87,6 +88,8 @@ register_adapter(JenkinsAdapter())
 register_adapter(ChefAdapter())
 register_adapter(PuppetAdapter())
 register_adapter(PulumiAdapter())
+register_adapter(NginxAdapter())
+register_adapter(HAProxyAdapter())
 register_adapter(AzureWhatIfAdapter())
 register_adapter(GitHubActionsAdapter())
 register_adapter(AzurePipelinesAdapter())
@@ -119,6 +122,8 @@ __all__ = [
     "GitLabCIAdapter",
     "KubernetesAdapter",
     "NomadPlanAdapter",
+    "NginxAdapter",
+    "HAProxyAdapter",
     "PackerInspectAdapter",
     "PulumiAdapter",
     "PuppetAdapter",

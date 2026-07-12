@@ -371,6 +371,22 @@ def _build_parser() -> argparse.ArgumentParser:
     systemd.add_argument("input_file", help="Path to a systemd unit file.")
     systemd.set_defaults(func=_systemd_gate)
 
+    nginx = subparsers.add_parser(
+        "nginx",
+        help="Emit the agent-gate decision for an NGINX configuration file.",
+    )
+    nginx.add_argument("--framework", help="Include checks from a compliance framework.")
+    nginx.add_argument("input_file", help="Path to an NGINX configuration file.")
+    nginx.set_defaults(func=_proxy_config_gate)
+
+    haproxy = subparsers.add_parser(
+        "haproxy",
+        help="Emit the agent-gate decision for an HAProxy configuration file.",
+    )
+    haproxy.add_argument("--framework", help="Include checks from a compliance framework.")
+    haproxy.add_argument("input_file", help="Path to an HAProxy configuration file.")
+    haproxy.set_defaults(func=_proxy_config_gate)
+
     cloud_init = subparsers.add_parser(
         "cloud-init",
         help="Emit the agent-gate decision for cloud-init user-data.",
@@ -1181,6 +1197,38 @@ def _systemd_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_systemd(data, catalog=catalog))
+
+
+def _proxy_config_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for NGINX or HAProxy configuration."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.proxy_configs import (
+        ProxyConfigInputError,
+        analyze_proxy_config,
+        parse_haproxy_config,
+        parse_nginx_config,
+    )
+
+    ecosystem = args.command
+    parser = parse_nginx_config if ecosystem == "nginx" else parse_haproxy_config
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parser(source)
+    except ProxyConfigInputError as exc:
+        print(f"Error: invalid {ecosystem} configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != ecosystem:
+        print(f"Error: input not recognized as {ecosystem} configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_proxy_config(data, catalog=catalog))
 
 
 def _dockerfile_gate(args: argparse.Namespace) -> int:

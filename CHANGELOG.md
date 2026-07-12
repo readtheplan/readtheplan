@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native NGINX and HAProxy configuration gates across the CLI, generalized
+  Action, and local MCP server. Static parsing surfaces includes, executable
+  modules/Lua/programs, runtime identity, public listeners, TLS verification,
+  upstream routing, authentication, header/traffic mutation, management APIs,
+  host files, state, and effective inherited-configuration boundaries.
 - Native systemd unit gates across the CLI, generalized Action, and local MCP
   server. Static parsing preserves repeated/reset directives and surfaces host
   commands, runtime identity, capabilities, credentials, sandboxing, filesystem
