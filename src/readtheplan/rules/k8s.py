@@ -764,3 +764,487 @@ def _flux_receiver_candidates(
             )
         ]
     return []
+
+
+_TEKTON_SECRET_TOKENS = (
+    "api_key",
+    "apikey",
+    "credential",
+    "passwd",
+    "password",
+    "private_key",
+    "secret",
+    "token",
+)
+
+
+def _tekton_walk(value: Any):
+    yield value
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from _tekton_walk(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _tekton_walk(item)
+
+
+def _tekton_has_secret_reference(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if key_text in {
+                "secret",
+                "secretref",
+                "secretkeyref",
+                "imagepullsecrets",
+            }:
+                return True
+            if any(token in key_text for token in _TEKTON_SECRET_TOKENS):
+                return True
+            if _tekton_has_secret_reference(item):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_tekton_has_secret_reference(item) for item in value)
+    return False
+
+
+def _tekton_has_privileged_pod_settings(value: Any) -> bool:
+    for item in _tekton_walk(value):
+        if not isinstance(item, dict):
+            continue
+        if any(item.get(key) is True for key in ("hostIPC", "hostNetwork", "hostPID")):
+            return True
+        if item.get("hostPath") is not None:
+            return True
+        security = item.get("securityContext")
+        if isinstance(security, dict) and (
+            security.get("privileged") is True
+            or security.get("allowPrivilegeEscalation") is True
+            or security.get("runAsUser") in (0, "0")
+        ):
+            return True
+        text = str(item).lower()
+        if "docker.sock" in text or "containerd.sock" in text or "podman.sock" in text:
+            return True
+    return False
+
+
+def _tekton_images(value: Any) -> list[str]:
+    images: list[str] = []
+    for item in _tekton_walk(value):
+        if isinstance(item, dict) and item.get("image") is not None:
+            images.append(str(item["image"]))
+    return images
+
+
+def _tekton_mutable_images(value: Any) -> list[str]:
+    return [image for image in _tekton_images(value) if "@sha256:" not in image.lower()]
+
+
+def _tekton_param_map(reference: dict[str, Any]) -> dict[str, Any]:
+    params = reference.get("params", [])
+    if not isinstance(params, list):
+        return {}
+    return {
+        str(param.get("name")): param.get("value")
+        for param in params
+        if isinstance(param, dict) and param.get("name") is not None
+    }
+
+
+def _tekton_reference_findings(value: Any) -> list[str]:
+    findings: list[str] = []
+    for item in _tekton_walk(value):
+        if not isinstance(item, dict) or not item.get("resolver"):
+            continue
+        resolver = str(item["resolver"]).lower()
+        params = _tekton_param_map(item)
+        if resolver == "git":
+            revision = str(params.get("revision") or "")
+            invalid_sha = len(revision) != 40 or any(
+                char not in "0123456789abcdefABCDEF" for char in revision
+            )
+            if invalid_sha:
+                findings.append("resolve a Task or Pipeline from a mutable Git revision")
+        elif resolver == "bundles":
+            bundle = str(params.get("bundle") or "")
+            if "@sha256:" not in bundle.lower():
+                findings.append("resolve a Task or Pipeline from a mutable OCI bundle")
+            if params.get("secret"):
+                findings.append("use registry credentials for remote bundle resolution")
+        elif resolver == "http":
+            url = str(params.get("url") or "")
+            if url.lower().startswith("http://"):
+                findings.append("fetch a remote definition over unencrypted HTTP")
+            if not (params.get("digest") or params.get("sha256") or params.get("sha512")):
+                findings.append("fetch a remote HTTP definition without an integrity digest")
+        elif resolver == "cluster":
+            findings.append("resolve a mutable Task or Pipeline from the cluster")
+        elif resolver == "hub":
+            findings.append("resolve executable pipeline content from a configured Hub")
+        else:
+            findings.append(f"use the '{resolver}' remote resolver")
+    return findings
+
+
+def _tekton_workspace_findings(spec: dict[str, Any]) -> list[str]:
+    findings: list[str] = []
+    workspaces = spec.get("workspaces", [])
+    if not isinstance(workspaces, list):
+        return findings
+    for workspace in workspaces:
+        if not isinstance(workspace, dict):
+            continue
+        if workspace.get("secret") is not None:
+            findings.append("mount a Secret-backed workspace")
+        if workspace.get("persistentVolumeClaim") is not None:
+            findings.append("read or write a persistent volume workspace")
+        if workspace.get("volumeClaimTemplate") is not None:
+            findings.append("provision persistent storage for pipeline execution")
+    return findings
+
+
+@register_rule(
+    "kubernetes_tekton_task",
+    "kubernetes_tekton_cluster_task",
+    "kubernetes_tekton_step_action",
+)
+def _tekton_task_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if resource_type.endswith("cluster_task"):
+        label = "ClusterTask"
+    elif resource_type.endswith("step_action"):
+        label = "StepAction"
+    else:
+        label = "Task"
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                f"__TOOL__ will delete this Tekton {label}; future Runs may fail to resolve it.",
+            )
+        ]
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    steps = spec.get("steps", [])
+    sidecars = spec.get("sidecars", [])
+    executable = bool(steps) or (
+        resource_type.endswith("step_action")
+        and any(spec.get(key) is not None for key in ("image", "script", "command", "args"))
+    )
+    findings = ["execute container steps and commands"] if executable else []
+    if sidecars:
+        findings.append("run sidecar containers alongside build steps")
+    if _tekton_mutable_images(spec):
+        findings.append("use one or more container images not pinned by digest")
+    if _tekton_has_secret_reference(spec):
+        findings.append("consume Secret-backed credentials or values")
+    if _tekton_has_privileged_pod_settings(spec):
+        findings.append("request privileged, root, host, or container-runtime access")
+    findings.extend(_tekton_workspace_findings(spec))
+    if findings:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    f"This Tekton {label} can {'; '.join(dict.fromkeys(findings))}. "
+                    "Review scripts, commands, image provenance, workspaces, network access, "
+                    "results, and least-privilege execution before use."
+                ),
+            )
+        ]
+    return [
+        RuleResult(
+            "review",
+            f"__TOOL__ will change a Tekton {label}; review its resolved execution spec.",
+        )
+    ]
+
+
+@register_rule("kubernetes_tekton_pipeline")
+def _tekton_pipeline_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "__TOOL__ will delete this Tekton Pipeline; future PipelineRuns may fail.",
+            )
+        ]
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = _tekton_reference_findings(spec)
+    embedded = any(
+        isinstance(item, dict) and item.get("taskSpec") is not None
+        for item in _tekton_walk(spec)
+    )
+    if embedded:
+        findings.append("embed executable Task specifications directly")
+    if _tekton_has_secret_reference(spec):
+        findings.append("reference Secret-backed pipeline inputs")
+    if findings:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Tekton Pipeline can "
+                    f"{'; '.join(dict.fromkeys(findings))}. Review task provenance, "
+                    "parameter flow, workspace access, finally tasks, and failure behavior."
+                ),
+            )
+        ]
+    return [
+        RuleResult(
+            "review",
+            (
+                "__TOOL__ will change a Tekton Pipeline. Review task references, ordering, "
+                "when expressions, params, workspaces, results, finally tasks, and timeouts."
+            ),
+        )
+    ]
+
+
+_TEKTON_RUN_TYPES = (
+    "kubernetes_tekton_task_run",
+    "kubernetes_tekton_pipeline_run",
+    "kubernetes_tekton_run",
+    "kubernetes_tekton_custom_run",
+)
+
+
+@register_rule(*_TEKTON_RUN_TYPES)
+def _tekton_run_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_tekton_").replace("_", " ").title()
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                f"__TOOL__ will delete this Tekton {label}, cancelling or removing run state.",
+            )
+        ]
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["start or alter executable workload on the cluster"]
+    if spec.get("serviceAccountName") or spec.get("taskRunTemplate"):
+        findings.append("execute with a selected Kubernetes ServiceAccount")
+    findings.extend(_tekton_reference_findings(spec))
+    findings.extend(_tekton_workspace_findings(spec))
+    if _tekton_has_secret_reference(spec):
+        findings.append("consume Secret-backed credentials or parameters")
+    if _tekton_has_privileged_pod_settings(spec):
+        findings.append("request privileged, root, host, or container-runtime access")
+    if _tekton_mutable_images(spec):
+        findings.append("execute one or more images not pinned by digest")
+    return [
+        RuleResult(
+            "dangerous",
+            (
+                f"This Tekton {label} can {'; '.join(dict.fromkeys(findings))}. Review "
+                "resolved definitions, identity, inputs, workspaces, pod templates, "
+                "timeouts, cancellation, and emitted results before execution."
+            ),
+        )
+    ]
+
+
+@register_rule("kubernetes_tekton_event_listener")
+def _tekton_event_listener_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "__TOOL__ will delete this Tekton EventListener and stop event ingestion.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Tekton EventListener exposes event-driven pipeline ingress. "
+                    "Review service account, trigger bindings/templates, interceptors, "
+                    "webhook authentication, payload validation, network exposure, and "
+                    "denial-of-service controls."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_tekton_trigger_template")
+def _tekton_trigger_template_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "__TOOL__ will delete this TriggerTemplate and break dependent triggers.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Tekton TriggerTemplate creates Kubernetes resources from event "
+                    "parameters. Review every resourceTemplate, namespace, ServiceAccount, "
+                    "untrusted substitution, Run identity, and admission boundary."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_tekton_trigger")
+def _tekton_trigger_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [RuleResult("irreversible", "__TOOL__ will delete this Tekton Trigger.")]
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Tekton Trigger connects event payloads, interceptors, bindings, "
+                    "templates, and a ServiceAccount. Review authentication, filtering, "
+                    "credential scope, and generated resources."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_tekton_trigger_binding",
+    "kubernetes_tekton_cluster_trigger_binding",
+)
+def _tekton_trigger_binding_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "__TOOL__ will delete this Tekton TriggerBinding and break dependent triggers.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        scope = "cluster-wide " if "cluster" in resource_type else ""
+        return [
+            RuleResult(
+                "review",
+                (
+                    f"__TOOL__ will change a {scope}Tekton TriggerBinding. Review event "
+                    "payload/header extraction, defaults, namespace scope, and downstream "
+                    "parameter validation."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_tekton_pipeline_resource")
+def _tekton_pipeline_resource_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "__TOOL__ will delete this deprecated Tekton PipelineResource.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This deprecated Tekton PipelineResource can identify external Git, "
+                    "image, storage, or cluster inputs and outputs. Migrate to Tasks and "
+                    "Workspaces; review source trust, revisions, credentials, and consumers."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_tekton_cluster_interceptor")
+def _tekton_cluster_interceptor_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "__TOOL__ will delete this cluster-scoped Tekton interceptor.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Tekton ClusterInterceptor lets EventListeners invoke a "
+                    "cluster-scoped webhook extension. Review endpoint identity, TLS, "
+                    "payload handling, namespace consumers, availability, and RBAC."
+                ),
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_tekton_resolution_request")
+def _tekton_resolution_request_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "__TOOL__ will delete this Tekton ResolutionRequest and its resolver state.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                (
+                    "This Tekton ResolutionRequest asks an installed resolver to fetch "
+                    "executable pipeline content. Review resolver policy, source, immutable "
+                    "revision or digest, credentials, integrity, caching, and result consumers."
+                ),
+            )
+        ]
+    return []

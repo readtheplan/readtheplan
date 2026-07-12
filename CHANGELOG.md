@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Tekton-aware Kubernetes rules for Tasks, Pipelines, Runs, remote resolvers,
+  workspaces, ServiceAccounts, pod security, EventListeners, TriggerTemplates,
+  Triggers, bindings, and ResolutionRequests. Rendered Tekton YAML now receives
+  native execution and event-ingress semantics through every Kubernetes surface.
 - Native Bitbucket Pipelines YAML gates across the CLI, generalized Action, and
   local MCP server. Images, self-hosted runners, OIDC, deployments, service
   containers, Docker access, caches, scripts, Pipes, artifacts, custom variables,
