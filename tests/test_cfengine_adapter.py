@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from readtheplan.adapters.cfengine import (
     CFEngineAdapter,
     CFEngineInputError,
+    _promiser,
     analyze_cfengine,
     parse_cfengine,
 )
@@ -149,6 +151,19 @@ def test_cfengine_accepts_compact_one_line_policy() -> None:
 def test_cfengine_adapter_rejects_wrong_shape() -> None:
     assert not CFEngineAdapter().can_handle({})
     assert not CFEngineAdapter().can_handle({"cfengine": {"artifact_type": "policy"}})
+
+
+@pytest.mark.parametrize("quote", ['"', "'"])
+def test_promiser_parser_is_linear_for_adversarial_escaped_input(quote: str) -> None:
+    malicious = quote + "\\!" * 50_000
+    started = time.perf_counter()
+    assert _promiser(malicious) == malicious
+    assert time.perf_counter() - started < 0.5
+
+
+def test_promiser_parser_preserves_supported_quoted_and_unquoted_forms() -> None:
+    assert _promiser('"path with \\"escape\\"" action => body') == 'path with \\"escape\\"'
+    assert _promiser("package_name policy => 'present'") == "package_name"
 
 
 def test_augments_duplicate_input_names_are_strict_json() -> None:

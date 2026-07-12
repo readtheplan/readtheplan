@@ -317,10 +317,29 @@ def _attributes(statement: str) -> dict[str, str]:
 
 def _promiser(statement: str) -> str:
     clean = re.sub(r"(?m)^\s*[A-Za-z0-9_!&|().]+::\s*$", "", statement).strip()
-    match = re.match(r"(?s)(?:\"((?:\\.|[^\"])*)\"|'((?:\\.|[^'])*)'|([^\s,]+))", clean)
-    if not match:
+    if not clean:
         return "dynamic"
-    return next((value for value in match.groups() if value is not None), "dynamic")
+    if clean[0] not in {'"', "'"}:
+        end = 0
+        while end < len(clean) and not clean[end].isspace() and clean[end] != ",":
+            end += 1
+        return clean[:end] or "dynamic"
+    quote = clean[0]
+    value: list[str] = []
+    index = 1
+    while index < len(clean):
+        char = clean[index]
+        if char == "\\" and index + 1 < len(clean):
+            value.extend((char, clean[index + 1]))
+            index += 2
+            continue
+        if char == quote:
+            return "".join(value)
+        value.append(char)
+        index += 1
+    # parse_cfengine rejects unterminated source strings. Keep this helper total for
+    # direct callers and adversarial input without re-scanning or backtracking.
+    return clean
 
 
 def _truthy(value: Any) -> bool:
