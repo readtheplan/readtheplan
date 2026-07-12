@@ -93,6 +93,7 @@ gcp = "readtheplan.rules.gcp"
 azure = "readtheplan.rules.azure"
 cloudflare = "readtheplan.rules.cloudflare"
 github = "readtheplan.rules.github"
+gitlab = "readtheplan.rules.gitlab"
 k8s = "readtheplan.rules.k8s"
 
 [project.optional-dependencies]

@@ -108,6 +108,36 @@ jobs:
           assert "public Internet" in payload["changes"][0]["explanation"]
           PY
 
+      - name: Run action on GitLab Terraform plan
+        id: gitlab_provider
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/gitlab_provider_plan_risky.json
+          framework: soc2
+
+      - name: Assert GitLab Terraform outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.gitlab_provider.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.gitlab_provider.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.gitlab_provider.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.gitlab_provider.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "36"
+          test "$ACTION_COUNTS" = '{"create":21,"delete":4,"update":11}'
+          test "$RISK_COUNTS" = '{"dangerous":24,"irreversible":4,"review":8}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["resource_change_count"] == 36
+          assert payload["framework"]["name"] == "soc2"
+          assert payload["changes"][0]["type"] == "gitlab_project"
+          assert "public Internet" in payload["changes"][0]["explanation"]
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./
