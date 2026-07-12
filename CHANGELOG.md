@@ -9,6 +9,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Azure Bicep source gates across the CLI, GitHub Action, and MCP.
+  Static analysis now covers resources/modules, deployment scope, RBAC and policy,
+  Deployment Scripts, public exposure, complete-mode deletion, secure parameters
+  and outputs, secret/file functions, and explicit compiler/What-If boundaries.
 - First-party Terraform rules for all 63 resources in New Relic provider v3.94.0.
   Account identity and API/Synthetics credentials, alerting/muting, notification
   workflows and Workflow Automation, dashboards, Synthetics/private locations,

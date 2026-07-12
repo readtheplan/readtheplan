@@ -85,7 +85,8 @@ deterministic agent-gate schema; native plan analysis can also produce
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
 | Serverless Framework | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity/artifacts, IAM, functions, events, plugins, variables, packaging, and embedded CloudFormation |
 | AWS SAM | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code, policies, event ingress, APIs, state machines, nested apps, Connectors, builds, and lifecycle policies |
-| Azure Bicep / ARM | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
+| Azure Bicep source | `readtheplan bicep main.bicep` | Static resources/modules, target scopes, RBAC/policy/locks, Deployment Scripts, public access, secure parameters/outputs, external files, and compiler boundaries |
+| Azure Bicep / ARM What-If | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
 | Kubernetes / Argo / Flux / Tekton / Gateway API / cert-manager / External Secrets / Istio / Kyverno / Gatekeeper / KEDA / Knative | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, workloads, GitOps, workflows/events, routing/mesh, admission policy, certificates/trust, secret sync, event-driven scaling, and serverless rules |
 | Helm source | `readtheplan helm Chart.yaml` | Chart metadata, values, and Go-template source with dependencies, hooks, dynamic evaluation, exposure, privilege, and secret rules |
 | Kustomize source | `readtheplan kustomize kustomization.yaml` | Resources/bases, remote pinning, patches, generators, image overrides, Helm inflation, plugins, and transforms |

@@ -7,6 +7,7 @@ from readtheplan.adapters.ansible import AnsibleAdapter
 from readtheplan.adapters.atlantis import AtlantisAdapter
 from readtheplan.adapters.azure import AzureWhatIfAdapter
 from readtheplan.adapters.base import BaseAdapter
+from readtheplan.adapters.bicep import BicepAdapter
 from readtheplan.adapters.caddy import CaddyAdapter
 from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloud_init import CloudInitAdapter
@@ -119,6 +120,7 @@ register_adapter(PulumiAdapter())
 register_adapter(NginxAdapter())
 register_adapter(HAProxyAdapter())
 register_adapter(AzureWhatIfAdapter())
+register_adapter(BicepAdapter())
 register_adapter(GitHubActionsAdapter())
 register_adapter(AzurePipelinesAdapter())
 register_adapter(BitbucketPipelinesAdapter())
@@ -145,6 +147,7 @@ __all__ = [
     "BaseAdapter",
     "AzureWhatIfAdapter",
     "AzurePipelinesAdapter",
+    "BicepAdapter",
     "BitbucketPipelinesAdapter",
     "BuildkiteAdapter",
     "CaddyAdapter",

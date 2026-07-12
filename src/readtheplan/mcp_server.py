@@ -263,6 +263,46 @@ def agent_gate_azure(
     return analyze_azure_whatif(data, catalog=catalog)
 
 
+def agent_gate_bicep(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the agent-gate decision for Azure Bicep source."""
+    from readtheplan.adapters.bicep import (
+        BicepAdapter,
+        BicepInputError,
+        analyze_bicep,
+        parse_bicep_source,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read Bicep source {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_bicep_source(source)
+    except BicepInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Bicep source in {input_path}: {exc}",
+        ) from exc
+    if not BicepAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Azure Bicep source",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_bicep(data, catalog=catalog)
+
+
 def agent_gate_kubernetes(
     input_path: str,
     framework: str | None = None,
@@ -1457,6 +1497,7 @@ def create_server() -> Any:
     agent_gate_handler = agent_gate
     agent_gate_cfn_handler = agent_gate_cloudformation
     agent_gate_azure_handler = agent_gate_azure
+    agent_gate_bicep_handler = agent_gate_bicep
     agent_gate_k8s_handler = agent_gate_kubernetes
     agent_gate_pulumi_handler = agent_gate_pulumi
     agent_gate_pipeline_handler = agent_gate_pipeline
@@ -1529,6 +1570,14 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return the gate decision for Azure Bicep/ARM What-If JSON."""
         return agent_gate_azure_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_bicep")
+    def _agent_gate_bicep_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return the gate decision for Azure Bicep source before compilation."""
+        return agent_gate_bicep_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_kubernetes")
     def _agent_gate_k8s_tool(

@@ -64,7 +64,7 @@
           <p style="color:var(--muted);margin:12px 0 0">
             Terraform and OpenTofu work natively with first-party AWS, GCP, Azure,
             complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation</strong>,
-            <strong>Azure Bicep/ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Salt</strong>, <strong>Jenkins</strong>,
+            <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Salt</strong>, <strong>Jenkins</strong>,
             <strong>Pulumi</strong>, <strong>Chef</strong>, <strong>Puppet</strong>, <strong>GitHub Actions</strong>,
             <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
             <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, <strong>Dockerfiles</strong>, <strong>Azure Pipelines</strong>, and <strong>Bitbucket Pipelines</strong>. Rendered Helm,
@@ -75,6 +75,7 @@
           <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
 readtheplan azure whatif.json
+readtheplan bicep main.bicep
 readtheplan kubernetes rendered.yaml
 readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
@@ -94,7 +95,8 @@ readtheplan docker-compose compose.yml
 readtheplan nomad plan-response.json
 readtheplan packer inspect.txt</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Ansible and
+            CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. Bicep
+            source receives conservative static analysis before compilation. Ansible and
             static Salt SLS input consume YAML structurally; templated Salt input falls back to a
             conservative scanner. Docker Compose is parsed structurally without resolving external
             files, while Nomad consumes the scheduler's structured job-plan API response and
@@ -156,12 +158,16 @@ readtheplan nomad plan-response.json</code></pre>
 
       <section class="g" aria-labelledby="azure-whatif-title">
         <div class="gc utility-panel-wide">
-          <h2 id="azure-whatif-title">Azure Bicep and ARM What-If</h2>
+          <h2 id="azure-whatif-title">Azure Bicep source and ARM What-If</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
-            Ask Azure Resource Manager to evaluate the Bicep or ARM template, retain full resource
-            payloads, and gate the resulting local JSON artifact:
+            Gate Bicep source locally before compilation, then ask Azure Resource Manager to retain
+            full resource payloads for operation-level confirmation:
           </p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>az deployment group what-if \
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan bicep --framework soc2 main.bicep
+bicep lint main.bicep
+bicep build main.bicep
+
+az deployment group what-if \
   --resource-group production \
   --template-file main.bicep \
   --result-format FullResourcePayloads \
@@ -169,7 +175,10 @@ readtheplan nomad plan-response.json</code></pre>
 
 readtheplan azure whatif.json</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            Create, modify, delete, ignore/no-change, deploy-only, unsupported, and potential
+            Source analysis covers broad scopes, modules, RBAC/policy/locks, Deployment Scripts,
+            public access, complete-mode deletion, secure parameters and outputs, and external
+            compiler boundaries without restoring modules or reading files. The What-If gate maps
+            create, modify, delete, ignore/no-change, deploy-only, unsupported, and potential
             changes map into the shared gate. Full before/after resource payloads feed Azure VM,
             AKS, storage, RBAC, and network-security rules. ResourceIdOnly <code>Deploy</code>
             results, unresolved potential changes, nested-deployment diagnostics, and unsupported
