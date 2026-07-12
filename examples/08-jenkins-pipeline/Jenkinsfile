@@ -1,0 +1,20 @@
+pipeline {
+  agent any
+  stages {
+    stage('Build') {
+      steps {
+        echo 'Building the application'
+        checkout scm
+        sh 'make test'
+      }
+    }
+    stage('Deploy') {
+      steps {
+        input message: 'Deploy to production?'
+        withCredentials([string(credentialsId: 'deploy-token', variable: 'TOKEN')]) {
+          sh './deploy.sh'
+        }
+      }
+    }
+  }
+}

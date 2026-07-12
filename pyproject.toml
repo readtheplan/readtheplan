@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "readtheplan"
 version = "0.4.0"
-description = "Terraform plan risk explainer — reads `terraform plan` JSON and classifies each change as safe/review/dangerous/irreversible."
+description = "Local infrastructure change risk analysis for Terraform, Kubernetes, Ansible, Jenkins, Chef, Puppet, and CloudFormation."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "ansible", "jenkins", "chef", "puppet", "kubernetes", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -40,8 +40,12 @@ readtheplan = "readtheplan.cli:main"
 # import via importlib.metadata. The builtins below are wired here as the
 # canonical examples (discovery is idempotent).
 [project.entry-points."readtheplan.adapters"]
+ansible = "readtheplan.adapters.ansible:AnsibleAdapter"
+chef = "readtheplan.adapters.chef:ChefAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
+jenkins = "readtheplan.adapters.jenkins:JenkinsAdapter"
 kubernetes = "readtheplan.adapters.kubernetes:KubernetesAdapter"
+puppet = "readtheplan.adapters.puppet:PuppetAdapter"
 
 [project.entry-points."readtheplan.rules"]
 aws = "readtheplan.rules.aws"

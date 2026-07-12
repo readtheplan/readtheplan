@@ -11,7 +11,7 @@
 > [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-**Terraform / OpenTofu plan risk analysis for humans, CI pipelines, and AI agents.** Classifies every change as safe, review, dangerous, or irreversible. Produces compliance evidence for SOC 2, ISO 27001, and HIPAA. Runs locally — no uploads, no accounts, no backend.
+**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review Terraform/OpenTofu plans, CloudFormation and Kubernetes changes, Ansible playbooks, Jenkins pipelines, Chef recipes, and Puppet manifests through one deterministic risk gate. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
 pip install readtheplan && readtheplan analyze plan.json
@@ -27,7 +27,7 @@ Requires Python 3.10+.
 
 | Tool | Analyzes | Risk tiers | Compliance evidence | Agent gate | Local-only |
 |------|----------|------------|---------------------|------------|------------|
-| **readtheplan** | Plan diff | ✅ 4 tiers | ✅ SOC2/ISO/HIPAA | ✅ proceed/warn/block | ✅ |
+| **readtheplan** | Plans + config/pipelines | ✅ 4 tiers | ✅ SOC2/ISO/HIPAA | ✅ proceed/warn/block | ✅ |
 | tflint | Code (HCL) | ❌ lint only | ❌ | ❌ | ✅ |
 | tfsec | Code (HCL) | ❌ security only | ❌ | ❌ | ✅ |
 | checkov | Code + plan | ⚠️ pass/fail | ⚠️ policy checks | ❌ | ✅ |
@@ -37,13 +37,13 @@ Requires Python 3.10+.
 | infracost | Plan diff | ❌ cost only | ❌ | ❌ | ❌ SaaS |
 | OPA/Sentinel | Policy engine | ⚠️ rule-based | ⚠️ | ⚠️ policy gates | ✅ |
 
-**readtheplan is the only tool that:** classifies plan diffs by blast radius risk tier, annotates with compliance controls, produces auditable evidence envelopes, gates CI pipelines and AI agents, and runs entirely locally with no SaaS dependency.
+**readtheplan brings one review contract to infrastructure changes:** classify blast-radius risk, annotate compliance controls, produce auditable evidence, gate CI pipelines and AI agents, and keep the source material local.
 
 ---
 
 ## Who it's for
 
-- **Individual Terraform / OpenTofu users** — see the blast radius of an apply before you run it: `readtheplan analyze plan.json`.
+- **Infrastructure authors** — see the blast radius of a plan, manifest, playbook, recipe, or pipeline before it runs.
 - **Platform / DevOps teams** — standardize risk tiers and org-specific escalations across repos with rule overlays (no forks, no code changes).
 - **CI maintainers** — drop the GitHub Action into any pipeline to gate pull requests on `dangerous` / `irreversible` changes.
 - **Security & compliance reviewers** — SOC 2 / ISO 27001 / HIPAA control mappings plus signed, auditable evidence envelopes for every change.
@@ -61,14 +61,29 @@ Terraform's plan/apply separation exists so a human reviews changes before they 
 
 ## What it does
 
-readtheplan reads `terraform plan` JSON (Terraform and OpenTofu) and classifies each change:
+readtheplan analyzes structured Terraform/OpenTofu plans and infrastructure-tool inputs, then classifies each operation:
 
 🟢 **safe** — no-op, tag update, read-only change
 🟡 **review** — security group rule change, minor config drift
 🟠 **dangerous** — instance replacement, IAM policy change, database modification
 🔴 **irreversible** — data deletion, KMS key destruction, RDS instance termination
 
-It applies **resource-aware rules** (40+ AWS resource types), **compliance framework mappings** (SOC 2, ISO 27001, HIPAA), and produces **auditable evidence envelopes** with sigstore-backed signed attestations.
+Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource types). Every adapter feeds the same **compliance framework mappings** (SOC 2, ISO 27001, HIPAA) and deterministic agent-gate schema; native plan analysis can also produce **auditable evidence envelopes** with sigstore-backed signed attestations.
+
+### Supported infrastructure tools
+
+| Tool | Command | Analysis level |
+|------|---------|----------------|
+| Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff + resource-aware rules |
+| CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
+| Kubernetes | `readtheplan kubernetes manifests.json` | Structured manifest diff + workload/RBAC rules |
+| Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |
+| Jenkins | `readtheplan jenkins Jenkinsfile` | Conservative pipeline-step analysis |
+| Chef | `readtheplan chef default.rb` | Conservative recipe-resource analysis |
+| Puppet | `readtheplan puppet site.pp` | Conservative manifest-resource analysis |
+
+The scripted configuration adapters deliberately classify unexpanded includes and unknown
+constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
 
 ## How it looks
 
@@ -321,12 +336,12 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - **Agent gate** — deterministic proceed/warn/block decisions for CI and AI agents
 - **Customer rule overlays** — org-specific risk escalations via YAML, no code changes needed
 - **MCP preview** — local stdio tools for agent and IDE integrations
-- **No uploads** — your Terraform plan JSON never leaves your machine
+- **No uploads** — plans, manifests, playbooks, recipes, and pipelines stay on your machine
 - **MIT licensed** — use it anywhere, no strings attached
 
 ## What's not in scope
 
-- Multi-cloud beyond AWS (Terraform/OpenTofu only for now)
+- Full language interpretation for dynamic Jenkins, Chef, or Puppet code (unknown constructs require review)
 - SaaS dashboard (local-first by design)
 - Hosted analyzer service until ADR 0013 security gates are implemented and enforced
 - Policy-as-code engine (OPA/Sentinel exist for that)
@@ -369,9 +384,9 @@ Good first issues are tagged [`good first issue`](https://github.com/readtheplan
 
 ## Status
 
-**v0.3 — stable CLI + GitHub Action.** The PyPI package ships the Python CLI and composite GitHub Action. Current `main` includes: resource-aware AWS risk rules, compliance framework annotations, evidence envelopes, signed attestation verification, customer rule overlays, MCP preview, examples, benchmarks, and the static onboarding site.
+**v0.3 — stable CLI + GitHub Action.** The PyPI package ships the Python CLI and composite GitHub Action. Current development includes resource-aware AWS risk rules, compliance framework annotations, evidence envelopes, signed attestation verification, customer rule overlays, infrastructure adapters, MCP preview, examples, benchmarks, and the static onboarding site.
 
-What's shipping next: CloudFormation/Pulumi adapters, PCI-DSS and NIST 800-53 catalogs, expanded AWS resource coverage.
+What's shipping next: deeper adapter coverage, Pulumi support, PCI-DSS and NIST 800-53 catalogs, and expanded cloud resource rules.
 
 ## License
 

@@ -1,0 +1,20 @@
+- name: Deploy the web application
+  hosts: web
+  become: true
+  tasks:
+    - name: Explain the deployment
+      ansible.builtin.debug:
+        msg: Deploying the current release
+
+    - name: Install nginx
+      ansible.builtin.package:
+        name: nginx
+        state: present
+
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+
+    - name: Run the database migration
+      ansible.builtin.command: ./manage.py migrate

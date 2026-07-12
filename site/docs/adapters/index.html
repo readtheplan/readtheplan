@@ -44,7 +44,7 @@
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
           <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / Adapters</p>
-          <h1 id="title">Adding a new IaC adapter.</h1>
+          <h1 id="title">One risk gate for every infrastructure tool.</h1>
           <p class="intro-copy">
             readtheplan's adapter system lets you plug in support for any infrastructure-as-code tool — Pulumi, CDK,
             Crossplane, or custom in-house tooling. This guide walks through the full process, from the
@@ -62,8 +62,24 @@
             mapping, agent gating, evidence envelopes — works identically regardless of the source tool.
           </p>
           <p style="color:var(--muted);margin:12px 0 0">
-            Today readtheplan ships with <strong>CloudFormation</strong> and <strong>Kubernetes</strong> adapters. Adding a new adapter means
-            Terraform and OpenTofu already work natively through <code>terraform show -json</code> output, but tools like Pulumi, AWS CDK, Crossplane, or Terragrunt need an adapter.
+            Terraform and OpenTofu work natively. Built-in adapters cover <strong>CloudFormation</strong>,
+            <strong>Kubernetes</strong>, <strong>Ansible</strong>, <strong>Jenkins</strong>,
+            <strong>Chef</strong>, and <strong>Puppet</strong>. Pulumi, AWS CDK, Crossplane,
+            Terragrunt, and internal tools can use the same public adapter interface.
+          </p>
+
+          <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
+readtheplan kubernetes manifests.json
+readtheplan ansible playbook.yml
+readtheplan jenkins Jenkinsfile
+readtheplan chef default.rb
+readtheplan puppet site.pp</code></pre>
+          <p style="color:var(--muted);margin:12px 0 0">
+            CloudFormation and Kubernetes consume structured diffs. Ansible consumes YAML
+            structurally. Jenkins, Chef, and Puppet use conservative syntax-aware scanning:
+            unknown or unexpanded constructs become <code>review</code>, and source files are
+            never executed.
           </p>
 
           <h3 style="margin-top:28px;color:var(--accent)">Why write one?</h3>

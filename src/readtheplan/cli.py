@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TextIO, cast
+from typing import Any, TextIO, cast
 
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.controls import (
@@ -49,7 +49,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="readtheplan",
-        description="Read and summarize Terraform plan JSON.",
+        description=(
+            "Review infrastructure changes across plans, manifests, playbooks, "
+            "and pipelines."
+        ),
     )
     parser.add_argument(
         "--version",
@@ -194,6 +197,50 @@ def _build_parser() -> argparse.ArgumentParser:
         "input_file", help="Path to Kubernetes manifest diff JSON (old_manifests/new_manifests or resources)."  # noqa: E501
     )
     kubernetes.set_defaults(func=_kubernetes_gate)
+
+    ansible = subparsers.add_parser(
+        "ansible",
+        help="Emit the agent-gate decision for an Ansible playbook.",
+    )
+    ansible.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    ansible.add_argument("input_file", help="Path to an Ansible playbook YAML file.")
+    ansible.set_defaults(func=_ansible_gate)
+
+    jenkins = subparsers.add_parser(
+        "jenkins",
+        help="Emit the agent-gate decision for a declarative or scripted Jenkinsfile.",
+    )
+    jenkins.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    jenkins.add_argument("input_file", help="Path to a Jenkinsfile.")
+    jenkins.set_defaults(func=_jenkins_gate)
+
+    chef = subparsers.add_parser(
+        "chef",
+        help="Emit the agent-gate decision for a Chef recipe.",
+    )
+    chef.add_argument("--framework", help="Include checks from a compliance framework.")
+    chef.add_argument("input_file", help="Path to a Chef recipe (.rb).")
+    chef.set_defaults(func=_chef_gate)
+
+    puppet = subparsers.add_parser(
+        "puppet",
+        help="Emit the agent-gate decision for a Puppet manifest.",
+    )
+    puppet.add_argument("--framework", help="Include checks from a compliance framework.")
+    puppet.add_argument("input_file", help="Path to a Puppet manifest (.pp).")
+    puppet.set_defaults(func=_puppet_gate)
 
     verify = subparsers.add_parser(
         "verify",
@@ -590,6 +637,123 @@ def _kubernetes_gate(args: argparse.Namespace) -> int:
             return 1
 
     gate = analyze_kubernetes(data, catalog=catalog)
+    json.dump(gate, sys.stdout, indent=2)
+    print()
+    decision = gate.get("decision", "warn")
+    if decision == "block":
+        return 2
+    if decision == "warn":
+        return 1
+    return 0
+
+
+def _ansible_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for an Ansible playbook."""
+    import yaml
+
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.ansible import analyze_ansible
+
+    try:
+        documents = list(yaml.safe_load_all(Path(args.input_file).read_text(encoding="utf-8")))
+    except (OSError, yaml.YAMLError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+
+    plays: list[object] = []
+    for document in documents:
+        if isinstance(document, list):
+            plays.extend(document)
+        elif isinstance(document, dict):
+            plays.append(document)
+    data = {"plays": plays}
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "ansible":
+        print("Error: input not recognized as an Ansible playbook", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_ansible(data, catalog=catalog))
+
+
+def _jenkins_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Jenkinsfile."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.jenkins import analyze_jenkins
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+
+    data = {"jenkinsfile": source}
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "jenkins":
+        print("Error: input not recognized as a Jenkins pipeline", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_jenkins(data, catalog=catalog))
+
+
+def _chef_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Chef recipe."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.chef import analyze_chef
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    data = {"chef_recipe": source}
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "chef":
+        print("Error: input not recognized as a Chef recipe", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_chef(data, catalog=catalog))
+
+
+def _puppet_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Puppet manifest."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.puppet import analyze_puppet
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    data = {"puppet_manifest": source}
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "puppet":
+        print("Error: input not recognized as a Puppet manifest", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_puppet(data, catalog=catalog))
+
+
+def _adapter_catalog(framework: str | None) -> ControlCatalog | None:
+    if not framework:
+        return None
+    try:
+        return load_catalog(framework)
+    except (CatalogSchemaError, FrameworkNotFoundError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return None
+
+
+def _write_adapter_gate(gate: dict[str, Any]) -> int:
     json.dump(gate, sys.stdout, indent=2)
     print()
     decision = gate.get("decision", "warn")

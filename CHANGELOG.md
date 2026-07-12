@@ -6,6 +6,11 @@
 - Self-improving evolution analysis now stays local and deterministic;
   candidate generation never spawns external model tooling.
 
+### Added
+- Built-in local adapters and CLI gates for Ansible playbooks, Jenkins pipelines,
+  Chef recipes, and Puppet manifests. Scripted formats use conservative static
+  analysis and never execute user infrastructure code.
+
 ## [0.4.0] — 2026-07-11
 
 ### Added
