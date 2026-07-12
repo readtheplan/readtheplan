@@ -109,6 +109,8 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert "site/dist" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "X-Content-Type-Options: nosniff" in build_script
     assert "Content-Security-Policy" in build_script
+    assert "https://static.cloudflareinsights.com" in build_script
+    assert "https://plausible.io" not in build_script
     assert "font-src 'self'" in build_script
     assert "img-src 'self' data:" in build_script
     assert "Strict-Transport-Security" in build_script
@@ -126,6 +128,9 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert '"mcp"' in build_script
     assert '"brief"' in build_script
     assert "npm --prefix site run build" in workflow
+
+    homepage = (SITE / "index.html").read_text(encoding="utf-8")
+    assert "https://plausible.io" not in homepage
 
     for asset in [
         "404.html",

@@ -135,6 +135,7 @@ if (!css.includes("@media (max-width: 768px)") && !css.includes("@media (max-wid
 // Build script contract.
 for (const token of [
   "Content-Security-Policy",
+  "https://static.cloudflareinsights.com",
   "font-src 'self'",
   "img-src 'self' data:",
   "Strict-Transport-Security",
@@ -148,6 +149,10 @@ for (const token of [
   "serial=()",
 ]) {
   requireIncludes(buildScript, token, "security header");
+}
+
+if (buildScript.includes("https://plausible.io") || html.includes("https://plausible.io")) {
+  throw new Error("Plausible must not be loaded when Cloudflare Web Analytics is enabled.");
 }
 
 for (const token of ["assetDirs", '"fonts"', '"img"', '"tools"', '"resources"', '"mcp"', '"brief"']) {
