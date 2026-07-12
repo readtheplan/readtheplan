@@ -83,6 +83,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Terraform configuration | `readtheplan terraform-config main.tf` | HCL/JSON providers, backends, modules, resources/data, provisioners, lifecycle, remote state, imports/moves/removals, secrets, and static exposure |
 | Terragrunt | `readtheplan terragrunt terragrunt.hcl` | HCL/JSON root modules, hooks, CLI arguments, remote state, includes, dependencies/mocks, generated files, inputs, assumed identity, engines, and evaluation functions |
 | CloudFormation | `readtheplan cloudformation changes.json` | Structured change set or template diff |
+| AWS CDK | `readtheplan cdk cdk.out/manifest.json` | Versioned Cloud Assembly and asset manifests: stacks, context, roles, artifact graphs, templates, file/Docker assets, executable producers, build secrets/SSH/networking, destinations, and deployment boundaries |
 | Serverless Framework | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity/artifacts, IAM, functions, events, plugins, variables, packaging, and embedded CloudFormation |
 | AWS SAM | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code, policies, event ingress, APIs, state machines, nested apps, Connectors, builds, and lifecycle policies |
 | Azure Bicep source | `readtheplan bicep main.bicep` | Static resources/modules, target scopes, RBAC/policy/locks, Deployment Scripts, public access, secure parameters/outputs, external files, and compiler boundaries |

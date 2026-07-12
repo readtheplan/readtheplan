@@ -9,6 +9,7 @@ matrix makes those boundaries explicit.
 | Terraform / OpenTofu | `terraform show -json` plan | `readtheplan analyze plan.json` | Native plan diff, old/new state, resource-aware rules, evidence and signing | Stable |
 | Cloudflare Terraform provider | Provider v5 plan resources plus important v4 aliases | `readtheplan analyze plan.json` | Zones/DNS/DNSSEC, rulesets/WAF and settings, Workers/routes, Zero Trust/tunnels, R2/D1/KV/Queues, load balancing, TLS, API identity, Logpush, and Pages | Built-in |
 | CloudFormation | Change Set JSON or old/new template wrapper | `readtheplan cloudformation changes.json` | Structured operations; template wrappers include deep old/new properties | Built-in |
+| AWS CDK | `cdk.out/manifest.json` or asset manifest JSON | `readtheplan cdk cdk.out/manifest.json` | Cloud Assembly schema/runtime, stacks/accounts/regions/roles/templates, missing context, artifact graphs/metadata, nested assemblies, file and Docker asset production/publishing, executable producers, secrets/SSH/networking, and deployment boundaries | Built-in |
 | Serverless Framework | `serverless.yml` service source | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity and artifacts, IAM, functions, events, plugins, external variables, packaging, extensions and embedded CloudFormation | Built-in |
 | AWS SAM | SAM template YAML/JSON | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code sources, policies, event ingress, APIs, state machines, nested apps, Connectors, custom builds and lifecycle policies | Built-in |
 | Azure Bicep source | `.bicep` source | `readtheplan bicep main.bicep` | Resources/modules, broad scopes, RBAC/policy/locks, Deployment Scripts, public access, secure parameters/outputs, secret/file functions, and compiler boundaries | Conservative |
@@ -135,9 +136,11 @@ the same optional `framework` parameter through its MCP tool.
   reads referenced files, or contacts Azure. Run `bicep lint`/`bicep build`, then
   submit Azure What-If `FullResourcePayloads` JSON to the `azure` gate for the
   authoritative operation-level create/modify/delete prediction.
-- AWS CDK currently flows through synthesized CloudFormation. Terragrunt flows
-  through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
-  those tools expose additional structured semantics worth preserving.
+- AWS CDK analysis never executes the application or reads referenced companion
+  artifacts. Run the `cdk` gate on both the Cloud Assembly and each asset manifest,
+  inspect referenced templates/assets, then use `cdk diff` or a CloudFormation
+  Change Set for the live target-account operation delta. Terragrunt source flows
+  through its native gate and Terraform/OpenTofu plan JSON remains authoritative.
 - Argo CD/Workflows/Events, Flux, Tekton, Gateway API, cert-manager/trust-manager,
   External Secrets, Istio, Kyverno, Gatekeeper, KEDA, and Knative receive
   first-party controller semantics. Other custom resources remain conservative

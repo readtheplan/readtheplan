@@ -181,6 +181,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cloudformation.set_defaults(func=_cloudformation_gate)
 
+    cdk = subparsers.add_parser(
+        "cdk",
+        help="Emit the agent-gate decision for an AWS CDK Cloud Assembly or asset manifest.",
+    )
+    cdk.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    cdk.add_argument(
+        "input_file", help="Path to cdk.out/manifest.json or a CDK asset manifest JSON file."
+    )
+    cdk.set_defaults(func=_cdk_gate)
+
     azure = subparsers.add_parser(
         "azure",
         help="Emit the agent-gate decision for Azure Bicep/ARM What-If JSON.",
@@ -997,6 +1013,35 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
     if decision == "warn":
         return 1
     return 0
+
+
+def _cdk_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for AWS CDK synthesized manifests."""
+    from readtheplan.adapters.cdk import (
+        CdkAdapter,
+        CdkInputError,
+        analyze_cdk,
+        parse_cdk_manifest,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_cdk_manifest(source)
+    except CdkInputError as exc:
+        print(f"Error: invalid AWS CDK manifest: {exc}", file=sys.stderr)
+        return 1
+    if not CdkAdapter().can_handle(data):
+        print("Error: input not recognized as an AWS CDK manifest", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_cdk(data, catalog=catalog))
 
 
 def _kubernetes_gate(args: argparse.Namespace) -> int:

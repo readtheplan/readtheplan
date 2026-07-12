@@ -232,6 +232,42 @@ def agent_gate_cloudformation(
     return analyze_cloudformation(data, catalog=catalog)
 
 
+def agent_gate_cdk(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for an AWS CDK Cloud Assembly or asset manifest."""
+    from readtheplan.adapters.cdk import (
+        CdkAdapter,
+        CdkInputError,
+        analyze_cdk,
+        parse_cdk_manifest,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read CDK input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_cdk_manifest(source)
+    except CdkInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Invalid AWS CDK manifest {input_path}: {exc}"
+        ) from exc
+    if not CdkAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as an AWS CDK manifest"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_cdk(data, catalog=catalog)
+
+
 def agent_gate_azure(
     input_path: str,
     framework: str | None = None,
@@ -1569,6 +1605,7 @@ def create_server() -> Any:
     analyze_plan_handler = analyze_plan
     agent_gate_handler = agent_gate
     agent_gate_cfn_handler = agent_gate_cloudformation
+    agent_gate_cdk_handler = agent_gate_cdk
     agent_gate_azure_handler = agent_gate_azure
     agent_gate_bicep_handler = agent_gate_bicep
     agent_gate_k8s_handler = agent_gate_kubernetes
@@ -1635,6 +1672,14 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Return the gate decision for a CloudFormation Change Set / template diff."""
         return agent_gate_cfn_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_cdk")
+    def _agent_gate_cdk_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return the gate for an AWS CDK Cloud Assembly or asset manifest."""
+        return agent_gate_cdk_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_azure")
     def _agent_gate_azure_tool(

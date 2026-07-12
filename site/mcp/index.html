@@ -97,7 +97,8 @@ readtheplan mcp</pre>
           <p class="utility-copy">
             The preview exposes Terraform <code>analyze_plan</code> and
             <code>agent_gate</code>, plus <code>agent_gate_cloudformation</code>,
-            <code>agent_gate_azure</code>, <code>agent_gate_bicep</code>, <code>agent_gate_kubernetes</code>,
+            <code>agent_gate_azure</code>, <code>agent_gate_bicep</code>,
+            <code>agent_gate_cdk</code>, <code>agent_gate_kubernetes</code>,
             <code>agent_gate_helm</code>, <code>agent_gate_kustomize</code>,
             <code>agent_gate_crossplane</code>, <code>agent_gate_serverless</code>,
             <code>agent_gate_sam</code>,
@@ -230,7 +231,7 @@ readtheplan mcp</pre>
             to one Terraform repository, tune review prompts, and decide which workflows
             belong in CLI evidence rather than the preview MCP tool.
             Current MCP gates normalize Terraform/OpenTofu plans and configuration,
-            Terragrunt, CloudFormation, Bicep source, Azure What-If,
+            Terragrunt, CloudFormation, AWS CDK Cloud Assemblies/assets, Bicep source, Azure What-If,
             Kubernetes (including Tekton), Pulumi, GitHub Actions, GitLab CI, CircleCI,
             Ansible playbooks/project configuration (<code>ansible-project</code>), Jenkins pipelines/JCasC (<code>jenkins-jcasc</code>), Chef recipes/projects (<code>chef-project</code>), Puppet manifests/projects (<code>puppet-project</code>),
             Docker Compose, Nomad, Packer, Salt, Vagrant, cloud-init, systemd,
@@ -239,8 +240,8 @@ readtheplan mcp</pre>
             OpenTelemetry Collector,
             Buildkite, Atlantis,
             Dockerfiles,
-            Azure Pipelines, and Bitbucket Pipelines into the same contract. AWS CDK
-            and additional GCP/Oracle inputs can follow the same local-first boundary.
+            Azure Pipelines, and Bitbucket Pipelines into the same contract. Additional
+            GCP/Oracle inputs can follow the same local-first boundary.
           </p>
           <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20MCP%20pilot%20setup">
             Request pilot setup

@@ -105,6 +105,7 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "ansible-project",
         "bicep",
         "chef-project",
+        "cdk",
         "cloudformation",
         "jenkins-jcasc",
         "kubernetes",

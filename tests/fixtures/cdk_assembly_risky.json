@@ -1,0 +1,69 @@
+{
+  "version": "38.0.1",
+  "minimumCliVersion": "2.180.0",
+  "missing": [
+    {
+      "key": "availability-zones:account=111111111111:region=us-east-1",
+      "provider": "availability-zones"
+    }
+  ],
+  "runtime": {
+    "libraries": {
+      "aws-cdk-lib": "2.180.0",
+      "constructs": "10.4.2"
+    }
+  },
+  "artifacts": {
+    "ProductionStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/us-east-1",
+      "dependencies": ["Assets", "MissingArtifact"],
+      "properties": {
+        "templateFile": "../outside/ProductionStack.template.json",
+        "validateOnSynth": false,
+        "terminationProtection": false,
+        "assumeRoleArn": "arn:aws:iam::111111111111:role/cdk-deploy-role",
+        "cloudFormationExecutionRoleArn": "arn:aws:iam::111111111111:role/cdk-cfn-exec-role",
+        "parameters": {
+          "DatabasePassword": "literal-production-password"
+        }
+      },
+      "metadata": {
+        "/ProductionStack/Database": [
+          {
+            "type": "aws:cdk:error",
+            "data": "Database configuration failed validation"
+          },
+          {
+            "type": "aws:cdk:warning",
+            "data": "Removal policy defaults to destroy"
+          },
+          {
+            "type": "aws:cdk:asset",
+            "data": {
+              "path": "asset.123"
+            }
+          }
+        ]
+      }
+    },
+    "Assets": {
+      "type": "cdk:asset-manifest",
+      "dependencies": ["ProductionStack"],
+      "properties": {
+        "file": "ProductionStack.assets.json",
+        "requiresBootstrapStackVersion": 21
+      }
+    },
+    "Nested": {
+      "type": "cdk:cloud-assembly",
+      "properties": {
+        "directoryName": "../nested-assembly"
+      }
+    },
+    "VendorInstruction": {
+      "type": "vendor:custom-artifact",
+      "properties": {}
+    }
+  }
+}

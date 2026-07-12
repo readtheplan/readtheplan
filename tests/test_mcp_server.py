@@ -19,6 +19,7 @@ from readtheplan.mcp_server import (
     agent_gate_azure,
     agent_gate_bicep,
     agent_gate_caddy,
+    agent_gate_cdk,
     agent_gate_cloud_init,
     agent_gate_cloudformation,
     agent_gate_consul,
@@ -123,6 +124,7 @@ def test_cloudformation_and_kubernetes_mcp_tools_accept_frameworks(
     tmp_path: Path,
 ) -> None:
     cloudformation = agent_gate_cloudformation(str(FIXTURES / "cfn_change_set_mixed.json"), "soc2")
+    cdk = agent_gate_cdk(str(FIXTURES / "cdk_assembly_risky.json"), "soc2")
     manifest = tmp_path / "deployment.yaml"
     manifest.write_text(
         "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n",
@@ -131,6 +133,7 @@ def test_cloudformation_and_kubernetes_mcp_tools_accept_frameworks(
     kubernetes = agent_gate_kubernetes(str(manifest), "soc2")
 
     assert "rtp.control.soc2.CC8.1" in cloudformation["required_checks"]
+    assert "rtp.control.soc2.CC8.1" in cdk["required_checks"]
     assert "rtp.control.soc2.CC8.1" in kubernetes["required_checks"]
 
 
@@ -1111,6 +1114,7 @@ def test_stdio_server_tools_list() -> None:
         assert "analyze_plan" in tool_names
         assert "agent_gate" in tool_names
         assert "agent_gate_cloudformation" in tool_names
+        assert "agent_gate_cdk" in tool_names
         assert "agent_gate_azure" in tool_names
         assert "agent_gate_bicep" in tool_names
         assert "agent_gate_kubernetes" in tool_names
@@ -1144,6 +1148,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_configuration_management" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
+            "agent_gate_cdk",
             "agent_gate_azure",
             "agent_gate_bicep",
             "agent_gate_kubernetes",
