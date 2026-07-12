@@ -1,0 +1,377 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: checkout
+spec:
+  hosts: ["*"]
+  http:
+    - fault:
+        abort:
+          httpStatus: 503
+          percentage: {value: 10}
+      mirror: {host: checkout-shadow}
+      rewrite: {uri: /}
+      route:
+        - destination: {host: checkout}
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: checkout
+spec:
+  host: checkout
+  trafficPolicy:
+    tls: {mode: DISABLE}
+    loadBalancer: {simple: RANDOM}
+    outlierDetection: {consecutive5xxErrors: 1}
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: public
+spec:
+  servers:
+    - port: {number: 80, name: http, protocol: HTTP}
+      hosts: ["*"]
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: external
+spec:
+  hosts: ["*.example.com"]
+  location: MESH_EXTERNAL
+  resolution: NONE
+  ports:
+    - {number: 443, name: tls, protocol: TLS}
+---
+apiVersion: networking.istio.io/v1
+kind: Sidecar
+metadata:
+  name: unrestricted
+spec:
+  egress:
+    - hosts: ["*/*"]
+  outboundTrafficPolicy: {mode: ALLOW_ANY}
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: custom-filter
+spec:
+  configPatches:
+    - applyTo: HTTP_FILTER
+      patch:
+        operation: INSERT_BEFORE
+        value: {name: custom.filter}
+---
+apiVersion: extensions.istio.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: auth-filter
+spec:
+  url: oci://registry.example.com/auth-filter:latest
+  imagePullSecret: registry-token
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: broad-custom-auth
+spec:
+  action: CUSTOM
+  provider: {name: external-authz}
+  rules:
+    - to:
+        - operation: {paths: ["*"]}
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: permissive
+spec:
+  mtls: {mode: PERMISSIVE}
+---
+apiVersion: security.istio.io/v1
+kind: RequestAuthentication
+metadata:
+  name: external-jwt
+spec:
+  jwtRules:
+    - issuer: https://issuer.example.com
+      jwksUri: https://issuer.example.com/.well-known/jwks.json
+      forwardOriginalToken: true
+      outputClaimToHeaders:
+        - {header: x-user, claim: sub}
+---
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: disable-access-logs
+spec:
+  accessLogging:
+    - disabled: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mutate-and-generate
+spec:
+  validationFailureAction: Audit
+  rules:
+    - name: mutate-images
+      match: {any: [{resources: {kinds: [Pod]}}]}
+      mutate:
+        patchStrategicMerge:
+          metadata: {labels: {managed: "true"}}
+    - name: generate-secret
+      match: {any: [{resources: {kinds: [Namespace]}}]}
+      generate:
+        apiVersion: v1
+        kind: Secret
+        name: bootstrap
+        namespace: "{{request.object.metadata.name}}"
+---
+apiVersion: policies.kyverno.io/v1alpha1
+kind: MutatingPolicy
+metadata:
+  name: add-label
+spec:
+  matchConstraints: {resourceRules: []}
+  mutations: []
+---
+apiVersion: policies.kyverno.io/v1alpha1
+kind: DeletingPolicy
+metadata:
+  name: delete-completed
+spec:
+  matchConstraints: {resourceRules: []}
+  conditions: []
+---
+apiVersion: policies.kyverno.io/v1alpha1
+kind: ImageValidatingPolicy
+metadata:
+  name: verify-images
+spec:
+  matchConstraints: {resourceRules: []}
+  imageExtractors: {}
+---
+apiVersion: policies.kyverno.io/v1alpha1
+kind: PolicyException
+metadata:
+  name: exempt-builds
+spec:
+  exceptions:
+    - policyName: verify-images
+      ruleNames: [require-signature]
+  match: {any: [{resources: {namespaces: [builds]}}]}
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredlabels
+spec:
+  crd:
+    spec:
+      names: {kind: K8sRequiredLabels}
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredlabels
+        violation[{"msg": "missing owner"}] { not input.review.object.metadata.labels.owner }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: require-owner
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: [Namespace]
+---
+apiVersion: mutations.gatekeeper.sh/v1
+kind: Assign
+metadata:
+  name: assign-owner
+spec:
+  applyTo:
+    - groups: [""]
+      kinds: [Pod]
+      versions: [v1]
+  location: metadata.labels.owner
+  parameters:
+    assign:
+      externalData: {provider: ownership}
+---
+apiVersion: config.gatekeeper.sh/v1alpha1
+kind: Config
+metadata:
+  name: config
+  namespace: gatekeeper-system
+spec:
+  sync:
+    syncOnly:
+      - {group: "", version: v1, kind: Secret}
+  match:
+    - excludedNamespaces: [kube-system]
+      processes: [webhook]
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: queue-worker
+spec:
+  scaleTargetRef: {name: worker}
+  minReplicaCount: 0
+  maxReplicaCount: 500
+  fallback: {failureThreshold: 3, replicas: 25}
+  triggers:
+    - type: metrics-api
+      metadata:
+        url: https://metrics.example.com/value
+        unsafeSsl: "true"
+      authenticationRef:
+        name: scaler-auth
+        kind: ClusterTriggerAuthentication
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: queue-job
+spec:
+  rollout: {strategy: default}
+  jobTargetRef:
+    template:
+      spec:
+        containers:
+          - name: worker
+            image: example/worker:latest
+            securityContext: {privileged: true}
+        restartPolicy: Never
+  triggers:
+    - type: rabbitmq
+      authenticationRef: {name: scaler-auth}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ClusterTriggerAuthentication
+metadata:
+  name: scaler-auth
+spec:
+  secretTargetRef:
+    - {parameter: password, name: scaler-secret, key: password}
+  podIdentity: {provider: aws}
+  hashiCorpVault:
+    address: https://vault.example.com
+    authentication: token
+---
+apiVersion: eventing.keda.sh/v1alpha1
+kind: CloudEventSource
+metadata:
+  name: autoscaling-events
+spec:
+  destination: https://events.example.com/keda
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: public-api
+  annotations:
+    autoscaling.knative.dev/min-scale: "0"
+spec:
+  template:
+    spec:
+      serviceAccountName: api-admin
+      containers:
+        - image: example/public-api:latest
+          env:
+            - name: TOKEN
+              valueFrom: {secretKeyRef: {name: api-token, key: token}}
+---
+apiVersion: serving.knative.dev/v1
+kind: Route
+metadata:
+  name: public-api
+spec:
+  traffic:
+    - {revisionName: public-api-v1, percent: 90}
+    - {revisionName: public-api-v2, percent: 10, tag: canary}
+---
+apiVersion: eventing.knative.dev/v1
+kind: Broker
+metadata:
+  name: default
+spec:
+  delivery:
+    retry: 10
+    backoffPolicy: exponential
+    deadLetterSink: {ref: {apiVersion: v1, kind: Service, name: dead-letters}}
+---
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: deploy
+spec:
+  broker: default
+  filter: {attributes: {type: deployment.requested}}
+  subscriber:
+    uri: https://deploy.example.com/events
+---
+apiVersion: messaging.knative.dev/v1
+kind: InMemoryChannel
+metadata:
+  name: transient-events
+spec: {}
+---
+apiVersion: messaging.knative.dev/v1
+kind: Subscription
+metadata:
+  name: audit-events
+spec:
+  channel: {apiVersion: messaging.knative.dev/v1, kind: InMemoryChannel, name: transient-events}
+  subscriber: {uri: https://audit.example.com/events}
+  delivery: {retry: 5, deadLetterSink: {uri: https://audit.example.com/dead}}
+---
+apiVersion: flows.knative.dev/v1
+kind: Sequence
+metadata:
+  name: deployment-flow
+spec:
+  steps:
+    - {uri: https://validate.example.com}
+    - {uri: https://deploy.example.com}
+  reply: {uri: https://status.example.com}
+---
+apiVersion: sources.knative.dev/v1
+kind: ApiServerSource
+metadata:
+  name: pod-events
+spec:
+  serviceAccountName: event-reader
+  resources:
+    - {apiVersion: v1, kind: Event}
+  sink: {uri: https://events.example.com/pods}
+---
+apiVersion: eventing.knative.dev/v1alpha1
+kind: EventPolicy
+metadata:
+  name: broad-senders
+spec:
+  from:
+    - ref: {apiVersion: v1, kind: ServiceAccount, name: event-sender}
+---
+apiVersion: eventing.knative.dev/v1alpha1
+kind: EventTransform
+metadata:
+  name: redact
+spec:
+  sink: {uri: https://events.example.com/redacted}
+  jsonata: {$expr: "data"}
+---
+apiVersion: eventing.knative.dev/v1alpha1
+kind: RequestReply
+metadata:
+  name: request-reply
+spec:
+  brokerRef: {apiVersion: eventing.knative.dev/v1, kind: Broker, name: default}
+  timeout: PT30S

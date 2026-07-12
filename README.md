@@ -81,7 +81,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Serverless Framework | `readtheplan serverless serverless.yml` | Framework/tool version, deployment identity/artifacts, IAM, functions, events, plugins, variables, packaging, and embedded CloudFormation |
 | AWS SAM | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code, policies, event ingress, APIs, state machines, nested apps, Connectors, builds, and lifecycle policies |
 | Azure Bicep / ARM | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
-| Kubernetes / Argo / Flux / Tekton / Gateway API / cert-manager / External Secrets | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, workload, GitOps, workflow/event, routing, certificate/trust, and secret-sync rules |
+| Kubernetes / Argo / Flux / Tekton / Gateway API / cert-manager / External Secrets / Istio / Kyverno / Gatekeeper / KEDA / Knative | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, workloads, GitOps, workflows/events, routing/mesh, admission policy, certificates/trust, secret sync, event-driven scaling, and serverless rules |
 | Helm source | `readtheplan helm Chart.yaml` | Chart metadata, values, and Go-template source with dependencies, hooks, dynamic evaluation, exposure, privilege, and secret rules |
 | Kustomize source | `readtheplan kustomize kustomization.yaml` | Resources/bases, remote pinning, patches, generators, image overrides, Helm inflation, plugins, and transforms |
 | Crossplane | `readtheplan crossplane resources.yaml` | Packages/functions, image policy, runtime configuration, XRDs, Compositions, provider credentials, managed-resource lifecycle, and composite selection |
@@ -159,8 +159,9 @@ Serverless Framework and AWS SAM source analysis does not resolve variables,
 download artifacts, execute plugins/builders/macros, package code, or synthesize
 CloudFormation; each remains an explicit review or blocking trust boundary.
 Kubernetes controller analysis understands Argo Workflows/Events, Gateway API,
-cert-manager/trust-manager, and External Secrets API groups without contacting
-controllers, resolving runtime status, or reading referenced Secrets.
+cert-manager/trust-manager, External Secrets, Istio, Kyverno, Gatekeeper, KEDA,
+and Knative API groups without contacting controllers, resolving runtime status,
+or reading referenced Secrets.
 
 ## How it looks
 

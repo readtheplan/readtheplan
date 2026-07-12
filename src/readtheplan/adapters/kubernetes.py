@@ -97,6 +97,78 @@ _EXTERNAL_SECRETS_KIND_MAP: dict[str, str] = {
     "ClusterPushSecret": "kubernetes_external_secrets_cluster_push_secret",
 }
 
+_ISTIO_KIND_MAP: dict[tuple[str, str], str] = {
+    ("networking.istio.io", "VirtualService"): "kubernetes_istio_virtual_service",
+    ("networking.istio.io", "DestinationRule"): "kubernetes_istio_destination_rule",
+    ("networking.istio.io", "Gateway"): "kubernetes_istio_gateway",
+    ("networking.istio.io", "ServiceEntry"): "kubernetes_istio_service_entry",
+    ("networking.istio.io", "Sidecar"): "kubernetes_istio_sidecar",
+    ("networking.istio.io", "EnvoyFilter"): "kubernetes_istio_envoy_filter",
+    ("networking.istio.io", "WorkloadEntry"): "kubernetes_istio_workload_entry",
+    ("networking.istio.io", "WorkloadGroup"): "kubernetes_istio_workload_group",
+    ("networking.istio.io", "ProxyConfig"): "kubernetes_istio_proxy_config",
+    ("security.istio.io", "AuthorizationPolicy"): "kubernetes_istio_authorization_policy",
+    ("security.istio.io", "PeerAuthentication"): "kubernetes_istio_peer_authentication",
+    ("security.istio.io", "RequestAuthentication"): "kubernetes_istio_request_authentication",
+    ("telemetry.istio.io", "Telemetry"): "kubernetes_istio_telemetry",
+    ("extensions.istio.io", "WasmPlugin"): "kubernetes_istio_wasm_plugin",
+}
+
+_KYVERNO_KIND_MAP: dict[str, str] = {
+    "ClusterPolicy": "kubernetes_kyverno_cluster_policy",
+    "Policy": "kubernetes_kyverno_policy",
+    "ValidatingPolicy": "kubernetes_kyverno_validating_policy",
+    "NamespacedValidatingPolicy": "kubernetes_kyverno_namespaced_validating_policy",
+    "MutatingPolicy": "kubernetes_kyverno_mutating_policy",
+    "NamespacedMutatingPolicy": "kubernetes_kyverno_namespaced_mutating_policy",
+    "GeneratingPolicy": "kubernetes_kyverno_generating_policy",
+    "NamespacedGeneratingPolicy": "kubernetes_kyverno_namespaced_generating_policy",
+    "DeletingPolicy": "kubernetes_kyverno_deleting_policy",
+    "NamespacedDeletingPolicy": "kubernetes_kyverno_namespaced_deleting_policy",
+    "ImageValidatingPolicy": "kubernetes_kyverno_image_validating_policy",
+    "NamespacedImageValidatingPolicy": "kubernetes_kyverno_namespaced_image_validating_policy",
+    "CleanupPolicy": "kubernetes_kyverno_cleanup_policy",
+    "ClusterCleanupPolicy": "kubernetes_kyverno_cluster_cleanup_policy",
+    "PolicyException": "kubernetes_kyverno_policy_exception",
+}
+
+_GATEKEEPER_KIND_MAP: dict[tuple[str, str], str] = {
+    ("templates.gatekeeper.sh", "ConstraintTemplate"): "kubernetes_gatekeeper_constraint_template",
+    ("config.gatekeeper.sh", "Config"): "kubernetes_gatekeeper_config",
+    ("mutations.gatekeeper.sh", "Assign"): "kubernetes_gatekeeper_assign",
+    ("mutations.gatekeeper.sh", "AssignMetadata"): "kubernetes_gatekeeper_assign_metadata",
+    ("mutations.gatekeeper.sh", "ModifySet"): "kubernetes_gatekeeper_modify_set",
+    ("mutations.gatekeeper.sh", "AssignImage"): "kubernetes_gatekeeper_assign_image",
+    ("expansion.gatekeeper.sh", "ExpansionTemplate"): "kubernetes_gatekeeper_expansion_template",
+    ("syncset.gatekeeper.sh", "SyncSet"): "kubernetes_gatekeeper_sync_set",
+    ("externaldata.gatekeeper.sh", "Provider"): "kubernetes_gatekeeper_external_data_provider",
+}
+
+_KEDA_KIND_MAP: dict[str, str] = {
+    "ScaledObject": "kubernetes_keda_scaled_object",
+    "ScaledJob": "kubernetes_keda_scaled_job",
+    "TriggerAuthentication": "kubernetes_keda_trigger_authentication",
+    "ClusterTriggerAuthentication": "kubernetes_keda_cluster_trigger_authentication",
+    "CloudEventSource": "kubernetes_keda_cloud_event_source",
+}
+
+_KNATIVE_KIND_MAP: dict[tuple[str, str], str] = {
+    ("serving.knative.dev", "Service"): "kubernetes_knative_service",
+    ("serving.knative.dev", "Route"): "kubernetes_knative_route",
+    ("serving.knative.dev", "Configuration"): "kubernetes_knative_configuration",
+    ("serving.knative.dev", "Revision"): "kubernetes_knative_revision",
+    ("eventing.knative.dev", "Broker"): "kubernetes_knative_broker",
+    ("eventing.knative.dev", "Trigger"): "kubernetes_knative_trigger",
+    ("eventing.knative.dev", "EventPolicy"): "kubernetes_knative_event_policy",
+    ("eventing.knative.dev", "EventTransform"): "kubernetes_knative_event_transform",
+    ("eventing.knative.dev", "RequestReply"): "kubernetes_knative_request_reply",
+    ("messaging.knative.dev", "Channel"): "kubernetes_knative_channel",
+    ("messaging.knative.dev", "InMemoryChannel"): "kubernetes_knative_in_memory_channel",
+    ("messaging.knative.dev", "Subscription"): "kubernetes_knative_subscription",
+    ("flows.knative.dev", "Sequence"): "kubernetes_knative_sequence",
+    ("flows.knative.dev", "Parallel"): "kubernetes_knative_parallel",
+}
+
 _FLUX_KIND_MAP: dict[tuple[str, str], str] = {
     ("source.toolkit.fluxcd.io", "GitRepository"): "kubernetes_flux_git_repository",
     ("source.toolkit.fluxcd.io", "OCIRepository"): "kubernetes_flux_oci_repository",
@@ -166,6 +238,14 @@ _CLUSTER_SCOPED_KINDS = frozenset(
         "ClusterExternalSecret",
         "ClusterPushSecret",
         "ClusterGenerator",
+        "ClusterPolicy",
+        "ClusterCleanupPolicy",
+        "ValidatingPolicy",
+        "MutatingPolicy",
+        "GeneratingPolicy",
+        "DeletingPolicy",
+        "ImageValidatingPolicy",
+        "ClusterTriggerAuthentication",
     }
 )
 
@@ -503,6 +583,27 @@ class KubernetesAdapter(BaseAdapter):
                 return external_secrets_type
         if separator and api_group == "generators.external-secrets.io":
             return "kubernetes_external_secrets_generator"
+        istio_type = _ISTIO_KIND_MAP.get((api_group, kind)) if separator else None
+        if istio_type:
+            return istio_type
+        if separator and api_group in {"kyverno.io", "policies.kyverno.io"}:
+            kyverno_type = _KYVERNO_KIND_MAP.get(kind)
+            if kyverno_type:
+                return kyverno_type
+        gatekeeper_type = _GATEKEEPER_KIND_MAP.get((api_group, kind)) if separator else None
+        if gatekeeper_type:
+            return gatekeeper_type
+        if separator and api_group == "constraints.gatekeeper.sh":
+            return "kubernetes_gatekeeper_constraint"
+        if separator and api_group in {"keda.sh", "eventing.keda.sh"}:
+            keda_type = _KEDA_KIND_MAP.get(kind)
+            if keda_type:
+                return keda_type
+        knative_type = _KNATIVE_KIND_MAP.get((api_group, kind)) if separator else None
+        if knative_type:
+            return knative_type
+        if separator and api_group == "sources.knative.dev":
+            return "kubernetes_knative_event_source"
         mapped = _K8S_KIND_MAP.get(kind)
         if mapped:
             return mapped

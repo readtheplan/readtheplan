@@ -22,6 +22,11 @@ matrix makes those boundaries explicit.
 | Kubernetes Gateway API | GatewayClass, Gateway/ListenerSet, Routes, ReferenceGrant, and BackendTLSPolicy YAML | `readtheplan kubernetes gateway.yaml` | Listener exposure/TLS, route namespace trust, host matching, filters/mirroring, backend references, cross-namespace grants, and backend TLS validation | Built-in |
 | cert-manager / trust-manager | Certificate, Issuer, CertificateRequest, ACME, and Bundle YAML | `readtheplan kubernetes certificates.yaml` | Signing authority scope, wildcard/CA issuance, key rotation, ACME DNS/HTTP mutation, request approval, Secret ownership, and distributed trust | Built-in |
 | External Secrets Operator | Store, ExternalSecret, PushSecret, and generator YAML | `readtheplan kubernetes external-secrets.yaml` | Backend identity/scope, cluster-wide namespace boundaries, bulk imports, refresh/templates, Secret replication, outbound pushes, deletion policy, and generated credentials | Built-in |
+| Istio | Networking, security, telemetry, EnvoyFilter, and WasmPlugin YAML | `readtheplan kubernetes istio.yaml` | Traffic reachability, namespace export, external services, TLS/mTLS, authorization/JWT, low-level proxy patches, extension provenance, and telemetry gaps | Built-in |
+| Kyverno | Legacy ClusterPolicy/Policy plus validating, mutating, generating, deleting, image, cleanup, and exception policy YAML | `readtheplan kubernetes kyverno.yaml` | Admission enforcement, CEL/context, mutation/generation/deletion, image verification, scheduled cleanup, cluster scope, and policy exceptions | Built-in |
+| OPA Gatekeeper | ConstraintTemplate, Constraint, mutation, Config, SyncSet, ExpansionTemplate, and external-data Provider YAML | `readtheplan kubernetes gatekeeper.yaml` | Rego/CEL policy code, enforcement mode, admission mutation, inventory sync, process exclusions, expansion, and external policy data | Built-in |
+| KEDA | ScaledObject, ScaledJob, authentication, and CloudEventSource YAML | `readtheplan kubernetes keda.yaml` | Scale bounds and scale-to-zero, metric endpoints/TLS, fallback, executable Jobs, credential/identity scope, rollout, and autoscaling event export | Built-in |
+| Knative Serving / Eventing | Service/Route/Revision plus Broker, Trigger, Channel, Subscription, flows, sources, EventPolicy, transforms, and request/reply YAML | `readtheplan kubernetes knative.yaml` | Container/image/identity risk, traffic visibility and revision splits, CloudEvent routing/filtering, retries/DLQ, event-source identity, and sender authorization | Built-in |
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays, tasks, nested blocks, handlers, and roles | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
@@ -108,9 +113,10 @@ the same optional `framework` parameter through its MCP tool.
   through Terraform/OpenTofu plan JSON. A separate adapter is unnecessary unless
   those tools expose additional structured semantics worth preserving.
 - Argo CD/Workflows/Events, Flux, Tekton, Gateway API, cert-manager/trust-manager,
-  and External Secrets receive first-party controller semantics. Other custom
-  resources remain conservative because their reconciliation effects depend on
-  code and runtime configuration outside the submitted manifest.
+  External Secrets, Istio, Kyverno, Gatekeeper, KEDA, and Knative receive
+  first-party controller semantics. Other custom resources remain conservative
+  because their reconciliation effects depend on code and runtime configuration
+  outside the submitted manifest.
 - Controller-aware Kubernetes rules remain static: referenced templates, Secrets,
   Services, stores, trust roots, backends, controller configuration, admission,
   runtime status, and external systems must be verified in the target environment.
