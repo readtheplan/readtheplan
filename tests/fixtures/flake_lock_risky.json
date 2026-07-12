@@ -1,0 +1,64 @@
+{
+  "nodes": {
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "ops": "ops",
+        "local": "local",
+        "unlocked": "unlocked",
+        "shared": ["nixpkgs", "lib"],
+        "missing": "ghost"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1770000000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "0123456789abcdef0123456789abcdef01234567",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "ops": {
+      "locked": {
+        "dirtyRev": "dirty",
+        "rev": "abc123",
+        "type": "git",
+        "url": "http://deploy:literal-token@git.example.test/ops.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "http://git.example.test/ops.git"
+      }
+    },
+    "local": {
+      "locked": {
+        "lastModified": 1770000000,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+        "path": "../local-module",
+        "type": "path"
+      },
+      "original": {
+        "path": "../local-module",
+        "type": "path"
+      }
+    },
+    "unlocked": {
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "https://git.example.test/unlocked.git"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

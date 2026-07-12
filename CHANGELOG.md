@@ -9,6 +9,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Nix/NixOS gates across the CLI, GitHub Action, and MCP. Strict
+  `flake.lock` graph parsing plus conservative flake/module source scanning now
+  covers input provenance and pinning, caches/daemon trust, signatures and
+  sandboxing, fetches/impurity/build code, users/SSH/sudo/firewalls, services,
+  systemd/activation scripts, kernel/storage/network/containers, secrets, and
+  lazy module-evaluation boundaries.
 - Salt project gates across the CLI, GitHub Action, and MCP. Strict parsing of
   master/minion configuration, top files, and Salt SSH rosters now covers PKI
   trust, remote authorization, state/Pillar/module sources, GitFS provenance,
