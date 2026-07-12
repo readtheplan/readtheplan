@@ -4,6 +4,7 @@ from importlib.metadata import entry_points
 from typing import Any
 
 from readtheplan.adapters.ansible import AnsibleAdapter
+from readtheplan.adapters.atlantis import AtlantisAdapter
 from readtheplan.adapters.azure import AzureWhatIfAdapter
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.chef import ChefAdapter
@@ -81,6 +82,7 @@ def load_entry_point_adapters() -> list[str]:
 
 # Auto-register builtin adapters, then discover external plugins (best-effort).
 register_adapter(CloudFormationAdapter())
+register_adapter(AtlantisAdapter())
 register_adapter(CloudInitAdapter())
 register_adapter(DockerfileAdapter())
 register_adapter(KubernetesAdapter())
@@ -109,6 +111,7 @@ load_entry_point_adapters()
 __all__ = [
     "ADAPTER_ENTRY_POINT_GROUP",
     "AnsibleAdapter",
+    "AtlantisAdapter",
     "BaseAdapter",
     "AzureWhatIfAdapter",
     "AzurePipelinesAdapter",

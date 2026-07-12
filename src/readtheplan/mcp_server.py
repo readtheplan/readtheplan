@@ -408,6 +408,43 @@ def agent_gate_pipeline(
     return analyze_pipeline(adapter, data, catalog=catalog)  # type: ignore[arg-type]
 
 
+def agent_gate_atlantis(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Atlantis repo-level or server-side YAML."""
+    from readtheplan.adapters.atlantis import (
+        AtlantisAdapter,
+        AtlantisInputError,
+        analyze_atlantis,
+        parse_atlantis_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Atlantis input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_atlantis_config(source)
+    except AtlantisInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Atlantis configuration in {input_path}: {exc}",
+        ) from exc
+    if not AtlantisAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Atlantis configuration"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_atlantis(data, catalog=catalog)
+
+
 def agent_gate_workload(
     input_path: str,
     ecosystem: str,
@@ -812,6 +849,7 @@ def create_server() -> Any:
     agent_gate_k8s_handler = agent_gate_kubernetes
     agent_gate_pulumi_handler = agent_gate_pulumi
     agent_gate_pipeline_handler = agent_gate_pipeline
+    agent_gate_atlantis_handler = agent_gate_atlantis
     agent_gate_workload_handler = agent_gate_workload
     agent_gate_packer_handler = agent_gate_packer
     agent_gate_salt_handler = agent_gate_salt
@@ -912,6 +950,19 @@ def create_server() -> Any:
             ecosystem,
             framework=framework,
         )
+
+    @mcp.tool(name="agent_gate_atlantis")
+    def _agent_gate_atlantis_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Atlantis repo-level or server-side configuration.
+
+        Args:
+            input_path: Local path to atlantis.yaml or server repos.yaml.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_atlantis_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_workload")
     def _agent_gate_workload_tool(

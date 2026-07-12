@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Atlantis repo-level and server-side configuration gates across the CLI,
+  generalized Action, and local MCP server. Plan/apply/import requirements,
+  custom commands, environment steps, workflow hooks, override permissions,
+  custom-workflow authorization, repo scope, locks, autoplan, policy checks,
+  parallelism, and execution ordering feed the shared risk contract.
 - Native Buildkite pipeline gates across the CLI, generalized Action, and local
   MCP server. Commands, dynamic uploads, plugin pinning, agents/queues, secrets,
   environment interpolation, artifacts, triggers, approvals, retries,

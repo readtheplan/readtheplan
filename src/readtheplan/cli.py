@@ -328,6 +328,14 @@ def _build_parser() -> argparse.ArgumentParser:
     buildkite.add_argument("input_file", help="Path to a Buildkite pipeline YAML file.")
     buildkite.set_defaults(func=_pipeline_gate)
 
+    atlantis = subparsers.add_parser(
+        "atlantis",
+        help="Emit the agent-gate decision for Atlantis repo or server configuration.",
+    )
+    atlantis.add_argument("--framework", help="Include checks from a compliance framework.")
+    atlantis.add_argument("input_file", help="Path to atlantis.yaml or server repos.yaml.")
+    atlantis.set_defaults(func=_atlantis_gate)
+
     docker_compose = subparsers.add_parser(
         "docker-compose",
         help="Emit the agent-gate decision for a Docker Compose configuration.",
@@ -1028,6 +1036,35 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_pipeline(adapter, data, catalog=catalog))
+
+
+def _atlantis_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Atlantis repo-level or server-side YAML."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.atlantis import (
+        AtlantisInputError,
+        analyze_atlantis,
+        parse_atlantis_config,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_atlantis_config(source)
+    except AtlantisInputError as exc:
+        print(f"Error: invalid Atlantis configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "atlantis":
+        print("Error: input not recognized as Atlantis configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_atlantis(data, catalog=catalog))
 
 
 def _workload_gate(args: argparse.Namespace) -> int:

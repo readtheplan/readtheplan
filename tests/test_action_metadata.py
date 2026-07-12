@@ -23,6 +23,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert (
         "cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
+        "atlantis|"
         "docker-compose|"
         "dockerfile|nomad|packer|salt|vagrant|"
         "cloud-init|systemd|nginx|haproxy"
@@ -86,6 +87,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/bitbucket_pipelines_deploy.yml" in workflow
     assert "tool: buildkite" in workflow
     assert "input-file: tests/fixtures/buildkite_deploy.yml" in workflow
+    assert "tool: atlantis" in workflow
+    assert "input-file: tests/fixtures/atlantis_risky.yaml" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow
