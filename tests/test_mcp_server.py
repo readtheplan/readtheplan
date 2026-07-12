@@ -22,6 +22,7 @@ from readtheplan.mcp_server import (
     agent_gate_dockerfile,
     agent_gate_envoy,
     agent_gate_kubernetes,
+    agent_gate_monitoring,
     agent_gate_packer,
     agent_gate_pipeline,
     agent_gate_proxy_config,
@@ -204,6 +205,23 @@ def test_agent_gate_envoy_supports_bootstrap_and_config_dump(
     result = agent_gate_envoy(str(FIXTURES / fixture), "soc2")
     assert result["adapter"] == "envoy"
     assert result["decision"] == decision
+    assert result["total_changes"] == total
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize(
+    ("ecosystem", "fixture", "total"),
+    [
+        ("prometheus", "prometheus_risky.yml", 16),
+        ("alertmanager", "alertmanager_risky.yml", 17),
+    ],
+)
+def test_agent_gate_monitoring_supports_both_ecosystems(
+    ecosystem: str, fixture: str, total: int
+) -> None:
+    result = agent_gate_monitoring(str(FIXTURES / fixture), ecosystem, "soc2")
+    assert result["adapter"] == ecosystem
+    assert result["decision"] == "block"
     assert result["total_changes"] == total
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -983,6 +1001,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_proxy_config" in tool_names
         assert "agent_gate_atlantis" in tool_names
         assert "agent_gate_envoy" in tool_names
+        assert "agent_gate_monitoring" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1011,6 +1030,10 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(atlantis_schema["properties"])
         envoy_schema = tools_by_name["agent_gate_envoy"]["inputSchema"]
         assert {"input_path", "framework"} <= set(envoy_schema["properties"])
+        monitoring_schema = tools_by_name["agent_gate_monitoring"]["inputSchema"]
+        assert {"input_path", "ecosystem", "framework"} <= set(
+            monitoring_schema["properties"]
+        )
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 

@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "pulumi", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "salt", "jenkins", "chef", "puppet", "kubernetes", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "prometheus", "alertmanager", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -41,6 +41,7 @@ readtheplan = "readtheplan.cli:main"
 # canonical examples (discovery is idempotent).
 [project.entry-points."readtheplan.adapters"]
 ansible = "readtheplan.adapters.ansible:AnsibleAdapter"
+alertmanager = "readtheplan.adapters.monitoring:AlertmanagerAdapter"
 atlantis = "readtheplan.adapters.atlantis:AtlantisAdapter"
 azure = "readtheplan.adapters.azure:AzureWhatIfAdapter"
 azure-pipelines = "readtheplan.adapters.pipelines:AzurePipelinesAdapter"
@@ -62,6 +63,7 @@ nomad = "readtheplan.adapters.workloads:NomadPlanAdapter"
 nginx = "readtheplan.adapters.proxy_configs:NginxAdapter"
 packer = "readtheplan.adapters.packer:PackerInspectAdapter"
 pulumi = "readtheplan.adapters.pulumi:PulumiAdapter"
+prometheus = "readtheplan.adapters.monitoring:PrometheusAdapter"
 puppet = "readtheplan.adapters.puppet:PuppetAdapter"
 salt = "readtheplan.adapters.salt:SaltAdapter"
 systemd = "readtheplan.adapters.systemd:SystemdUnitAdapter"

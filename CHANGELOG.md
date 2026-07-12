@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Prometheus and Alertmanager configuration gates across the CLI,
+  generalized Action, and local MCP server. Scrape/discovery targets, rule files,
+  relabeling, remote read/write, HTTP auth/TLS, OTLP, alert routing, notification
+  integrations, credentials, templates, inhibition/time intervals, and event
+  export feed the shared risk contract.
 - Native Envoy bootstrap and admin config-dump gates across the CLI, generalized
   Action, and local MCP server. Listeners, admin exposure, clusters, xDS sources,
   runtime layers, TLS identity validation, secrets, routes, access logs, filters,

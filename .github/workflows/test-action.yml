@@ -264,6 +264,58 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Prometheus configuration
+        id: prometheus
+        uses: ./
+        with:
+          tool: prometheus
+          input-file: tests/fixtures/prometheus_risky.yml
+          framework: soc2
+
+      - name: Assert Prometheus outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.prometheus.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.prometheus.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.prometheus.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "16"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "prometheus"
+          assert payload["decision"] == "block"
+          PY
+
+      - name: Run action on Alertmanager configuration
+        id: alertmanager
+        uses: ./
+        with:
+          tool: alertmanager
+          input-file: tests/fixtures/alertmanager_risky.yml
+          framework: soc2
+
+      - name: Assert Alertmanager outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.alertmanager.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.alertmanager.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.alertmanager.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "17"
+          test "$RISK_COUNTS" = '{"dangerous":10,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "alertmanager"
+          assert payload["decision"] == "block"
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

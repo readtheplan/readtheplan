@@ -688,6 +688,50 @@ def agent_gate_systemd(
     return analyze_systemd(data, catalog=catalog)
 
 
+def agent_gate_monitoring(
+    input_path: str,
+    ecosystem: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Prometheus or Alertmanager YAML."""
+    from readtheplan.adapters.monitoring import (
+        AlertmanagerAdapter,
+        MonitoringInputError,
+        PrometheusAdapter,
+        analyze_monitoring,
+        parse_monitoring_config,
+    )
+
+    if ecosystem not in {"prometheus", "alertmanager"}:
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="ecosystem must be prometheus or alertmanager"
+        )
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read {ecosystem} input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_monitoring_config(source, ecosystem)
+    except MonitoringInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid {ecosystem} configuration in {input_path}: {exc}",
+        ) from exc
+    adapter = PrometheusAdapter() if ecosystem == "prometheus" else AlertmanagerAdapter()
+    if not adapter.can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message=f"Input is not recognized as {ecosystem} configuration"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_monitoring(data, catalog=catalog)
+
+
 def agent_gate_envoy(
     input_path: str,
     framework: str | None = None,
@@ -893,6 +937,7 @@ def create_server() -> Any:
     agent_gate_cloud_init_handler = agent_gate_cloud_init
     agent_gate_systemd_handler = agent_gate_systemd
     agent_gate_envoy_handler = agent_gate_envoy
+    agent_gate_monitoring_handler = agent_gate_monitoring
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1084,6 +1129,21 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_systemd_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_monitoring")
+    def _agent_gate_monitoring_tool(
+        input_path: str,
+        ecosystem: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Prometheus or Alertmanager configuration.
+
+        Args:
+            input_path: Local path to prometheus.yml or alertmanager.yml.
+            ecosystem: prometheus or alertmanager.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_monitoring_handler(input_path, ecosystem, framework=framework)
 
     @mcp.tool(name="agent_gate_envoy")
     def _agent_gate_envoy_tool(

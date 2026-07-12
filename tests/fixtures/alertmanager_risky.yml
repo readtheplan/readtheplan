@@ -1,0 +1,36 @@
+global:
+  smtp_smarthost: smtp.example.test:25
+  smtp_require_tls: false
+  smtp_auth_password: fixture-secret
+  slack_api_url: https://hooks.slack.example.test/fixture
+route:
+  receiver: operations
+  group_by: [alertname, cluster]
+  routes:
+    - receiver: incident-webhook
+      matchers: [severity="critical"]
+receivers:
+  - name: operations
+    email_configs:
+      - to: ops@example.test
+        auth_password: fixture-password
+        tls_config:
+          insecure_skip_verify: true
+  - name: incident-webhook
+    webhook_configs:
+      - url: https://hooks.example.test/alerts
+        authorization:
+          credentials: fixture-token
+templates:
+  - templates/*.tmpl
+inhibit_rules:
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [cluster]
+time_intervals:
+  - name: maintenance
+    time_intervals:
+      - weekdays: [saturday, sunday]
+event_recorder:
+  webhook:
+    url: https://events.example.test/alertmanager
