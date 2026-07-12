@@ -96,6 +96,35 @@ jobs:
           echo "Expected unsupported tool validation to fail"
           exit 1
 
+      - name: Run action on GitHub Actions workflow
+        id: github_actions
+        uses: ./
+        with:
+          tool: github-actions
+          input-file: tests/fixtures/github_actions_deploy.yml
+          framework: soc2
+
+      - name: Assert GitHub Actions workflow outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.github_actions.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.github_actions.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.github_actions.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "4"
+          test "$RISK_COUNTS" = '{"dangerous":1,"irreversible":0,"review":2,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "github-actions"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Azure What-If
         id: azure
         uses: ./

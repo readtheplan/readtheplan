@@ -4,7 +4,7 @@ author: readtheplan maintainers
 
 inputs:
   tool:
-    description: "Input tool: terraform, cloudformation, azure, kubernetes, pulumi, ansible, jenkins, chef, or puppet."
+    description: "Input tool: terraform, cloudformation, azure, kubernetes, pulumi, ansible, jenkins, chef, puppet, github-actions, gitlab-ci, or circleci."
     required: false
     default: "terraform"
   input-file:
@@ -77,8 +77,8 @@ runs:
 
         TOOL="${TOOL,,}"
         case "$TOOL" in
-          terraform|cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet) ;;
-          *) echo "::error::tool must be one of: terraform, cloudformation, azure, kubernetes, pulumi, ansible, jenkins, chef, puppet; got: $TOOL"; exit 1 ;;
+          terraform|cloudformation|azure|kubernetes|pulumi|ansible|jenkins|chef|puppet|github-actions|gitlab-ci|circleci) ;;
+          *) echo "::error::unsupported tool: $TOOL"; exit 1 ;;
         esac
 
         if [ -n "$INPUT_FILE" ] && [ -n "$PLAN_FILE" ] && [ "$INPUT_FILE" != "$PLAN_FILE" ]; then

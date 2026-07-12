@@ -61,8 +61,7 @@ def _validate_path(plan_path: str) -> Path:
             raise MCPToolInputError(
                 code="PATH_TRAVERSAL",
                 message=(
-                    f"plan_path {plan_path!r} resolves outside the allowed "
-                    f"working root {root}"
+                    f"plan_path {plan_path!r} resolves outside the allowed working root {root}"
                 ),
             ) from None
     return resolved
@@ -148,10 +147,7 @@ def _read_confined_bytes(path: str) -> bytes:
             except ValueError:
                 raise MCPToolInputError(
                     code="PATH_TRAVERSAL",
-                    message=(
-                        f"input path {path!r} opened outside the allowed "
-                        f"working root {root}"
-                    ),
+                    message=(f"input path {path!r} opened outside the allowed working root {root}"),
                 ) from None
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
@@ -230,9 +226,7 @@ def agent_gate_cloudformation(
         ) from exc
 
     if not isinstance(data, dict):
-        raise MCPToolInputError(
-            code="INVALID_INPUT", message="Input must be a JSON object"
-        )
+        raise MCPToolInputError(code="INVALID_INPUT", message="Input must be a JSON object")
 
     catalog = _load_catalog_for_tool(framework)
     return analyze_cloudformation(data, catalog=catalog)
@@ -357,6 +351,53 @@ def agent_gate_pulumi(
     return analyze_pulumi(data, catalog=catalog)
 
 
+def agent_gate_pipeline(
+    input_path: str,
+    ecosystem: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for GitHub Actions, GitLab CI, or CircleCI YAML."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.pipelines import (
+        PipelineInputError,
+        analyze_pipeline,
+        parse_pipeline_yaml,
+    )
+
+    if ecosystem not in {"github-actions", "gitlab-ci", "circleci"}:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="ecosystem must be github-actions, gitlab-ci, or circleci",
+        )
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read {ecosystem} input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_pipeline_yaml(source, ecosystem)
+    except PipelineInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid {ecosystem} pipeline YAML in {input_path}: {exc}",
+        ) from exc
+
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != ecosystem:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Input is not recognized as {ecosystem} configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_pipeline(adapter, data, catalog=catalog)  # type: ignore[arg-type]
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -391,9 +432,7 @@ def _summary_for_tool(plan_path: str) -> PlanSummary:
             raise PlanError(f"plan path is a directory, not a file: {plan_file}") from exc
         except PermissionError as exc:
             if plan_file.is_dir():
-                raise PlanError(
-                    f"plan path is a directory, not a file: {plan_file}"
-                ) from exc
+                raise PlanError(f"plan path is a directory, not a file: {plan_file}") from exc
             raise PlanError(f"cannot read plan file {plan_file}: {exc}") from exc
         except OSError as exc:
             raise PlanError(f"cannot read plan file {plan_file}: {exc}") from exc
@@ -404,8 +443,7 @@ def _summary_for_tool(plan_path: str) -> PlanSummary:
             plan_data = json.loads(raw)
         except json.JSONDecodeError as exc:
             raise PlanError(
-                f"invalid JSON in {plan_file}: line {exc.lineno}, "
-                f"column {exc.colno}: {exc.msg}"
+                f"invalid JSON in {plan_file}: line {exc.lineno}, column {exc.colno}: {exc.msg}"
             ) from exc
         if not isinstance(plan_data, dict):
             raise PlanError(f"Terraform plan JSON must be an object: {plan_file}")
@@ -431,6 +469,7 @@ def create_server() -> Any:
     agent_gate_azure_handler = agent_gate_azure
     agent_gate_k8s_handler = agent_gate_kubernetes
     agent_gate_pulumi_handler = agent_gate_pulumi
+    agent_gate_pipeline_handler = agent_gate_pipeline
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -503,6 +542,25 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_pulumi_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_pipeline")
+    def _agent_gate_pipeline_tool(
+        input_path: str,
+        ecosystem: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for GitHub Actions, GitLab CI, or CircleCI YAML.
+
+        Args:
+            input_path: Local path to the pipeline YAML file.
+            ecosystem: github-actions, gitlab-ci, or circleci.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_pipeline_handler(
+            input_path,
+            ecosystem,
+            framework=framework,
+        )
 
     @mcp.tool(name="evolution_status")
     def _evolution_status_tool() -> dict[str, object]:

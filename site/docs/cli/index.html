@@ -140,8 +140,11 @@ readtheplan pulumi preview.json
 readtheplan ansible playbook.yml
 readtheplan jenkins Jenkinsfile
 readtheplan chef default.rb
-readtheplan puppet site.pp</code></pre>
-          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, and Crossplane artifacts work directly. Azure accepts Bicep/ARM deployment What-If JSON; use FullResourcePayloads for property-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events; generate the default format with <code>pulumi preview --json &gt; preview.json</code>. Ansible input is parsed as structured YAML, including nested task blocks and handlers. Jenkins, Chef, and Puppet use conservative syntax-aware scanners: recognized execution or destructive operations block, and unknown or dynamic constructs require review. None of the adapters execute user configuration.</p>
+readtheplan puppet site.pp
+readtheplan github-actions .github/workflows/deploy.yml
+readtheplan gitlab-ci .gitlab-ci.yml
+readtheplan circleci .circleci/config.yml</code></pre>
+          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, and Crossplane artifacts work directly. Azure accepts Bicep/ARM deployment What-If JSON; use FullResourcePayloads for property-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events. Ansible input is parsed as structured YAML. Jenkins, Chef, and Puppet use conservative syntax-aware scanners. GitHub Actions, GitLab CI, and CircleCI parse YAML structurally and review permissions, secrets, reusable code, includes, deployment environments, and executable steps. None of the adapters execute user configuration.</p>
           <p style="color:var(--muted);margin-top:12px">Adapter exit codes are <code>0</code> for proceed, <code>1</code> for warn, and <code>2</code> for block. Add <code>--framework soc2</code>, <code>--framework iso27001</code>, or <code>--framework hipaa</code> to include required control checks.</p>
         </div>
       </section>

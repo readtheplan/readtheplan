@@ -18,6 +18,7 @@ from readtheplan.mcp_server import (
     agent_gate_azure,
     agent_gate_cloudformation,
     agent_gate_kubernetes,
+    agent_gate_pipeline,
     agent_gate_pulumi,
     analyze_plan,
     create_server,
@@ -51,10 +52,7 @@ def test_agent_gate_pulumi_supports_framework_checks() -> None:
     result = agent_gate_pulumi(str(FIXTURES / "pulumi_preview_mixed.json"), "soc2")
     assert result["adapter"] == "pulumi"
     assert result["decision"] == "block"
-    assert any(
-        str(check).startswith("rtp.control.soc2.")
-        for check in result["required_checks"]
-    )
+    assert any(str(check).startswith("rtp.control.soc2.") for check in result["required_checks"])
 
 
 def test_agent_gate_pulumi_unknown_provider_gets_framework_baseline(
@@ -91,9 +89,7 @@ def test_agent_gate_pulumi_unknown_provider_gets_framework_baseline(
 def test_cloudformation_and_kubernetes_mcp_tools_accept_frameworks(
     tmp_path: Path,
 ) -> None:
-    cloudformation = agent_gate_cloudformation(
-        str(FIXTURES / "cfn_change_set_mixed.json"), "soc2"
-    )
+    cloudformation = agent_gate_cloudformation(str(FIXTURES / "cfn_change_set_mixed.json"), "soc2")
     manifest = tmp_path / "deployment.yaml"
     manifest.write_text(
         "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n",
@@ -111,6 +107,25 @@ def test_agent_gate_pulumi_rejects_invalid_preview(tmp_path: Path) -> None:
     with pytest.raises(MCPToolInputError) as exc_info:
         agent_gate_pulumi(str(invalid))
     assert exc_info.value.code == "INVALID_JSON"
+
+
+def test_agent_gate_pipeline_supports_framework_checks() -> None:
+    result = agent_gate_pipeline(
+        str(FIXTURES / "github_actions_deploy.yml"),
+        "github-actions",
+        "soc2",
+    )
+
+    assert result["adapter"] == "github-actions"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_pipeline("pipeline.yml", "unknown")
+
+    assert exc_info.value.code == "INVALID_INPUT"
 
 
 @pytest.mark.parametrize(
@@ -244,9 +259,7 @@ def test_analyze_plan_with_framework_returns_controls() -> None:
 def test_analyze_plan_framework_matches_cli(capsys) -> None:
     """Framework-enriched MCP output must match the CLI --framework JSON."""
     plan = FIXTURES / "soc2_plan.json"
-    exit_code = main(
-        ["analyze", "--format", "json", "--framework", "soc2", str(plan)]
-    )
+    exit_code = main(["analyze", "--format", "json", "--framework", "soc2", str(plan)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -277,9 +290,7 @@ def test_analyze_plan_without_framework_has_no_controls() -> None:
 def test_agent_gate_with_framework_adds_control_checks() -> None:
     result = agent_gate(str(FIXTURES / "soc2_plan.json"), framework="soc2")
 
-    control_checks = [
-        c for c in result["required_checks"] if c.startswith("rtp.control.soc2.")
-    ]
+    control_checks = [c for c in result["required_checks"] if c.startswith("rtp.control.soc2.")]
     assert len(control_checks) > 0
 
 
@@ -505,6 +516,19 @@ def test_agent_gate_kubernetes_rejects_path_outside_root(monkeypatch, tmp_path) 
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_pipeline_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "workflow.yml"
+    outside.write_text("permissions: {}\njobs: {}\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_pipeline(str(outside), "github-actions")
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_kubernetes_allows_path_inside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -664,9 +688,7 @@ def test_stdio_server_tools_list() -> None:
         tools_req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
         tools_resp = _send_jsonrpc(proc, tools_req)
         assert "result" in tools_resp, f"tools/list failed: {tools_resp}"
-        tools_by_name = {
-            tool["name"]: tool for tool in tools_resp["result"]["tools"]
-        }
+        tools_by_name = {tool["name"]: tool for tool in tools_resp["result"]["tools"]}
         tool_names = set(tools_by_name)
         assert "analyze_plan" in tool_names
         assert "agent_gate" in tool_names
@@ -674,6 +696,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_azure" in tool_names
         assert "agent_gate_kubernetes" in tool_names
         assert "agent_gate_pulumi" in tool_names
+        assert "agent_gate_pipeline" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
             "agent_gate_azure",
@@ -681,6 +704,8 @@ def test_stdio_server_tools_list() -> None:
             "agent_gate_pulumi",
         ):
             assert "framework" in tools_by_name[tool_name]["inputSchema"]["properties"]
+        pipeline_schema = tools_by_name["agent_gate_pipeline"]["inputSchema"]
+        assert {"input_path", "ecosystem", "framework"} <= set(pipeline_schema["properties"])
 
         # --- tools/call: analyze_plan ---
         call_req = {

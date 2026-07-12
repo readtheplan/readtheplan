@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native GitHub Actions, GitLab CI, and CircleCI YAML gates across the CLI,
+  generalized Action, and local MCP server. The adapters flag write-token scopes,
+  unpinned reusable code, secret exposure, arbitrary commands, remote includes,
+  deployment environments, SSH keys, orbs, and remote Docker without executing
+  pipeline code.
 - Exact-first compliance baselines across all six packaged frameworks. Every
   Terraform provider and built-in adapter now receives a change-management or
   secure-configuration control even before a resource-specific mapping exists;

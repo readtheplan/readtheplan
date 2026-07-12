@@ -10,6 +10,11 @@ from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
+from readtheplan.adapters.pipelines import (
+    CircleCIAdapter,
+    GitHubActionsAdapter,
+    GitLabCIAdapter,
+)
 from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
 
@@ -18,17 +23,21 @@ ADAPTER_ENTRY_POINT_GROUP = "readtheplan.adapters"
 
 _registry: dict[str, BaseAdapter] = {}
 
+
 def register_adapter(adapter: BaseAdapter) -> None:
     _registry[adapter.adapter_name] = adapter
 
+
 def get_adapter(name: str) -> BaseAdapter:
     return _registry[name]
+
 
 def detect_adapter(input_data: dict[str, Any]) -> BaseAdapter | None:
     for adapter in _registry.values():
         if adapter.can_handle(input_data):
             return adapter
     return None
+
 
 def load_entry_point_adapters() -> list[str]:
     """Discover and register adapters contributed by external packages via the
@@ -58,6 +67,7 @@ def load_entry_point_adapters() -> list[str]:
             continue
     return discovered
 
+
 # Auto-register builtin adapters, then discover external plugins (best-effort).
 register_adapter(CloudFormationAdapter())
 register_adapter(KubernetesAdapter())
@@ -67,6 +77,9 @@ register_adapter(ChefAdapter())
 register_adapter(PuppetAdapter())
 register_adapter(PulumiAdapter())
 register_adapter(AzureWhatIfAdapter())
+register_adapter(GitHubActionsAdapter())
+register_adapter(GitLabCIAdapter())
+register_adapter(CircleCIAdapter())
 load_entry_point_adapters()
 
 __all__ = [
@@ -75,8 +88,11 @@ __all__ = [
     "BaseAdapter",
     "AzureWhatIfAdapter",
     "ChefAdapter",
+    "CircleCIAdapter",
     "CloudFormationAdapter",
     "JenkinsAdapter",
+    "GitHubActionsAdapter",
+    "GitLabCIAdapter",
     "KubernetesAdapter",
     "PulumiAdapter",
     "PuppetAdapter",
