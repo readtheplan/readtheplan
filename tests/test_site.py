@@ -239,7 +239,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
     assert "<form" not in mcp
 
 
-def test_weekly_brief_paid_output_loop_slice() -> None:
+def test_weekly_brief_free_community_slice() -> None:
     brief_path = SITE / "brief" / "index.html"
     sample_path = SITE / "brief" / "sample-001" / "index.html"
     sitemap = (SITE / "sitemap.xml").read_text(encoding="utf-8")
@@ -254,8 +254,8 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
 
     for expected in [
         "Weekly Terraform/SOC 2 change intelligence for platform teams",
-        "repeated paid output loop",
-        "monitor, filter, analyze, package, deliver",
+        "free community brief",
+        "monitor, filter, analyze, package, publish",
         "platform/SRE teams",
         "DevOps consultancies",
         "SOC 2 consultants",
@@ -265,12 +265,11 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
         "Terraform/SOC2 risk angle",
         "Action checklist",
         "readtheplan CTA",
-        "First sample/free",
-        "Private weekly brief",
-        "Custom company-specific monitoring",
-        "MCP/custom integration upsell",
-        "Request first brief / private pilot",
-        "info@readtheplan.dev",
+        "Public sample",
+        "Open weekly brief",
+        "Community suggestions",
+        "Reusable integrations",
+        "Suggest the next issue",
         "Terraform/OpenTofu",
         "AWS logging",
         "AWS IAM",
@@ -293,6 +292,10 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
         "Stripe",
         "Checkout",
         "Subscribe now",
+        "paid output",
+        "$499",
+        "Managed (Paid)",
+        "Enterprise (Custom)",
         "storage bucket",
         "store uploaded",
         "stored plan",
@@ -303,6 +306,22 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
         assert prohibited.lower() not in combined.lower()
 
     assert "<form" not in combined
+
+
+def test_pricing_is_free_forever_and_has_no_paid_tiers() -> None:
+    pricing = (SITE / "pricing" / "index.html").read_text(encoding="utf-8")
+
+    for expected in [
+        "Free forever. No tiers.",
+        "$0",
+        "No feature or usage paywall",
+        "No behavioral advertising",
+        "Optional AI-crawler monetization",
+    ]:
+        assert expected in pricing
+
+    for prohibited in ["$499", "Managed", "Enterprise", "free trial", "Contact for pricing"]:
+        assert prohibited.lower() not in pricing.lower()
 
 
 def test_docs_routes_are_sitemap_listed_and_landing_aligned() -> None:
@@ -365,4 +384,3 @@ def test_site_redesign_visual_contract() -> None:
         "img/noise.svg",
     ]:
         assert (SITE / asset).exists()
-

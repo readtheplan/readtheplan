@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Changed
+- The website now presents one free-forever, MIT-licensed toolchain instead of
+  Managed and Enterprise tiers; the AI guide, weekly brief, privacy policy, and
+  terms use the same local-first model.
+- Added guardrails for privacy-preserving Cloudflare AI-crawler monetization
+  without behavioral advertising, human paywalls, or plan-data collection.
 - Self-improving evolution analysis now stays local and deterministic;
   candidate generation never spawns external model tooling.
 

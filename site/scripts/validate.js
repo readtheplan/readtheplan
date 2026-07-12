@@ -287,11 +287,11 @@ if (/<form[^>]+action=/i.test(seoHtml)) {
   throw new Error("SEO tools must not submit forms to a backend.");
 }
 
-// Brief page: paid output loop, no upload/backend/billing/automation claims.
+// Brief page: free community artifact, no upload/backend/billing/automation claims.
 for (const token of [
   "Weekly Terraform/SOC 2 change intelligence for platform teams",
-  "repeated paid output loop",
-  "monitor, filter, analyze, package, deliver",
+  "free community brief",
+  "monitor, filter, analyze, package, publish",
   "platform/SRE teams",
   "DevOps consultancies",
   "SOC 2 consultants",
@@ -301,12 +301,11 @@ for (const token of [
   "Terraform/SOC2 risk angle",
   "Action checklist",
   "readtheplan CTA",
-  "First sample/free",
-  "Private weekly brief",
-  "Custom company-specific monitoring",
-  "MCP/custom integration upsell",
-  "Request first brief / private pilot",
-  "info@readtheplan.dev",
+  "Public sample",
+  "Open weekly brief",
+  "Community suggestions",
+  "Reusable integrations",
+  "Suggest the next issue",
   "Terraform/OpenTofu",
   "AWS logging",
   "AWS IAM",
@@ -330,6 +329,10 @@ for (const token of [
   "Stripe",
   "Checkout",
   "Subscribe now",
+  "paid output",
+  "$499",
+  "Managed (Paid)",
+  "Enterprise (Custom)",
   "storage bucket",
   "store uploaded",
   "stored plan",
@@ -342,6 +345,20 @@ for (const token of [
 
 if (/<form/i.test(briefCombined)) {
   throw new Error("Brief pages must not include forms.");
+}
+
+const pricingHtml = read("pricing/index.html");
+for (const token of [
+  "Free forever. No tiers.",
+  "$0",
+  "No feature or usage paywall",
+  "No behavioral advertising",
+  "Optional AI-crawler monetization",
+]) {
+  requireIncludes(pricingHtml, token, "free pricing token");
+}
+for (const token of ["$499", "Managed", "Enterprise", "free trial", "Contact for pricing"]) {
+  forbidIncludes(pricingHtml, token, "free pricing page");
 }
 
 // MCP page: local preview only, no hosted/upload implications.

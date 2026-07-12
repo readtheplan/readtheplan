@@ -29,60 +29,59 @@
         <div class="gc hero-content">
           <p class="eyebrow">Legal</p>
           <h1>Privacy Policy</h1>
-          <p class="subtitle">Effective: May 16, 2026</p>
+          <p class="subtitle">Effective: July 12, 2026</p>
         </div>
       </section>
       <div class="prose" style="max-width:720px;margin:2rem auto;padding:0 1.5rem;">
         <h2>1. Information We Collect</h2>
-        <p><strong>OSS Toolchain:</strong> The local CLI, GitHub Action, and MCP tools do not transmit any data to readtheplan servers. We collect nothing.</p>
-        <p><strong>Managed Platform:</strong> When you create an account, we collect:</p>
-        <ul>
-          <li>Email address and full name (registration).</li>
-          <li>Organization and project names (workspace setup).</li>
-          <li>Policy configurations and compliance framework selections.</li>
-          <li>Signed evidence summaries (not raw Terraform plans).</li>
-        </ul>
-        <p><strong>Website:</strong> We use Plausible Analytics, a privacy-first, cookie-less analytics service, and Cloudflare CDN for Three.js. No personal data is collected through these services. We do not use cookies, tracking pixels, or behavioral advertising scripts.</p>
+        <p><strong>Local toolchain:</strong> The CLI, GitHub Action, and MCP tools do not transmit plans or usage data to readtheplan servers. They run on your machine or CI runner.</p>
+        <p><strong>Website:</strong> Cloudflare processes ordinary request data needed to deliver and protect the site, such as IP addresses, request headers, requested URLs, and security signals. We may use aggregate, cookie-less analytics to understand site traffic. We do not use behavioral advertising, tracking pixels, or cross-site profiles.</p>
+        <p><strong>AI chat:</strong> If you use the optional website chat, the messages you submit are sent through a Cloudflare Pages Function to our configured AI provider so it can generate a response. Do not paste infrastructure plans, credentials, personal data, or other sensitive information into chat.</p>
 
         <h2>2. How We Use Information</h2>
-        <p>We use collected information to:</p>
+        <p>We process the limited website information described above to:</p>
         <ul>
-          <li>Provide and maintain the Managed and Enterprise Service.</li>
-          <li>Authenticate users and enforce access controls.</li>
-          <li>Generate compliance reports and evidence timelines.</li>
-          <li>Communicate service updates, billing, and support.</li>
+          <li>Deliver, secure, debug, and improve the website.</li>
+          <li>Rate-limit abuse of the optional AI chat.</li>
+          <li>Generate chat responses when you explicitly submit a message.</li>
+          <li>Measure aggregate human and automated traffic.</li>
         </ul>
 
         <h2>3. Data Storage and Retention</h2>
-        <p>The managed SaaS backend is currently offline, and readtheplan.dev is serving a static frontend with API stubs. If/when managed accounts return, this policy will be updated with the active storage backend and retention schedule before data collection resumes.</p>
+        <p>readtheplan does not operate user accounts or store infrastructure plans. The website is primarily static. Chat messages are processed to answer the request; infrastructure and retention practices of Cloudflare and the configured AI provider are governed by their respective policies.</p>
 
         <h2>4. Data Sharing</h2>
-        <p>We do not sell, rent, or share your data with third parties except:</p>
+        <p>We do not sell or rent visitor data. Information is shared only:</p>
         <ul>
+          <li>With Cloudflare to deliver and protect the website.</li>
+          <li>With the configured AI provider when you submit an AI chat message.</li>
           <li>As required by law or legal process.</li>
           <li>With your explicit consent.</li>
           <li>To protect the security or integrity of the Service.</li>
         </ul>
 
-        <h2>5. Security</h2>
-        <p>We implement industry-standard security measures: bcrypt password hashing (12 rounds), JWT with token revocation, HttpOnly/Secure cookies, rate limiting, CORS restrictions, Content-Security-Policy headers, and encrypted connections (TLS 1.3).</p>
+        <h2>5. Automated Access and Monetization</h2>
+        <p>We may use Cloudflare controls to allow, block, measure, or charge automated crawlers for access to public website content. These controls apply to automated requests for public content. They do not monetize CLI activity, infrastructure plans, chat messages, or personal data, and they do not place a paywall in front of human visitors.</p>
 
-        <h2>6. Your Rights</h2>
+        <h2>6. Security</h2>
+        <p>We use HTTPS, security headers, input limits, and rate limiting. No Internet service can guarantee absolute security, so do not send secrets or raw infrastructure plans through website chat.</p>
+
+        <h2>7. Your Rights</h2>
         <p>You may:</p>
         <ul>
-          <li>Access and update your account information.</li>
-          <li>Export your organization's evidence and policy data.</li>
-          <li>Request deletion of your account and associated data.</li>
+          <li>Use the local toolchain without creating a readtheplan account.</li>
+          <li>Ask what website information we hold about you.</li>
+          <li>Request deletion of information we control, where applicable.</li>
         </ul>
         <p>To exercise these rights, contact <a href="mailto:info@readtheplan.dev">info@readtheplan.dev</a>.</p>
 
-        <h2>7. Children's Privacy</h2>
+        <h2>8. Children's Privacy</h2>
         <p>The Service is not intended for individuals under 16. We do not knowingly collect information from children.</p>
 
-        <h2>8. Changes to This Policy</h2>
-        <p>We may update this Privacy Policy. Material changes will be communicated via email for registered users.</p>
+        <h2>9. Changes to This Policy</h2>
+        <p>We may update this Privacy Policy. The effective date above identifies the current version.</p>
 
-        <h2>9. Contact</h2>
+        <h2>10. Contact</h2>
         <p><a href="mailto:info@readtheplan.dev">info@readtheplan.dev</a></p>
       </div>
     </main>
