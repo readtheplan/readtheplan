@@ -1323,6 +1323,71 @@ def agent_gate_dockerfile(
     return analyze_dockerfile(data, catalog=catalog)
 
 
+def agent_gate_configuration_management(
+    input_path: str,
+    ecosystem: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return a gate for Ansible, Jenkins, Chef, or Puppet source."""
+    from readtheplan.adapters.ansible import AnsibleAdapter, analyze_ansible
+    from readtheplan.adapters.chef import ChefAdapter, analyze_chef
+    from readtheplan.adapters.jenkins import JenkinsAdapter, analyze_jenkins
+    from readtheplan.adapters.puppet import PuppetAdapter, analyze_puppet
+
+    supported = {"ansible", "jenkins", "chef", "puppet"}
+    if ecosystem not in supported:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=("ecosystem must be one of: " + ", ".join(sorted(supported))),
+        )
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read {ecosystem} input {input_path}: {exc}",
+        ) from exc
+
+    if ecosystem == "ansible":
+        try:
+            import yaml
+
+            documents = list(yaml.safe_load_all(source))
+        except yaml.YAMLError as exc:
+            raise MCPToolInputError(
+                code="INPUT_ERROR",
+                message=f"Cannot parse Ansible input {input_path}: {exc}",
+            ) from exc
+        plays: list[object] = []
+        for document in documents:
+            if isinstance(document, list):
+                plays.extend(document)
+            elif isinstance(document, dict):
+                plays.append(document)
+        data = {"plays": plays}
+        adapter = AnsibleAdapter()
+        analyze = analyze_ansible
+    else:
+        key, adapter, analyze = {
+            "jenkins": ("jenkinsfile", JenkinsAdapter(), analyze_jenkins),
+            "chef": ("chef_recipe", ChefAdapter(), analyze_chef),
+            "puppet": ("puppet_manifest", PuppetAdapter(), analyze_puppet),
+        }[ecosystem]
+        data = {key: source}
+    if not adapter.can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Input is not recognized as {ecosystem} source",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze(data, catalog=catalog)
+
+
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
     """Load a compliance framework catalog, or return ``None``."""
     if not framework:
@@ -1420,6 +1485,7 @@ def create_server() -> Any:
     agent_gate_sam_handler = agent_gate_sam
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
+    agent_gate_configuration_management_handler = agent_gate_configuration_management
 
     @mcp.tool(name="analyze_plan")
     def _analyze_plan_tool(
@@ -1782,6 +1848,25 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_dockerfile_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_configuration_management")
+    def _agent_gate_configuration_management_tool(
+        input_path: str,
+        ecosystem: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Ansible, Jenkins, Chef, or Puppet source.
+
+        Args:
+            input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
+            ecosystem: ansible, jenkins, chef, or puppet.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_configuration_management_handler(
+            input_path,
+            ecosystem,
+            framework=framework,
+        )
 
     @mcp.tool(name="evolution_status")
     def _evolution_status_tool() -> dict[str, object]:

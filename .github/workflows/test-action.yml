@@ -684,6 +684,111 @@ jobs:
           assert payload["decision"] == "block"
           PY
 
+      - name: Run action on Ansible playbook
+        id: ansible
+        uses: ./
+        with:
+          tool: ansible
+          input-file: tests/fixtures/ansible_config_management_risky.yml
+          framework: soc2
+
+      - name: Assert Ansible outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.ansible.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.ansible.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.ansible.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "9"
+          test "$RISK_COUNTS" = '{"dangerous":7,"irreversible":0,"review":2,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["decision"] == "block"
+          assert "Ansible play" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
+      - name: Run action on Jenkinsfile
+        id: jenkins
+        uses: ./
+        with:
+          tool: jenkins
+          input-file: tests/fixtures/Jenkinsfile.config-management-risky
+          framework: soc2
+
+      - name: Assert Jenkins outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.jenkins.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.jenkins.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.jenkins.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "16"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":5,"safe":2}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["decision"] == "block"
+          assert "not pinned by digest" in payload["pr_comment"]
+          PY
+
+      - name: Run action on Chef recipe
+        id: chef
+        uses: ./
+        with:
+          tool: chef
+          input-file: tests/fixtures/chef_config_management_risky.rb
+          framework: soc2
+
+      - name: Assert Chef outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "8"
+          test "$RISK_COUNTS" = '{"dangerous":6,"irreversible":0,"review":1,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["decision"] == "block"
+          assert "no checksum" in payload["pr_comment"]
+          PY
+
+      - name: Run action on Puppet manifest
+        id: puppet
+        uses: ./
+        with:
+          tool: puppet
+          input-file: tests/fixtures/puppet_config_management_risky.pp
+          framework: soc2
+
+      - name: Assert Puppet outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "11"
+          test "$RISK_COUNTS" = '{"dangerous":6,"irreversible":0,"review":4,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["decision"] == "block"
+          assert "profile::application" in payload["pr_comment"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

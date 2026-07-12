@@ -1132,6 +1132,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_serverless" in tool_names
         assert "agent_gate_sam" in tool_names
         assert "agent_gate_dockerfile" in tool_names
+        assert "agent_gate_configuration_management" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
             "agent_gate_azure",
@@ -1191,6 +1192,12 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(sam_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
+        config_management_schema = tools_by_name["agent_gate_configuration_management"][
+            "inputSchema"
+        ]
+        assert {"input_path", "ecosystem", "framework"} <= set(
+            config_management_schema["properties"]
+        )
 
         # --- tools/call: analyze_plan ---
         call_req = {

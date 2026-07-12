@@ -128,6 +128,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/serverless_framework_risky.yml" in workflow
     assert "tool: sam" in workflow
     assert "input-file: tests/fixtures/sam_template_risky.yml" in workflow
+    assert "input-file: tests/fixtures/ansible_config_management_risky.yml" in workflow
+    assert "input-file: tests/fixtures/Jenkinsfile.config-management-risky" in workflow
+    assert "input-file: tests/fixtures/chef_config_management_risky.rb" in workflow
+    assert "input-file: tests/fixtures/puppet_config_management_risky.pp" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow
