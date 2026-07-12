@@ -20,6 +20,12 @@ framework_version: nist-800-53-rev5
 schema_version: 1
 
 mappings:
+  - resource_type: "*"
+    actions: ["*"]
+    controls:
+      - id: CM-2
+        title: Baseline Configuration
+        rationale: Every infrastructure or delivery-system change must preserve and document the authorized system baseline.
   # ── KMS ─────────────────────────────────────────────────────────────────
   - resource_type: aws_kms_key
     actions: [create]

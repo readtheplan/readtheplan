@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Exact-first compliance baselines across all six packaged frameworks. Every
+  Terraform provider and built-in adapter now receives a change-management or
+  secure-configuration control even before a resource-specific mapping exists;
+  CloudFormation and Kubernetes MCP tools now accept `framework` like their CLI
+  counterparts.
 - Azure Bicep/ARM deployment What-If adapter, CLI gate, MCP tool, and Action
   selector. FullResourcePayloads old/new state feeds existing Azure resource
   rules; ResourceIdOnly, potential changes, and diagnostics require review.

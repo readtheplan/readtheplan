@@ -2,6 +2,12 @@ framework: soc2
 framework_version: 2017-tsc
 schema_version: 1
 mappings:
+- resource_type: "*"
+  actions: ["*"]
+  controls:
+  - id: CC8.1
+    title: Change Management
+    rationale: Every infrastructure or delivery-system change requires authorized, tested, and traceable change management.
 - resource_type: aws_kms_key
   actions:
   - create

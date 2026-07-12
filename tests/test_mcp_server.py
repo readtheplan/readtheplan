@@ -57,6 +57,54 @@ def test_agent_gate_pulumi_supports_framework_checks() -> None:
     )
 
 
+def test_agent_gate_pulumi_unknown_provider_gets_framework_baseline(
+    tmp_path: Path,
+) -> None:
+    preview = tmp_path / "pulumi-gcp.json"
+    preview.write_text(
+        json.dumps(
+            {
+                "events": [
+                    {
+                        "sequence": 1,
+                        "resourcePreEvent": {
+                            "metadata": {
+                                "op": "update",
+                                "urn": "urn:pulumi:dev::app::gcp:storage/bucket:Bucket::assets",
+                                "type": "gcp:storage/bucket:Bucket",
+                                "old": {"inputs": {"location": "US"}},
+                                "new": {"inputs": {"location": "EU"}},
+                            }
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = agent_gate_pulumi(str(preview), "soc2")
+
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_cloudformation_and_kubernetes_mcp_tools_accept_frameworks(
+    tmp_path: Path,
+) -> None:
+    cloudformation = agent_gate_cloudformation(
+        str(FIXTURES / "cfn_change_set_mixed.json"), "soc2"
+    )
+    manifest = tmp_path / "deployment.yaml"
+    manifest.write_text(
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\n",
+        encoding="utf-8",
+    )
+    kubernetes = agent_gate_kubernetes(str(manifest), "soc2")
+
+    assert "rtp.control.soc2.CC8.1" in cloudformation["required_checks"]
+    assert "rtp.control.soc2.CC8.1" in kubernetes["required_checks"]
+
+
 def test_agent_gate_pulumi_rejects_invalid_preview(tmp_path: Path) -> None:
     invalid = tmp_path / "preview.json"
     invalid.write_text("not-json", encoding="utf-8")
@@ -616,12 +664,23 @@ def test_stdio_server_tools_list() -> None:
         tools_req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
         tools_resp = _send_jsonrpc(proc, tools_req)
         assert "result" in tools_resp, f"tools/list failed: {tools_resp}"
-        tool_names = {t["name"] for t in tools_resp["result"]["tools"]}
+        tools_by_name = {
+            tool["name"]: tool for tool in tools_resp["result"]["tools"]
+        }
+        tool_names = set(tools_by_name)
         assert "analyze_plan" in tool_names
         assert "agent_gate" in tool_names
         assert "agent_gate_cloudformation" in tool_names
         assert "agent_gate_azure" in tool_names
+        assert "agent_gate_kubernetes" in tool_names
         assert "agent_gate_pulumi" in tool_names
+        for tool_name in (
+            "agent_gate_cloudformation",
+            "agent_gate_azure",
+            "agent_gate_kubernetes",
+            "agent_gate_pulumi",
+        ):
+            assert "framework" in tools_by_name[tool_name]["inputSchema"]["properties"]
 
         # --- tools/call: analyze_plan ---
         call_req = {

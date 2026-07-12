@@ -69,9 +69,10 @@ def test_ansible_cli_reads_yaml(tmp_path, capsys) -> None:
         "- hosts: all\n  tasks:\n    - name: inspect\n      debug:\n        msg: ok\n",
         encoding="utf-8",
     )
-    assert main(["ansible", str(playbook)]) == 0
+    assert main(["ansible", "--framework", "soc2", str(playbook)]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["decision"] == "proceed"
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
 
 
 def test_ansible_cli_rejects_non_playbook(tmp_path, capsys) -> None:

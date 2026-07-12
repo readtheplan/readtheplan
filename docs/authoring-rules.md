@@ -154,7 +154,11 @@ mappings:
 
 `actions` matches the plan's action set (e.g. `create`, `update`, `delete`,
 `delete/create`, `replace`). The same resource type can have several entries for
-different actions. Add a case to [`tests/test_controls.py`](../tests/test_controls.py)
+different actions. A `resource_type: "*"` entry with `actions: ["*"]` defines the
+framework-wide baseline used for every provider and adapter. Exact resource/action
+mappings are evaluated first, so their more specific title and rationale win when a
+control ID is duplicated by the wildcard baseline. Add a case to
+[`tests/test_controls.py`](../tests/test_controls.py)
 asserting the control shows up for that resource/action, then regenerate the example
 outputs (`scripts/regenerate-examples.sh`) since they include a SOC 2 column.
 

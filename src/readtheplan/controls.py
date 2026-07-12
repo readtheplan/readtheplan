@@ -46,14 +46,18 @@ class ControlCatalog:
         action = _canonical_action(actions)
         seen: set[str] = set()
         out: list[ControlEntry] = []
-        for mapping in self._mappings.get(resource_type, ()):
-            if action not in mapping.actions:
-                continue
-            for control in mapping.controls:
-                if control.id in seen:
+        # Resource-specific mappings win so their detailed rationale is preserved.
+        # A catalog-wide wildcard supplies a framework baseline for adapters and
+        # providers that do not have a bespoke resource mapping yet.
+        for resource_key in (resource_type, "*"):
+            for mapping in self._mappings.get(resource_key, ()):
+                if action not in mapping.actions and "*" not in mapping.actions:
                     continue
-                seen.add(control.id)
-                out.append(control)
+                for control in mapping.controls:
+                    if control.id in seen:
+                        continue
+                    seen.add(control.id)
+                    out.append(control)
         return tuple(out)
 
 

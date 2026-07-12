@@ -83,14 +83,18 @@ mappings:
 
 Match semantics:
 
-- `resource_type` matches Terraform's `resource_changes[].type` exactly.
+- `resource_type` normally matches the normalized resource type exactly.
+  `resource_type: "*"` defines a framework-wide baseline for every provider and
+  adapter.
 - `actions` is a list of action strings in the same vocabulary as ADR 0003
   (`create`, `update`, `delete`, `delete/create`, `replace`, `read`, `no-op`).
-  A change matches if its action is present in the list.
+  A change matches if its action is present in the list; `actions: ["*"]`
+  matches every canonical action.
 - A change can match multiple mappings; the resulting `controls` list is the
-  union, deduplicated by `id`.
-- A change that matches no mapping receives `controls: []` (omitted in
-  markdown output, present as empty list in JSON).
+  union, deduplicated by `id`. Exact mappings are evaluated before wildcard
+  mappings so detailed rationales win.
+- A change receives `controls: []` only when the selected framework has neither
+  a matching exact entry nor a wildcard baseline.
 
 ### Initial framework scope
 

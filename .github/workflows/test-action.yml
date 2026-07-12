@@ -102,6 +102,7 @@ jobs:
         with:
           tool: azure
           input-file: tests/fixtures/azure_whatif_mixed.json
+          framework: soc2
 
       - name: Assert Azure action outputs
         shell: bash
@@ -121,6 +122,7 @@ jobs:
           payload = json.loads(os.environ["SUMMARY_JSON"])
           assert payload["adapter"] == "azure"
           assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
       - name: Fail on invalid plan JSON

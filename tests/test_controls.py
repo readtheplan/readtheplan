@@ -105,14 +105,27 @@ def test_iso27001_replace_order_invariant() -> None:
     assert len(forward) > 0
 
 
-def test_controls_for_unmapped_resource_returns_empty() -> None:
-    cat = controls.load_catalog("soc2")
+@pytest.mark.parametrize(
+    ("framework", "expected_id"),
+    [
+        ("soc2", "CC8.1"),
+        ("iso27001", "A.8.32"),
+        ("hipaa", "164.308(a)(1)"),
+        ("pci_dss", "Req-2.2.1"),
+        ("hitrust", "11.a"),
+        ("fedramp_moderate", "CM-2"),
+    ],
+)
+def test_controls_for_unmapped_resource_returns_framework_baseline(
+    framework: str, expected_id: str
+) -> None:
+    cat = controls.load_catalog(framework)
     out = cat.controls_for(
-        resource_type="aws_synthetics_canary",
-        actions=["update"],
+        resource_type="ansible_template",
+        actions=["execute"],
     )
 
-    assert out == ()
+    assert [control.id for control in out] == [expected_id]
 
 
 def test_soc2_controls_for_platform_service_resource() -> None:
@@ -172,6 +185,15 @@ mappings:
       - id: C3
         title: Third
         rationale: Third match.
+  - resource_type: "*"
+    actions: ["*"]
+    controls:
+      - id: C2
+        title: Generic duplicate
+        rationale: Must not replace the exact rationale.
+      - id: C4
+        title: Baseline
+        rationale: Generic baseline.
 """.lstrip(),
         encoding="utf-8",
     )
@@ -179,8 +201,9 @@ mappings:
     cat = controls._load_from_path(catalog)
     out = cat.controls_for(resource_type="aws_example", actions=["create"])
 
-    assert [control.id for control in out] == ["C1", "C2", "C3"]
+    assert [control.id for control in out] == ["C1", "C2", "C3", "C4"]
     assert out[1].title == "Second"
+    assert out[1].rationale == "Second match."
 
 
 def test_cli_markdown_includes_controls_column(

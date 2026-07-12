@@ -21,6 +21,12 @@ framework_version: '4.0'
 schema_version: 1
 
 mappings:
+  - resource_type: "*"
+    actions: ["*"]
+    controls:
+      - id: Req-2.2.1
+        title: Secure Configuration Standards
+        rationale: Every infrastructure or delivery-system change must preserve documented secure configuration standards for in-scope systems.
   # ── KMS ─────────────────────────────────────────────────────────────────
   - resource_type: aws_kms_key
     actions: [create]

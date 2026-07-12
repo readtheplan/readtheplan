@@ -34,8 +34,10 @@ def test_puppet_gate_and_cli(tmp_path, capsys) -> None:
 
     manifest = tmp_path / "site.pp"
     manifest.write_text("package { 'curl':\n ensure => installed,\n}\n", encoding="utf-8")
-    assert main(["puppet", str(manifest)]) == 1
-    assert json.loads(capsys.readouterr().out)["decision"] == "warn"
+    assert main(["puppet", "--framework", "soc2", str(manifest)]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["decision"] == "warn"
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
 
 
 def test_puppet_cli_rejects_plain_text(tmp_path, capsys) -> None:

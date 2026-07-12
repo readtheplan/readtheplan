@@ -206,7 +206,10 @@ def agent_gate(
     return agent_gate_to_dict(summary, catalog)
 
 
-def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
+def agent_gate_cloudformation(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
     """Return the agent-gate decision for a CloudFormation Change Set / template diff."""
     from readtheplan.adapters.cloudformation import analyze_cloudformation
 
@@ -231,7 +234,8 @@ def agent_gate_cloudformation(input_path: str) -> dict[str, object]:
             code="INVALID_INPUT", message="Input must be a JSON object"
         )
 
-    return analyze_cloudformation(data)
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_cloudformation(data, catalog=catalog)
 
 
 def agent_gate_azure(
@@ -265,7 +269,10 @@ def agent_gate_azure(
     return analyze_azure_whatif(data, catalog=catalog)
 
 
-def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
+def agent_gate_kubernetes(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
     """Return the agent-gate decision for a Kubernetes manifest diff.
 
     Accepts JSON or YAML with any of:
@@ -304,7 +311,8 @@ def agent_gate_kubernetes(input_path: str) -> dict[str, object]:
             message=f"Invalid Kubernetes input in {input_path}: {exc}",
         ) from exc
 
-    return analyze_kubernetes(data)
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_kubernetes(data, catalog=catalog)
 
 
 def agent_gate_pulumi(
@@ -452,9 +460,12 @@ def create_server() -> Any:
         return agent_gate_handler(plan_path, framework=framework)
 
     @mcp.tool(name="agent_gate_cloudformation")
-    def _agent_gate_cfn_tool(input_path: str) -> dict[str, object]:
-        """Return the agent-gate decision for a CloudFormation Change Set / template diff."""
-        return agent_gate_cfn_handler(input_path)
+    def _agent_gate_cfn_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return the gate decision for a CloudFormation Change Set / template diff."""
+        return agent_gate_cfn_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_azure")
     def _agent_gate_azure_tool(
@@ -465,7 +476,10 @@ def create_server() -> Any:
         return agent_gate_azure_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_kubernetes")
-    def _agent_gate_k8s_tool(input_path: str) -> dict[str, object]:
+    def _agent_gate_k8s_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
         """Return the agent-gate decision for a Kubernetes manifest diff.
 
         Args:
@@ -473,8 +487,9 @@ def create_server() -> Any:
                 - {"old_manifests": [...], "new_manifests": [...]} — diff format
                 - {"resources": [...]} — single manifest format
                 - one manifest, kind: List, or multi-document YAML
+            framework: Optional compliance framework for control checks.
         """
-        return agent_gate_k8s_handler(input_path)
+        return agent_gate_k8s_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_pulumi")
     def _agent_gate_pulumi_tool(

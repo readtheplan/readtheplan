@@ -46,7 +46,7 @@ Requires Python 3.10+.
 - **Infrastructure authors** — see the blast radius of a plan, manifest, playbook, recipe, or pipeline before it runs.
 - **Platform / DevOps teams** — standardize risk tiers and org-specific escalations across repos with rule overlays (no forks, no code changes).
 - **CI maintainers** — drop the GitHub Action into any pipeline to gate pull requests on `dangerous` / `irreversible` changes.
-- **Security & compliance reviewers** — SOC 2 / ISO 27001 / HIPAA control mappings plus signed, auditable evidence envelopes for every change.
+- **Security & compliance reviewers** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST control mappings plus signed, auditable evidence envelopes for every change.
 - **AI-agent workflows** — a deterministic `proceed` / `warn` / `block` gate that stops an agent from auto-applying unsafe infrastructure.
 
 ---
@@ -68,7 +68,7 @@ readtheplan analyzes structured Terraform/OpenTofu plans and infrastructure-tool
 🟠 **dangerous** — instance replacement, IAM policy change, database modification
 🔴 **irreversible** — data deletion, KMS key destruction, RDS instance termination
 
-Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource types). Every adapter feeds the same **compliance framework mappings** (SOC 2, ISO 27001, HIPAA) and deterministic agent-gate schema; native plan analysis can also produce **auditable evidence envelopes** with sigstore-backed signed attestations.
+Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource types). Every adapter feeds the same six **compliance framework mappings** with an exact-first change-management baseline and deterministic agent-gate schema; native plan analysis can also produce **auditable evidence envelopes** with sigstore-backed signed attestations.
 
 ### Supported infrastructure tools
 
@@ -334,7 +334,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - **CLI-first** — single `pip install`, runs anywhere Python runs
 - **GitHub Action** — copy-paste into any workflow
 - **Resource-aware rules** — 40+ AWS resource types: KMS, IAM, RDS, S3, EKS, Lambda, networking, etc.
-- **Compliance evidence** — SOC 2, ISO 27001, HIPAA control mappings with signed JSON envelopes
+- **Compliance evidence** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mappings with signed JSON envelopes
 - **Agent gate** — deterministic proceed/warn/block decisions for CI and AI agents
 - **Customer rule overlays** — org-specific risk escalations via YAML, no code changes needed
 - **MCP preview** — local stdio tools for agent and IDE integrations
