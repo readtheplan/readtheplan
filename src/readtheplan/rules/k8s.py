@@ -8,7 +8,7 @@ from readtheplan.rules._shared import (
 )
 
 
-@register_rule("kubernetes_deployment")
+@register_rule("kubernetes_deployment", "kubernetes_deployment_v1")
 def _k8s_deployment_candidates(
     resource_type: str,
     action_set: set[str],
@@ -48,16 +48,33 @@ def _k8s_deployment_candidates(
                 ),
             )
         ]
+    if "create" in action_set:
+        if change.get("adapter") == "kubernetes":
+            return []
+        return [
+            RuleResult(
+                "dangerous",
+                "__TOOL__ will create this Deployment and run its container images in the "
+                "cluster. Review image provenance, command/args, ServiceAccount identity, "
+                "secrets, pod security, network/storage access, replicas, probes, resource "
+                "limits, rollout strategy, and disruption controls.",
+            )
+        ]
     return []
 
 
-@register_rule("kubernetes_service", "kubernetes_ingress")
+@register_rule(
+    "kubernetes_service",
+    "kubernetes_service_v1",
+    "kubernetes_ingress",
+    "kubernetes_ingress_v1",
+)
 def _k8s_service_candidates(
     resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
-    label = "Ingress" if resource_type == "kubernetes_ingress" else "Service"
+    label = "Ingress" if "ingress" in resource_type else "Service"
 
     if "delete" in action_set and "create" in action_set:
         return [
@@ -91,10 +108,26 @@ def _k8s_service_candidates(
                 ),
             )
         ]
+    if "create" in action_set:
+        if change.get("adapter") == "kubernetes":
+            return []
+        risk = "dangerous" if label == "Ingress" else "review"
+        return [
+            RuleResult(
+                risk,
+                f"__TOOL__ will create this {label}. Review external exposure, addresses, "
+                "ports/protocols, selectors/backends, TLS, authentication, annotations, "
+                "source restrictions, health checks, and DNS ownership.",
+            )
+        ]
     return []
 
 
-@register_rule("kubernetes_secret")
+@register_rule(
+    "kubernetes_secret",
+    "kubernetes_secret_v1",
+    "kubernetes_secret_v1_data",
+)
 def _k8s_secret_candidates(
     resource_type: str,
     action_set: set[str],
@@ -129,7 +162,7 @@ def _k8s_secret_candidates(
     return []
 
 
-@register_rule("kubernetes_namespace")
+@register_rule("kubernetes_namespace", "kubernetes_namespace_v1")
 def _k8s_namespace_candidates(
     resource_type: str,
     action_set: set[str],
@@ -167,6 +200,17 @@ def _k8s_namespace_candidates(
                 ),
             )
         ]
+    if "create" in action_set:
+        if change.get("adapter") == "kubernetes":
+            return []
+        return [
+            RuleResult(
+                "review",
+                "__TOOL__ will create this Namespace. Review ownership labels, admission and "
+                "network-policy defaults, quotas/limits, RBAC, secret boundaries, and "
+                "lifecycle responsibility.",
+            )
+        ]
     return []
 
 
@@ -179,7 +223,7 @@ def _wildcard_rbac_fields(change: dict[str, Any]) -> tuple[str, ...]:
     if not isinstance(after, dict):
         return ()
 
-    rules = after.get("rules", [])
+    rules = after.get("rules", after.get("rule", []))
     if not isinstance(rules, list):
         return ()
 
@@ -187,8 +231,12 @@ def _wildcard_rbac_fields(change: dict[str, Any]) -> tuple[str, ...]:
     for rule in rules:
         if not isinstance(rule, dict):
             continue
-        for field in ("apiGroups", "resources", "verbs"):
-            values = rule.get(field, [])
+        for field, aliases in {
+            "apiGroups": ("apiGroups", "api_groups"),
+            "resources": ("resources",),
+            "verbs": ("verbs",),
+        }.items():
+            values = next((rule[key] for key in aliases if key in rule), [])
             if values == "*" or (
                 isinstance(values, (list, tuple, set, frozenset)) and "*" in values
             ):
@@ -199,25 +247,32 @@ def _wildcard_rbac_fields(change: dict[str, Any]) -> tuple[str, ...]:
 
 @register_rule(
     "kubernetes_cluster_role",
+    "kubernetes_cluster_role_v1",
     "kubernetes_cluster_role_binding",
+    "kubernetes_cluster_role_binding_v1",
     "kubernetes_role_binding",
+    "kubernetes_role_binding_v1",
     "kubernetes_role",
+    "kubernetes_role_v1",
 )
 def _k8s_rbac_candidates(
     resource_type: str,
     action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
-    if resource_type == "kubernetes_cluster_role":
+    normalized_type = resource_type.removesuffix("_v1")
+    if normalized_type == "kubernetes_cluster_role":
         label = "ClusterRole"
-    elif resource_type == "kubernetes_role":
+    elif normalized_type == "kubernetes_role":
         label = "Role"
-    elif resource_type == "kubernetes_cluster_role_binding":
+    elif normalized_type == "kubernetes_cluster_role_binding":
         label = "ClusterRoleBinding"
     else:
         label = "RoleBinding"
 
-    if resource_type in _RBAC_ROLE_TYPES and ("create" in action_set or "update" in action_set):
+    if normalized_type in _RBAC_ROLE_TYPES and (
+        "create" in action_set or "update" in action_set
+    ):
         wildcard_fields = _wildcard_rbac_fields(change)
         if wildcard_fields:
             fields = ", ".join(wildcard_fields)
@@ -268,7 +323,7 @@ def _k8s_rbac_candidates(
     return []
 
 
-@register_rule("kubernetes_network_policy")
+@register_rule("kubernetes_network_policy", "kubernetes_network_policy_v1")
 def _k8s_network_policy_candidates(
     resource_type: str,
     action_set: set[str],
@@ -297,6 +352,21 @@ def _k8s_network_policy_candidates(
             )
         ]
     if "update" in action_set or "create" in action_set:
+        after = change.get("after", {})
+        spec = after.get("spec", {}) if isinstance(after, dict) else {}
+        if (
+            isinstance(spec, dict)
+            and spec.get("pod_selector") == {}
+            and {"Ingress", "Egress"}.issubset(set(spec.get("policy_types", [])))
+        ):
+            return [
+                RuleResult(
+                    "dangerous",
+                    "__TOOL__ will apply a namespace-wide default-deny NetworkPolicy for both "
+                    "ingress and egress. Review DNS/control-plane exceptions, bootstrap and "
+                    "monitoring traffic, selector scope, rollout order, and break-glass access.",
+                )
+            ]
         return [
             RuleResult(
                 "review",

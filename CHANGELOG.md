@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Complete first-party Terraform rules for all 83 resources in HashiCorp's
+  Kubernetes provider v3.2.1 and `helm_release` in the Helm provider v3.2.0.
+  Versioned workloads, autoscaling, admission webhooks/CEL, arbitrary manifests,
+  RBAC, service identity/tokens/certificates, networking, storage, scheduling,
+  quotas, metadata patches, and Helm chart lifecycle now receive explicit
+  cluster-impact, state-exposure, disruption, and recovery semantics.
 - First-party Terraform rules for all 72 resources in HashiCorp TFE provider
   v0.78.0. Workspaces/projects/stacks and remote state, variables and tokens,
   teams/SAML/SCIM, Sentinel/OPA policy and exclusions, agents/run tasks/triggers,

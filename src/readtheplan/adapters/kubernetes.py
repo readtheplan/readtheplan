@@ -410,6 +410,7 @@ class KubernetesAdapter(BaseAdapter):
                     "Spec": r.get("spec", {}),
                     "Data": r.get("data", {}),
                     "_metadata": {
+                        "adapter": "kubernetes",
                         "before": {},
                         "after": properties,
                     },
@@ -433,6 +434,7 @@ class KubernetesAdapter(BaseAdapter):
                     "Spec": r.get("spec", {}),
                     "Data": r.get("data", {}),
                     "_metadata": {
+                        "adapter": "kubernetes",
                         "before": properties,
                         "after": {},
                     },
@@ -458,6 +460,7 @@ class KubernetesAdapter(BaseAdapter):
                         "Namespace": _namespace_from_resource(new_r),
                         "Replacement": "Conditional",
                         "_metadata": {
+                            "adapter": "kubernetes",
                             "before": old_props,
                             "after": new_props,
                         },
@@ -484,6 +487,7 @@ class KubernetesAdapter(BaseAdapter):
                     "Spec": r.get("spec", {}),
                     "Data": r.get("data", {}),
                     "_metadata": {
+                        "adapter": "kubernetes",
                         "before": {},
                         "after": properties,
                     },
