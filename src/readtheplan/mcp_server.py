@@ -725,6 +725,43 @@ def agent_gate_traefik(
     return analyze_traefik(data, catalog=catalog)
 
 
+def agent_gate_grafana(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for Grafana INI or provisioning YAML/JSON."""
+    from readtheplan.adapters.grafana import (
+        GrafanaAdapter,
+        GrafanaInputError,
+        analyze_grafana,
+        parse_grafana_config,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Grafana input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_grafana_config(source)
+    except GrafanaInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Grafana configuration in {input_path}: {exc}",
+        ) from exc
+    if not GrafanaAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Grafana configuration"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_grafana(data, catalog=catalog)
+
+
 def agent_gate_otel_collector(
     input_path: str,
     framework: str | None = None,
@@ -1014,6 +1051,7 @@ def create_server() -> Any:
     agent_gate_monitoring_handler = agent_gate_monitoring
     agent_gate_otel_collector_handler = agent_gate_otel_collector
     agent_gate_traefik_handler = agent_gate_traefik
+    agent_gate_grafana_handler = agent_gate_grafana
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_dockerfile_handler = agent_gate_dockerfile
 
@@ -1226,6 +1264,14 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_otel_collector_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_grafana")
+    def _agent_gate_grafana_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Grafana INI or provisioning YAML/JSON configuration."""
+        return agent_gate_grafana_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_monitoring")
     def _agent_gate_monitoring_tool(

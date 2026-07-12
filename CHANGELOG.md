@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Grafana configuration gates across the CLI, generalized Action, and
+  local MCP server. Server/auth/security INI plus provisioning YAML/JSON expose
+  listeners, cookies, anonymous/proxy/federated auth, data sources, dashboards,
+  alerting, plugins, credentials, deletion, and access control through the
+  shared risk contract.
 - Native Traefik YAML/JSON/TOML gates across the CLI, generalized Action, and
   local MCP server. Static entry points, forwarded-header trust, providers,
   Docker/Kubernetes scope, API/dashboard, ACME, plugins and observability join

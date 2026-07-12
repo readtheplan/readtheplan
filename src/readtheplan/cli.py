@@ -419,6 +419,16 @@ def _build_parser() -> argparse.ArgumentParser:
     traefik.add_argument("input_file", help="Path to Traefik static or dynamic configuration.")
     traefik.set_defaults(func=_traefik_gate)
 
+    grafana = subparsers.add_parser(
+        "grafana",
+        help="Emit the agent-gate decision for Grafana INI or provisioning config.",
+    )
+    grafana.add_argument("--framework", help="Include checks from a compliance framework.")
+    grafana.add_argument(
+        "input_file", help="Path to grafana.ini or provisioning YAML/JSON."
+    )
+    grafana.set_defaults(func=_grafana_gate)
+
     prometheus = subparsers.add_parser(
         "prometheus",
         help="Emit the agent-gate decision for Prometheus configuration YAML.",
@@ -1315,6 +1325,35 @@ def _traefik_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_traefik(data, catalog=catalog))
+
+
+def _grafana_gate(args: argparse.Namespace) -> int:
+    """Emit the shared gate for Grafana INI or provisioning YAML/JSON."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.grafana import (
+        GrafanaInputError,
+        analyze_grafana,
+        parse_grafana_config,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_grafana_config(source)
+    except GrafanaInputError as exc:
+        print(f"Error: invalid Grafana configuration: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "grafana":
+        print("Error: input not recognized as Grafana configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_grafana(data, catalog=catalog))
 
 
 def _otel_collector_gate(args: argparse.Namespace) -> int:

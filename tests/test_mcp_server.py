@@ -21,6 +21,7 @@ from readtheplan.mcp_server import (
     agent_gate_cloudformation,
     agent_gate_dockerfile,
     agent_gate_envoy,
+    agent_gate_grafana,
     agent_gate_kubernetes,
     agent_gate_monitoring,
     agent_gate_otel_collector,
@@ -246,6 +247,14 @@ def test_agent_gate_traefik_supports_yaml_and_toml() -> None:
     assert risky["total_changes"] == 23
     assert static["adapter"] == "traefik"
     assert "rtp.control.soc2.CC8.1" in risky["required_checks"]
+
+
+@pytest.mark.parametrize("fixture", ["grafana_risky.ini", "grafana_provisioning_risky.yml"])
+def test_agent_gate_grafana_supports_ini_and_provisioning(fixture: str) -> None:
+    result = agent_gate_grafana(str(FIXTURES / fixture), "soc2")
+    assert result["adapter"] == "grafana"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
 def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
@@ -1026,6 +1035,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_monitoring" in tool_names
         assert "agent_gate_otel_collector" in tool_names
         assert "agent_gate_traefik" in tool_names
+        assert "agent_gate_grafana" in tool_names
         assert "agent_gate_dockerfile" in tool_names
         for tool_name in (
             "agent_gate_cloudformation",
@@ -1062,6 +1072,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(collector_schema["properties"])
         traefik_schema = tools_by_name["agent_gate_traefik"]["inputSchema"]
         assert {"input_path", "framework"} <= set(traefik_schema["properties"])
+        grafana_schema = tools_by_name["agent_gate_grafana"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(grafana_schema["properties"])
         dockerfile_schema = tools_by_name["agent_gate_dockerfile"]["inputSchema"]
         assert {"input_path", "framework"} <= set(dockerfile_schema["properties"])
 
