@@ -7,6 +7,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- First-party Terraform rules for all 130 resources in the current GitLab
+  provider catalog. Projects/groups and instance defaults, protected refs and
+  environments, approvals, identity/federation, tokens/keys/variables, runners
+  and cluster agents, hooks/integrations/mirrors, CI job-token trust, releases
+  and registry protection, security/compliance policy, and collaboration
+  metadata no longer fall back to generic Terraform semantics.
 - First-party Terraform rules for the GitHub provider. Repository lifecycle and
   visibility, branches and rulesets, organization/team/collaborator access,
   Actions execution and workflow-token policy, secrets and variables,
