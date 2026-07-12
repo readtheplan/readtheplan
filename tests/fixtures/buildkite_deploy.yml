@@ -1,0 +1,34 @@
+env:
+  API_TOKEN: fixture-secret
+agents:
+  queue: production
+steps:
+  - label: ":pipeline: Upload"
+    command: buildkite-agent pipeline upload .buildkite/deploy.yml
+    agents:
+      queue: privileged
+  - group: Deploy
+    steps:
+      - label: ":docker: Build"
+        command:
+          - docker build -t app:latest .
+          - docker push app:latest
+        plugins:
+          - docker#latest:
+              volumes:
+                - /var/run/docker.sock:/var/run/docker.sock
+          - aws-assume-role-with-web-identity#v1.2.3:
+              role-arn: arn:aws:iam::123456789012:role/deploy
+        secrets:
+          - DEPLOY_TOKEN
+        artifact_paths:
+          - dist/**/*
+        retry:
+          automatic: true
+        concurrency_group: production/deploy
+        soft_fail: true
+  - block: ":rocket: Release?"
+  - trigger: downstream-production
+    build:
+      branch: main
+  - wait

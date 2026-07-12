@@ -61,6 +61,7 @@ def parse_pipeline_yaml(source: str, ecosystem: str) -> dict[str, Any]:
     wrappers = {
         "azure-pipelines": "azure_pipelines",
         "bitbucket-pipelines": "bitbucket_pipelines",
+        "buildkite": "buildkite",
         "github-actions": "github_actions",
         "gitlab-ci": "gitlab_ci",
         "circleci": "circleci",
@@ -1465,6 +1466,227 @@ class BitbucketPipelinesAdapter(_PipelineAdapter):
         return value if isinstance(value, list) else [value]
 
 
+class BuildkiteAdapter(_PipelineAdapter):
+    wrapper_key = "buildkite"
+    tool_name = "Buildkite"
+
+    @property
+    def adapter_name(self) -> str:
+        return "buildkite"
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        pipeline = input_data[self.wrapper_key]
+        changes: list[dict[str, Any]] = []
+        if pipeline.get("env") is not None:
+            changes.append(self._environment("pipeline.env", pipeline["env"], global_env=True))
+        if pipeline.get("agents") is not None:
+            changes.append(self._agents("pipeline.agents", pipeline["agents"]))
+        steps = pipeline.get("steps")
+        if not isinstance(steps, list) or not steps:
+            changes.append(
+                _change(
+                    "pipeline.steps",
+                    "unresolved",
+                    "review",
+                    "Buildkite pipeline has no statically analyzable steps; review uploaded or "
+                    "generated pipeline configuration.",
+                )
+            )
+            return changes
+        self._steps(steps, "steps", changes)
+        changes.append(
+            _change(
+                "pipeline.effective_configuration",
+                "effective_configuration",
+                "review",
+                "Buildkite execution also depends on agent hooks, cluster/queue policies, "
+                "pipeline settings, environment interpolation, and uploaded dynamic steps.",
+            )
+        )
+        return changes
+
+    def _steps(
+        self, steps: list[Any], prefix: str, changes: list[dict[str, Any]]
+    ) -> None:
+        for index, raw_step in enumerate(steps):
+            address = f"{prefix}[{index}]"
+            if isinstance(raw_step, str):
+                kind = raw_step.lower()
+                changes.append(
+                    _change(
+                        address,
+                        "wait" if kind in {"wait", "waiter"} else "unresolved",
+                        "safe" if kind in {"wait", "waiter"} else "review",
+                        "Buildkite wait creates an ordering barrier."
+                        if kind in {"wait", "waiter"}
+                        else "Buildkite shorthand step requires review.",
+                    )
+                )
+                continue
+            if not isinstance(raw_step, dict):
+                changes.append(
+                    _change(address, "unresolved", "review", "Buildkite step is not an object.")
+                )
+                continue
+            nested = raw_step.get("steps")
+            if isinstance(nested, list):
+                changes.append(
+                    _change(
+                        f"{address}.group",
+                        "group",
+                        "review",
+                        "Buildkite group controls conditional and shared execution boundaries.",
+                    )
+                )
+                self._steps(nested, f"{address}.steps", changes)
+            command = raw_step.get("command", raw_step.get("commands"))
+            if command is not None:
+                text = "\n".join(map(str, command)) if isinstance(command, list) else str(command)
+                changes.append(
+                    _change(
+                        f"{address}.command",
+                        "command",
+                        "dangerous",
+                        "Buildkite command step executes arbitrary code on the selected agent.",
+                    )
+                )
+                if re.search(r"buildkite-agent\s+pipeline\s+upload", text, re.IGNORECASE):
+                    changes.append(
+                        _change(
+                            f"{address}.pipeline_upload",
+                            "dynamic_pipeline",
+                            "dangerous",
+                            "Command uploads dynamic pipeline steps not present in this artifact.",
+                        )
+                    )
+                if self._secret_reference(text):
+                    changes.append(self._secret(f"{address}.command.secrets"))
+            if raw_step.get("plugins") is not None:
+                self._plugins(raw_step["plugins"], f"{address}.plugins", changes)
+            if raw_step.get("env") is not None:
+                changes.append(self._environment(f"{address}.env", raw_step["env"]))
+            if raw_step.get("secrets") is not None:
+                changes.append(self._secret(f"{address}.secrets"))
+            if raw_step.get("agents") is not None:
+                changes.append(self._agents(f"{address}.agents", raw_step["agents"]))
+            if raw_step.get("trigger") is not None:
+                changes.append(
+                    _change(
+                        f"{address}.trigger",
+                        "trigger",
+                        "dangerous",
+                        "Buildkite trigger starts another pipeline with separate code, settings, "
+                        "agents, and secrets.",
+                    )
+                )
+            if "block" in raw_step or "input" in raw_step:
+                changes.append(
+                    _change(
+                        f"{address}.approval",
+                        "approval",
+                        "review",
+                        "Buildkite block/input pauses for user data or approval; verify "
+                        "permissions.",
+                    )
+                )
+            if raw_step.get("artifact_paths") is not None:
+                changes.append(
+                    _change(
+                        f"{address}.artifact_paths",
+                        "artifacts",
+                        "review",
+                        "Buildkite artifacts persist agent files; verify paths, retention, and "
+                        "credential exclusion.",
+                    )
+                )
+            for key, kind, risk, explanation in (
+                ("soft_fail", "soft_fail", "dangerous", "Soft-fail can bypass a failing gate."),
+                ("retry", "retry", "review", "Retry can re-execute commands or infrastructure."),
+                (
+                    "concurrency_group",
+                    "concurrency",
+                    "review",
+                    "Concurrency changes deployment serialization.",
+                ),
+                (
+                    "depends_on",
+                    "dependency",
+                    "review",
+                    "Step dependencies control execution order.",
+                ),
+            ):
+                if raw_step.get(key) is not None:
+                    changes.append(_change(f"{address}.{key}", kind, risk, explanation))
+
+    def _plugins(
+        self, plugins: Any, address: str, changes: list[dict[str, Any]]
+    ) -> None:
+        values = plugins if isinstance(plugins, list) else [plugins]
+        for index, plugin in enumerate(values):
+            reference = next(iter(plugin), "") if isinstance(plugin, dict) else str(plugin)
+            ref = str(reference)
+            _, separator, version = ref.rpartition("#")
+            pinned_version = _SHA_REF.fullmatch(version) or _EXACT_PIPE_VERSION.fullmatch(
+                version.lstrip("v")
+            )
+            pinned = ref.startswith("./") or bool(separator and pinned_version)
+            changes.append(
+                _change(
+                    f"{address}[{index}]",
+                    "plugin",
+                    "review" if pinned else "dangerous",
+                    "Buildkite plugin runs lifecycle hooks on the agent; pin an exact reviewed "
+                    "version and verify publisher and configuration.",
+                )
+            )
+            if self._secret_reference(plugin):
+                changes.append(self._secret(f"{address}[{index}].secrets"))
+
+    def _environment(self, address: str, value: Any, *, global_env: bool = False) -> dict[str, str]:
+        sensitive = self._secret_reference(value)
+        risk = "dangerous" if sensitive or global_env else "review"
+        scope = "pipeline-wide" if global_env else "step"
+        return _change(
+            address,
+            "environment",
+            risk,
+            f"Buildkite {scope} environment is interpolated and sent to jobs; avoid literal or "
+            "credential-bearing values.",
+        )
+
+    def _agents(self, address: str, value: Any) -> dict[str, str]:
+        return _change(
+            address,
+            "agents",
+            "review",
+            "Buildkite agent and queue selection determines host access, hooks, and secret policy.",
+        )
+
+    def _secret_reference(self, value: Any) -> bool:
+        if isinstance(value, dict):
+            return any(
+                _SENSITIVE_VARIABLE_NAME.search(str(key)) is not None
+                or self._secret_reference(item)
+                for key, item in value.items()
+            )
+        if isinstance(value, list):
+            return any(self._secret_reference(item) for item in value)
+        text = str(value)
+        return bool(
+            re.search(r"\$\{?[A-Za-z_][A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|KEY)", text, re.I)
+            or re.search(r"buildkite-agent\s+secret\s+get", text, re.I)
+        )
+
+    def _secret(self, address: str) -> dict[str, str]:
+        return _change(
+            address,
+            "secret_input",
+            "dangerous",
+            "Buildkite step accesses credential material; verify secret policy, queue scope, "
+            "interpolation, command-line exposure, and log redaction.",
+        )
+
+
 def analyze_pipeline(
     adapter: _PipelineAdapter, data: dict[str, Any], *, catalog=None
 ) -> dict[str, Any]:
@@ -1498,3 +1720,7 @@ def analyze_azure_pipelines(data: dict[str, Any], *, catalog=None) -> dict[str, 
 
 def analyze_bitbucket_pipelines(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
     return analyze_pipeline(BitbucketPipelinesAdapter(), data, catalog=catalog)
+
+
+def analyze_buildkite(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(BuildkiteAdapter(), data, catalog=catalog)

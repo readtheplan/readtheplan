@@ -16,6 +16,7 @@ from readtheplan.adapters.packer import PackerInspectAdapter
 from readtheplan.adapters.pipelines import (
     AzurePipelinesAdapter,
     BitbucketPipelinesAdapter,
+    BuildkiteAdapter,
     CircleCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
@@ -94,6 +95,7 @@ register_adapter(AzureWhatIfAdapter())
 register_adapter(GitHubActionsAdapter())
 register_adapter(AzurePipelinesAdapter())
 register_adapter(BitbucketPipelinesAdapter())
+register_adapter(BuildkiteAdapter())
 register_adapter(GitLabCIAdapter())
 register_adapter(CircleCIAdapter())
 register_adapter(DockerComposeAdapter())
@@ -111,6 +113,7 @@ __all__ = [
     "AzureWhatIfAdapter",
     "AzurePipelinesAdapter",
     "BitbucketPipelinesAdapter",
+    "BuildkiteAdapter",
     "ChefAdapter",
     "CircleCIAdapter",
     "CloudFormationAdapter",

@@ -89,6 +89,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |
 | Azure Pipelines | `readtheplan azure-pipelines azure-pipelines.yml` | Repositories, templates, variable groups, pools, containers, environments, service connections, tasks, and scripts |
 | Bitbucket Pipelines | `readtheplan bitbucket-pipelines bitbucket-pipelines.yml` | Images, runners, OIDC, deployments, services, caches, scripts, pipes, artifacts, imports, and secured-variable references |
+| Buildkite | `readtheplan buildkite pipeline.yml` | Commands, dynamic uploads, plugins, agents/queues, secrets, artifacts, triggers, approvals, retries, concurrency, and effective agent policy |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |
 | Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |
@@ -103,6 +104,8 @@ The scripted configuration adapters deliberately classify unexpanded includes an
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
 The CI workflow adapters preserve GitHub's YAML `on` key correctly and require
 immutable references for reusable third-party code.
+Buildkite analysis distinguishes exact plugin versions from floating refs and
+surfaces dynamic pipeline uploads plus agent-hook, queue-policy, and interpolation boundaries.
 Salt parses static SLS YAML and conservatively scans Jinja-templated state files;
 render-time execution-module calls are dangerous and generated state remains review.
 Docker Compose parsing follows Docker's documented trust boundary without resolving

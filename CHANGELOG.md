@@ -7,6 +7,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Buildkite pipeline gates across the CLI, generalized Action, and local
+  MCP server. Commands, dynamic uploads, plugin pinning, agents/queues, secrets,
+  environment interpolation, artifacts, triggers, approvals, retries,
+  concurrency, soft-fail gates, and agent/runtime policy boundaries feed the
+  shared risk contract.
 - Native NGINX and HAProxy configuration gates across the CLI, generalized
   Action, and local MCP server. Static parsing surfaces includes, executable
   modules/Lua/programs, runtime identity, public listeners, TLS verification,
