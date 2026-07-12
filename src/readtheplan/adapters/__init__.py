@@ -18,6 +18,7 @@ from readtheplan.adapters.pipelines import (
 )
 from readtheplan.adapters.pulumi import PulumiAdapter
 from readtheplan.adapters.puppet import PuppetAdapter
+from readtheplan.adapters.salt import SaltAdapter
 from readtheplan.adapters.workloads import DockerComposeAdapter, NomadPlanAdapter
 
 #: Entry point group external packages use to contribute adapters.
@@ -85,6 +86,7 @@ register_adapter(CircleCIAdapter())
 register_adapter(DockerComposeAdapter())
 register_adapter(NomadPlanAdapter())
 register_adapter(PackerInspectAdapter())
+register_adapter(SaltAdapter())
 load_entry_point_adapters()
 
 __all__ = [
@@ -104,6 +106,7 @@ __all__ = [
     "PackerInspectAdapter",
     "PulumiAdapter",
     "PuppetAdapter",
+    "SaltAdapter",
     "register_adapter",
     "get_adapter",
     "detect_adapter",

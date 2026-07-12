@@ -80,6 +80,7 @@ Terraform/OpenTofu analysis applies **resource-aware rules** (40+ AWS resource t
 | Kubernetes / Helm / Kustomize / Crossplane / Argo CD / Flux | `readtheplan kubernetes rendered.yaml` | JSON/YAML, multi-doc, RBAC, custom-resource, and GitOps rules |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |
 | Ansible | `readtheplan ansible playbook.yml` | Structured YAML task, block, handler, and role analysis |
+| Salt | `readtheplan salt state.sls` | Structured SLS states, destructive functions, command/module execution, secrets, includes, and Jinja rendering |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Conservative pipeline-step analysis |
 | Chef | `readtheplan chef default.rb` | Conservative recipe-resource analysis |
 | Puppet | `readtheplan puppet site.pp` | Conservative manifest-resource analysis |
@@ -94,6 +95,8 @@ The scripted configuration adapters deliberately classify unexpanded includes an
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
 The CI workflow adapters preserve GitHub's YAML `on` key correctly and require
 immutable references for reusable third-party code.
+Salt parses static SLS YAML and conservatively scans Jinja-templated state files;
+render-time execution-module calls are dangerous and generated state remains review.
 Docker Compose parsing follows Docker's documented trust boundary without resolving
 external files. Nomad consumes the JSON response from the job plan HTTP API so
 scheduler decisions remain structured rather than being inferred from HCL text.

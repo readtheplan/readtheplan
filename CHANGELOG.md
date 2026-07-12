@@ -7,6 +7,10 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Salt SLS gates across the CLI, generalized Action, and local MCP server.
+  Static YAML states receive module/function-aware risk; Jinja files receive a
+  conservative fallback, and render-time execution, destructive states,
+  credential-like Pillar/SDB inputs, includes, and duplicate keys are surfaced.
 - Native Packer inspect gates across the CLI, generalized Action, and local MCP
   server. Human and machine-readable inspect output is normalized into builders,
   provisioners, post-processors, masked/unresolved variables, and an explicit

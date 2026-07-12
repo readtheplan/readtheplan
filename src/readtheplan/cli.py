@@ -327,6 +327,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     packer.set_defaults(func=_packer_gate)
 
+    salt = subparsers.add_parser(
+        "salt",
+        help="Emit the agent-gate decision for a Salt SLS state file.",
+    )
+    salt.add_argument("--framework", help="Include checks from a compliance framework.")
+    salt.add_argument("input_file", help="Path to a Salt SLS YAML/Jinja state file.")
+    salt.set_defaults(func=_salt_gate)
+
     verify = subparsers.add_parser(
         "verify",
         help="Verify a signed rtp-evidence-v1 envelope.",
@@ -1001,6 +1009,31 @@ def _packer_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_packer(data, catalog=catalog))
+
+
+def _salt_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for a Salt SLS state file."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.salt import SaltInputError, analyze_salt, parse_salt_sls
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_salt_sls(source)
+    except SaltInputError as exc:
+        print(f"Error: invalid Salt SLS input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "salt":
+        print("Error: input not recognized as a Salt SLS state", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_salt(data, catalog=catalog))
 
 
 def _adapter_catalog(framework: str | None) -> ControlCatalog | None:

@@ -270,6 +270,35 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Salt states
+        id: salt
+        uses: ./
+        with:
+          tool: salt
+          input-file: tests/fixtures/salt_states_risky.sls
+          framework: soc2
+
+      - name: Assert Salt outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.salt.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.salt.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.salt.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "6"
+          test "$RISK_COUNTS" = '{"dangerous":2,"irreversible":0,"review":3,"safe":1}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "salt"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Fail on invalid plan JSON
         id: invalid
         uses: ./
