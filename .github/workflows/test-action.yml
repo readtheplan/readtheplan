@@ -1219,6 +1219,40 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Chef Berksfile lock
+        id: chef_berkshelf
+        uses: ./
+        with:
+          tool: chef-project
+          input-file: tests/fixtures/chef_berkshelf_risky/Berksfile.lock
+          framework: soc2
+
+      - name: Assert Chef Berksfile lock outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef_berkshelf.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef_berkshelf.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef_berkshelf.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "12"
+          test "$RISK_COUNTS" = '{"dangerous":4,"irreversible":0,"review":8,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "chef-project"
+          assert payload["artifact_type"] == "berks_lock"
+          assert payload["dependency_count"] == 5
+          assert payload["decision"] == "block"
+          assert "no resolved graph entry" in payload["pr_comment"]
+          assert "fixture-user" not in serialized
+          assert "fixture-password" not in serialized
+          assert "example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef client runtime configuration
         id: chef_runtime
         uses: ./

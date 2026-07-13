@@ -408,8 +408,8 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     chef_project.add_argument(
         "input_file",
         help=(
-            "Path to Policyfile.rb, Policyfile.lock.json, metadata.rb, client.rb, solo.rb, "
-            "Workstation config.rb/knife.rb, or chef-server.rb."
+            "Path to Policyfile.rb, Policyfile.lock.json, Berksfile, Berksfile.lock, metadata.rb, "
+            "client.rb, solo.rb, Workstation config.rb/knife.rb, or chef-server.rb."
         ),
     )
     chef_project.set_defaults(func=_chef_project_gate)

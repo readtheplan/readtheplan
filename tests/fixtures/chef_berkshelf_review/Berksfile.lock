@@ -1,0 +1,11 @@
+DEPENDENCIES
+  base (= 3.2.1)
+  pinned-git
+    git: https://git.example.invalid/cookbooks/base.git
+    ref: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+
+GRAPH
+  base (3.2.1)
+    support (= 1.1.0)
+  pinned-git (2.0.0)
+  support (1.1.0)
