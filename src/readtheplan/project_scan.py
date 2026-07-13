@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from readtheplan.adapters.ansible_code import ansible_code_metadata
 from readtheplan.adapters.bolt_content import bolt_task_implementation_language
 from readtheplan.rules import RISK_ORDER
 
@@ -262,6 +263,10 @@ def identify_project_input(
                 implementation_source = ""
         if bolt_task_implementation_language(relative_path, implementation_source):
             return "puppet-project"
+
+    ansible_code = ansible_code_metadata(relative_path)
+    if ansible_code is not None and _ansible_code_context(path, parts):
+        return "ansible-project"
 
     if name == "ansible.cfg":
         return "ansible-project"
@@ -739,6 +744,27 @@ def _ansible_role_content_context(path: Path, parts: tuple[str, ...]) -> bool:
     return False
 
 
+def _ansible_code_context(path: Path, parts: tuple[str, ...]) -> bool:
+    """Require project or role evidence before treating Python/PowerShell as Ansible code."""
+    if "collections" in parts[:-1]:
+        collection_index = parts.index("collections")
+        if len(parts) > collection_index + 4 and parts[collection_index + 3] == "plugins":
+            return True
+    if "roles" in parts[:-1] and any(
+        part in {"library", "plugins"} or part.endswith("_plugins") for part in parts[:-1]
+    ):
+        return True
+    for ancestor in path.parents:
+        if (ancestor / "galaxy.yml").is_file() or (ancestor / "galaxy.yaml").is_file():
+            return True
+        if (ancestor / "ansible.cfg").is_file():
+            return True
+        role_markers = {"defaults", "handlers", "meta", "tasks", "vars"}
+        if sum((ancestor / marker).exists() for marker in role_markers) >= 2:
+            return True
+    return False
+
+
 def _chef_cookbook_content_context(
     path: Path,
     parts: tuple[str, ...],
@@ -963,8 +989,10 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
     if isinstance(payload.get("dynamic_erb"), bool):
         result["dynamic_erb"] = payload["dynamic_erb"]
     for field in (
+        "component_name",
         "language",
         "hook_name",
+        "plugin_type",
         "source_kind",
         "task_name",
     ):
