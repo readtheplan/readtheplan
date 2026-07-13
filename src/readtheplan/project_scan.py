@@ -250,6 +250,8 @@ def identify_project_input(
 
     if name == ".terraform.lock.hcl":
         return "terraform-lock"
+    if name.endswith((".tfstate", ".tfstate.backup", ".tfstate.json")):
+        return "terraform-state"
     if name.endswith((".tfcomponent.hcl", ".tfdeploy.hcl")):
         return "terraform-stack"
     if name == "terragrunt.hcl" or name.endswith(".terragrunt.hcl"):
@@ -926,6 +928,22 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
         return None
     if isinstance(document.get("sops"), dict):
         return "sops"
+    if (
+        isinstance(document.get("format_version"), str)
+        and isinstance(document.get("terraform_version"), str)
+        and isinstance(document.get("values"), dict)
+        and "resource_changes" not in document
+        and "planned_values" not in document
+    ):
+        return "terraform-state"
+    if (
+        document.get("version") == 4
+        and isinstance(document.get("terraform_version"), str)
+        and isinstance(document.get("serial"), int)
+        and isinstance(document.get("lineage"), str)
+        and isinstance(document.get("resources"), list)
+    ):
+        return "terraform-state"
     bake_targets = document.get("target")
     if isinstance(bake_targets, dict) and any(
         isinstance(target, dict)
@@ -1091,6 +1109,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
     if isinstance(payload.get("dynamic_erb"), bool):
         result["dynamic_erb"] = payload["dynamic_erb"]
     for field in (
+        "artifact",
         "component_name",
         "external_fact_type",
         "extension_type",
@@ -1106,6 +1125,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
             result[field] = payload[field]
     for field in (
         "line_count",
+        "output_count",
         "command_count",
         "credential_binding_count",
         "dynamic_count",
@@ -1132,6 +1152,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "source_line_count",
         "resource_change_count",
         "secret_interpolation_count",
+        "serial",
         "plan_finding_count",
     ):
         if isinstance(payload.get(field), int):
