@@ -28,7 +28,7 @@ def test_action_uses_json_cli_contract() -> None:
         "travis-ci|drone-ci|woodpecker-ci|concourse|bamboo|"
         "codebuild|cloud-build|codepipeline|"
         "atlantis|"
-        "docker-compose|"
+        "docker-compose|docker-bake|"
         "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|sops|vagrant|"
         "cloud-init|systemd|nginx|haproxy|envoy|traefik|caddy|grafana|loki|vault|consul|"
         "prometheus|alertmanager|"
@@ -99,6 +99,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/github_actions_deploy.yml" in workflow
     assert "tool: docker-compose" in workflow
     assert "input-file: tests/fixtures/docker_compose_risky.yml" in workflow
+    assert "tool: docker-bake" in workflow
+    assert "input-file: tests/fixtures/docker-bake.risky.hcl" in workflow
     assert "tool: nomad" in workflow
     assert "input-file: tests/fixtures/nomad_plan_risky.json" in workflow
     assert "input-file: tests/fixtures/flux_gitops_risky.yml" in workflow

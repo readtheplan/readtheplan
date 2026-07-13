@@ -38,6 +38,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("secrets/production.sops.env", "sops"),
         ("secrets/production.sops.ini", "sops"),
         ("Vagrantfile", "vagrant"),
+        ("docker-bake.hcl", "docker-bake"),
+        ("docker-bake.override.json", "docker-bake"),
         ("Dockerfile.production", "dockerfile"),
         ("compose.yaml", "docker-compose"),
         (".github/workflows/deploy.yml", "github-actions"),
@@ -114,6 +116,26 @@ def test_content_detection_for_cloud_build_and_codepipeline_json(tmp_path: Path)
     )
     assert identify_project_input(cloud_build, cloud_build.name) == "cloud-build"
     assert identify_project_input(codepipeline, codepipeline.name) == "codepipeline"
+
+
+def test_content_detection_for_generated_docker_bake_json(tmp_path: Path) -> None:
+    bake = tmp_path / "generated-build.json"
+    bake.write_text(
+        json.dumps(
+            {
+                "target": {
+                    "app": {
+                        "context": ".",
+                        "dockerfile": "Dockerfile",
+                        "output": [{"type": "registry"}],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert identify_project_input(bake, bake.name) == "docker-bake"
 
 
 def test_content_detection_for_sops_structured_dotenv_and_ini(tmp_path: Path) -> None:
@@ -355,6 +377,25 @@ def test_project_scan_analyzes_sops_policy_and_encrypted_documents(tmp_path: Pat
     assert {item["tool"] for item in payload["files"]} == {"sops"}
     assert payload["decision"] == "block"
     assert "literal-token-must-not-leak" not in json.dumps(payload)
+
+
+def test_project_scan_analyzes_docker_bake_and_redacts_build_values(tmp_path: Path) -> None:
+    (tmp_path / "docker-bake.hcl").write_text(
+        (FIXTURES / "docker-bake.risky.hcl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "docker-bake"
+    assert payload["files"][0]["adapter"] == "docker-bake"
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "literal-build-token-must-not-leak" not in encoded
+    assert "literal-build-arg-must-not-leak" not in encoded
 
 
 def test_malformed_discovered_input_becomes_redacted_validation_error(tmp_path: Path) -> None:

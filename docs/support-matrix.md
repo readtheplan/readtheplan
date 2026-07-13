@@ -52,6 +52,7 @@ matrix makes those boundaries explicit.
 | Azure Pipelines | `azure-pipelines.yml` | `readtheplan azure-pipelines azure-pipelines.yml` | Repository/container resources, templates, variable groups, inline secrets, pools, deployment environments, service connections, tasks, scripts, and protected-resource boundaries | Built-in |
 | Bitbucket Pipelines | `bitbucket-pipelines.yml` | `readtheplan bitbucket-pipelines bitbucket-pipelines.yml` | Images, self-hosted runners, OIDC, deployments, services, Docker daemon access, caches, scripts, pipes, artifacts, custom variables, imports, and external settings | Built-in |
 | Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
+| Docker Buildx Bake | `docker-bake.hcl`, `docker-bake.json`, or Compose YAML build definitions | `readtheplan docker-bake docker-bake.hcl` | Static build graph, target/group references, inheritance/matrices, local/remote contexts, Dockerfile paths/inline source, entitlements/networking, build args, secrets/SSH, cache import/export, outputs/registry publication, source policy, attestations, and non-execution boundaries | Built-in |
 | Dockerfile / Containerfile | Dockerfile source | `readtheplan dockerfile Dockerfile` | Frontends, base-image pinning, stages, commands/heredocs, BuildKit mounts, secret ARG/ENV, COPY/ADD, users, health, deferred instructions, and context boundaries | Built-in |
 | HashiCorp Nomad | HCL/JSON jobspec or `/v1/job/:id/plan` JSON response | `readtheplan nomad job.nomad.hcl` | Source task drivers, commands/images, artifacts/templates, identity, Vault/Consul, services/networking, storage/secrets, plus scheduler placement/replacement/stops and failures | Built-in |
 | HashiCorp Packer | Native HCL2/JSON or human/`-machine-readable` inspect output | `readtheplan packer image.pkr.hcl` | Plugin/core constraints, variables/locals/data, builders/communicators/base inputs, provisioners, post-processors/publishing, secrets, functions, and inspect/source boundaries | Built-in |
@@ -109,7 +110,7 @@ the same optional `framework` parameter through its MCP tool.
   Crossplane packages, providers, or Composition functions,
   Serverless Framework plugins or AWS SAM builds/transforms,
   Pulumi, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,
-  Docker Compose, Dockerfiles, Nomad, Packer,
+  Docker Compose, Docker Buildx Bake, Dockerfiles, Nomad, Packer,
   Vagrant, cloud-init user-data, or provider code.
 - Ansible configuration precedence, inventory/plugin execution, transitive Galaxy
   dependencies, includes/roles, and Jenkins shared libraries remain external code

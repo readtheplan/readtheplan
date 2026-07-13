@@ -949,6 +949,19 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     cloud_init.add_argument("input_file", help="Path to cloud-init user-data.")
     cloud_init.set_defaults(func=_cloud_init_gate)
 
+    docker_bake = subparsers.add_parser(
+        "docker-bake",
+        help="Emit the agent-gate decision for a Docker Buildx Bake definition.",
+    )
+    docker_bake.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    docker_bake.add_argument(
+        "input_file",
+        help="Path to docker-bake.hcl, docker-bake.json, or a Compose build file.",
+    )
+    docker_bake.set_defaults(func=_docker_bake_gate)
+
     dockerfile = subparsers.add_parser(
         "dockerfile",
         help="Emit the agent-gate decision for a Dockerfile or Containerfile.",
@@ -2970,6 +2983,35 @@ def _proxy_config_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_proxy_config(data, catalog=catalog))
+
+
+def _docker_bake_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Docker Buildx Bake."""
+    from readtheplan.adapters.docker_bake import (
+        DockerBakeAdapter,
+        DockerBakeInputError,
+        analyze_docker_bake,
+        parse_docker_bake,
+    )
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_docker_bake(source, path.name)
+    except DockerBakeInputError as exc:
+        print(f"Error: invalid Docker Bake input: {exc}", file=sys.stderr)
+        return 1
+    if not DockerBakeAdapter().can_handle(data):
+        print("Error: input not recognized as Docker Buildx Bake", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_docker_bake(data, catalog=catalog))
 
 
 def _dockerfile_gate(args: argparse.Namespace) -> int:

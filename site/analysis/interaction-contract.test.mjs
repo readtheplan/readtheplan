@@ -201,6 +201,7 @@ assert.match(adapterDocs, /<strong>Ansible playbooks and project configuration<\
 assert.match(adapterDocs, /<strong>Jenkins pipelines\/JCasC<\/strong>/);
 assert.match(adapterDocs, /<strong>Chef recipes and projects<\/strong>/);
 assert.match(adapterDocs, /<strong>Puppet manifests and projects<\/strong>/);
+assert.match(adapterDocs, /<strong>Docker Compose and Buildx Bake<\/strong>/);
 assert.match(adapterDocs, /BaseAdapter/);
 const readme = await read("../README.md");
 assert.match(readme, /SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST/);

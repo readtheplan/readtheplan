@@ -102,7 +102,7 @@ MCP_ROOT=/absolute/path/to/repository readtheplan mcp</pre>
             <code>agent_gate_cdk</code>, <code>agent_gate_kubernetes</code>,
             <code>agent_gate_helm</code>, <code>agent_gate_helmfile</code>, <code>agent_gate_terramate</code>, <code>agent_gate_spacelift</code>, <code>agent_gate_carvel</code>, <code>agent_gate_kustomize</code>,
             <code>agent_gate_crossplane</code>, <code>agent_gate_serverless</code>,
-              <code>agent_gate_sam</code>, <code>agent_gate_skaffold</code>, <code>agent_gate_devspace</code>, <code>agent_gate_tilt</code>, <code>agent_gate_cue</code>, <code>agent_gate_jsonnet</code>, <code>agent_gate_nix</code>, <code>agent_gate_dsc</code>, <code>agent_gate_cfengine</code>, <code>agent_gate_opa</code>, <code>agent_gate_sentinel</code>, <code>agent_gate_sops</code>, <code>agent_gate_terraform_lock</code>, <code>agent_gate_terraform_state</code>,
+              <code>agent_gate_sam</code>, <code>agent_gate_skaffold</code>, <code>agent_gate_devspace</code>, <code>agent_gate_tilt</code>, <code>agent_gate_cue</code>, <code>agent_gate_jsonnet</code>, <code>agent_gate_nix</code>, <code>agent_gate_dsc</code>, <code>agent_gate_cfengine</code>, <code>agent_gate_opa</code>, <code>agent_gate_sentinel</code>, <code>agent_gate_sops</code>, <code>agent_gate_docker_bake</code>, <code>agent_gate_terraform_lock</code>, <code>agent_gate_terraform_state</code>,
             <code>agent_gate_configuration_management</code>, and
             <code>agent_gate_pulumi</code> and <code>agent_gate_pulumi_project</code>.
             Every tool accepts a local input path.
@@ -255,7 +255,7 @@ MCP_ROOT=/absolute/path/to/repository readtheplan mcp</pre>
             Prometheus, Alertmanager,
             OpenTelemetry Collector,
             Buildkite, Atlantis,
-            Dockerfiles,
+            Docker Buildx Bake definitions, Dockerfiles,
             Azure Pipelines, and Bitbucket Pipelines into the same contract. Additional
             GCP/Oracle inputs can follow the same local-first boundary.
           </p>

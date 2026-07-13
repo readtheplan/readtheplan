@@ -2322,6 +2322,45 @@ def agent_gate_proxy_config(
     return analyze_proxy_config(data, catalog=catalog)
 
 
+def agent_gate_docker_bake(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for a local Docker Buildx Bake definition."""
+    from readtheplan.adapters.docker_bake import (
+        DockerBakeAdapter,
+        DockerBakeInputError,
+        analyze_docker_bake,
+        parse_docker_bake,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Docker Bake input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_docker_bake(source, Path(input_path).name)
+    except DockerBakeInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Docker Bake input in {input_path}: {exc}",
+        ) from exc
+    if not DockerBakeAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Docker Buildx Bake",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_docker_bake(data, catalog=catalog)
+
+
 def agent_gate_dockerfile(
     input_path: str,
     framework: str | None = None,
@@ -2671,6 +2710,7 @@ def create_server() -> Any:
     agent_gate_serverless_handler = agent_gate_serverless
     agent_gate_sam_handler = agent_gate_sam
     agent_gate_proxy_config_handler = agent_gate_proxy_config
+    agent_gate_docker_bake_handler = agent_gate_docker_bake
     agent_gate_dockerfile_handler = agent_gate_dockerfile
     agent_gate_configuration_management_handler = agent_gate_configuration_management
 
@@ -3298,6 +3338,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_proxy_config_handler(input_path, ecosystem, framework=framework)
+
+    @mcp.tool(name="agent_gate_docker_bake")
+    def _agent_gate_docker_bake_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Docker Buildx Bake without running a build.
+
+        Args:
+            input_path: Local path to Bake HCL/JSON or a Compose build definition.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_docker_bake_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_dockerfile")
     def _agent_gate_dockerfile_tool(

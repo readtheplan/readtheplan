@@ -25,6 +25,7 @@ from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.crossplane import CrossplaneAdapter
 from readtheplan.adapters.cue import CueAdapter
 from readtheplan.adapters.devspace import DevSpaceAdapter
+from readtheplan.adapters.docker_bake import DockerBakeAdapter
 from readtheplan.adapters.dockerfile import DockerfileAdapter
 from readtheplan.adapters.dsc import DscAdapter
 from readtheplan.adapters.envoy import EnvoyAdapter
@@ -138,6 +139,7 @@ register_adapter(CarvelAdapter())
 register_adapter(CdkAdapter())
 register_adapter(AtlantisAdapter())
 register_adapter(CloudInitAdapter())
+register_adapter(DockerBakeAdapter())
 register_adapter(DockerfileAdapter())
 register_adapter(DscAdapter())
 register_adapter(DevSpaceAdapter())
@@ -234,6 +236,7 @@ __all__ = [
     "CrossplaneAdapter",
     "CueAdapter",
     "CloudInitAdapter",
+    "DockerBakeAdapter",
     "DockerComposeAdapter",
     "DockerfileAdapter",
     "DscAdapter",

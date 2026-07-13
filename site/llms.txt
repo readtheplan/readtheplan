@@ -15,6 +15,8 @@ Cloud-native delivery coverage includes AWS CodeBuild buildspecs, Google Cloud
 Build configurations, and AWS CodePipeline definitions.
 Secrets supply-chain coverage includes SOPS creation policy and encrypted
 YAML, JSON, dotenv, and INI metadata without decrypting secret values.
+Container build supply-chain coverage includes Docker Buildx Bake HCL/JSON and
+Compose-backed build graphs without invoking Buildx or contacting registries.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.
