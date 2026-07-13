@@ -46,7 +46,7 @@ matrix makes those boundaries explicit.
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
 | Chef project / runtime | `Policyfile.rb`, `Policyfile.lock.json`, `metadata.rb`, `client.rb`, `.chef/config.rb`/`knife.rb`, `solo.rb`, `chef-server.rb`, or supported `.d` fragments | `readtheplan chef-project client.rb` | Policy/run lists, cookbook provenance, resolved locks, attributes/dependencies, client identity and convergence, Workstation bootstrap/SSH, Solo content paths and remote recipes, Server TLS/LDAP/database/required-recipe controls, credentials, duplicate overrides, and dynamic Ruby/external-state boundaries | Built-in |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Built-in and namespaced resource/state scanner covering execution/identity/connectivity, classes, dynamic data/templates, custom types, virtual/exported resources, collectors, refresh relationships, sources, and permissions | Conservative |
-| Puppet project / runtime | `Puppetfile`, module `metadata.json`, `hiera.yaml`, or `puppet.conf` | `readtheplan puppet-project puppet.conf` | Forge/Git source provenance, immutable revisions, module/install paths, metadata identity and bounded dependencies, Hiera hierarchy/backends/data paths/options/secrets, plus duplicate-safe main agent/server/CA settings for certificate trust, autosigning, commands, cached catalogs, plugins, reports, endpoints, identities, credentials, and code paths | Built-in |
+| Puppet project / runtime / Bolt | `Puppetfile`, module `metadata.json`, `hiera.yaml`, `puppet.conf`, `bolt-project.yaml`, or Bolt `inventory.yaml` | `readtheplan puppet-project bolt-project.yaml` | Forge/Git source provenance, bounded dependencies, Hiera, duplicate-safe agent/server/CA settings, plus Bolt modules/plugins, dynamic target discovery, inherited transports, SSH/WinRM trust, credentials, privilege, command/interpreter overrides, and non-execution boundaries | Built-in |
 | GitHub Actions | Workflow YAML | `readtheplan github-actions workflow.yml` | Token permissions, action/reusable-workflow pinning, secret inputs, environments, and run steps | Built-in |
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
@@ -120,7 +120,9 @@ the same optional `framework` parameter through its MCP tool.
   cookbook contents, server-side state, Puppet module contents and transitive dependencies,
   Code Manager/r10k deployment settings, Hiera data, eyaml keys, `auth.conf`,
   autosign policy/config contents, Puppet Server HOCON, Ruby extensions,
-  custom providers/types, dynamic
+  custom providers/types, Bolt configuration precedence, installed Bolt module/plugin code,
+  resolved dynamic inventory and external secrets, target state, selected tasks/plans/commands,
+  dynamic
   language expressions, Hiera/data bindings, and compiled catalogs are not
   evaluated; recognized boundaries are surfaced for review instead.
 - Jenkins JCasC analysis parses one YAML file without resolving supplementary

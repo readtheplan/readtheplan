@@ -217,6 +217,15 @@ def identify_project_input(
     if name.startswith("pulumi.") and suffix in _YAML_SUFFIXES:
         return "pulumi-project"
 
+    if name == "bolt-project.yaml" or (
+        name in {"inventory.yaml", "inventory.yml"}
+        and (
+            any(part in {"bolt", ".puppetlabs"} for part in parts[:-1])
+            or (path.parent / "bolt-project.yaml").is_file()
+        )
+    ):
+        return "puppet-project"
+
     if name == "ansible.cfg":
         return "ansible-project"
     if name in {
