@@ -24,9 +24,7 @@ def _changes(fixture: str):
 
 def test_text_catalog_surfaces_mutable_experimental_incremental_and_url_sources() -> None:
     changes = _changes("jenkins_plugins_risky.txt")
-    plugins = [
-        change for change in changes if change.resource_type == "jenkins_project_plugin"
-    ]
+    plugins = [change for change in changes if change.resource_type == "jenkins_project_plugin"]
     encoded = json.dumps(
         [{"address": change.address, "explanation": change.explanation} for change in changes]
     )
@@ -67,9 +65,7 @@ def test_yaml_latest_and_direct_url_are_dangerous() -> None:
         filename="plugins.yaml",
     )
     changes = JenkinsProjectAdapter().analyze(data)
-    plugins = [
-        change for change in changes if change.resource_type == "jenkins_project_plugin"
-    ]
+    plugins = [change for change in changes if change.resource_type == "jenkins_project_plugin"]
 
     assert len(plugins) == 2
     assert {change.risk for change in plugins} == {"dangerous"}
@@ -332,12 +328,7 @@ def test_shared_library_var_surfaces_trust_execution_and_data_boundaries() -> No
 
 def test_shared_library_class_surfaces_controller_cps_and_process_boundaries() -> None:
     fixture = (
-        FIXTURES
-        / "jenkins_shared_library_risky"
-        / "src"
-        / "org"
-        / "example"
-        / "Helper.groovy"
+        FIXTURES / "jenkins_shared_library_risky" / "src" / "org" / "example" / "Helper.groovy"
     )
     data = parse_jenkins_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
     changes = JenkinsProjectAdapter().analyze(data)
@@ -384,11 +375,10 @@ def test_shared_library_lexer_ignores_comments_and_string_contents_linearly() ->
     source = (
         "def call() {\n"
         "  // @Grab('ignored') Jenkins.instance sh('ignored')\n"
-        "  def text = \"@Grab Jenkins.instance sh(\"\n"
+        '  def text = "@Grab Jenkins.instance sh("\n'
         "  def apiToken = config.token\n"
         "  def resource = libraryResource('static.txt')\n"
-        "}\n"
-        + "a" * 200_000
+        "}\n" + "a" * 200_000
     )
     data = parse_jenkins_project(source, filename="vars/example.groovy")
     changes = JenkinsProjectAdapter().analyze(data)
@@ -436,4 +426,89 @@ def test_shared_library_gate_and_cli_report_redacted_source_metadata(
     assert payload["artifact_type"] == "shared_library_var"
     assert payload["source_kind"] == "global_variable"
     assert "fixture-shared-library-secret-do-not-leak" not in json.dumps(payload)
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+
+
+def test_init_hook_surfaces_controller_security_and_runtime_boundaries() -> None:
+    fixture = FIXTURES / "jenkins_groovy_hooks_risky" / "init.groovy.d" / "10-security.groovy"
+    data = parse_jenkins_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
+    changes = JenkinsProjectAdapter().analyze(data, tool_name="Jenkins project")
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert data["jenkins_project"]["artifact_type"] == "init_hook"
+    assert data["jenkins_project"]["document"]["hook_name"] == "init"
+    assert "jenkins_project_executable_source" in kinds
+    assert "jenkins_project_controller_api" in kinds
+    assert "jenkins_project_security_configuration" in kinds
+    assert "jenkins_project_credential_configuration" in kinds
+    assert "jenkins_project_plugin_configuration" in kinds
+    assert "jenkins_project_agent_configuration" in kinds
+    assert "jenkins_project_filesystem_access" in kinds
+    assert "jenkins_project_network_access" in kinds
+    assert "jenkins_project_process_execution" in kinds
+    assert "jenkins_project_runtime_configuration" in kinds
+    assert "jenkins_project_literal_secret" in kinds
+    assert "jenkins_project_resolution_boundary" in kinds
+    assert (
+        next(
+            change for change in changes if change.resource_type.endswith("executable_source")
+        ).risk
+        == "dangerous"
+    )
+    for sensitive in (
+        "apiToken",
+        "fixture-controller-token-do-not-leak",
+        "FIXTURE_ENDPOINT",
+        "fixture-controller-command-do-not-run",
+        "/var/lib/jenkins/bootstrap",
+        "mailer",
+    ):
+        assert sensitive not in encoded
+
+
+def test_boot_failure_hook_is_a_dangerous_controller_execution_boundary() -> None:
+    source = """
+import jenkins.model.Jenkins
+Jenkins.get().doSafeRestart(null)
+"""
+    data = parse_jenkins_project(
+        source,
+        filename="jenkins_home/boot-failure.groovy.d/notify.groovy",
+    )
+    changes = JenkinsProjectAdapter().analyze(data)
+
+    assert data["jenkins_project"]["artifact_type"] == "boot_failure_hook"
+    assert data["jenkins_project"]["document"]["hook_name"] == "boot-failure"
+    assert any(change.resource_type.endswith("controller_lifecycle") for change in changes)
+    assert all(
+        change.risk == "dangerous"
+        for change in changes
+        if change.resource_type.endswith(("executable_source", "controller_lifecycle"))
+    )
+
+
+def test_init_hook_gate_and_cli_report_redacted_source_metadata(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = FIXTURES / "jenkins_groovy_hooks_risky" / "init.groovy.d" / "10-security.groovy"
+    data = parse_jenkins_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
+    gate = analyze_jenkins_project(data)
+
+    assert gate["adapter"] == "jenkins-project"
+    assert gate["artifact_type"] == "init_hook"
+    assert gate["source_kind"] == "controller_init_hook"
+    assert gate["hook_name"] == "init"
+    assert gate["source_line_count"] == 15
+    assert gate["decision"] == "block"
+
+    assert main(["jenkins-project", "--framework", "soc2", str(fixture)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["artifact_type"] == "init_hook"
+    assert payload["source_kind"] == "controller_init_hook"
+    assert payload["hook_name"] == "init"
+    assert "fixture-controller-token-do-not-leak" not in json.dumps(payload)
+    assert "fixture-controller-command-do-not-run" not in json.dumps(payload)
     assert "rtp.control.soc2.CC8.1" in payload["required_checks"]

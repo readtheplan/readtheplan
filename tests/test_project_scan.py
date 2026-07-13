@@ -51,6 +51,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("Jenkinsfile.deploy", "jenkins"),
         ("plugins.txt", "jenkins-project"),
         ("jenkins/plugins.yaml", "jenkins-project"),
+        ("jenkins_home/init.groovy", "jenkins-project"),
+        ("jenkins_home/init.groovy.d/10-security.groovy", "jenkins-project"),
+        ("jenkins_home/boot-failure.groovy", "jenkins-project"),
+        ("usr/share/jenkins/ref/boot-failure.groovy.d/notify.groovy", "jenkins-project"),
         ("cookbooks/base/recipes/default.rb", "chef"),
         ("cookbooks/base/resources/application.rb", "chef"),
         ("cookbooks/base/attributes/default.rb", "chef"),
@@ -877,6 +881,33 @@ def test_project_scan_analyzes_jenkins_shared_library_without_generic_groovy(
     encoded = json.dumps(payload)
     assert "fixture-shared-library-secret-do-not-leak" not in encoded
     assert "fixture-controller-path-do-not-leak" not in encoded
+
+
+def test_project_scan_analyzes_jenkins_controller_groovy_hooks() -> None:
+    payload = scan_project(FIXTURES / "jenkins_groovy_hooks_risky", display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    hook = payload["files"][0]
+    assert hook["tool"] == "jenkins-project"
+    assert hook["artifact_type"] == "init_hook"
+    assert hook["source_kind"] == "controller_init_hook"
+    assert hook["hook_name"] == "init"
+    assert hook["source_line_count"] == 15
+    assert hook["total_changes"] == 17
+    assert payload["total_changes"] == 17
+    assert payload["risk_counts"] == {
+        "safe": 0,
+        "review": 3,
+        "dangerous": 14,
+        "irreversible": 0,
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-controller-token-do-not-leak" not in encoded
+    assert "fixture-controller-command-do-not-run" not in encoded
+    assert "FIXTURE_ENDPOINT" not in encoded
 
 
 def test_project_scan_analyzes_chef_runtime_configuration(tmp_path: Path) -> None:
