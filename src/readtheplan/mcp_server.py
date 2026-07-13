@@ -713,6 +713,7 @@ def agent_gate_pipeline(
 ) -> dict[str, object]:
     """Return the gate decision for supported CI pipeline YAML."""
     from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.cloud_ci import analyze_cloud_ci
     from readtheplan.adapters.pipelines import (
         PipelineInputError,
         analyze_pipeline,
@@ -758,7 +759,6 @@ def agent_gate_pipeline(
     if ecosystem in cloud_ecosystems:
         from readtheplan.adapters.cloud_ci import (
             CloudCIInputError,
-            analyze_cloud_ci,
             parse_cloud_ci,
         )
 
