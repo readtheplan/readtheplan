@@ -132,6 +132,88 @@ _KITCHEN_TOP_LEVEL_KEYS = {
     "transport",
     "verifier",
 }
+_MAX_HABITAT_BYTES = 2 * 1024 * 1024
+_MAX_HABITAT_LINES = 100_000
+_HABITAT_HOOKS = {
+    "file-updated",
+    "health-check",
+    "init",
+    "install",
+    "post-run",
+    "post-stop",
+    "reconfigure",
+    "reload",
+    "run",
+    "suitability",
+    "uninstall",
+}
+_HABITAT_PLAN_BASH_ASSIGNMENT = re.compile(
+    r"^\s*(?:export\s+)?(?P<name>pkg_[A-Za-z0-9_]+)\s*=\s*(?P<value>.*)$"
+)
+_HABITAT_PLAN_POWERSHELL_ASSIGNMENT = re.compile(
+    r"^\s*\$(?P<name>pkg_[A-Za-z0-9_]+)\s*=\s*(?P<value>.*)$",
+    re.IGNORECASE,
+)
+_HABITAT_GENERIC_BASH_ASSIGNMENT = re.compile(
+    r"^\s*(?:export\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.+)$"
+)
+_HABITAT_GENERIC_POWERSHELL_ASSIGNMENT = re.compile(
+    r"^\s*\$(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.+)$",
+    re.IGNORECASE,
+)
+_HABITAT_CALLBACK_BASH = re.compile(
+    r"^\s*(?P<name>do_[A-Za-z0-9_]+)\s*\(\s*\)\s*\{",
+    re.IGNORECASE,
+)
+_HABITAT_CALLBACK_POWERSHELL = re.compile(
+    r"^\s*function\s+(?P<name>Invoke-[A-Za-z0-9_-]+)\b",
+    re.IGNORECASE,
+)
+_HABITAT_TEMPLATE = re.compile(r"\{\{[#/>!]?.+?}}", re.DOTALL)
+_HABITAT_DYNAMIC = re.compile(
+    r"(?:\$\(|`[^`]*`|\$\{[^}]+}|\$env:|Get-(?:Child)?Item\s+Env:|\{\{)",
+    re.IGNORECASE,
+)
+_HABITAT_DEPENDENCY = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?P<ident>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+    r"(?:/[A-Za-z0-9_.+-]+(?:/[A-Za-z0-9_.+-]+)?)?)"
+)
+_HABITAT_COMMAND_PATTERNS = {
+    "download": re.compile(
+        r"(?:^|\s)(?:curl|wget|git\s+clone|Invoke-WebRequest|Invoke-RestMethod)\b",
+        re.IGNORECASE,
+    ),
+    "dynamic_execution": re.compile(
+        r"(?:^|\s)(?:eval|Invoke-Expression|Start-Process|bash\s+-c|sh\s+-c|"
+        r"cmd(?:\.exe)?\s+/c|powershell(?:\.exe)?\s+-(?:Command|EncodedCommand))\b",
+        re.IGNORECASE,
+    ),
+    "destructive": re.compile(
+        r"(?:rm\s+-[^\n]*[rf]|Remove-Item\b[^\n]*(?:-Recurse|-Force)|"
+        r"(?:mkfs|format)(?:\.|\s)|del\s+/[fq])",
+        re.IGNORECASE,
+    ),
+    "privilege": re.compile(
+        r"(?:^|\s)(?:sudo|su\s+-|runas\b)|-Verb\s+RunAs\b",
+        re.IGNORECASE,
+    ),
+    "remote_access": re.compile(
+        r"(?:^|\s)(?:ssh|scp|sftp|nc|netcat)\b",
+        re.IGNORECASE,
+    ),
+    "package_publish": re.compile(
+        r"\bhab\s+(?:pkg\s+(?:upload|promote)|origin\s+key)\b",
+        re.IGNORECASE,
+    ),
+    "unsafe_permissions": re.compile(
+        r"\bchmod\s+(?:[0-7]*[2367][0-7]{2}|[^\n]*\+s)\b|\bchown\s+root\b",
+        re.IGNORECASE,
+    ),
+    "secret_output": re.compile(
+        r"\b(?:echo|printf|Write-(?:Host|Output))\b[^\n]*(?:password|token|secret|key)",
+        re.IGNORECASE,
+    ),
+}
 
 
 class _KitchenUniqueKeyLoader(yaml.SafeLoader):
@@ -885,11 +967,183 @@ def _parse_test_kitchen(source: str) -> dict[str, Any]:
     }
 
 
+def _habitat_artifact(filename: str) -> tuple[str, str, str] | None:
+    if not filename:
+        return None
+    normalized = Path(filename.replace("\\", "/"))
+    basename = normalized.name.casefold()
+    if basename == "plan.sh":
+        return "habitat_plan", "bash", ""
+    if basename == "plan.ps1":
+        return "habitat_plan", "powershell", ""
+    parts = tuple(part.casefold() for part in normalized.parts)
+    if "hooks" not in parts[:-1]:
+        return None
+    language = "powershell" if basename.endswith(".ps1") else "bash"
+    hook_name = basename
+    for suffix in (".bash", ".ps1", ".sh"):
+        hook_name = hook_name.removesuffix(suffix)
+    hook_name = hook_name.replace("_", "-")
+    if hook_name not in _HABITAT_HOOKS:
+        return None
+    return "habitat_hook", language, hook_name
+
+
+def _habitat_source_checks(source: str) -> list[str]:
+    if len(source.encode("utf-8")) > _MAX_HABITAT_BYTES:
+        raise ChefProjectInputError("Chef Habitat source exceeds the 2 MiB input limit")
+    if "\x00" in source:
+        raise ChefProjectInputError("Chef Habitat source contains a NUL byte")
+    lines = source.splitlines()
+    if len(lines) > _MAX_HABITAT_LINES:
+        raise ChefProjectInputError("Chef Habitat source exceeds the line count limit")
+    return lines
+
+
+def _habitat_assignment_balance(value: str) -> int:
+    return value.count("(") + value.count("{") - value.count(")") - value.count("}")
+
+
+def _habitat_plan_assignments(
+    lines: list[str], language: str
+) -> list[dict[str, Any]]:
+    matcher = (
+        _HABITAT_PLAN_POWERSHELL_ASSIGNMENT
+        if language == "powershell"
+        else _HABITAT_PLAN_BASH_ASSIGNMENT
+    )
+    assignments: list[dict[str, Any]] = []
+    index = 0
+    while index < len(lines):
+        match = matcher.match(lines[index])
+        if not match:
+            index += 1
+            continue
+        value_lines = [match.group("value")]
+        balance = _habitat_assignment_balance(value_lines[0])
+        continuation = value_lines[0].rstrip().endswith(("\\", "`"))
+        next_index = index + 1
+        while next_index < len(lines) and (balance > 0 or continuation):
+            child = lines[next_index]
+            value_lines.append(child)
+            balance += _habitat_assignment_balance(child)
+            continuation = child.rstrip().endswith(("\\", "`"))
+            next_index += 1
+        assignments.append(
+            {
+                "name": match.group("name").casefold(),
+                "line": index + 1,
+                "value": "\n".join(value_lines).strip(),
+            }
+        )
+        index = next_index
+    return assignments
+
+
+def _habitat_callbacks(
+    lines: list[str], language: str
+) -> list[dict[str, Any]]:
+    matcher = (
+        _HABITAT_CALLBACK_POWERSHELL if language == "powershell" else _HABITAT_CALLBACK_BASH
+    )
+    starts: list[tuple[int, str]] = []
+    for index, line in enumerate(lines):
+        match = matcher.match(line)
+        if match:
+            starts.append((index, match.group("name").casefold()))
+    callbacks: list[dict[str, Any]] = []
+    for position, (index, name) in enumerate(starts):
+        end = starts[position + 1][0] if position + 1 < len(starts) else len(lines)
+        callbacks.append(
+            {
+                "name": name,
+                "line": index + 1,
+                "body": "\n".join(lines[index:end]),
+            }
+        )
+    return callbacks
+
+
+def _habitat_command_hits(lines: list[str]) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    for index, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        for category, pattern in _HABITAT_COMMAND_PATTERNS.items():
+            if pattern.search(stripped):
+                hits.append({"line": index, "category": category})
+    return hits
+
+
+def _habitat_literal_secret_count(lines: list[str], language: str) -> int:
+    matcher = (
+        _HABITAT_GENERIC_POWERSHELL_ASSIGNMENT
+        if language == "powershell"
+        else _HABITAT_GENERIC_BASH_ASSIGNMENT
+    )
+    count = 0
+    for line in lines:
+        match = matcher.match(line)
+        if not match or not _SECRET.search(match.group("name")):
+            continue
+        value = match.group("value").strip().strip("'\"")
+        if value and not _HABITAT_DYNAMIC.search(value):
+            count += 1
+    count += sum(
+        1
+        for line in lines
+        if re.search(r"(?:https?|git)://[^\s/@:]+:[^\s/@]+@", line, re.IGNORECASE)
+    )
+    return count
+
+
+def _parse_habitat_source(
+    source: str,
+    *,
+    artifact_type: str,
+    language: str,
+    hook_name: str,
+) -> dict[str, Any]:
+    lines = _habitat_source_checks(source)
+    assignments = (
+        _habitat_plan_assignments(lines, language) if artifact_type == "habitat_plan" else []
+    )
+    callbacks = _habitat_callbacks(lines, language) if artifact_type == "habitat_plan" else []
+    return {
+        "artifact_type": artifact_type,
+        "document": {
+            "language": language,
+            "hook_name": hook_name,
+            "line_count": len(lines),
+            "assignments": assignments,
+            "callbacks": callbacks,
+            "command_hits": _habitat_command_hits(lines),
+            "literal_secret_count": _habitat_literal_secret_count(lines, language),
+            "template_count": len(_HABITAT_TEMPLATE.findall(source)),
+            "dynamic_count": len(_HABITAT_DYNAMIC.findall(source)),
+            "has_shebang": bool(lines and lines[0].startswith("#!")),
+            "source": source,
+        },
+    }
+
+
 def parse_chef_project(source: str, *, filename: str = "") -> dict[str, Any]:
     """Parse static Chef project/runtime files without executing Ruby."""
     if not source.strip():
         raise ChefProjectInputError("input is empty")
     basename = Path(filename.replace("\\", "/")).name.casefold() if filename else ""
+    habitat = _habitat_artifact(filename)
+    if habitat:
+        artifact_type, language, hook_name = habitat
+        return {
+            "chef_project": _parse_habitat_source(
+                source,
+                artifact_type=artifact_type,
+                language=language,
+                hook_name=hook_name,
+            )
+        }
     if basename == "berksfile":
         return {"chef_project": _parse_berksfile(source)}
     if basename == "berksfile.lock":
@@ -2157,6 +2411,424 @@ def _test_kitchen_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     return changes
 
 
+def _habitat_assignment_map(document: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {assignment["name"]: assignment for assignment in document["assignments"]}
+
+
+def _habitat_clean_value(value: str) -> str:
+    return value.strip().strip("'\"")
+
+
+def _habitat_dependency_changes(
+    assignment: dict[str, Any], *, dependency_kind: str
+) -> list[dict[str, str]]:
+    dependencies = [
+        match.group("ident")
+        for match in _HABITAT_DEPENDENCY.finditer(assignment["value"])
+    ]
+    changes: list[dict[str, str]] = []
+    for index, dependency in enumerate(dependencies):
+        segments = dependency.split("/")
+        immutable = len(segments) == 4 and all(segments)
+        changes.append(
+            _change(
+                f"chef.habitat.plan.{dependency_kind}.{index}",
+                f"habitat_{dependency_kind}",
+                "review" if immutable else "dangerous",
+                "The Habitat plan installs executable package content"
+                + (
+                    " pinned to an origin, package, version, and release; verify origin trust, "
+                    "artifact signatures, and transitive install hooks."
+                    if immutable
+                    else " without a complete origin/package/version/release identifier, so a "
+                    "later build can resolve different content."
+                ),
+            )
+        )
+    if not dependencies and assignment["value"].strip():
+        changes.append(
+            _change(
+                f"chef.habitat.plan.{dependency_kind}.dynamic",
+                f"habitat_{dependency_kind}",
+                "dangerous",
+                "The Habitat dependency list is dynamic or could not be resolved statically; "
+                "installed package content and install hooks remain unknown.",
+            )
+        )
+    return changes
+
+
+def _habitat_command_changes(
+    document: dict[str, Any], *, address_prefix: str
+) -> list[dict[str, str]]:
+    explanations = {
+        "download": (
+            "The source downloads or clones external content outside Habitat's default checksum "
+            "workflow."
+        ),
+        "dynamic_execution": (
+            "The source invokes a dynamic command interpreter or process launcher."
+        ),
+        "destructive": (
+            "The source performs recursive, forced, formatting, or destructive filesystem "
+            "operations."
+        ),
+        "privilege": (
+            "The source requests elevated host privileges during build or service execution."
+        ),
+        "remote_access": "The source opens an interactive or file-transfer remote-access boundary.",
+        "package_publish": (
+            "The source uploads/promotes Habitat packages or accesses origin signing-key "
+            "operations."
+        ),
+        "unsafe_permissions": (
+            "The source applies broadly writable, set-id, or root-owned filesystem permissions."
+        ),
+        "secret_output": "The source may write credential-like data to build or Supervisor logs.",
+    }
+    return [
+        _change(
+            f"{address_prefix}.line.{hit['line']}.{hit['category']}",
+            f"habitat_{hit['category']}",
+            "dangerous",
+            explanations[hit["category"]],
+        )
+        for hit in document["command_hits"]
+    ]
+
+
+def _habitat_plan_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    assignments = document["assignments"]
+    by_name = _habitat_assignment_map(document)
+    counts: dict[str, int] = {}
+    for assignment in assignments:
+        counts[assignment["name"]] = counts.get(assignment["name"], 0) + 1
+    duplicates = sum(count - 1 for count in counts.values() if count > 1)
+    if duplicates:
+        changes.append(
+            _change(
+                "chef.habitat.plan.assignments",
+                "habitat_duplicate_assignment",
+                "dangerous",
+                f"The plan reassigns {duplicates} package setting(s); effective values depend on "
+                "executable shell ordering and branches.",
+            )
+        )
+
+    missing = [name for name in ("pkg_name", "pkg_origin", "pkg_version") if name not in by_name]
+    if missing:
+        changes.append(
+            _change(
+                "chef.habitat.plan.identity",
+                "habitat_package_identity",
+                "dangerous",
+                f"The plan omits {len(missing)} required package identity setting(s); environment "
+                "or callback behavior can change the built package identity.",
+            )
+        )
+    else:
+        dynamic_identity = sum(
+            bool(_HABITAT_DYNAMIC.search(by_name[name]["value"]))
+            for name in ("pkg_name", "pkg_origin", "pkg_version")
+        )
+        changes.append(
+            _change(
+                "chef.habitat.plan.identity",
+                "habitat_package_identity",
+                "dangerous" if dynamic_identity else "review",
+                "The plan declares package name, origin, and version"
+                + (
+                    f", with {dynamic_identity} value(s) selected dynamically at build time."
+                    if dynamic_identity
+                    else "; verify origin ownership, version/release policy, and signing keys."
+                ),
+            )
+        )
+
+    source_assignment = by_name.get("pkg_source")
+    checksum_assignment = by_name.get("pkg_shasum")
+    callbacks = {callback["name"]: callback for callback in document["callbacks"]}
+    verify_callback = callbacks.get("do_verify") or callbacks.get("invoke-verify")
+    if source_assignment:
+        source = _habitat_clean_value(source_assignment["value"])
+        plaintext = source.casefold().startswith(("http://", "git://"))
+        embedded = _embedded_credential(source)
+        dynamic = bool(_HABITAT_DYNAMIC.search(source))
+        changes.append(
+            _change(
+                "chef.habitat.plan.pkg_source",
+                "habitat_package_source",
+                "dangerous" if plaintext or embedded else "review",
+                "The plan downloads external package source."
+                + (" The transport is unauthenticated plaintext." if plaintext else "")
+                + (" The source URL embeds credentials." if embedded else "")
+                + (
+                    " Runtime shell expansion contributes to the resolved source location."
+                    if dynamic
+                    else ""
+                ),
+            )
+        )
+        checksum = (
+            _habitat_clean_value(checksum_assignment["value"])
+            if checksum_assignment
+            else ""
+        )
+        exact_checksum = bool(re.fullmatch(r"[0-9a-fA-F]{64}", checksum))
+        if not exact_checksum:
+            changes.append(
+                _change(
+                    "chef.habitat.plan.pkg_shasum",
+                    "habitat_source_integrity",
+                    "dangerous",
+                    "The external source lacks a static SHA-256 checksum; integrity depends on "
+                    "custom verification code or mutable remote state.",
+                )
+            )
+        else:
+            changes.append(
+                _change(
+                    "chef.habitat.plan.pkg_shasum",
+                    "habitat_source_integrity",
+                    "review",
+                    "The external source has a static SHA-256 checksum; verify checksum provenance "
+                    "and that custom download/verify callbacks do not bypass it.",
+                )
+            )
+    elif not any(name in callbacks for name in ("do_download", "invoke-download")):
+        changes.append(
+            _change(
+                "chef.habitat.plan.pkg_source",
+                "habitat_source_boundary",
+                "review",
+                "The plan has no static package source or custom download callback; verify whether "
+                "it packages local plan-context content and how that content is selected.",
+            )
+        )
+
+    for setting, dependency_kind in (
+        ("pkg_deps", "runtime_dependency"),
+        ("pkg_build_deps", "build_dependency"),
+    ):
+        if setting in by_name:
+            changes.extend(
+                _habitat_dependency_changes(
+                    by_name[setting], dependency_kind=dependency_kind
+                )
+            )
+
+    service_user = _habitat_clean_value(by_name.get("pkg_svc_user", {}).get("value", ""))
+    if service_user.casefold() in {"administrator", "root", "system"}:
+        changes.append(
+            _change(
+                "chef.habitat.plan.pkg_svc_user",
+                "habitat_privileged_service",
+                "dangerous",
+                "The Habitat service is configured to run as a privileged operating-system "
+                "identity.",
+            )
+        )
+    elif service_user:
+        changes.append(
+            _change(
+                "chef.habitat.plan.pkg_svc_user",
+                "habitat_service_identity",
+                "review",
+                "The plan selects a service identity; verify the account exists with least "
+                "privilege on every Supervisor target.",
+            )
+        )
+    if "pkg_svc_run" in by_name:
+        changes.append(
+            _change(
+                "chef.habitat.plan.pkg_svc_run",
+                "habitat_service_command",
+                "dangerous",
+                "The Supervisor executes a service command declared by the package plan; verify "
+                "arguments, signal handling, templated configuration, and child-process cleanup.",
+            )
+        )
+    for setting, kind in (
+        ("pkg_binds", "habitat_required_bind"),
+        ("pkg_binds_optional", "habitat_optional_bind"),
+        ("pkg_exports", "habitat_service_export"),
+        ("pkg_exposes", "habitat_service_exposure"),
+    ):
+        if setting in by_name:
+            changes.append(
+                _change(
+                    f"chef.habitat.plan.{setting}",
+                    kind,
+                    "review",
+                    "The plan declares a Supervisor service contract or exposure whose effective "
+                    "peers, configuration keys, ports, and trust depend on runtime binds and "
+                    "rendered default configuration.",
+                )
+            )
+    signal = _habitat_clean_value(by_name.get("pkg_shutdown_signal", {}).get("value", ""))
+    if signal.casefold() in {"kill", "sigkill", "9"}:
+        changes.append(
+            _change(
+                "chef.habitat.plan.pkg_shutdown_signal",
+                "habitat_forced_shutdown",
+                "dangerous",
+                "The service uses a non-graceful kill signal, risking interrupted writes and "
+                "inconsistent state.",
+            )
+        )
+
+    for index, callback in enumerate(document["callbacks"]):
+        callback_name = callback["name"]
+        verify = callback_name in {"do_verify", "invoke-verify"}
+        bypass = verify and bool(
+            re.search(r"(?m)^\s*(?:return\s+0|true)\s*;?\s*$", callback["body"])
+        )
+        changes.append(
+            _change(
+                f"chef.habitat.plan.callback.{index}",
+                "habitat_verification_bypass" if bypass else "habitat_build_callback",
+                "dangerous",
+                "The plan overrides Habitat's source verification with an unconditional success "
+                "path."
+                if bypass
+                else "The plan overrides a Habitat build phase with executable shell or "
+                "PowerShell code; verify network, filesystem, toolchain, and artifact effects.",
+            )
+        )
+    if verify_callback is not None and not checksum_assignment:
+        changes.append(
+            _change(
+                "chef.habitat.plan.custom_verification",
+                "habitat_custom_verification",
+                "review",
+                "Source integrity depends on custom executable verification rather than a static "
+                "plan checksum.",
+            )
+        )
+    if document["literal_secret_count"]:
+        changes.append(
+            _change(
+                "chef.habitat.plan.credentials",
+                "habitat_literal_secret",
+                "dangerous",
+                f"The plan contains {document['literal_secret_count']} literal credential-like "
+                "assignment or URL value(s); use scoped runtime secret injection instead.",
+            )
+        )
+    if document["dynamic_count"]:
+        changes.append(
+            _change(
+                "chef.habitat.plan.dynamic_source",
+                "habitat_dynamic_plan",
+                "review",
+                f"The plan contains {document['dynamic_count']} shell, environment, command, or "
+                "template expansion(s) whose resolved values are unavailable statically.",
+            )
+        )
+    changes.extend(
+        _habitat_command_changes(document, address_prefix="chef.habitat.plan.command")
+    )
+    changes.append(
+        _change(
+            "chef.habitat.plan.effective_package",
+            "habitat_plan_boundary",
+            "review",
+            "Effective package behavior also depends on Studio and Habitat versions, target and "
+            "scaffolding, environment variables, plan-context files, origin keys and Builder "
+            "policy, transitive packages/install hooks, configuration templates/default.toml, "
+            "runtime hooks, Supervisor flags, and the built HART artifact. Static analysis never "
+            "executes the plan or verifies an artifact signature.",
+        )
+    )
+    return changes
+
+
+def _habitat_hook_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    hook_name = document["hook_name"]
+    high_impact = hook_name not in {"health-check", "suitability"}
+    changes = [
+        _change(
+            "chef.habitat.hook.lifecycle",
+            "habitat_lifecycle_hook",
+            "dangerous" if high_impact else "review",
+            "The Supervisor executes this lifecycle hook as package-provided code"
+            + (
+                " during service or package state transitions."
+                if high_impact
+                else " repeatedly for health or leader-election decisions."
+            ),
+        )
+    ]
+    if document["language"] == "bash" and not document["has_shebang"]:
+        changes.append(
+            _change(
+                "chef.habitat.hook.interpreter",
+                "habitat_hook_interpreter",
+                "dangerous",
+                "The hook omits the required shebang, so interpreter selection and execution "
+                "behavior are ambiguous.",
+            )
+        )
+    if hook_name == "reload":
+        changes.append(
+            _change(
+                "chef.habitat.hook.reload",
+                "habitat_deprecated_hook",
+                "review",
+                "The deprecated reload hook restarts the service on configuration changes; migrate "
+                "to reconfigure or the default restart behavior.",
+            )
+        )
+    if document["template_count"]:
+        changes.append(
+            _change(
+                "chef.habitat.hook.templates",
+                "habitat_hook_templating",
+                "dangerous" if high_impact else "review",
+                f"The hook contains {document['template_count']} runtime template expression(s); "
+                "Supervisor configuration, census, bind, or secret data can influence execution.",
+            )
+        )
+    if document["literal_secret_count"]:
+        changes.append(
+            _change(
+                "chef.habitat.hook.credentials",
+                "habitat_literal_secret",
+                "dangerous",
+                f"The hook contains {document['literal_secret_count']} literal credential-like "
+                "assignment or URL value(s).",
+            )
+        )
+    if hook_name != "run" and re.search(
+        r"(?m)^\s*(?:hab|sleep)\b", document["source"], re.IGNORECASE
+    ):
+        changes.append(
+            _change(
+                "chef.habitat.hook.blocking_operation",
+                "habitat_blocking_hook",
+                "dangerous",
+                "A non-run hook invokes hab or sleep, which Chef warns can block the Supervisor "
+                "hook thread and disrupt lifecycle processing.",
+            )
+        )
+    changes.extend(
+        _habitat_command_changes(document, address_prefix="chef.habitat.hook.command")
+    )
+    changes.append(
+        _change(
+            "chef.habitat.hook.effective_runtime",
+            "habitat_hook_boundary",
+            "review",
+            "Effective hook behavior also depends on rendered Handlebars data, default/user TOML, "
+            "binds and census state, service identity, package dependencies, Supervisor topology, "
+            "update/restart policy, platform interpreter, and live filesystem/network/process "
+            "state. Static analysis never renders or executes the hook.",
+        )
+    )
+    return changes
+
+
 class ChefProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -2178,6 +2850,8 @@ class ChefProjectAdapter(BaseAdapter):
                 "solo_config",
                 "server_config",
                 "test_kitchen",
+                "habitat_plan",
+                "habitat_hook",
             }
             and isinstance(project.get("document"), dict)
         )
@@ -2186,6 +2860,10 @@ class ChefProjectAdapter(BaseAdapter):
         project = input_data["chef_project"]
         artifact_type = project["artifact_type"]
         document = project["document"]
+        if artifact_type == "habitat_plan":
+            return _habitat_plan_changes(document)
+        if artifact_type == "habitat_hook":
+            return _habitat_hook_changes(document)
         if artifact_type == "test_kitchen":
             return _test_kitchen_changes(document)
         if artifact_type.endswith("_config"):
@@ -2241,5 +2919,17 @@ def analyze_chef_project(data: dict[str, Any], *, catalog=None) -> dict[str, Any
         gate["platform_count"] = len(configuration.get("platforms", []))
         gate["suite_count"] = len(configuration.get("suites", []))
         gate["dynamic_erb"] = bool(project["document"]["erb_count"])
+    if project["artifact_type"] in {"habitat_plan", "habitat_hook"}:
+        document = project["document"]
+        gate["language"] = document["language"]
+        gate["line_count"] = document["line_count"]
+        gate["command_count"] = len(document["command_hits"])
+        gate["dynamic_count"] = document["dynamic_count"]
+    if project["artifact_type"] == "habitat_plan":
+        gate["variable_count"] = len(project["document"]["assignments"])
+        gate["callback_count"] = len(project["document"]["callbacks"])
+    if project["artifact_type"] == "habitat_hook":
+        gate["hook_name"] = project["document"]["hook_name"]
+        gate["template_count"] = project["document"]["template_count"]
     gate["total_changes"] = len(changes)
     return gate

@@ -533,3 +533,173 @@ def test_test_kitchen_parser_enforces_size_and_depth_limits() -> None:
     )
     with pytest.raises(ChefProjectInputError, match="nesting depth"):
         parse_chef_project(deeply_nested, filename=".kitchen.yml")
+
+
+def test_habitat_plan_surfaces_supply_chain_runtime_and_execution_without_values() -> None:
+    fixture = "chef_habitat_risky/habitat/plan.sh"
+    changes = _changes(fixture)
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert len(changes) == 27
+    assert sum(change.risk == "dangerous" for change in changes) == 20
+    assert sum(change.risk == "review" for change in changes) == 7
+    assert {
+        "chef_project_habitat_build_callback",
+        "chef_project_habitat_build_dependency",
+        "chef_project_habitat_destructive",
+        "chef_project_habitat_download",
+        "chef_project_habitat_dynamic_plan",
+        "chef_project_habitat_forced_shutdown",
+        "chef_project_habitat_literal_secret",
+        "chef_project_habitat_package_publish",
+        "chef_project_habitat_package_source",
+        "chef_project_habitat_plan_boundary",
+        "chef_project_habitat_privilege",
+        "chef_project_habitat_privileged_service",
+        "chef_project_habitat_remote_access",
+        "chef_project_habitat_runtime_dependency",
+        "chef_project_habitat_secret_output",
+        "chef_project_habitat_service_command",
+        "chef_project_habitat_source_integrity",
+        "chef_project_habitat_unsafe_permissions",
+        "chef_project_habitat_verification_bypass",
+    } <= kinds
+    for sensitive in (
+        "fixture-habitat-auth-token-do-not-leak",
+        "fixture-password",
+        "fixture-service",
+        "fixture-origin",
+        "example.invalid",
+        "fixture-binary",
+        "fixture-host",
+    ):
+        assert sensitive not in encoded
+
+
+def test_habitat_powershell_plan_supports_arrays_callbacks_and_redaction() -> None:
+    path = FIXTURES / "chef_habitat_risky" / "habitat" / "plan.ps1"
+    data = parse_chef_project(path.read_text(encoding="utf-8"), filename=str(path))
+    changes = ChefProjectAdapter().analyze(data)
+    gate = analyze_chef_project(data)
+    encoded = json.dumps(gate)
+
+    assert data["chef_project"]["artifact_type"] == "habitat_plan"
+    assert gate["language"] == "powershell"
+    assert gate["variable_count"] == 8
+    assert gate["callback_count"] == 3
+    assert gate["command_count"] == 4
+    assert gate["total_changes"] == 18
+    assert sum(change.risk == "dangerous" for change in changes) == 14
+    assert "fixture-habitat-windows-token-do-not-leak" not in encoded
+    assert "fixture-password" not in encoded
+    assert "example.invalid" not in encoded
+
+
+def test_pinned_habitat_plan_and_suitability_hook_stay_review_only() -> None:
+    assert {
+        change.risk
+        for change in _changes("chef_habitat_review/habitat/plan.sh")
+    } == {"review"}
+    assert {
+        change.risk
+        for change in _changes("chef_habitat_review/habitat/hooks/suitability")
+    } == {"review"}
+
+
+def test_habitat_hooks_surface_templates_commands_blocking_and_secrets() -> None:
+    run_path = "chef_habitat_risky/habitat/hooks/run"
+    health_path = "chef_habitat_risky/habitat/hooks/health-check"
+    run_data = parse_chef_project(
+        (FIXTURES / run_path).read_text(encoding="utf-8"), filename=run_path
+    )
+    run_gate = analyze_chef_project(run_data)
+    run_kinds = {
+        change.resource_type for change in ChefProjectAdapter().analyze(run_data)
+    }
+    health_changes = _changes(health_path)
+
+    assert run_gate["artifact_type"] == "habitat_hook"
+    assert run_gate["hook_name"] == "run"
+    assert run_gate["template_count"] == 1
+    assert run_gate["command_count"] == 2
+    assert run_gate["total_changes"] == 6
+    assert "chef_project_habitat_hook_templating" in run_kinds
+    assert "chef_project_habitat_literal_secret" in run_kinds
+    assert "chef_project_habitat_dynamic_execution" in run_kinds
+    assert any(
+        change.resource_type == "chef_project_habitat_blocking_hook"
+        for change in health_changes
+    )
+    encoded = json.dumps(run_gate)
+    assert "fixture-habitat-hook-token-do-not-leak" not in encoded
+    assert "runtime.example.invalid" not in encoded
+
+
+def test_habitat_plan_and_hook_parsers_never_execute_source(tmp_path: Path) -> None:
+    marker = tmp_path / "habitat-source-was-executed"
+    plan = f"pkg_name=x\npkg_origin=x\npkg_version=1\ntouch '{marker}'\n"
+    hook = f"#!/bin/sh\ntouch '{marker}'\n"
+
+    parse_chef_project(plan, filename="habitat/plan.sh")
+    parse_chef_project(hook, filename="habitat/hooks/run")
+
+    assert not marker.exists()
+
+
+def test_habitat_parser_recognizes_target_paths_extensions_and_legacy_hook_names() -> None:
+    cases = {
+        "habitat/x86_64-linux/plan.sh": ("habitat_plan", "bash", ""),
+        "habitat/x86_64-windows/plan.ps1": ("habitat_plan", "powershell", ""),
+        "habitat/hooks/health-check.sh": ("habitat_hook", "bash", "health-check"),
+        "habitat/hooks/health_check.ps1": (
+            "habitat_hook",
+            "powershell",
+            "health-check",
+        ),
+    }
+    for filename, (artifact_type, language, hook_name) in cases.items():
+        data = parse_chef_project("#!/bin/sh\necho ok\n", filename=filename)
+        document = data["chef_project"]["document"]
+        assert data["chef_project"]["artifact_type"] == artifact_type
+        assert document["language"] == language
+        assert document["hook_name"] == hook_name
+
+
+def test_habitat_parser_enforces_size_line_and_nul_limits() -> None:
+    with pytest.raises(ChefProjectInputError, match="2 MiB"):
+        parse_chef_project("pkg_name=x\n#" + "x" * (2 * 1024 * 1024), filename="plan.sh")
+    with pytest.raises(ChefProjectInputError, match="line count"):
+        parse_chef_project("# x\n" * 100_001, filename="plan.sh")
+    with pytest.raises(ChefProjectInputError, match="NUL byte"):
+        parse_chef_project("pkg_name=x\x00bad\n", filename="plan.sh")
+
+
+def test_habitat_gate_and_cli_expose_only_structural_metadata(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = FIXTURES / "chef_habitat_risky" / "habitat" / "plan.sh"
+    data = parse_chef_project(path.read_text(encoding="utf-8"), filename=str(path))
+    gate = analyze_chef_project(data)
+
+    assert gate["adapter"] == "chef-project"
+    assert gate["artifact_type"] == "habitat_plan"
+    assert gate["language"] == "bash"
+    assert gate["variable_count"] == 14
+    assert gate["callback_count"] == 4
+    assert gate["command_count"] == 7
+    assert gate["total_changes"] == 27
+    assert gate["risk_counts"]["dangerous"] == 20
+    assert gate["decision"] == "block"
+
+    assert main(["chef-project", "--framework", "soc2", str(path)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    encoded = json.dumps(payload)
+    assert payload["artifact_type"] == "habitat_plan"
+    assert payload["variable_count"] == 14
+    assert "fixture-habitat-auth-token-do-not-leak" not in encoded
+    assert "fixture-password" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]

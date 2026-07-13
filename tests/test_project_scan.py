@@ -57,6 +57,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("chef/client.d/security.rb", "chef-project"),
         ("cookbooks/base/.kitchen.yml", "chef-project"),
         ("cookbooks/base/kitchen.local.yaml", "chef-project"),
+        ("habitat/plan.sh", "chef-project"),
+        ("habitat/x86_64-windows/plan.ps1", "chef-project"),
+        ("habitat/hooks/run", "chef-project"),
+        ("habitat/hooks/health_check.ps1", "chef-project"),
         ("profiles/linux/inspec.yml", "inspec"),
         ("profiles/linux/inspec.lock", "inspec"),
         ("profiles/linux/waivers.yml", "inspec"),
@@ -787,6 +791,41 @@ def test_project_scan_analyzes_test_kitchen_configuration(tmp_path: Path) -> Non
     encoded = json.dumps(payload)
     assert "fixture-cloud-secret-do-not-leak" not in encoded
     assert "fixture-local-command-do-not-run" not in encoded
+    assert "example.invalid" not in encoded
+
+
+def test_project_scan_analyzes_chef_habitat_plans_and_hooks(tmp_path: Path) -> None:
+    source = FIXTURES / "chef_habitat_risky" / "habitat"
+    for relative in ("plan.sh", "plan.ps1", "hooks/run", "hooks/health-check"):
+        target = tmp_path / "habitat" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((source / relative).read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 4
+    assert payload["scanned_file_count"] == 4
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"chef-project"}
+    assert {item["artifact_type"] for item in payload["files"]} == {
+        "habitat_hook",
+        "habitat_plan",
+    }
+    bash_plan = next(item for item in payload["files"] if item["path"].endswith("plan.sh"))
+    assert bash_plan["language"] == "bash"
+    assert bash_plan["variable_count"] == 14
+    assert bash_plan["callback_count"] == 4
+    assert bash_plan["command_count"] == 7
+    assert bash_plan["dynamic_count"] > 0
+    run_hook = next(item for item in payload["files"] if item["path"].endswith("hooks/run"))
+    assert run_hook["hook_name"] == "run"
+    assert run_hook["template_count"] == 1
+    assert payload["total_changes"] == 55
+    assert payload["risk_counts"]["dangerous"] == 41
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-habitat" not in encoded
+    assert "fixture-password" not in encoded
     assert "example.invalid" not in encoded
 
 
