@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from readtheplan.adapters.ansible_project import (
     AnsibleProjectAdapter,
@@ -609,6 +610,186 @@ def test_controller_export_gate_and_cli_expose_only_structural_counts(
     assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
 
 
+def test_rulebook_surfaces_event_ingress_execution_and_runtime_risk_without_values() -> None:
+    changes = _changes("ansible_rulebook_risky.yml")
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert len(changes) == 44
+    assert sum(change.risk == "dangerous" for change in changes) == 30
+    assert sum(change.risk == "review" for change in changes) == 14
+    assert {
+        "ansible_project_rulebook_action_retry",
+        "ansible_project_rulebook_action_templating",
+        "ansible_project_rulebook_controller_event_forwarding",
+        "ansible_project_rulebook_event_filter",
+        "ansible_project_rulebook_event_logging",
+        "ansible_project_rulebook_event_source",
+        "ansible_project_rulebook_fact_gathering",
+        "ansible_project_rulebook_internal_event_state",
+        "ansible_project_rulebook_literal_secret",
+        "ansible_project_rulebook_multiple_rule_fanout",
+        "ansible_project_rulebook_parallel_execution",
+        "ansible_project_rulebook_plaintext_transport",
+        "ansible_project_rulebook_run_job_template",
+        "ansible_project_rulebook_run_module",
+        "ansible_project_rulebook_run_playbook",
+        "ansible_project_rulebook_run_workflow_template",
+        "ansible_project_rulebook_runtime_boundary",
+        "ansible_project_rulebook_shutdown",
+        "ansible_project_rulebook_tls_verification",
+        "ansible_project_rulebook_unconditional_rule",
+        "ansible_project_rulebook_unlocked_parallel_action",
+        "ansible_project_rulebook_webhook_ingress",
+    } <= kinds
+    for sensitive in (
+        "fixture-rulebook-webhook-token-do-not-leak",
+        "fixture-rulebook-filter-key-do-not-leak",
+        "fixture-rulebook-root-password-do-not-leak",
+        "fixture-rulebook-database-password-do-not-leak",
+        "events.example.invalid",
+        "fixture-workflow",
+        "fixture-edge-automation",
+    ):
+        assert sensitive not in encoded
+
+
+def test_rulebook_review_fixture_and_content_detection_stay_review_only() -> None:
+    path = FIXTURES / "ansible_rulebook_review.yml"
+    data = parse_ansible_project(
+        path.read_text(encoding="utf-8"), filename="arbitrary-activation.yml"
+    )
+    changes = AnsibleProjectAdapter().analyze(data)
+
+    assert data["ansible_project"]["artifact_type"] == "rulebook"
+    assert {change.risk for change in changes} == {"review"}
+
+
+@pytest.mark.parametrize(
+    ("source", "error"),
+    [
+        ("{}\n", "non-empty list of rulesets"),
+        (
+            "- name: demo\n  hosts: localhost\n  rules:\n"
+            "    - {name: one, condition: true, action: {none: null}}\n",
+            "sources must be a non-empty list",
+        ),
+        (
+            "- name: demo\n  hosts: localhost\n  sources: []\n  rules: []\n",
+            "sources must be a non-empty list",
+        ),
+        (
+            "- name: demo\n  hosts: localhost\n  sources:\n"
+            "    - short_plugin: {}\n  rules:\n"
+            "    - {name: one, condition: true, action: {none: null}}\n",
+            "fully qualified collection name",
+        ),
+        (
+            "- name: demo\n  hosts: localhost\n  sources:\n"
+            "    - eda.builtin.range: {limit: 1}\n  rules:\n"
+            "    - {name: one, condition: true, action: {unknown: null}}\n",
+            "action is unsupported",
+        ),
+        (
+            "- name: demo\n  hosts: localhost\n  sources:\n"
+            "    - eda.builtin.range: {limit: 1}\n  rules:\n"
+            "    - {name: same, condition: true, action: {none: null}}\n"
+            "    - {name: same, condition: false, action: {none: null}}\n",
+            "rule names must be unique",
+        ),
+        (
+            "- name: demo\n  hosts: localhost\n  sources:\n"
+            "    - eda.builtin.generic: &source\n"
+            "        payload: *source\n  rules:\n"
+            "    - {name: one, condition: true, action: {none: null}}\n",
+            "recursive YAML alias",
+        ),
+        (
+            "- name: demo\n  name: duplicate\n  hosts: localhost\n"
+            "  sources: [{eda.builtin.range: {limit: 1}}]\n"
+            "  rules: [{name: one, condition: true, action: {none: null}}]\n",
+            "duplicate YAML key",
+        ),
+    ],
+)
+def test_rulebook_parser_rejects_malformed_canonical_files(
+    source: str, error: str
+) -> None:
+    with pytest.raises(AnsibleProjectInputError, match=error):
+        parse_ansible_project(source, filename="extensions/eda/rulebooks/demo.yml")
+
+
+def test_rulebook_parser_enforces_source_size_and_nesting_limits() -> None:
+    oversized = (
+        "- name: demo\n  hosts: localhost\n  sources: []\n  rules: []\n#"
+        + "x" * (2 * 1024 * 1024)
+    )
+    with pytest.raises(AnsibleProjectInputError, match="source size limit"):
+        parse_ansible_project(oversized, filename="rulebook.yml")
+
+    many_nodes = (
+        "- name: demo\n  hosts: localhost\n  sources:\n"
+        "    - eda.builtin.generic:\n        payload:\n"
+        + "          - 0\n" * 100_001
+        + "  rules:\n"
+        "    - {name: one, condition: true, action: {none: null}}\n"
+    )
+    with pytest.raises(AnsibleProjectInputError, match="node count limit"):
+        parse_ansible_project(many_nodes, filename="rulebook.yml")
+
+    nested = "value"
+    for _ in range(110):
+        nested = {"nested": nested}
+    source = yaml.safe_dump(
+        [
+            {
+                "name": "demo",
+                "hosts": "localhost",
+                "sources": [{"eda.builtin.generic": nested}],
+                "rules": [
+                    {
+                        "name": "one",
+                        "condition": True,
+                        "action": {"none": None},
+                    }
+                ],
+            }
+        ],
+        sort_keys=False,
+    )
+    with pytest.raises(AnsibleProjectInputError, match="nesting depth limit"):
+        parse_ansible_project(source, filename="rulebook.yml")
+
+
+def test_rulebook_gate_and_cli_expose_only_structural_counts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = FIXTURES / "ansible_rulebook_risky.yml"
+    data = parse_ansible_project(path.read_text(encoding="utf-8"), filename=str(path))
+    gate = analyze_ansible_project(data)
+
+    assert gate["adapter"] == "ansible-project"
+    assert gate["artifact_type"] == "rulebook"
+    assert gate["ruleset_count"] == 2
+    assert gate["source_count"] == 3
+    assert gate["rule_count"] == 7
+    assert gate["action_count"] == 8
+    assert gate["total_changes"] == 44
+    assert gate["decision"] == "block"
+
+    assert main(["ansible-project", "--framework", "soc2", str(path)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    encoded = json.dumps(payload)
+    assert payload["risk_counts"]["dangerous"] == 30
+    assert payload["ruleset_count"] == 2
+    assert "fixture-rulebook-webhook-token-do-not-leak" not in encoded
+    assert "fixture-edge-automation" not in encoded
+    assert "events.example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+
+
 @pytest.mark.parametrize(
     ("fixture", "artifact_type", "decision"),
     [
@@ -628,6 +809,7 @@ def test_controller_export_gate_and_cli_expose_only_structural_counts(
             "block",
         ),
         ("ansible_controller_export_risky.json", "controller_export", "block"),
+        ("ansible_rulebook_risky.yml", "rulebook", "block"),
         (
             "ansible_inventory_plugin_risky.aws_ec2.yml",
             "inventory_plugin",
@@ -659,6 +841,7 @@ def test_ansible_project_cli_reads_both_formats(
         "ansible_execution_environment/execution-environment.yml",
         "ansible_navigator/ansible-navigator.yml",
         "ansible_molecule_risky/molecule/default/molecule.yml",
+        "ansible_rulebook_risky.yml",
     ):
         source = tmp_path / Path(fixture).name
         source.write_text((FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8")

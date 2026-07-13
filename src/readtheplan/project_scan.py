@@ -78,6 +78,9 @@ _CONFIG_BASENAME_SOURCE_SUFFIXES = frozenset(
 )
 _KUBERNETES_HINT = re.compile(r"(?ms)^\s*apiVersion\s*:\s*[^\s#]+.*?^\s*kind\s*:\s*[^\s#]+")
 _ANSIBLE_HINT = re.compile(r"(?ms)^\s*-?\s*hosts\s*:.*?^\s*(?:tasks|roles)\s*:")
+_ANSIBLE_RULEBOOK_HINT = re.compile(
+    r"(?ms)^\s*-\s+name\s*:.*?^\s+hosts\s*:.*?^\s+sources\s*:.*?^\s+rules\s*:"
+)
 _ANSIBLE_INVENTORY_PLUGIN_HINT = re.compile(
     r"(?m)^\s*plugin\s*:\s*(?:ansible\.builtin\.[A-Za-z0-9_]+|"
     r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+)\s*(?:#.*)?$"
@@ -308,6 +311,13 @@ def identify_project_input(
         return "ansible-project"
     if name in {"requirements.yaml", "requirements.yml"} and any(
         part in {"ansible", "collections", "roles"} for part in parts[:-1]
+    ):
+        return "ansible-project"
+    if suffix in _YAML_SUFFIXES and (
+        name in {"rulebook.yaml", "rulebook.yml"}
+        or name.startswith("rulebook-")
+        or name.endswith((".rulebook.yaml", ".rulebook.yml"))
+        or "rulebooks" in parts[:-1]
     ):
         return "ansible-project"
     if name in {"playbook.yml", "playbook.yaml"} or (
@@ -659,6 +669,8 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
     if suffix in _YAML_SUFFIXES:
         if _KUBERNETES_HINT.search(text):
             return "kubernetes"
+        if _ANSIBLE_RULEBOOK_HINT.search(text):
+            return "ansible-project"
         if _ANSIBLE_HINT.search(text):
             return "ansible"
         if _ANSIBLE_INVENTORY_PLUGIN_HINT.search(text) or _looks_like_ansible_inventory_yaml(text):
@@ -834,6 +846,9 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         result["asset_count"] = payload["asset_count"]
     if isinstance(payload.get("asset_type_count"), int):
         result["asset_type_count"] = payload["asset_type_count"]
+    for field in ("ruleset_count", "source_count", "rule_count", "action_count"):
+        if isinstance(payload.get(field), int):
+            result[field] = payload[field]
     return result
 
 
