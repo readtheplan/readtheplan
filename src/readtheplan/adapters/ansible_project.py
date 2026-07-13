@@ -163,6 +163,65 @@ _CONTROLLER_EXPORT_TYPES = {
     "workflow_job_templates": {"workflow_job_template"},
 }
 _MAX_CONTROLLER_EXPORT_ASSETS = 10_000
+_RULEBOOK_FILENAMES = {"rulebook.yaml", "rulebook.yml"}
+_RULEBOOK_ACTIONS = {
+    "debug",
+    "none",
+    "noop",
+    "post_event",
+    "print_event",
+    "retract_fact",
+    "run_job_template",
+    "run_module",
+    "run_playbook",
+    "run_workflow_template",
+    "set_fact",
+    "shutdown",
+}
+_RULEBOOK_RULESET_KEYS = {
+    "default_events_ttl",
+    "execution_strategy",
+    "gather_facts",
+    "hosts",
+    "match_multiple_rules",
+    "name",
+    "rules",
+    "sources",
+}
+_RULEBOOK_RULE_KEYS = {"action", "actions", "condition", "enabled", "name"}
+_RULEBOOK_SOURCE_META_KEYS = {"filters", "name"}
+_RULEBOOK_BUILTIN_SHORT_FILTERS = {
+    "dashes_to_underscores",
+    "event_splitter",
+    "insert_hosts_to_meta",
+    "insert_meta_info",
+    "json_filter",
+    "normalize_keys",
+}
+_RULEBOOK_PLUGIN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:[.][A-Za-z_][A-Za-z0-9_]*){2,}$")
+_RULEBOOK_TEMPLATE = re.compile(r"(?:\{[{%]|\b(?:lookup|query)\s*\()", re.IGNORECASE)
+_RULEBOOK_ENDPOINT_KEY = re.compile(
+    r"(?:^|_)(?:broker|dsn|endpoint|host|server|url|webhook)(?:$|_)", re.IGNORECASE
+)
+_RULEBOOK_TLS_BYPASS_KEYS = {
+    "check_hostname",
+    "ssl_verify",
+    "tls_verify",
+    "validate_certs",
+    "verify",
+    "verify_ssl",
+}
+_RULEBOOK_EXECUTION_ACTIONS = {
+    "run_job_template",
+    "run_module",
+    "run_playbook",
+    "run_workflow_template",
+}
+_MAX_RULEBOOK_BYTES = 2 * 1024 * 1024
+_MAX_RULEBOOK_NODES = 100_000
+_MAX_RULEBOOK_DEPTH = 100
+_MAX_RULEBOOK_RULESETS = 1_000
+_MAX_RULEBOOK_ITEMS = 10_000
 _GALAXY_KEYS = {
     "authors",
     "build_ignore",
@@ -635,6 +694,8 @@ def _load_inventory_yaml(source: str) -> Any:
     except AnsibleProjectInputError:
         raise
     except yaml.YAMLError as exc:
+        if "recursive" in str(exc).casefold():
+            raise AnsibleProjectInputError("input contains a recursive YAML alias") from exc
         raise AnsibleProjectInputError(str(exc)) from exc
     documents = [document for document in documents if document is not None]
     if len(documents) != 1:
@@ -1122,6 +1183,253 @@ def _controller_export_document(
     }
 
 
+def _rulebook_filename(filename: str | None) -> bool:
+    parts = _artifact_parts(filename)
+    if not parts:
+        return False
+    name = parts[-1]
+    if not name.endswith((".yaml", ".yml")):
+        return False
+    return (
+        name in _RULEBOOK_FILENAMES
+        or name.startswith("rulebook-")
+        or name.endswith((".rulebook.yaml", ".rulebook.yml"))
+        or "rulebooks" in parts[:-1]
+    )
+
+
+def _bound_rulebook_value(
+    value: Any,
+    *,
+    depth: int = 0,
+    counter: list[int] | None = None,
+) -> None:
+    if counter is None:
+        counter = [0]
+    counter[0] += 1
+    if counter[0] > _MAX_RULEBOOK_NODES:
+        raise AnsibleProjectInputError("Ansible rulebook exceeds the node count limit")
+    if depth > _MAX_RULEBOOK_DEPTH:
+        raise AnsibleProjectInputError("Ansible rulebook exceeds the nesting depth limit")
+    if isinstance(value, dict):
+        for key, child in value.items():
+            _bound_rulebook_value(key, depth=depth + 1, counter=counter)
+            _bound_rulebook_value(child, depth=depth + 1, counter=counter)
+    elif isinstance(value, list):
+        for child in value:
+            _bound_rulebook_value(child, depth=depth + 1, counter=counter)
+
+
+def _validate_rulebook_plugin_entry(
+    entry: Any,
+    *,
+    label: str,
+    metadata_keys: set[str] = frozenset(),
+    allow_short: bool = False,
+) -> str:
+    if not isinstance(entry, dict):
+        raise AnsibleProjectInputError(f"Ansible rulebook {label} must be a mapping")
+    if not all(isinstance(key, str) for key in entry):
+        raise AnsibleProjectInputError(f"Ansible rulebook {label} keys must be strings")
+    plugin_keys = set(entry) - metadata_keys
+    if len(plugin_keys) != 1:
+        raise AnsibleProjectInputError(
+            f"Ansible rulebook {label} must contain exactly one plugin"
+        )
+    plugin = next(iter(plugin_keys))
+    if not _RULEBOOK_PLUGIN.fullmatch(plugin) and not (
+        allow_short and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", plugin)
+    ):
+        raise AnsibleProjectInputError(
+            f"Ansible rulebook {label} plugin must use a fully qualified collection name"
+        )
+    arguments = entry[plugin]
+    if arguments is not None and not isinstance(arguments, dict):
+        raise AnsibleProjectInputError(
+            f"Ansible rulebook {label} plugin arguments must be a mapping"
+        )
+    return plugin
+
+
+def _validate_rulebook_action(action: Any, *, label: str) -> None:
+    if not isinstance(action, dict) or len(action) != 1:
+        raise AnsibleProjectInputError(
+            f"Ansible rulebook {label} must be a one-action mapping"
+        )
+    name, arguments = next(iter(action.items()))
+    if name not in _RULEBOOK_ACTIONS:
+        raise AnsibleProjectInputError(f"Ansible rulebook {label} action is unsupported")
+    if arguments is not None and not isinstance(arguments, dict):
+        raise AnsibleProjectInputError(
+            f"Ansible rulebook {label} action arguments must be a mapping"
+        )
+
+
+def _rulebook_document(
+    document: Any,
+    *,
+    strict: bool = False,
+) -> dict[str, Any] | None:
+    if not isinstance(document, list) or not document:
+        if strict:
+            raise AnsibleProjectInputError(
+                "Ansible rulebook must be a non-empty list of rulesets"
+            )
+        return None
+    high_confidence = all(
+        isinstance(ruleset, dict) and {"rules", "sources"} <= set(ruleset)
+        for ruleset in document
+    )
+    if not high_confidence and not strict:
+        return None
+    if len(document) > _MAX_RULEBOOK_RULESETS:
+        raise AnsibleProjectInputError("Ansible rulebook exceeds the ruleset count limit")
+    _reject_recursive_artifact_aliases(document, label="Ansible rulebook")
+    _bound_rulebook_value(document)
+
+    ruleset_names: set[str] = set()
+    item_count = 0
+    for ruleset_index, ruleset in enumerate(document):
+        if not isinstance(ruleset, dict):
+            raise AnsibleProjectInputError("Ansible rulebook rulesets must be mappings")
+        unknown = set(ruleset) - _RULEBOOK_RULESET_KEYS
+        if unknown:
+            raise AnsibleProjectInputError(
+                "Ansible rulebook ruleset contains unsupported fields"
+            )
+        name = ruleset.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise AnsibleProjectInputError(
+                "Ansible rulebook ruleset name must be a non-empty string"
+            )
+        if name in ruleset_names:
+            raise AnsibleProjectInputError("Ansible rulebook ruleset names must be unique")
+        ruleset_names.add(name)
+        hosts = ruleset.get("hosts")
+        if not (
+            isinstance(hosts, str)
+            and hosts.strip()
+            or isinstance(hosts, list)
+            and hosts
+            and all(isinstance(host, str) and host.strip() for host in hosts)
+        ):
+            raise AnsibleProjectInputError(
+                "Ansible rulebook ruleset hosts must be a non-empty string or string list"
+            )
+        for key in ("gather_facts", "match_multiple_rules"):
+            if key in ruleset and not isinstance(ruleset[key], bool):
+                raise AnsibleProjectInputError(
+                    f"Ansible rulebook ruleset {key} must be a boolean"
+                )
+        strategy = ruleset.get("execution_strategy", "sequential")
+        if strategy not in {"parallel", "sequential"}:
+            raise AnsibleProjectInputError(
+                "Ansible rulebook execution_strategy must be sequential or parallel"
+            )
+        ttl = ruleset.get("default_events_ttl")
+        if ttl is not None and (
+            isinstance(ttl, bool) or not isinstance(ttl, (int, float, str))
+        ):
+            raise AnsibleProjectInputError(
+                "Ansible rulebook default_events_ttl must be a scalar duration"
+            )
+
+        sources = ruleset.get("sources")
+        rules = ruleset.get("rules")
+        if not isinstance(sources, list) or not sources:
+            raise AnsibleProjectInputError(
+                "Ansible rulebook ruleset sources must be a non-empty list"
+            )
+        if not isinstance(rules, list) or not rules:
+            raise AnsibleProjectInputError(
+                "Ansible rulebook ruleset rules must be a non-empty list"
+            )
+        item_count += len(sources) + len(rules)
+        if item_count > _MAX_RULEBOOK_ITEMS:
+            raise AnsibleProjectInputError("Ansible rulebook exceeds the item count limit")
+
+        for source_index, source in enumerate(sources):
+            _validate_rulebook_plugin_entry(
+                source,
+                label=f"ruleset {ruleset_index} source {source_index}",
+                metadata_keys=_RULEBOOK_SOURCE_META_KEYS,
+            )
+            if "name" in source and (
+                not isinstance(source["name"], str) or not source["name"].strip()
+            ):
+                raise AnsibleProjectInputError(
+                    "Ansible rulebook source name must be a non-empty string"
+                )
+            filters = source.get("filters", [])
+            if not isinstance(filters, list):
+                raise AnsibleProjectInputError("Ansible rulebook source filters must be a list")
+            item_count += len(filters)
+            if item_count > _MAX_RULEBOOK_ITEMS:
+                raise AnsibleProjectInputError("Ansible rulebook exceeds the item count limit")
+            for filter_index, event_filter in enumerate(filters):
+                _validate_rulebook_plugin_entry(
+                    event_filter,
+                    label=(
+                        f"ruleset {ruleset_index} source {source_index} filter {filter_index}"
+                    ),
+                    allow_short=True,
+                )
+
+        rule_names: set[str] = set()
+        for rule_index, rule in enumerate(rules):
+            if not isinstance(rule, dict):
+                raise AnsibleProjectInputError("Ansible rulebook rules must be mappings")
+            if set(rule) - _RULEBOOK_RULE_KEYS:
+                raise AnsibleProjectInputError(
+                    "Ansible rulebook rule contains unsupported fields"
+                )
+            rule_name = rule.get("name")
+            if not isinstance(rule_name, str) or not rule_name.strip():
+                raise AnsibleProjectInputError(
+                    "Ansible rulebook rule name must be a non-empty string"
+                )
+            if rule_name in rule_names:
+                raise AnsibleProjectInputError(
+                    "Ansible rulebook rule names must be unique within a ruleset"
+                )
+            rule_names.add(rule_name)
+            if "condition" not in rule or rule["condition"] is None:
+                raise AnsibleProjectInputError("Ansible rulebook rule requires a condition")
+            condition = rule["condition"]
+            if not isinstance(condition, (bool, dict, float, int, list, str)) or condition in (
+                "",
+                [],
+                {},
+            ):
+                raise AnsibleProjectInputError(
+                    "Ansible rulebook rule condition must be a non-empty scalar, list, or mapping"
+                )
+            if "enabled" in rule and not isinstance(rule["enabled"], bool):
+                raise AnsibleProjectInputError("Ansible rulebook rule enabled must be a boolean")
+            action_keys = {"action", "actions"} & set(rule)
+            if len(action_keys) != 1:
+                raise AnsibleProjectInputError(
+                    "Ansible rulebook rule requires exactly one of action or actions"
+                )
+            if "action" in rule:
+                actions = [rule["action"]]
+            else:
+                actions = rule["actions"]
+                if not isinstance(actions, list) or not actions:
+                    raise AnsibleProjectInputError(
+                        "Ansible rulebook rule actions must be a non-empty list"
+                    )
+            item_count += len(actions)
+            if item_count > _MAX_RULEBOOK_ITEMS:
+                raise AnsibleProjectInputError("Ansible rulebook exceeds the item count limit")
+            for action_index, action in enumerate(actions):
+                _validate_rulebook_action(
+                    action,
+                    label=f"ruleset {ruleset_index} rule {rule_index} action {action_index}",
+                )
+    return {"rulesets": document}
+
+
 def parse_ansible_project(source: str, filename: str | None = None) -> dict[str, Any]:
     """Parse Ansible project configuration, dependencies, or inventory without execution."""
     if not source.strip():
@@ -1132,6 +1440,24 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
     artifact_filename = _artifact_filename(filename)
     artifact_parts = _artifact_parts(filename)
     parent = artifact_parts[-2] if len(artifact_parts) > 1 else ""
+    possible_rulebook = _rulebook_filename(filename) or (
+        filename_suffix in {".yaml", ".yml"}
+        and re.search(r"(?m)^\s+sources\s*:", source) is not None
+        and re.search(r"(?m)^\s+rules\s*:", source) is not None
+    )
+    if possible_rulebook and len(source.encode("utf-8")) > _MAX_RULEBOOK_BYTES:
+        raise AnsibleProjectInputError("Ansible rulebook exceeds the source size limit")
+    if _rulebook_filename(filename):
+        document = _load_inventory_yaml(source)
+        rulebook = _rulebook_document(document, strict=True)
+        if rulebook is None:
+            raise AnsibleProjectInputError("input is not a recognized Ansible rulebook")
+        return {
+            "ansible_project": {
+                "artifact_type": "rulebook",
+                "document": rulebook,
+            }
+        }
     if artifact_filename in _GALAXY_FILENAMES:
         document = _load_inventory_yaml(source)
         return {
@@ -1237,6 +1563,14 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
             "ansible_project": {
                 "artifact_type": "controller_export",
                 "document": controller_export,
+            }
+        }
+    rulebook = _rulebook_document(document)
+    if rulebook is not None:
+        return {
+            "ansible_project": {
+                "artifact_type": "rulebook",
+                "document": rulebook,
             }
         }
     inventory_yaml = _parse_inventory_yaml(document)
@@ -3884,6 +4218,452 @@ def _controller_export_changes(document: dict[str, Any]) -> list[dict[str, str]]
     return changes
 
 
+def _rulebook_secret_counts(value: Any) -> tuple[int, int]:
+    literal = 0
+    protected = 0
+    for path, scalar in _walk_controller_scalars(value):
+        key = path[-1] if path else ""
+        if isinstance(scalar, str) and _embedded_url_credential(scalar):
+            literal += 1
+            continue
+        if (
+            not key
+            or not _SECRET_OPTIONS.search(key)
+            or scalar is None
+            or scalar == ""
+            or scalar is False
+        ):
+            continue
+        if isinstance(scalar, _VaultValue) or _external_or_encrypted_value(scalar):
+            protected += 1
+        elif not isinstance(scalar, (dict, list)):
+            literal += 1
+    return literal, protected
+
+
+def _rulebook_value_has_template(value: Any) -> bool:
+    return any(
+        isinstance(scalar, str) and _RULEBOOK_TEMPLATE.search(scalar)
+        for _, scalar in _walk_controller_scalars(value)
+    )
+
+
+def _rulebook_value_has_plaintext_endpoint(value: Any) -> bool:
+    return any(
+        path
+        and _RULEBOOK_ENDPOINT_KEY.search(path[-1])
+        and isinstance(scalar, str)
+        and scalar.strip().casefold().startswith(("http://", "ftp://", "git://"))
+        for path, scalar in _walk_controller_scalars(value)
+    )
+
+
+def _rulebook_value_disables_tls(value: Any) -> bool:
+    return any(
+        path
+        and path[-1] in _RULEBOOK_TLS_BYPASS_KEYS
+        and _disabled(scalar)
+        for path, scalar in _walk_controller_scalars(value)
+    )
+
+
+def _rulebook_source_changes(
+    source: dict[str, Any],
+    *,
+    ruleset_index: int,
+    source_index: int,
+) -> list[dict[str, str]]:
+    address = f"rulebook.ruleset.{ruleset_index}.source.{source_index}"
+    plugin = next(key for key in source if key not in _RULEBOOK_SOURCE_META_KEYS)
+    arguments = source.get(plugin) or {}
+    builtin = plugin.startswith(("ansible.eda.", "eda.builtin."))
+    changes = [
+        _change(
+            f"{address}.plugin",
+            "rulebook_event_source",
+            "review" if builtin else "dangerous",
+            "The ruleset starts an event-source plugin with network, filesystem, message-bus, "
+            "or other integration behavior determined by installed collection code."
+            + (
+                " The source uses an Ansible EDA or built-in plugin name; verify the installed "
+                "collection version and Decision Environment provenance."
+                if builtin
+                else " The source uses third-party collection code outside the rulebook."
+            ),
+        )
+    ]
+    literal, protected = _rulebook_secret_counts(arguments)
+    if literal:
+        changes.append(
+            _change(
+                f"{address}.credentials",
+                "rulebook_literal_secret",
+                "dangerous",
+                f"The event-source configuration contains {literal} literal secret-like or "
+                "credential-bearing value(s); move them to Vault or runtime variables.",
+            )
+        )
+    if protected:
+        changes.append(
+            _change(
+                f"{address}.secret_boundary",
+                "rulebook_secret_boundary",
+                "review",
+                f"The event-source configuration references {protected} encrypted or external "
+                "secret-like value(s); verify runtime resolution, scope, and log redaction.",
+            )
+        )
+    if _rulebook_value_has_plaintext_endpoint(arguments):
+        changes.append(
+            _change(
+                f"{address}.transport",
+                "rulebook_plaintext_transport",
+                "dangerous",
+                "The event source uses a plaintext endpoint for event or credential-bearing "
+                "traffic.",
+            )
+        )
+    if _rulebook_value_disables_tls(arguments):
+        changes.append(
+            _change(
+                f"{address}.tls",
+                "rulebook_tls_verification",
+                "dangerous",
+                "The event source disables certificate or peer verification.",
+            )
+        )
+    if _rulebook_value_has_template(arguments):
+        changes.append(
+            _change(
+                f"{address}.templating",
+                "rulebook_source_templating",
+                "review",
+                "Runtime variables or event data select event-source configuration that cannot "
+                "be resolved from this rulebook alone.",
+            )
+        )
+    if plugin.endswith(".webhook"):
+        host = str(arguments.get("host", "0.0.0.0")).strip().casefold()
+        authenticated = any(
+            arguments.get(key) not in (None, "", False)
+            for key in ("cafile", "hmac_secret", "token")
+        )
+        changes.append(
+            _change(
+                f"{address}.ingress",
+                "rulebook_webhook_ingress",
+                "dangerous" if host in {"", "0.0.0.0", "::"} or not authenticated else "review",
+                "The event source accepts webhook ingress that can trigger automation; verify "
+                "network exposure, sender authentication, replay protection, payload limits, "
+                "and rate limits."
+                + (
+                    " The configured listener is broad or has no visible token, HMAC, or mTLS "
+                    "authentication."
+                    if host in {"", "0.0.0.0", "::"} or not authenticated
+                    else " Static listener configuration includes an authentication mechanism."
+                ),
+            )
+        )
+    for filter_index, event_filter in enumerate(source.get("filters", [])):
+        filter_plugin = next(iter(event_filter))
+        builtin_filter = (
+            filter_plugin in _RULEBOOK_BUILTIN_SHORT_FILTERS
+            or filter_plugin.startswith(
+                ("ansible.builtin.", "ansible.eda.", "eda.builtin.")
+            )
+        )
+        changes.append(
+            _change(
+                f"{address}.filter.{filter_index}",
+                "rulebook_event_filter",
+                "review" if builtin_filter else "dangerous",
+                "An event filter executes installed plugin code and can discard, transform, or "
+                "enrich untrusted event data before conditions evaluate."
+                + (
+                    " Verify the pinned built-in or Ansible collection implementation."
+                    if builtin_filter
+                    else " The filter uses third-party collection code outside the rulebook."
+                ),
+            )
+        )
+    return changes
+
+
+def _rulebook_action_changes(
+    action: dict[str, Any],
+    *,
+    ruleset_index: int,
+    rule_index: int,
+    action_index: int,
+    parallel: bool,
+) -> list[dict[str, str]]:
+    name, raw_arguments = next(iter(action.items()))
+    arguments = raw_arguments or {}
+    address = (
+        f"rulebook.ruleset.{ruleset_index}.rule.{rule_index}.action.{action_index}"
+    )
+    changes: list[dict[str, str]] = []
+    if name in _RULEBOOK_EXECUTION_ACTIONS:
+        descriptions = {
+            "run_job_template": "launches an Automation Controller job template",
+            "run_module": "runs an Ansible module against the ruleset inventory",
+            "run_playbook": "runs an Ansible playbook against the ruleset inventory",
+            "run_workflow_template": "launches an Automation Controller workflow template",
+        }
+        changes.append(
+            _change(
+                f"{address}.execution",
+                f"rulebook_{name}",
+                "dangerous",
+                f"A matching event {descriptions[name]}; target identity, credentials, content, "
+                "prompt-on-launch policy, and effective privileges are runtime boundaries.",
+            )
+        )
+        if parallel and not arguments.get("lock"):
+            changes.append(
+                _change(
+                    f"{address}.concurrency",
+                    "rulebook_unlocked_parallel_action",
+                    "dangerous",
+                    "The executable action can run concurrently without a lock, increasing race, "
+                    "duplicate-remediation, and conflicting-change risk.",
+                )
+            )
+        if _enabled(arguments.get("retry")) or (
+            isinstance(arguments.get("retries"), int) and arguments["retries"] > 0
+        ):
+            changes.append(
+                _change(
+                    f"{address}.retries",
+                    "rulebook_action_retry",
+                    "dangerous",
+                    "The rulebook retries a failed executable action, which can repeat partial or "
+                    "non-idempotent infrastructure mutations.",
+                )
+            )
+    elif name in {"debug", "print_event"}:
+        changes.append(
+            _change(
+                f"{address}.output",
+                "rulebook_event_logging",
+                "dangerous",
+                "The action writes event, fact, variable, or message data to output; untrusted "
+                "payloads and secrets can enter controller logs.",
+            )
+        )
+    elif name == "shutdown":
+        immediate = str(arguments.get("kind", "")).casefold() == "now" or arguments.get(
+            "delay"
+        ) == 0
+        changes.append(
+            _change(
+                f"{address}.lifecycle",
+                "rulebook_shutdown",
+                "dangerous" if immediate else "review",
+                "A matching event shuts down the rulebook and every ruleset in the process; "
+                "verify availability, in-flight action handling, and restart policy."
+                + (" The shutdown is configured to be immediate." if immediate else ""),
+            )
+        )
+    elif name in {"post_event", "set_fact", "retract_fact"}:
+        cross_ruleset = bool(arguments.get("ruleset"))
+        changes.append(
+            _change(
+                f"{address}.state",
+                "rulebook_internal_event_state",
+                "dangerous" if cross_ruleset else "review",
+                "The action mutates rule-engine event or fact state, which can trigger later "
+                "conditions and create feedback loops."
+                + (
+                    " It targets another ruleset, expanding the activation path."
+                    if cross_ruleset
+                    else ""
+                ),
+            )
+        )
+    else:
+        changes.append(
+            _change(
+                f"{address}.none",
+                "rulebook_noop_action",
+                "review",
+                "The rule intentionally performs no external action; verify this is test or "
+                "suppression behavior rather than a missing remediation.",
+            )
+        )
+
+    literal, protected = _rulebook_secret_counts(arguments)
+    if literal:
+        changes.append(
+            _change(
+                f"{address}.credentials",
+                "rulebook_literal_secret",
+                "dangerous",
+                f"The action contains {literal} literal secret-like or credential-bearing "
+                "value(s); move them to Vault or a runtime secret boundary.",
+            )
+        )
+    if protected:
+        changes.append(
+            _change(
+                f"{address}.secret_boundary",
+                "rulebook_secret_boundary",
+                "review",
+                f"The action references {protected} encrypted or external secret-like value(s); "
+                "verify runtime resolution, scope, and output redaction.",
+            )
+        )
+    if _rulebook_value_has_template(arguments):
+        changes.append(
+            _change(
+                f"{address}.templating",
+                "rulebook_action_templating",
+                "dangerous" if name in _RULEBOOK_EXECUTION_ACTIONS else "review",
+                "Runtime event, fact, or variable data is interpolated into action arguments"
+                + (
+                    ", so untrusted input can influence executable targets or parameters."
+                    if name in _RULEBOOK_EXECUTION_ACTIONS
+                    else "; verify escaping, type handling, and downstream consumers."
+                ),
+            )
+        )
+    if name in {"run_job_template", "run_workflow_template"} and arguments.get(
+        "include_events", True
+    ):
+        changes.append(
+            _change(
+                f"{address}.event_payload",
+                "rulebook_controller_event_forwarding",
+                "review",
+                "Matching event data is forwarded to Automation Controller; verify survey and "
+                "prompt-on-launch controls, payload sensitivity, size, and retention.",
+            )
+        )
+    return changes
+
+
+def _rulebook_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for ruleset_index, ruleset in enumerate(document["rulesets"]):
+        address = f"rulebook.ruleset.{ruleset_index}"
+        hosts = ruleset["hosts"]
+        host_values = [hosts] if isinstance(hosts, str) else hosts
+        broad_hosts = any(
+            str(host).strip().casefold() in {"*", "all", "all:!localhost"}
+            for host in host_values
+        )
+        changes.append(
+            _change(
+                f"{address}.hosts",
+                "rulebook_inventory_scope",
+                "dangerous" if broad_hosts else "review",
+                "The ruleset defines the inventory scope used by module and playbook actions; "
+                "verify the resolved inventory, limits, connection identity, and variable "
+                "precedence."
+                + (" The static host pattern is broad." if broad_hosts else ""),
+            )
+        )
+        if ruleset.get("gather_facts"):
+            changes.append(
+                _change(
+                    f"{address}.gather_facts",
+                    "rulebook_fact_gathering",
+                    "dangerous" if broad_hosts else "review",
+                    "The rulebook connects to inventory hosts at startup and uploads gathered "
+                    "facts into the rule engine before an event matches."
+                    + (" The host scope is broad." if broad_hosts else ""),
+                )
+            )
+        parallel = ruleset.get("execution_strategy") == "parallel"
+        if parallel:
+            changes.append(
+                _change(
+                    f"{address}.execution_strategy",
+                    "rulebook_parallel_execution",
+                    "dangerous",
+                    "The ruleset executes matching actions in parallel, increasing concurrency, "
+                    "ordering, and duplicate-remediation risk.",
+                )
+            )
+        if ruleset.get("match_multiple_rules"):
+            changes.append(
+                _change(
+                    f"{address}.match_multiple_rules",
+                    "rulebook_multiple_rule_fanout",
+                    "dangerous",
+                    "One event may continue matching multiple rules, multiplying downstream "
+                    "actions and retaining partial events until expiration.",
+                )
+            )
+        if "default_events_ttl" in ruleset:
+            changes.append(
+                _change(
+                    f"{address}.default_events_ttl",
+                    "rulebook_event_retention",
+                    "review",
+                    "The ruleset overrides partial-event retention; verify memory growth, data "
+                    "sensitivity, stale matches, and eviction behavior.",
+                )
+            )
+        for source_index, source in enumerate(ruleset["sources"]):
+            changes.extend(
+                _rulebook_source_changes(
+                    source,
+                    ruleset_index=ruleset_index,
+                    source_index=source_index,
+                )
+            )
+        for rule_index, rule in enumerate(ruleset["rules"]):
+            condition = rule["condition"]
+            if condition is True or (
+                isinstance(condition, str)
+                and condition.strip().casefold() in {"1 == 1", "true"}
+            ):
+                changes.append(
+                    _change(
+                        f"{address}.rule.{rule_index}.condition",
+                        "rulebook_unconditional_rule",
+                        "dangerous",
+                        "The rule condition is statically unconditional, so every received event "
+                        "can trigger its actions.",
+                    )
+                )
+            if rule.get("enabled") is False:
+                changes.append(
+                    _change(
+                        f"{address}.rule.{rule_index}.enabled",
+                        "rulebook_disabled_rule",
+                        "review",
+                        "The rule is disabled but retains executable activation logic that can be "
+                        "re-enabled by a later configuration change.",
+                    )
+                )
+            actions = [rule["action"]] if "action" in rule else rule["actions"]
+            for action_index, action in enumerate(actions):
+                changes.extend(
+                    _rulebook_action_changes(
+                        action,
+                        ruleset_index=ruleset_index,
+                        rule_index=rule_index,
+                        action_index=action_index,
+                        parallel=parallel,
+                    )
+                )
+    changes.append(
+        _change(
+            "rulebook.effective_activation",
+            "rulebook_runtime_boundary",
+            "review",
+            "Effective Event-Driven Ansible behavior also depends on the Decision Environment "
+            "image, installed source/filter collections, inventory and variables, Vault inputs, "
+            "controller credentials and prompt policy, network ingress, rule-engine semantics, "
+            "activation restart/scaling policy, and the referenced playbooks, modules, and "
+            "templates. Static analysis never starts sources or evaluates conditions.",
+        )
+    )
+    return changes
+
+
 class AnsibleProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -3908,6 +4688,7 @@ class AnsibleProjectAdapter(BaseAdapter):
                 "navigator",
                 "requirements",
                 "role_metadata",
+                "rulebook",
                 "runtime_metadata",
             }
             and isinstance(config.get("document"), dict)
@@ -3929,6 +4710,8 @@ class AnsibleProjectAdapter(BaseAdapter):
             changes = _controller_export_changes(document)
         elif artifact_type == "role_metadata":
             changes = _role_metadata_changes(document)
+        elif artifact_type == "rulebook":
+            changes = _rulebook_changes(document)
         elif artifact_type == "runtime_metadata":
             changes = _runtime_metadata_changes(document)
         elif artifact_type == "requirements":
@@ -3961,6 +4744,7 @@ class AnsibleProjectAdapter(BaseAdapter):
             "molecule",
             "navigator",
             "role_metadata",
+            "rulebook",
             "runtime_metadata",
         }:
             changes.append(
@@ -4000,5 +4784,15 @@ def analyze_ansible_project(data: dict[str, Any], *, catalog=None) -> dict[str, 
         resources = data["ansible_project"]["document"]["resources"]
         gate["asset_count"] = sum(len(assets) for assets in resources.values())
         gate["asset_type_count"] = len(resources)
+    if gate["artifact_type"] == "rulebook":
+        rulesets = data["ansible_project"]["document"]["rulesets"]
+        gate["ruleset_count"] = len(rulesets)
+        gate["source_count"] = sum(len(ruleset["sources"]) for ruleset in rulesets)
+        gate["rule_count"] = sum(len(ruleset["rules"]) for ruleset in rulesets)
+        gate["action_count"] = sum(
+            1 if "action" in rule else len(rule["actions"])
+            for ruleset in rulesets
+            for rule in ruleset["rules"]
+        )
     gate["total_changes"] = len(changes)
     return gate
