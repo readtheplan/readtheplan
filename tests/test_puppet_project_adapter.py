@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from readtheplan.adapters.puppet_external_fact import puppet_external_fact_metadata
 from readtheplan.adapters.puppet_project import (
     PuppetProjectAdapter,
     PuppetProjectInputError,
@@ -20,6 +21,247 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def _changes(fixture: str):
     data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture)
     return PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+
+@pytest.mark.parametrize(
+    ("name", "external_fact_type", "detail"),
+    [
+        ("cloud_inventory.py", "executable", "python"),
+        ("host_inventory.sh", "executable", "shell"),
+        ("legacy_inventory.pl", "executable", "perl"),
+        ("service_inventory.rb", "executable", "ruby"),
+        ("windows_inventory.ps1", "executable", "powershell"),
+        ("windows_legacy.cmd", "executable", "batch"),
+        ("security.json", "structured_data", "json"),
+        ("location.yaml", "structured_data", "yaml"),
+        ("identity.txt", "structured_data", "text"),
+    ],
+)
+def test_puppet_external_facts_are_classified_by_agent_runtime(
+    name: str, external_fact_type: str, detail: str
+) -> None:
+    path = (
+        FIXTURES
+        / "puppet_external_facts_risky"
+        / "modules"
+        / "site"
+        / "facts.d"
+        / name
+    )
+    data = parse_puppet_project(path.read_text(encoding="utf-8"), filename=str(path))
+    gate = analyze_puppet_project(data)
+
+    assert data["puppet_project"]["artifact_type"] == "external_fact"
+    assert gate["artifact_type"] == "external_fact"
+    assert gate["external_fact_type"] == external_fact_type
+    assert gate.get("language", gate.get("format")) == detail
+    assert gate["source_kind"] == "agent_external_fact"
+    assert gate["component_name"] == path.stem
+    assert gate["source_line_count"] > 0
+    expected_fact_count = {
+        "identity.txt": 2,
+        "location.yaml": 1,
+        "security.json": 2,
+    }.get(name, 0)
+    assert gate["fact_count"] == expected_fact_count
+
+
+def test_executable_external_fact_surfaces_agent_code_and_redacts_source() -> None:
+    path = (
+        FIXTURES
+        / "puppet_external_facts_risky"
+        / "modules"
+        / "site"
+        / "facts.d"
+        / "cloud_inventory.py"
+    )
+    data = parse_puppet_project(path.read_text(encoding="utf-8"), filename=str(path))
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    kinds = {change.resource_type for change in changes}
+    gate = analyze_puppet_project(data)
+
+    assert {
+        "puppet_project_environment_input",
+        "puppet_project_external_fact_boundary",
+        "puppet_project_external_fact_execution",
+        "puppet_project_fact_collection_timeout",
+        "puppet_project_network_access",
+        "puppet_project_secret_handling",
+        "puppet_project_tls_verification_disabled",
+        "puppet_project_unsafe_deserialization",
+    } == kinds
+    assert {change.actions for change in changes} == {("execute",)}
+    assert gate["total_changes"] == 8
+    assert gate["risk_counts"] == {
+        "safe": 0,
+        "review": 3,
+        "dangerous": 5,
+        "irreversible": 0,
+    }
+    assert gate["decision"] == "block"
+    assert "DO_NOT_LEAK" not in json.dumps(data)
+    encoded = json.dumps(gate)
+    assert "RTP_FIXTURE_EXTERNAL_FACT_PYTHON_SECRET_DO_NOT_LEAK" not in encoded
+    assert "python-facts.example.invalid" not in encoded
+
+
+def test_structured_external_facts_surface_overrides_and_secret_data() -> None:
+    root = (
+        FIXTURES
+        / "puppet_external_facts_risky"
+        / "modules"
+        / "site"
+        / "facts.d"
+    )
+    for name in ("identity.txt", "security.json"):
+        path = root / name
+        data = parse_puppet_project(path.read_text(encoding="utf-8"), filename=str(path))
+        changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+        kinds = {change.resource_type for change in changes}
+        assert {
+            "puppet_project_core_fact_override",
+            "puppet_project_external_fact_boundary",
+            "puppet_project_external_fact_data",
+            "puppet_project_secret_fact_data",
+        } == kinds
+        assert {change.actions for change in changes} == {("configure",)}
+        gate = analyze_puppet_project(data)
+        assert gate["total_changes"] == 4
+        assert gate["risk_counts"]["dangerous"] == 2
+        assert gate["decision"] == "block"
+        assert "DO_NOT_LEAK" not in json.dumps(data)
+        assert "DO_NOT_LEAK" not in json.dumps(gate)
+
+
+def test_external_fact_ignores_risky_words_in_python_comments_and_strings() -> None:
+    source = (
+        "#!/usr/bin/env python3\n"
+        "# requests.get and pickle.load are documentation\n"
+        'note = "requests.get pickle.load shell=True"\n'
+        'print("site=ok")\n'
+    )
+    filename = "modules/site/facts.d/review.py"
+    data = parse_puppet_project(source, filename=filename)
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+    assert [change.resource_type for change in changes] == [
+        "puppet_project_external_fact_execution",
+        "puppet_project_external_fact_boundary",
+    ]
+
+
+def test_external_fact_shebang_and_unsupported_binary_paths_are_bounded() -> None:
+    source = "#!/usr/bin/env perl\nprint \"site=ok\\n\";\n"
+    filename = "modules/site/facts.d/site-fact"
+    assert puppet_external_fact_metadata(filename, source)["language"] == "perl"
+    gate = analyze_puppet_project(parse_puppet_project(source, filename=filename))
+    assert gate["language"] == "perl"
+    assert gate["external_fact_type"] == "executable"
+
+    with pytest.raises(PuppetProjectInputError, match="unsupported facts.d content"):
+        parse_puppet_project("binary fixture", filename="modules/site/facts.d/fact.exe")
+
+
+def test_external_fact_parser_never_executes_source(tmp_path: Path) -> None:
+    marker = tmp_path / "external-fact-was-executed"
+    source = f"#!/bin/sh\ntouch '{marker}'\nprintf 'site=ok\\n'\n"
+
+    parse_puppet_project(source, filename="modules/site/facts.d/site.sh")
+
+    assert not marker.exists()
+
+
+def test_executable_external_fact_surfaces_missing_shebang_and_output() -> None:
+    data = parse_puppet_project(
+        "site_value=fixture\n",
+        filename="modules/site/facts.d/site.sh",
+    )
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+    assert {change.resource_type for change in changes} == {
+        "puppet_project_external_fact_boundary",
+        "puppet_project_external_fact_execution",
+        "puppet_project_fact_output_interface",
+        "puppet_project_fact_shebang",
+    }
+
+
+@pytest.mark.parametrize(
+    ("source", "filename", "error"),
+    [
+        ('{"site": 1, "site": 2}', "modules/site/facts.d/site.json", "duplicate JSON"),
+        ('{"site": NaN}', "modules/site/facts.d/site.json", "non-finite JSON"),
+        ("site: one\nsite: two\n", "modules/site/facts.d/site.yaml", "duplicate YAML"),
+        ("site=one\nsite=two\n", "modules/site/facts.d/site.txt", "duplicate text"),
+        ("site-without-value\n", "modules/site/facts.d/site.txt", "invalid text"),
+        ("\ufeffsite=value\n", "modules/site/facts.d/site.txt", "UTF-8 BOM"),
+        ("Facter.add(:x) {}\x00\n", "modules/site/facts.d/site.rb", "NUL byte"),
+    ],
+)
+def test_external_fact_rejects_ambiguous_or_unsafe_input(
+    source: str, filename: str, error: str
+) -> None:
+    with pytest.raises(PuppetProjectInputError, match=error):
+        parse_puppet_project(source, filename=filename)
+
+
+def test_external_fact_enforces_source_limits() -> None:
+    filename = "modules/site/facts.d/site.txt"
+    with pytest.raises(PuppetProjectInputError, match="source size limit"):
+        parse_puppet_project("site=" + "x" * (2 * 1024 * 1024), filename=filename)
+    with pytest.raises(PuppetProjectInputError, match="line count limit"):
+        parse_puppet_project(
+            "site=value\n" * 100_001,
+            filename=filename,
+        )
+    with pytest.raises(PuppetProjectInputError, match="fact count limit"):
+        parse_puppet_project(
+            "".join(f"fact_{index}=value\n" for index in range(5_001)),
+            filename=filename,
+        )
+
+
+def test_external_fact_enforces_structure_and_finding_limits() -> None:
+    recursive = "site: &site\n  nested: *site\n"
+    with pytest.raises(PuppetProjectInputError, match="recursive YAML alias"):
+        parse_puppet_project(recursive, filename="modules/site/facts.d/site.yaml")
+
+    nested = "site:\n" + "".join(
+        "  " * depth + f"level_{depth}:\n" for depth in range(1, 103)
+    )
+    nested += "  " * 103 + "leaf: true\n"
+    with pytest.raises(PuppetProjectInputError, match="nesting depth limit"):
+        parse_puppet_project(nested, filename="modules/site/facts.d/site.yaml")
+
+    with pytest.raises(PuppetProjectInputError, match="invalid Python external fact"):
+        parse_puppet_project(
+            '#!/usr/bin/python3\nvalue = """unterminated\n',
+            filename="modules/site/facts.d/site.py",
+        )
+
+    findings = "#!/usr/bin/python3\n" + "requests.get(url)\n" * 2_001
+    with pytest.raises(PuppetProjectInputError, match="finding count limit"):
+        parse_puppet_project(findings, filename="modules/site/facts.d/site.py")
+
+
+def test_puppet_external_fact_cli_emits_runtime_metadata(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = (
+        FIXTURES
+        / "puppet_external_facts_risky"
+        / "modules"
+        / "site"
+        / "facts.d"
+        / "security.json"
+    )
+    assert main(["puppet-project", str(path)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["artifact_type"] == "external_fact"
+    assert payload["external_fact_type"] == "structured_data"
+    assert payload["format"] == "json"
+    assert payload["source_kind"] == "agent_external_fact"
+    assert payload["fact_count"] == 2
 
 
 @pytest.mark.parametrize(

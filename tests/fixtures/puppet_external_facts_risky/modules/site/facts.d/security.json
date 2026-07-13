@@ -1,0 +1,8 @@
+{
+  "networking": {
+    "hostname": "fixture.invalid"
+  },
+  "service": {
+    "client_secret": "RTP_FIXTURE_EXTERNAL_FACT_JSON_SECRET_DO_NOT_LEAK"
+  }
+}

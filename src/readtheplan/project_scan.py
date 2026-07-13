@@ -14,6 +14,7 @@ from typing import Any
 
 from readtheplan.adapters.ansible_code import ansible_code_metadata
 from readtheplan.adapters.bolt_content import bolt_task_implementation_language
+from readtheplan.adapters.puppet_external_fact import puppet_external_fact_metadata
 from readtheplan.adapters.puppet_ruby import puppet_ruby_metadata
 from readtheplan.rules import RISK_ORDER
 
@@ -266,6 +267,21 @@ def identify_project_input(
             return "puppet-project"
 
     if puppet_ruby_metadata(relative_path) is not None:
+        return "puppet-project"
+
+    external_fact_source = ""
+    if "facts.d" in parts[:-1] and puppet_external_fact_metadata(relative_path) is None:
+        if content is not None:
+            try:
+                external_fact_source = content[:4096].decode("utf-8")
+            except UnicodeDecodeError:
+                external_fact_source = ""
+        elif inspect_content:
+            try:
+                external_fact_source = path.read_bytes()[:4096].decode("utf-8")
+            except (OSError, UnicodeDecodeError):
+                external_fact_source = ""
+    if puppet_external_fact_metadata(relative_path, external_fact_source) is not None:
         return "puppet-project"
 
     ansible_code = ansible_code_metadata(relative_path)
@@ -994,7 +1010,10 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         result["dynamic_erb"] = payload["dynamic_erb"]
     for field in (
         "component_name",
+        "external_fact_type",
         "extension_type",
+        "fact_count",
+        "format",
         "language",
         "hook_name",
         "plugin_type",
