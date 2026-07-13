@@ -66,6 +66,7 @@ from readtheplan.adapters.salt_project import SaltProjectAdapter
 from readtheplan.adapters.sentinel import SentinelAdapter
 from readtheplan.adapters.serverless import SamTemplateAdapter, ServerlessFrameworkAdapter
 from readtheplan.adapters.skaffold import SkaffoldAdapter
+from readtheplan.adapters.sops import SOPSAdapter
 from readtheplan.adapters.spacelift import SpaceliftAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
 from readtheplan.adapters.teamcity import TeamCityAdapter
@@ -195,6 +196,7 @@ register_adapter(SamTemplateAdapter())
 register_adapter(SentinelAdapter())
 register_adapter(SkaffoldAdapter())
 register_adapter(SpaceliftAdapter())
+register_adapter(SOPSAdapter())
 register_adapter(SystemdUnitAdapter())
 register_adapter(TerraformConfigAdapter())
 register_adapter(TerraformLockAdapter())
@@ -271,6 +273,7 @@ __all__ = [
     "ServerlessFrameworkAdapter",
     "SentinelAdapter",
     "SkaffoldAdapter",
+    "SOPSAdapter",
     "SpaceliftAdapter",
     "SystemdUnitAdapter",
     "TerraformConfigAdapter",

@@ -117,6 +117,7 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "codebuild",
         "cloud-build",
         "codepipeline",
+        "sops",
         "kubernetes",
         "nix",
         "dsc",

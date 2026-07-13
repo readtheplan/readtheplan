@@ -82,6 +82,10 @@ _CONCOURSE_HINT = re.compile(
     r"(?ms)^\s*jobs\s*:\s*\n.*?^\s*-\s*name\s*:.*?^\s*plan\s*:\s*\n"
     r".*?^\s*-\s*(?:task|get|put|set_pipeline|load_var)\s*:"
 )
+_SOPS_YAML_HINT = re.compile(r"(?m)^sops\s*:\s*$")
+_SOPS_DOTENV_HINT = re.compile(r"(?m)^sops_(?:mac|version|lastmodified)\s*=")
+_SOPS_INI_HINT = re.compile(r"(?m)^\[sops\]\s*$")
+_SOPS_ENCRYPTED_HINT = re.compile(r"ENC\[AES256_GCM,data:")
 
 
 class ProjectScanError(ValueError):
@@ -247,6 +251,10 @@ def identify_project_input(
         return "opa"
     if suffix == ".sentinel" or name in {"sentinel.hcl", "sentinel.json"}:
         return "sentinel"
+    if name == ".sops.yaml" or (
+        ".sops." in name and suffix in (*_YAML_SUFFIXES, ".json", ".env", ".ini")
+    ):
+        return "sops"
 
     if _named_config_variant(name, suffix, "vagrantfile"):
         return "vagrant"
@@ -391,7 +399,7 @@ def _named_config_variant(name: str, suffix: str, *basenames: str) -> bool:
 
 
 def _identify_from_content(path: Path, suffix: str) -> str | None:
-    if suffix not in (*_YAML_SUFFIXES, ".json"):
+    if suffix not in (*_YAML_SUFFIXES, ".json", ".env", ".ini"):
         return None
     try:
         raw = path.read_bytes()[: 256 * 1024]
@@ -405,6 +413,16 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return None
+    if suffix in (*_YAML_SUFFIXES, ".json", ".env", ".ini") and _SOPS_ENCRYPTED_HINT.search(
+        text
+    ):
+        return "sops"
+    if suffix in _YAML_SUFFIXES and _SOPS_YAML_HINT.search(text):
+        return "sops"
+    if suffix == ".env":
+        return "sops" if _SOPS_DOTENV_HINT.search(text) else None
+    if suffix == ".ini":
+        return "sops" if _SOPS_INI_HINT.search(text) else None
     if suffix in _YAML_SUFFIXES:
         if _KUBERNETES_HINT.search(text):
             return "kubernetes"
@@ -421,6 +439,8 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
         return None
     if not isinstance(document, dict):
         return None
+    if isinstance(document.get("sops"), dict):
+        return "sops"
     if "format_version" in document and (
         "resource_changes" in document or "planned_values" in document
     ):

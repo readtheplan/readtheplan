@@ -32,6 +32,11 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("states/web.sls", "salt"),
         ("flake.nix", "nix"),
         ("policy/main.rego", "opa"),
+        (".sops.yaml", "sops"),
+        ("secrets/production.sops.yaml", "sops"),
+        ("secrets/production.sops.json", "sops"),
+        ("secrets/production.sops.env", "sops"),
+        ("secrets/production.sops.ini", "sops"),
         ("Vagrantfile", "vagrant"),
         ("Dockerfile.production", "dockerfile"),
         ("compose.yaml", "docker-compose"),
@@ -109,6 +114,41 @@ def test_content_detection_for_cloud_build_and_codepipeline_json(tmp_path: Path)
     )
     assert identify_project_input(cloud_build, cloud_build.name) == "cloud-build"
     assert identify_project_input(codepipeline, codepipeline.name) == "codepipeline"
+
+
+def test_content_detection_for_sops_structured_dotenv_and_ini(tmp_path: Path) -> None:
+    yaml_secret = tmp_path / "generated-secret.yaml"
+    yaml_secret.write_text(
+        "value: ENC[AES256_GCM,data:x,iv:y,tag:z,type:str]\n"
+        "sops:\n  mac: ENC[AES256_GCM,data:m,iv:i,tag:t,type:str]\n",
+        encoding="utf-8",
+    )
+    json_secret = tmp_path / "generated-secret.json"
+    json_secret.write_text(json.dumps({"data": "ENC[...]", "sops": {"version": "3.10"}}))
+    env_secret = tmp_path / "generated-secret.env"
+    env_secret.write_text("KEY=ENC[...]\nsops_mac=ENC[...]\n", encoding="utf-8")
+    ini_secret = tmp_path / "generated-secret.ini"
+    ini_secret.write_text("[data]\nkey=ENC[...]\n[sops]\nversion=3.10\n", encoding="utf-8")
+
+    assert identify_project_input(yaml_secret, yaml_secret.name) == "sops"
+    assert identify_project_input(json_secret, json_secret.name) == "sops"
+    assert identify_project_input(env_secret, env_secret.name) == "sops"
+    assert identify_project_input(ini_secret, ini_secret.name) == "sops"
+
+
+def test_sops_encrypted_prefix_detects_large_document_before_truncated_metadata(
+    tmp_path: Path,
+) -> None:
+    secret = tmp_path / "production.enc.yaml"
+    secret.write_text(
+        "value: ENC[AES256_GCM,data:x,iv:y,tag:z,type:str]\n"
+        + "padding: "
+        + "x" * (300 * 1024)
+        + "\nsops:\n  version: 3.10.2\n",
+        encoding="utf-8",
+    )
+
+    assert identify_project_input(secret, secret.name) == "sops"
 
 
 def test_large_terraform_plan_is_detected_from_a_bounded_prefix(tmp_path: Path) -> None:
@@ -293,6 +333,28 @@ def test_project_scan_analyzes_cloud_native_build_and_delivery(tmp_path: Path) -
     assert "literal-codebuild-token" not in encoded
     assert "literal-cloud-build-token" not in encoded
     assert "literal-codepipeline-token" not in encoded
+
+
+def test_project_scan_analyzes_sops_policy_and_encrypted_documents(tmp_path: Path) -> None:
+    destinations = {
+        ".sops.yaml": "sops_policy_risky.yaml",
+        "secret.sops.yaml": "secret.sops.yaml",
+        "secret.sops.env": "secret.sops.env",
+        "secret.sops.ini": "secret.sops.ini",
+    }
+    for destination, fixture in destinations.items():
+        (tmp_path / destination).write_text(
+            (FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 4
+    assert payload["scanned_file_count"] == 4
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"sops"}
+    assert payload["decision"] == "block"
+    assert "literal-token-must-not-leak" not in json.dumps(payload)
 
 
 def test_malformed_discovered_input_becomes_redacted_validation_error(tmp_path: Path) -> None:

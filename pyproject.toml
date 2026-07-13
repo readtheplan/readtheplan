@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "travis-ci", "drone-ci", "woodpecker-ci", "concourse", "bamboo", "teamcity", "codebuild", "cloud-build", "codepipeline", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "travis-ci", "drone-ci", "woodpecker-ci", "concourse", "bamboo", "teamcity", "codebuild", "cloud-build", "codepipeline", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "sops", "secrets", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -109,6 +109,7 @@ salt-project = "readtheplan.adapters.salt_project:SaltProjectAdapter"
 nix = "readtheplan.adapters.nix:NixProjectAdapter"
 opa = "readtheplan.adapters.opa:OPAAdapter"
 sentinel = "readtheplan.adapters.sentinel:SentinelAdapter"
+sops = "readtheplan.adapters.sops:SOPSAdapter"
 skaffold = "readtheplan.adapters.skaffold:SkaffoldAdapter"
 sam = "readtheplan.adapters.serverless:SamTemplateAdapter"
 serverless = "readtheplan.adapters.serverless:ServerlessFrameworkAdapter"

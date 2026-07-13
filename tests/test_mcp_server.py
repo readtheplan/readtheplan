@@ -55,6 +55,7 @@ from readtheplan.mcp_server import (
     agent_gate_sentinel,
     agent_gate_serverless,
     agent_gate_skaffold,
+    agent_gate_sops,
     agent_gate_spacelift,
     agent_gate_systemd,
     agent_gate_terraform_config,
@@ -98,6 +99,13 @@ def test_agent_gate_sentinel_supports_framework_checks() -> None:
     assert result["adapter"] == "sentinel"
     assert result["artifact_type"] == "policy"
     assert result["decision"] == "block"
+
+
+def test_agent_gate_sops_supports_framework_checks_and_redacts_plaintext() -> None:
+    result = agent_gate_sops(str(FIXTURES / "secret.sops.yaml"), "soc2")
+    assert result["adapter"] == "sops"
+    assert result["decision"] == "block"
+    assert "literal-token-must-not-leak" not in json.dumps(result)
 
 
 def test_agent_gate_matches_cli_json(capsys) -> None:
@@ -1625,6 +1633,22 @@ def test_agent_gate_sentinel_rejects_path_outside_root(monkeypatch, tmp_path) ->
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_sops_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "secret.sops.yaml"
+    outside.write_text(
+        "value: ENC[AES256_GCM,data:x,iv:y,tag:z,type:str]\nsops: {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_sops(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_terraform_lock_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1912,6 +1936,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_cfengine" in tool_names
         assert "agent_gate_opa" in tool_names
         assert "agent_gate_sentinel" in tool_names
+        assert "agent_gate_sops" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
@@ -1991,6 +2016,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(opa_schema["properties"])
         sentinel_schema = tools_by_name["agent_gate_sentinel"]["inputSchema"]
         assert {"input_path", "framework"} <= set(sentinel_schema["properties"])
+        sops_schema = tools_by_name["agent_gate_sops"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(sops_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]
