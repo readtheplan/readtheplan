@@ -71,9 +71,15 @@
             Kustomize, and Crossplane resources flow through the Kubernetes gate. Terragrunt
             and internal tools can use the same public adapter interface.
           </p>
+          <p style="color:var(--muted);margin:12px 0 0">
+            Use <code>readtheplan scan .</code> to discover high-confidence inputs and combine the
+            matching adapters into one project-level gate. Use an individual command when a file
+            name is intentionally unconventional or when you want to force a specific parser.
+          </p>
 
           <h3 style="margin-top:28px;color:var(--accent)">Built-in commands</h3>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan scan --framework soc2 .
+readtheplan cloudformation changes.json
 readtheplan cdk cdk.out/manifest.json
 readtheplan terraform-lock .terraform.lock.hcl
 readtheplan terraform-state state.json

@@ -1,0 +1,12 @@
+pipeline {
+  agent any
+  stages {
+    stage('Deploy') {
+      steps {
+        withCredentials([string(credentialsId: 'production', variable: 'TOKEN')]) {
+          sh 'kubectl apply -f deploy/'
+        }
+      }
+    }
+  }
+}

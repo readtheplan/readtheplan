@@ -48,6 +48,44 @@ jobs:
           assert payload["changes"][0]["address"] == "aws_s3_bucket.logs"
           PY
 
+      - name: Run action on mixed infrastructure project
+        id: project_scan
+        uses: ./
+        with:
+          tool: scan
+          input-file: tests/fixtures/project_scan
+          framework: soc2
+
+      - name: Assert project scan outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.project_scan.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.project_scan.outputs['change-count'] }}
+          ACTION_COUNTS: ${{ steps.project_scan.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.project_scan.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "17"
+          test "$ACTION_COUNTS" = '{}'
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":8,"safe":0}'
+
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "project-scan"
+          assert payload["decision"] == "block"
+          assert payload["discovered_file_count"] == 4
+          assert payload["scanned_file_count"] == 4
+          assert {item["tool"] for item in payload["files"]} == {
+              "docker-compose", "jenkins", "spacelift", "terraform-config"
+          }
+          assert "project-scan-secret" not in os.environ["SUMMARY_JSON"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Pulumi preview
         id: pulumi
         uses: ./

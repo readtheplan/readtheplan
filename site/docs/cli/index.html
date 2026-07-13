@@ -58,6 +58,25 @@
         </div>
       </section>
 
+      <section class="g" aria-labelledby="scan-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="scan-title">readtheplan scan</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">Recursively discover supported infrastructure files, run the matching local analyzers, and emit one aggregate project gate. Dependency/build directories and symlinks are skipped by default.</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan scan --framework soc2 .</code></pre>
+          <h3 style="margin-top:24px;color:var(--accent)">Flags</h3>
+          <table style="width:100%;border-collapse:collapse;margin-top:12px">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px 12px;color:var(--muted)">Flag</th><th style="padding:8px 12px;color:var(--muted)">Description</th></tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--framework NAME</td><td style="padding:8px 12px;color:var(--muted)">Include framework checks in every per-file gate.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--exclude GLOB</td><td style="padding:8px 12px;color:var(--muted)">Skip a repository-relative glob. Repeatable.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--max-files N</td><td style="padding:8px 12px;color:var(--muted)">Fail closed after discovering more than N supported inputs. Default: 500.</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--max-file-bytes N</td><td style="padding:8px 12px;color:var(--muted)">Record oversized inputs as validation errors. Default: 10 MiB.</td></tr>
+            </tbody>
+          </table>
+          <p style="color:var(--muted);margin-top:16px">Output uses <code>rtp-agent-gate-v1</code> with <code>adapter: project-scan</code>, aggregate risk counts, per-file summaries, and redacted validation errors. Exit codes are <code>0</code> proceed, <code>1</code> warn, and <code>2</code> block.</p>
+        </div>
+      </section>
+
       <section class="g" aria-labelledby="analyze-title">
         <div class="gc utility-panel-wide">
           <h2 id="analyze-title">readtheplan analyze</h2>
