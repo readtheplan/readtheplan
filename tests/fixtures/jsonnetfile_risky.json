@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "source": {"git": {"remote": "git://github.com/example/platform-lib"}},
+      "version": "main"
+    },
+    {
+      "source": {"git": {"remote": "https://github.com/jsonnet-libs/k8s-libsonnet"}},
+      "version": "v1.31.2"
+    }
+  ],
+  "legacyImports": true
+}

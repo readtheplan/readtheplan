@@ -27,6 +27,7 @@ from readtheplan.adapters.hashicorp import ConsulAdapter, VaultAdapter
 from readtheplan.adapters.helm import HelmAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.jenkins_jcasc import JenkinsJCasCAdapter
+from readtheplan.adapters.jsonnet import JsonnetAdapter
 from readtheplan.adapters.kubernetes import KubernetesAdapter
 from readtheplan.adapters.kustomize import KustomizeAdapter
 from readtheplan.adapters.loki import LokiAdapter
@@ -140,6 +141,7 @@ register_adapter(AnsibleAdapter())
 register_adapter(AnsibleProjectAdapter())
 register_adapter(JenkinsAdapter())
 register_adapter(JenkinsJCasCAdapter())
+register_adapter(JsonnetAdapter())
 register_adapter(ChefAdapter())
 register_adapter(ChefProjectAdapter())
 register_adapter(CFEngineAdapter())
@@ -208,6 +210,7 @@ __all__ = [
     "ConsulAdapter",
     "JenkinsAdapter",
     "JenkinsJCasCAdapter",
+    "JsonnetAdapter",
     "GitHubActionsAdapter",
     "GitLabCIAdapter",
     "KubernetesAdapter",

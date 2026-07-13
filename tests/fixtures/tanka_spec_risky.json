@@ -1,0 +1,11 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "spec": {
+    "apiServer": "http://production.example.test",
+    "contextNames": ["production-admin"],
+    "namespace": "production",
+    "diffStrategy": "subset",
+    "injectLabels": false
+  }
+}
