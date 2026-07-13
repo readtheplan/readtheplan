@@ -228,6 +228,7 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/chef_config_management_risky.rb" in workflow
     assert "tool: chef-project" in workflow
     assert "input-file: tests/fixtures/chef_policyfile_risky.rb" in workflow
+    assert "input-file: tests/fixtures/chef_runtime/client.rb" in workflow
     assert "input-file: tests/fixtures/puppet_config_management_risky.pp" in workflow
     assert "tool: puppet-project" in workflow
     assert "input-file: tests/fixtures/Puppetfile.project-risky" in workflow

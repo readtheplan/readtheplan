@@ -93,6 +93,7 @@ def test_puppet_fixture_surfaces_modules_dynamic_data_and_cross_node_resources()
         ("jenkins-project", "jenkins_plugins_risky.txt"),
         ("chef", "chef_config_management_risky.rb"),
         ("chef-project", "chef_policyfile_risky.rb"),
+        ("chef-project", "chef_runtime/client.rb"),
         ("puppet", "puppet_config_management_risky.pp"),
         ("puppet-project", "Puppetfile.project-risky"),
     ],

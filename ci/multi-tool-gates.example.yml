@@ -49,6 +49,8 @@ jobs:
             input: chef/recipes/default.rb
           - tool: chef-project
             input: chef/Policyfile.lock.json
+          - tool: chef-project
+            input: chef/client.rb
           - tool: puppet
             input: puppet/site.pp
           - tool: puppet-project

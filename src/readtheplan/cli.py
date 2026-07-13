@@ -402,12 +402,15 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     chef_project = subparsers.add_parser(
         "chef-project",
-        help="Emit the agent-gate decision for Chef policy or cookbook project files.",
+        help="Emit the agent-gate decision for Chef project and runtime configuration.",
     )
     chef_project.add_argument("--framework", help="Include checks from a compliance framework.")
     chef_project.add_argument(
         "input_file",
-        help="Path to Policyfile.rb, Policyfile.lock.json, or cookbook metadata.rb.",
+        help=(
+            "Path to Policyfile.rb, Policyfile.lock.json, metadata.rb, client.rb, solo.rb, "
+            "Workstation config.rb/knife.rb, or chef-server.rb."
+        ),
     )
     chef_project.set_defaults(func=_chef_project_gate)
 
@@ -1763,7 +1766,7 @@ def _chef_gate(args: argparse.Namespace) -> int:
 
 
 def _chef_project_gate(args: argparse.Namespace) -> int:
-    """Emit the agent-gate contract for Chef project policy and metadata."""
+    """Emit the agent-gate contract for Chef project and runtime configuration."""
     from readtheplan.adapters.chef_project import (
         ChefProjectAdapter,
         ChefProjectInputError,
@@ -1777,7 +1780,7 @@ def _chef_project_gate(args: argparse.Namespace) -> int:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
     try:
-        data = parse_chef_project(source)
+        data = parse_chef_project(source, filename=args.input_file)
     except ChefProjectInputError as exc:
         print(f"Error: invalid Chef project input: {exc}", file=sys.stderr)
         return 1

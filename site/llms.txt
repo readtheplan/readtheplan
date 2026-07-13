@@ -28,6 +28,10 @@ executing plugins, resolving Vault values, contacting APIs, or connecting to hos
 Puppet coverage includes manifests, Puppetfile/module metadata, Hiera configuration,
 and duplicate-safe puppet.conf analysis for agent, server, CA, trust, execution,
 cached-catalog, plugin, reporting, identity, endpoint, and credential settings.
+Chef coverage includes recipes, policy/lock/cookbook metadata, and static analysis of
+client.rb, Workstation config.rb/knife.rb, solo.rb, chef-server.rb, and supported .d
+fragments for trust, credentials, endpoints, bootstrap, execution, TLS, LDAP, and
+database controls without evaluating Ruby or contacting Chef services.
 Jenkins plugin-catalog coverage includes strict text/YAML parsing, version mutability,
 experimental and incremental sources, direct URLs, privileged capabilities, and an
 explicit offline boundary for update-center metadata and dependency resolution.
