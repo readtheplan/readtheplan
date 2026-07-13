@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Pricing for readtheplan: free OSS local toolchain, paid managed platform for teams, and enterprise with private connector."
+      content="readtheplan is free forever: the CLI, GitHub Action, MCP server, compliance catalogs, evidence signing, and every built-in adapter."
     />
     <title>Pricing | readtheplan</title>
     <link rel="canonical" href="https://readtheplan.dev/pricing/" />
@@ -16,7 +16,7 @@
     <meta property="og:title" content="Pricing | readtheplan" />
     <meta
       property="og:description"
-      content="Free OSS toolchain. Paid managed platform for compliance teams. Enterprise with private connector."
+      content="Every readtheplan feature is free and MIT licensed. No paid tier, trial, account, or enterprise sales funnel."
     />
     <meta property="og:url" content="https://readtheplan.dev/pricing/" />
     <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
@@ -108,56 +108,28 @@
       <section class="hero g utility-hero" aria-labelledby="pricing-title">
         <div class="gc hero-content">
           <p class="eyebrow">Pricing</p>
-          <h1 id="pricing-title">Simple, transparent pricing</h1>
+          <h1 id="pricing-title">Everything is free.</h1>
           <p class="subtitle">
-            Start with the free OSS toolchain. Upgrade when your team needs
-            managed compliance workflows, policy governance, and audit-ready reports.
+            No trial clock, feature gate, account requirement, enterprise tier, or
+            sales call. Install readtheplan and use the complete toolchain under MIT.
           </p>
         </div>
       </section>
 
       <div class="pricing-grid">
-        <div class="pricing-card">
-          <h3>OSS</h3>
-          <div class="price">Free</div>
-          <p>Local-first toolchain for individual engineers and small teams.</p>
+        <div class="pricing-card featured">
+          <h3>readtheplan</h3>
+          <div class="price">$0<span> forever</span></div>
+          <p>The same local-first toolchain for individuals, teams, consultancies, and regulated environments.</p>
           <ul>
             <li>CLI plan analyzer</li>
             <li>GitHub Action integration</li>
-            <li>Local MCP tool</li>
-            <li>SOC 2 / ISO 27001 / HIPAA catalogs</li>
+            <li>Local MCP server and agent gates</li>
+            <li>Every built-in infrastructure adapter</li>
+            <li>Six compliance catalogs</li>
             <li>Signed evidence artifacts</li>
+            <li>Custom rules and local extensions</li>
             <li>Community support</li>
-          </ul>
-        </div>
-
-        <div class="pricing-card featured">
-          <h3>Managed</h3>
-          <div class="price">$499<span>/month</span></div>
-          <p>Managed platform for compliance teams shipping infrastructure weekly.</p>
-          <ul>
-            <li>Everything in OSS</li>
-            <li>Team workspaces (orgs, projects)</li>
-            <li>Policy governance dashboard</li>
-            <li>Evidence history &amp; timeline</li>
-            <li>Compliance reports (PDF/JSON)</li>
-            <li>Onboarding &amp; policy tuning</li>
-            <li>Email support (24h SLA)</li>
-          </ul>
-        </div>
-
-        <div class="pricing-card">
-          <h3>Enterprise</h3>
-          <div class="price">Custom</div>
-          <p>For regulated environments with strict data-boundary requirements.</p>
-          <ul>
-            <li>Everything in Managed</li>
-            <li>Private connector (on-prem)</li>
-            <li>SSO (SAML/OIDC)</li>
-            <li>Role-based access control</li>
-            <li>Audit log retention</li>
-            <li>Custom compliance frameworks</li>
-            <li>Dedicated support &amp; SLA</li>
           </ul>
         </div>
       </div>
@@ -165,7 +137,7 @@
       <div class="cta-row">
         <p>
           <a href="mailto:info@readtheplan.dev" class="btn-primary">
-            Talk to us about Managed or Enterprise ->
+            Get free setup help ->
           </a>
         </p>
       </div>
@@ -175,37 +147,36 @@
         <dl>
           <dt>Do I need to upload Terraform plans?</dt>
           <dd>
-            No. readtheplan is local-first by design. Raw Terraform plan JSON never
-            leaves your machine. The managed platform only stores metadata: org/project
-            info, policy profiles, and full signed evidence envelopes. Evidence envelopes
-            are typically 2–5 KB (risk analysis output + compliance mappings + signature)
-            — not raw Terraform plans.
+            No. readtheplan is local-first by design. Raw Terraform plan JSON stays on
+            your machine or CI runner. The optional website chat is separate and clearly
+            discloses that its messages are processed by DeepSeek.
           </dd>
 
-          <dt>Can I switch from OSS to Managed later?</dt>
+          <dt>Are team and compliance features free too?</dt>
           <dd>
-            Yes. The OSS CLI and Managed platform share the same rules engine and
-            compliance catalog. Migration is a one-time setup: connect your CLI,
-            configure your org policies, and you're running.
+            Yes. Evidence signing, agent gates, the GitHub Action, MCP server, custom
+            rules, and all six built-in compliance catalogs are part of the free project.
           </dd>
 
-          <dt>What's the difference between Managed and Enterprise?</dt>
+          <dt>How is the project funded?</dt>
           <dd>
-            Enterprise adds a private connector that runs entirely within your
-            infrastructure — no data leaves your network. It also includes SSO,
-            custom compliance frameworks, and dedicated support with a negotiated SLA.
+            The project does not charge users or sell feature access. We are exploring
+            opt-in, traffic-side funding such as Cloudflare Pay Per Crawl for commercial
+            AI crawlers when that program becomes available. Human access, normal search,
+            releases, and local tooling remain free.
           </dd>
 
-          <dt>Is there a free trial for Managed?</dt>
+          <dt>Are there ads or behavioral tracking?</dt>
           <dd>
-            We offer a 14-day pilot with onboarding support. Email
-            info@readtheplan.dev to get started.
+            No. The site does not use behavioral advertising scripts or lock content
+            behind an ad wall. Cloudflare and cookie-less analytics protect and measure
+            the public site without changing the free product promise.
           </dd>
 
           <dt>Which compliance frameworks are supported?</dt>
           <dd>
-            SOC 2, ISO 27001, and HIPAA are built-in. Enterprise customers can request
-            custom framework mappings (FedRAMP, PCI DSS, GDPR, etc.).
+            Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST.
+            You can also author custom rules locally.
           </dd>
         </dl>
       </section>

@@ -88,7 +88,11 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="resources"' in html
     assert 'id="compare"' in html
     assert 'id="gen-output"' in html
-    assert "Turn Terraform JSON plans into stable risk tiers" in html
+    assert "One free local risk gate for Terraform, Kubernetes, CI/CD" in html
+    assert (
+        "Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, "
+        "FedRAMP Moderate, and HITRUST"
+    ) in html
     assert "/tools/terraform-risk-calculator/" in html
     assert "/tools/soc2-cloud-control-mapper/" in html
     assert "/mcp/" in html
@@ -169,7 +173,7 @@ def test_static_seo_tools_preserve_local_first_privacy() -> None:
     assert "Terraform IAM Policy Risk" in combined
     assert "Terraform Security Group 0.0.0.0/0 Risk" in combined
     assert "Terraform CloudWatch Log Retention Risk" in combined
-    assert "Request pilot setup" in combined
+    assert "Get free setup help" in combined
     assert "info@readtheplan.dev" in combined
     assert 'itemscope itemtype="https://schema.org/FAQPage"' in combined
     assert "new FormData(calculator)" in tools_js
@@ -233,12 +237,12 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "CloudFormation",
         "Kubernetes",
         "Pulumi",
-        "Request pilot setup",
+        "Get free setup help",
         "info@readtheplan.dev",
         "auth design",
         "least privilege",
         "audit logs",
-        "Custom engagement",
+        "Community guidance",
     ]:
         assert expected in mcp
 
@@ -258,7 +262,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
     assert "<form" not in mcp
 
 
-def test_weekly_brief_paid_output_loop_slice() -> None:
+def test_weekly_brief_free_community_slice() -> None:
     brief_path = SITE / "brief" / "index.html"
     sample_path = SITE / "brief" / "sample-001" / "index.html"
     sitemap = (SITE / "sitemap.xml").read_text(encoding="utf-8")
@@ -273,23 +277,22 @@ def test_weekly_brief_paid_output_loop_slice() -> None:
 
     for expected in [
         "Weekly Terraform/SOC 2 change intelligence for platform teams",
-        "repeated paid output loop",
-        "monitor, filter, analyze, package, deliver",
-        "platform/SRE teams",
+        "free community loop",
+        "monitor, filter, analyze, package, publish",
+        "Platform and SRE teams",
         "DevOps consultancies",
         "SOC 2 consultants",
-        "seed-stage infra/devtool startups",
+        "Infra and devtool projects",
         "Top 5 infra/compliance changes",
         "Why they matter",
         "Terraform/SOC2 risk angle",
         "Action checklist",
         "readtheplan CTA",
-        "First sample/free",
-        "Private weekly brief",
-        "Custom company-specific monitoring",
-        "MCP/custom integration upsell",
-        "Request first brief / private pilot",
-        "info@readtheplan.dev",
+        "Public sample",
+        "Free weekly brief",
+        "Community requests",
+        "Local integrations",
+        "Suggest a brief item",
         "Terraform/OpenTofu",
         "AWS logging",
         "AWS IAM",
@@ -343,7 +346,7 @@ def test_docs_routes_are_sitemap_listed_and_landing_aligned() -> None:
         assert url_path in sitemap
         assert '<link rel="stylesheet" href="/matrix.css" />' in html
         assert '<header class="topbar g"' in html
-        assert 'class="version-cell gc">v0.3.0' in html
+        assert 'class="version-cell gc">v0.4.0' in html
         assert "readtheplan" in html
 
     assert "/demo/" in sitemap
@@ -374,7 +377,7 @@ def test_site_redesign_visual_contract() -> None:
     assert "@media (max-width: 720px)" in css
     assert '<link rel="stylesheet" href="/matrix.css" />' in docs
     assert '<header class="topbar g"' in docs
-    assert 'class="version-cell gc">v0.3.0' in docs
+    assert 'class="version-cell gc">v0.4.0' in docs
 
     for asset in [
         "fonts/DepartureMono-Regular.woff2",

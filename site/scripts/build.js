@@ -32,6 +32,7 @@ const files = [
   "favicon.svg",
   "og-image.png",
   "robots.txt",
+  "llms.txt",
   "sitemap.xml",
   "_redirects",
 ];

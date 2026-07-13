@@ -27,6 +27,8 @@ const briefHtml = read("brief/index.html");
 const sampleBriefHtml = read("brief/sample-001/index.html");
 const briefCombined = `${briefHtml}\n${sampleBriefHtml}`;
 const sitemap = read("sitemap.xml");
+const robots = read("robots.txt");
+const llms = read("llms.txt");
 
 // Index page contract: single linear landing page, local-first setup, community-driven.
 for (const token of [
@@ -46,7 +48,8 @@ for (const token of [
   "twitter:card",
   "No plan upload",
   "No uploads. Runs entirely in your CI.",
-  "Terraform + OpenTofu",
+  "Terraform + the broader infra stack",
+  "Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST",
   "readtheplan agent-gate plan.json",
   "proceed / warn / block",
   "MCP integration",
@@ -63,7 +66,7 @@ for (const token of [
   "/demo/",
   "/brief/",
   "/playground/",
-  "v0.3.0",
+  "v0.4.0",
 ]) {
   requireIncludes(html, token, "expected landing page token");
 }
@@ -78,7 +81,7 @@ for (const token of [
   "readtheplan analyze --framework",
   "Generate evidence artifact",
   "if: always()",
-  "cliCommand(true)",
+  "cliCommand(true, false)",
   "--format",
 ]) {
   requireIncludes(html, token, "setup generator behavior token");
@@ -160,12 +163,29 @@ for (const file of [
   "favicon.svg",
   "og-image.png",
   "robots.txt",
+  "llms.txt",
   "sitemap.xml",
 ]) {
   if (!fs.existsSync(path.join(root, file))) {
     throw new Error(`Missing static site asset: ${file}`);
   }
   requireIncludes(buildScript, file, "static site asset copy token");
+}
+
+for (const token of [
+  "Content-Signal: search=yes, ai-input=yes, ai-train=no",
+  "Sitemap: https://readtheplan.dev/sitemap.xml",
+]) {
+  requireIncludes(robots, token, "AI crawler policy");
+}
+
+for (const token of [
+  "Every product feature is free",
+  "https://readtheplan.dev/docs/",
+  "https://github.com/readtheplan/readtheplan",
+  "model training is not granted",
+]) {
+  requireIncludes(llms, token, "agent-readable site guidance");
 }
 
 for (const file of [
@@ -242,7 +262,7 @@ for (const token of [
   "Quickstart",
   "CLI Reference",
   "GitHub Action",
-  "v0.3.0",
+  "v0.4.0",
   "topbar g",
   "utility-panel-wide",
   "readtheplan agent-gate",
@@ -287,26 +307,25 @@ if (/<form[^>]+action=/i.test(seoHtml)) {
   throw new Error("SEO tools must not submit forms to a backend.");
 }
 
-// Brief page: paid output loop, no upload/backend/billing/automation claims.
+// Brief page: free community signal, no upload/backend/billing/automation claims.
 for (const token of [
   "Weekly Terraform/SOC 2 change intelligence for platform teams",
-  "repeated paid output loop",
-  "monitor, filter, analyze, package, deliver",
-  "platform/SRE teams",
+  "free community loop",
+  "monitor, filter, analyze, package, publish",
+  "Platform and SRE teams",
   "DevOps consultancies",
   "SOC 2 consultants",
-  "seed-stage infra/devtool startups",
+  "Infra and devtool projects",
   "Top 5 infra/compliance changes",
   "Why they matter",
   "Terraform/SOC2 risk angle",
   "Action checklist",
   "readtheplan CTA",
-  "First sample/free",
-  "Private weekly brief",
-  "Custom company-specific monitoring",
-  "MCP/custom integration upsell",
-  "Request first brief / private pilot",
-  "info@readtheplan.dev",
+  "Public sample",
+  "Free weekly brief",
+  "Community requests",
+  "Local integrations",
+  "Suggest a brief item",
   "Terraform/OpenTofu",
   "AWS logging",
   "AWS IAM",
@@ -336,6 +355,10 @@ for (const token of [
   "cron job is enabled",
   "scheduled delivery is enabled",
   "automatic scheduled delivery is enabled",
+  "repeated paid output loop",
+  "Private weekly brief",
+  "private pilot",
+  "MCP/custom integration upsell",
 ]) {
   forbidIncludes(briefCombined, token, "Brief pages");
 }
@@ -397,7 +420,8 @@ for (const token of [
   "auth design",
   "least privilege",
   "audit logs",
-  "Custom engagement",
+  "Free setup help",
+  "Community guidance",
 ]) {
   requireIncludes(mcpHtml, token, "MCP landing page token");
 }

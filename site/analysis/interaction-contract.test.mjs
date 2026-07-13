@@ -14,7 +14,7 @@ const hostile = renderers.renderSafeMarkdown('<img src=x onerror=alert(1)> [bad]
 assert.match(hostile, /&lt;img/);
 assert.doesNotMatch(hostile, /<img/);
 assert.doesNotMatch(hostile, /href="javascript:/);
-assert.match(hostile, /href="https:\/\/example\.com"/);
+assert.match(hostile, /href="https:\/\/example\.com\/"/);
 assert.match(hostile, /rel="noopener noreferrer"/);
 assert.match(chatInline, /div\.textContent = text/);
 assert.match(chatHtml, /Messages are processed by DeepSeek/);
@@ -43,11 +43,12 @@ assert.match(playground, /\(c\.controls \|\| \[\]\)\.map/);
 const prompt = await read("functions/api/chat.js");
 new Function(prompt.replace("export async function onRequest", "async function onRequest"));
 assert.match(prompt, /readtheplan analyze plan\.json/);
-assert.match(prompt, /readtheplan\/readtheplan@v0\.3\.0/);
-assert.match(prompt, /plan-file: plan\.json/);
+assert.match(prompt, /readtheplan\/readtheplan@v0\.4\.0/);
+assert.match(prompt, /input-file: plan\.json/);
 assert.doesNotMatch(prompt, /plan_file:/);
 assert.doesNotMatch(prompt, /terraform plan -out=\/dev\/stdout \| readtheplan/);
-assert.match(prompt, /Resource-aware rules currently cover AWS, GCP, Azure, and Kubernetes/);
+assert.match(prompt, /broad built-in adapter catalog/);
+assert.match(prompt, /There is no paid or enterprise tier/);
 
 const importSource = async (path) => {
   const source = await read(path);
@@ -131,47 +132,45 @@ const fakeDocument = {
 };
 const homeApi = new Function(
   "document", "navigator", "window", "setTimeout",
-  homeInline + "\nreturn { activeCI, activeFramework, activeThreshold, activeEvidence, syncEvidenceAvailability, cliCommand, integrationText, integrationLabel, updateGen, updateCLIPreview };",
+  homeInline + "\nreturn { activeVal, activeFramework, activeThreshold, activeEvidence, cliCommand, workflowText, updateGen, updateCLIPreview };",
 )(fakeDocument, { clipboard: { writeText: async () => {} } }, { getSelection: () => ({ removeAllRanges() {}, addRange() {} }) }, () => {});
 const activate = (group, label) => { activeState[group] = label; };
-assert.match(homeApi.integrationText(), /uses: readtheplan\/readtheplan@v0\.3\.0/);
-assert.match(homeApi.integrationText(), /fail-on-threshold: dangerous/);
-assert.match(homeApi.integrationText(), /--framework soc2 --format json --evidence readtheplan-evidence\.json/);
+assert.match(homeApi.workflowText(), /uses: readtheplan\/readtheplan@v0\.4\.0/);
+assert.match(homeApi.workflowText(), /input-file: plan\.json/);
+assert.match(homeApi.workflowText(), /fail-on-threshold: dangerous/);
+assert.match(homeApi.workflowText(), /--framework soc2 --format json --evidence readtheplan-evidence\.json/);
 activate("ci", "GitLab CI");
-assert.match(homeApi.integrationText(), /image: python:3\.13/);
-assert.doesNotMatch(homeApi.integrationText(), /uses: readtheplan/);
+assert.match(homeApi.workflowText(), /image: python:3\.13/);
+assert.match(homeApi.workflowText(), /artifacts:/);
+assert.doesNotMatch(homeApi.workflowText(), /uses: readtheplan/);
 activate("ci", "CircleCI");
-assert.match(homeApi.integrationText(), /version: 2\.1/);
-assert.match(homeApi.integrationText(), /cimg\/python:3\.13/);
+assert.match(homeApi.workflowText(), /version: 2\.1/);
+assert.match(homeApi.workflowText(), /cimg\/python:3\.13/);
 activate("ci", "Local only");
-assert.match(homeApi.integrationText(), /terraform show -json tfplan > plan\.json/);
-assert.doesNotMatch(homeApi.integrationText(), /artifacts:/);
+assert.match(homeApi.workflowText(), /terraform show -json tfplan > plan\.json/);
+assert.match(homeApi.workflowText(), /--fail-on dangerous/);
+assert.doesNotMatch(homeApi.workflowText(), /artifacts:/);
 activate("fw", "None");
 activate("ev", "JSON envelope");
-homeApi.syncEvidenceAvailability();
-assert.equal(activeState.ev, "Checklist only");
-assert.equal(fakeButtons.ev[0].disabled, true);
-assert.equal(fakeButtons.ev[1].disabled, true);
-assert.doesNotMatch(homeApi.cliCommand(false, true), /--framework|--evidence|--sign/);
+assert.doesNotMatch(homeApi.cliCommand(false, true), /--framework/);
+assert.match(homeApi.cliCommand(false, true), /--evidence readtheplan-evidence\.json/);
 assert.match(homeApi.cliCommand(false, true), /--fail-on dangerous/);
 activate("fw", "SOC 2");
-homeApi.syncEvidenceAvailability();
 activate("ev", "Signed (OIDC)");
 activate("thresh", "Don't block");
 assert.match(homeApi.cliCommand(false, true), /--sign/);
 assert.doesNotMatch(homeApi.cliCommand(false, true), /--fail-on/);
 activate("ci", "GitHub Actions");
-assert.match(homeApi.integrationText(), /id-token: write/);
-assert.match(homeApi.integrationText(), /readtheplan\[sign\]/);
+assert.match(homeApi.workflowText(), /readtheplan\[sign\]/);
 activate("ci", "CircleCI");
 activate("fw", "HIPAA");
 activate("ev", "JSON envelope");
 activate("thresh", "Review");
-assert.match(homeApi.integrationText(), /--framework hipaa/);
-assert.match(homeApi.integrationText(), /--fail-on review/);
+assert.match(homeApi.workflowText(), /--framework hipaa/);
+assert.match(homeApi.workflowText(), /--fail-on review/);
 homeApi.updateGen();
 homeApi.updateCLIPreview();
-assert.equal(fakeElements["gen-label"].textContent, "Generated CircleCI config");
+assert.match(fakeElements["gen-output"].textContent, /version: 2\.1/);
 assert.match(fakeElements["cli-preview-cmd"].textContent, /--fail-on review/);
 
 const matrixCss = await read("matrix.css");
@@ -192,21 +191,26 @@ assert.match(appJs, /Demo evidence could not be loaded\. You can still run the s
 assert.doesNotMatch(appJs, /The setup generator still works/);
 
 const cliDocs = await read("docs/cli/index.html");
-assert.match(cliDocs, /with six subcommands/);
+assert.match(cliDocs, /one local CLI/);
 assert.match(cliDocs, /readtheplan kubernetes --framework soc2 manifests\.json/);
 assert.match(cliDocs, /pci_dss\|fedramp_moderate\|hitrust/);
-assert.doesNotMatch(cliDocs, /with five subcommands/);
 const adapterDocs = await read("docs/adapters/index.html");
-assert.match(adapterDocs, /<strong>CloudFormation<\/strong> and <strong>Kubernetes<\/strong> adapters/);
-assert.match(adapterDocs, /tests\/test_k8s_adapter\.py/);
-assert.match(adapterDocs, /general <code>analyze<\/code> and <code>agent-gate<\/code> commands remain Terraform\/OpenTofu-specific/);
+assert.match(adapterDocs, /<strong>CloudFormation and AWS CDK<\/strong>/);
+assert.match(adapterDocs, /<strong>Kubernetes<\/strong>/);
+assert.match(adapterDocs, /<strong>Ansible playbooks and project configuration<\/strong>/);
+assert.match(adapterDocs, /<strong>Jenkins pipelines\/JCasC<\/strong>/);
+assert.match(adapterDocs, /<strong>Chef recipes and projects<\/strong>/);
+assert.match(adapterDocs, /<strong>Puppet manifests and projects<\/strong>/);
+assert.match(adapterDocs, /BaseAdapter/);
 const readme = await read("../README.md");
-assert.match(readme, /six compliance catalogs/);
+assert.match(readme, /SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST/);
 assert.doesNotMatch(readme, /What.s shipping next: CloudFormation/);
 
-assert.match(homeHtml, /six built-in catalogs/);
+assert.match(homeHtml, /Six built-in catalogs/);
 const pricingHtml = await read("pricing/index.html");
 assert.match(pricingHtml, /Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST/);
 assert.doesNotMatch(pricingHtml, /SOC 2, ISO 27001, and HIPAA are built-in/);
+assert.match(pricingHtml, /Everything is free/);
+assert.doesNotMatch(pricingHtml, /\$499|Managed platform|Enterprise adds/);
 
 console.log("Interaction contracts: 85 assertions passed.");

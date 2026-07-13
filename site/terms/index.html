@@ -20,7 +20,7 @@
       </a>
       <nav class="navlinks gc">
         <a href="/docs/">Docs</a>
-        <a href="/pricing/">Pricing</a>
+        <a href="/pricing/">Free</a>
         <a href="https://github.com/readtheplan/readtheplan">GitHub</a>
       </nav>
     </header>
@@ -29,7 +29,7 @@
         <div class="gc hero-content">
           <p class="eyebrow">Legal</p>
           <h1>Terms of Service</h1>
-          <p class="subtitle">Effective: May 16, 2026</p>
+          <p class="subtitle">Effective: July 12, 2026</p>
         </div>
       </section>
       <div class="prose" style="max-width:720px;margin:2rem auto;padding:0 1.5rem;">
@@ -37,23 +37,23 @@
         <p>By accessing or using readtheplan (&quot;the Service&quot;), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
 
         <h2>2. Description of Service</h2>
-        <p>readtheplan provides tools for analyzing Terraform and OpenTofu infrastructure-as-code plans, classifying changes by risk, and generating compliance evidence. The Service is available as:</p>
+        <p>readtheplan provides free, open-source tools for analyzing infrastructure changes, classifying risk, and generating compliance evidence. The project includes:</p>
         <ul>
-          <li><strong>OSS (Free):</strong> A local-first CLI tool, GitHub Action, and MCP toolchain. No data is transmitted to readtheplan servers.</li>
-          <li><strong>Managed (Paid):</strong> A hosted platform for team workspaces, policy governance, and compliance reporting.</li>
-          <li><strong>Enterprise (Custom):</strong> A private-connector deployment for regulated environments.</li>
+          <li><strong>Local tools:</strong> The CLI, GitHub Action, MCP server, agent gates, adapters, rules, and evidence tooling.</li>
+          <li><strong>Public website:</strong> Documentation, demos, a browser-local playground, static tools, and an optional AI project guide.</li>
+          <li><strong>License:</strong> The software is free under the MIT License. There is no paid or enterprise tier.</li>
         </ul>
 
         <h2>3. User Responsibilities</h2>
         <p>You are responsible for:</p>
         <ul>
-          <li>Maintaining the security of your account credentials.</li>
+          <li>Maintaining the security of credentials used in your own local or CI environment.</li>
           <li>Ensuring that any infrastructure plans you analyze do not violate applicable laws or third-party rights.</li>
           <li>Not using the Service for any unlawful or abusive purpose.</li>
         </ul>
 
         <h2>4. Data Handling</h2>
-        <p>The OSS toolchain processes Terraform plans entirely on your local machine. No raw plan JSON is transmitted to readtheplan servers. The Managed platform stores only metadata: organization and project names, policy configurations, and full signed evidence envelopes. (Evidence envelopes are typically 2–5 KB, containing the risk analysis output, compliance mappings, and cryptographic signature — not raw Terraform plans.) See our <a href="/privacy/">Privacy Policy</a> for details.</p>
+        <p>The local toolchain processes infrastructure artifacts on your machine or CI runner. Raw plan JSON is not transmitted to readtheplan servers. Do not paste secrets or raw infrastructure plans into the optional website chat; chat messages are processed by DeepSeek as disclosed in the interface. See our <a href="/privacy/">Privacy Policy</a> for details.</p>
 
         <h2>5. Intellectual Property</h2>
         <p>The OSS components are licensed under the MIT License. You retain ownership of any plans, configurations, and outputs you generate. readtheplan retains ownership of the Service itself, including its code, branding, and documentation.</p>
@@ -65,10 +65,10 @@
         <p>To the maximum extent permitted by law, readtheplan shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service.</p>
 
         <h2>8. Termination</h2>
-        <p>We may suspend or terminate your access to the Managed or Enterprise Service for violation of these Terms. You may stop using the Service at any time. OSS toolchain usage cannot be terminated — it runs locally.</p>
+        <p>You may stop using the public website at any time. Local toolchain usage is governed by the MIT License and runs independently in your environment.</p>
 
         <h2>9. Changes to Terms</h2>
-        <p>We may update these Terms from time to time. Continued use of the Service after changes constitutes acceptance. Material changes will be communicated via email for Managed/Enterprise customers.</p>
+        <p>We may update these Terms from time to time. The effective date above will change when the public terms change.</p>
 
         <h2>10. Contact</h2>
         <p>Questions about these Terms? <a href="mailto:info@readtheplan.dev">info@readtheplan.dev</a></p>
