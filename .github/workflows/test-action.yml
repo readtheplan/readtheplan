@@ -1418,6 +1418,41 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Test Kitchen configuration
+        id: chef_test_kitchen
+        uses: ./
+        with:
+          tool: chef-project
+          input-file: tests/fixtures/chef_test_kitchen_risky/.kitchen.yml
+          framework: soc2
+
+      - name: Assert Test Kitchen outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef_test_kitchen.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef_test_kitchen.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef_test_kitchen.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "31"
+          test "$RISK_COUNTS" = '{"dangerous":22,"irreversible":0,"review":9,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "chef-project"
+          assert payload["artifact_type"] == "test_kitchen"
+          assert payload["platform_count"] == 1
+          assert payload["suite_count"] == 1
+          assert payload["dynamic_erb"] is True
+          assert payload["decision"] == "block"
+          assert "fixture-cloud-secret-do-not-leak" not in serialized
+          assert "fixture-local-command-do-not-run" not in serialized
+          assert "example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef InSpec controls
         id: inspec
         uses: ./
