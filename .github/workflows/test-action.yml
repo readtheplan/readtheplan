@@ -1074,7 +1074,7 @@ jobs:
           assert payload["adapter"] == "ansible-project"
           assert payload["artifact_type"] == "execution_environment"
           assert payload["decision"] == "block"
-          assert "base image" in payload["pr_comment"]
+          assert "container image" in payload["pr_comment"]
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
