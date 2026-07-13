@@ -17,7 +17,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _changes(fixture: str):
-    data = parse_chef_project((FIXTURES / fixture).read_text(encoding="utf-8"))
+    data = parse_chef_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
     return ChefProjectAdapter().analyze(data, tool_name="Chef project")
 
 
@@ -70,6 +72,78 @@ def test_metadata_surfaces_cookbook_gem_compatibility_privacy_and_execution() ->
     assert sum(change.risk == "dangerous" for change in gems) == 1
     assert any(change.resource_type == "chef_project_public_cookbook_upload" for change in changes)
     assert any(change.resource_type == "chef_project_ruby_execution" for change in changes)
+
+
+def test_berksfile_surfaces_legacy_sources_pinning_groups_and_ruby_execution() -> None:
+    changes = _changes("chef_berkshelf_risky/Berksfile")
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps([change.explanation for change in changes])
+
+    assert "chef_project_berkshelf_legacy_workflow" in kinds
+    assert "chef_project_berkshelf_source" in kinds
+    assert "chef_project_berkshelf_source_precedence" in kinds
+    assert "chef_project_berkshelf_metadata_dependency" in kinds
+    assert "chef_project_berkshelf_solver" in kinds
+    assert "chef_project_berkshelf_cookbook_dependency" in kinds
+    assert "chef_project_ruby_execution" in kinds
+    assert "chef_project_berkshelf_boundary" in kinds
+    assert any(change.risk == "dangerous" for change in changes)
+    assert "fixture-user" not in encoded
+    assert "fixture-password" not in encoded
+    assert "example.invalid" not in encoded
+
+
+def test_berks_lock_surfaces_provenance_graph_integrity_and_missing_locks() -> None:
+    changes = _changes("chef_berkshelf_risky/Berksfile.lock")
+    direct = [
+        change
+        for change in changes
+        if change.resource_type == "chef_project_berkshelf_direct_dependency"
+    ]
+    resolved = [
+        change
+        for change in changes
+        if change.resource_type == "chef_project_berkshelf_resolved_cookbook"
+    ]
+    encoded = json.dumps([change.explanation for change in changes])
+
+    assert len(direct) == 5
+    assert len(resolved) == 5
+    assert sum(change.risk == "dangerous" for change in direct) == 3
+    assert sum(change.risk == "dangerous" for change in resolved) == 1
+    assert any("no resolved graph entry" in change.explanation for change in direct)
+    assert any(
+        "conflicts with the exact direct constraint" in change.explanation for change in direct
+    )
+    assert any("graph node" in change.explanation for change in resolved)
+    assert any("exact dependency constraint" in change.explanation for change in resolved)
+    assert "fixture-user" not in encoded
+    assert "fixture-password" not in encoded
+    assert "example.invalid" not in encoded
+
+
+def test_pinned_berkshelf_inputs_stay_review_only() -> None:
+    assert {change.risk for change in _changes("chef_berkshelf_review/Berksfile")} == {
+        "review"
+    }
+    assert {change.risk for change in _changes("chef_berkshelf_review/Berksfile.lock")} == {
+        "review"
+    }
+
+
+def test_legacy_json_berks_lock_is_parsed_and_flagged_dangerous() -> None:
+    data = parse_chef_project(
+        '{"dependencies":{"base":{"locked_version":"1.2.3"}}}',
+        filename="Berksfile.lock",
+    )
+    changes = ChefProjectAdapter().analyze(data, tool_name="Chef project")
+
+    assert data["chef_project"]["artifact_type"] == "berks_lock"
+    assert any(
+        change.resource_type == "chef_project_berkshelf_legacy_lock_format"
+        and change.risk == "dangerous"
+        for change in changes
+    )
 
 
 def test_client_config_surfaces_trust_credentials_execution_and_runtime_controls() -> None:
@@ -252,11 +326,44 @@ def test_runtime_parser_rejects_comments_only_configuration() -> None:
 
 
 @pytest.mark.parametrize(
+    ("source", "filename", "error"),
+    [
+        ("puts 'not a Berksfile'\n", "Berksfile", "recognized Berksfile"),
+        ("group :test do\n  metadata\n", "Berksfile", "unterminated"),
+        ("DEPENDENCIES\n  base\n", "Berksfile.lock", "DEPENDENCIES and GRAPH"),
+        (
+            "DEPENDENCIES\n  base\n  base\nGRAPH\n  base (1.0.0)\n",
+            "Berksfile.lock",
+            "duplicate Berksfile dependency",
+        ),
+        (
+            "DEPENDENCIES\n  base\nGRAPH\n  base (1.0.0)\n  base (1.0.1)\n",
+            "Berksfile.lock",
+            "duplicate Berksfile graph entry",
+        ),
+        (
+            "DEPENDENCIES\n  base\nGRAPH\n  base (1.0.0)\n"
+            "    child (= 1.0.0)\n    child (= 1.0.0)\n  child (1.0.0)\n",
+            "Berksfile.lock",
+            "duplicate Berksfile graph dependency",
+        ),
+    ],
+)
+def test_berkshelf_parser_rejects_dynamic_or_malformed_inputs(
+    source: str, filename: str, error: str
+) -> None:
+    with pytest.raises(ChefProjectInputError, match=error):
+        parse_chef_project(source, filename=filename)
+
+
+@pytest.mark.parametrize(
     ("fixture", "artifact_type"),
     [
         ("chef_policyfile_risky.rb", "policyfile"),
         ("chef_policy_lock_risky.json", "lock"),
         ("chef_metadata_risky.rb", "metadata"),
+        ("chef_berkshelf_risky/Berksfile", "berksfile"),
+        ("chef_berkshelf_risky/Berksfile.lock", "berks_lock"),
     ],
 )
 def test_gate_and_cli_support_every_chef_project_format(
@@ -264,7 +371,9 @@ def test_gate_and_cli_support_every_chef_project_format(
     artifact_type: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    data = parse_chef_project((FIXTURES / fixture).read_text(encoding="utf-8"))
+    data = parse_chef_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
     gate = analyze_chef_project(data)
     assert gate["adapter"] == "chef-project"
     assert gate["artifact_type"] == artifact_type

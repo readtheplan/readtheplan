@@ -240,7 +240,8 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "Docker Buildx Bake definitions",
         "ansible-project",
         "chef-project",
-        "Chef recipes/projects/client, Workstation, Solo, and Server runtime configuration",
+        "Chef recipes/projects/Berkshelf dependencies/client, Workstation, Solo, and Server "
+        "runtime configuration",
         "puppet-project",
         "salt-project",
         "NixOS",

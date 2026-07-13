@@ -41,6 +41,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("client.rb", "chef-project"),
         (".chef/config.rb", "chef-project"),
         ("chef/chef-server.rb", "chef-project"),
+        ("cookbooks/base/Berksfile", "chef-project"),
+        ("cookbooks/base/Berksfile.lock", "chef-project"),
         ("chef/client.d/security.rb", "chef-project"),
         ("manifests/site.pp", "puppet"),
         ("puppet/puppet.conf", "puppet-project"),

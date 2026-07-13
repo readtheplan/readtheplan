@@ -60,6 +60,14 @@ _METADATA_CALLS = {
     "supports",
     "version",
 }
+_BERKS_CALLS = {"cookbook", "metadata", "site", "solver", "source"}
+_BERKS_ENTRY = re.compile(
+    r"^  (?P<name>[A-Za-z0-9_.-]+)(?: \((?P<constraint>[^()]*)\))?$"
+)
+_BERKS_NESTED = re.compile(
+    r"^    (?P<name>[A-Za-z0-9_.-]+)(?: \((?P<constraint>[^()]*)\))?$"
+)
+_BERKS_OPTION = re.compile(r"^    (?P<key>[A-Za-z_][A-Za-z0-9_-]*): (?P<value>.+)$")
 _CONFIG_INDEXED = re.compile(
     r"^\s*(?P<scope>[A-Za-z_][A-Za-z0-9_:]*)\s*\[\s*"
     r"(?::(?P<symbol>[A-Za-z_][A-Za-z0-9_.-]*)|"
@@ -283,6 +291,246 @@ def _parse_ruby(source: str) -> dict[str, Any]:
     }
 
 
+def _ruby_argument_parts(text: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    quote: str | None = None
+    escaped = False
+    depth = 0
+    for index, char in enumerate(text):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and quote:
+            escaped = True
+            continue
+        if char in {"'", '"'}:
+            quote = None if quote == char else char if quote is None else quote
+            continue
+        if quote is not None:
+            continue
+        if char in "([{":
+            depth += 1
+        elif char in ")]}" and depth:
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:index].strip())
+            start = index + 1
+    tail = text[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _berks_options(parts: list[str]) -> dict[str, str]:
+    options: dict[str, str] = {}
+    for part in parts:
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)", part, re.DOTALL)
+        if not match:
+            continue
+        key = match.group(1).casefold()
+        if key in options:
+            raise ChefProjectInputError(f"duplicate Berksfile option: {key}")
+        value = match.group(2).strip()
+        quoted = _read_quoted(value, 0)
+        if quoted is not None and not value[quoted[1] :].strip():
+            options[key] = quoted[0]
+            continue
+        symbol = re.fullmatch(r":([A-Za-z_][A-Za-z0-9_.-]*)", value)
+        if symbol:
+            options[key] = symbol.group(1)
+    return options
+
+
+def _parse_berksfile(source: str) -> dict[str, Any]:
+    calls: list[dict[str, Any]] = []
+    dynamic: list[dict[str, Any]] = []
+    groups: list[tuple[str, ...]] = []
+    for line_number, original in enumerate(source.splitlines(), start=1):
+        line = _strip_comment(original).strip()
+        if not line:
+            continue
+        group = re.fullmatch(r"group\s+(.+?)\s+do", line, re.IGNORECASE)
+        if group:
+            names = [*_quoted_values(group.group(1))]
+            names.extend(match.group("value") for match in _SYMBOL.finditer(group.group(1)))
+            if not names:
+                dynamic.append({"line": line_number, "source": line})
+                groups.append(("<dynamic>",))
+            else:
+                groups.append(tuple(names))
+            continue
+        if line.casefold() == "end":
+            if not groups:
+                raise ChefProjectInputError(f"Berksfile has unmatched end at line {line_number}")
+            groups.pop()
+            continue
+        match = _CALL.match(line)
+        if not match or match.group("name").casefold() not in _BERKS_CALLS:
+            dynamic.append({"line": line_number, "source": line})
+            continue
+        name = match.group("name").casefold()
+        args = match.group("args")
+        parts = _ruby_argument_parts(args)
+        positionals: list[str] = []
+        for part in parts:
+            if re.match(r"[A-Za-z_][A-Za-z0-9_]*\s*:", part):
+                break
+            quoted = _read_quoted(part, 0)
+            if quoted is not None and not part[quoted[1] :].strip():
+                positionals.append(quoted[0])
+        calls.append(
+            {
+                "name": name,
+                "args": args,
+                "values": _quoted_values(args),
+                "positionals": positionals,
+                "symbols": [item.group("value") for item in _SYMBOL.finditer(args)],
+                "options": _berks_options(parts),
+                "groups": tuple(name for frame in groups for name in frame),
+                "line": line_number,
+            }
+        )
+        if (
+            _RUBY_EXECUTION.search(args)
+            or _RUBY_DYNAMIC.search(args)
+            or _contains_unquoted(args, ";")
+        ):
+            dynamic.append({"line": line_number, "source": args})
+    if groups:
+        raise ChefProjectInputError("Berksfile contains an unterminated group block")
+    if not calls or not {call["name"] for call in calls} & {"cookbook", "metadata", "source"}:
+        raise ChefProjectInputError("input is not a recognized Berksfile")
+    return {
+        "artifact_type": "berksfile",
+        "document": {"calls": calls, "dynamic": dynamic},
+    }
+
+
+def _parse_legacy_berks_lock(source: str) -> dict[str, Any]:
+    try:
+        document = json.loads(source, object_pairs_hook=_unique_object)
+    except ChefProjectInputError:
+        raise
+    except json.JSONDecodeError as exc:
+        raise ChefProjectInputError(str(exc)) from exc
+    dependencies = document.get("dependencies") if isinstance(document, dict) else None
+    if not isinstance(dependencies, dict):
+        raise ChefProjectInputError("legacy Berksfile lock must contain a dependencies object")
+    direct: list[dict[str, Any]] = []
+    graph: list[dict[str, Any]] = []
+    for name, details in dependencies.items():
+        if not isinstance(name, str) or not isinstance(details, dict):
+            raise ChefProjectInputError("legacy Berksfile dependencies must be named objects")
+        version = str(details.get("locked_version", "")).strip()
+        options = {
+            str(key): str(value)
+            for key, value in details.items()
+            if key != "locked_version" and isinstance(value, (str, int, float, bool))
+        }
+        direct.append({"name": name, "constraint": ">= 0.0.0", "options": options})
+        graph.append({"name": name, "version": version, "dependencies": []})
+    return {
+        "artifact_type": "berks_lock",
+        "document": {"direct": direct, "graph": graph, "legacy_format": True},
+    }
+
+
+def _parse_berks_lock(source: str) -> dict[str, Any]:
+    if source.lstrip().startswith("{"):
+        return _parse_legacy_berks_lock(source)
+    direct: list[dict[str, Any]] = []
+    graph: list[dict[str, Any]] = []
+    direct_names: set[str] = set()
+    graph_names: set[str] = set()
+    sections: set[str] = set()
+    state = ""
+    current_direct: dict[str, Any] | None = None
+    current_graph: dict[str, Any] | None = None
+    for line_number, raw in enumerate(source.splitlines(), start=1):
+        if not raw.strip():
+            continue
+        if raw in {"DEPENDENCIES", "GRAPH"}:
+            if raw in sections:
+                raise ChefProjectInputError(f"duplicate Berksfile lock section: {raw}")
+            sections.add(raw)
+            state = raw
+            current_direct = None
+            current_graph = None
+            continue
+        if not state:
+            raise ChefProjectInputError(
+                f"Berksfile lock content precedes a section at line {line_number}"
+            )
+        if state == "DEPENDENCIES":
+            option = _BERKS_OPTION.fullmatch(raw)
+            if option:
+                if current_direct is None:
+                    raise ChefProjectInputError(
+                        f"Berksfile lock option has no dependency at line {line_number}"
+                    )
+                key = option.group("key").casefold()
+                if key in current_direct["options"]:
+                    raise ChefProjectInputError(
+                        f"duplicate Berksfile lock option at line {line_number}"
+                    )
+                current_direct["options"][key] = option.group("value")
+                continue
+            entry = _BERKS_ENTRY.fullmatch(raw)
+            if not entry:
+                raise ChefProjectInputError(
+                    f"invalid Berksfile lock dependency at line {line_number}"
+                )
+            name = entry.group("name")
+            if name in direct_names:
+                raise ChefProjectInputError(f"duplicate Berksfile dependency: {name}")
+            direct_names.add(name)
+            current_direct = {
+                "name": name,
+                "constraint": entry.group("constraint") or "",
+                "options": {},
+            }
+            direct.append(current_direct)
+            continue
+        nested = _BERKS_NESTED.fullmatch(raw)
+        if nested:
+            if current_graph is None:
+                raise ChefProjectInputError(
+                    f"Berksfile lock graph edge has no parent at line {line_number}"
+                )
+            current_graph["dependencies"].append(
+                {
+                    "name": nested.group("name"),
+                    "constraint": nested.group("constraint") or "",
+                }
+            )
+            dependency_names = [item["name"] for item in current_graph["dependencies"]]
+            if len(dependency_names) != len(set(dependency_names)):
+                raise ChefProjectInputError(
+                    f"duplicate Berksfile graph dependency at line {line_number}"
+                )
+            continue
+        entry = _BERKS_ENTRY.fullmatch(raw)
+        if not entry or entry.group("constraint") is None:
+            raise ChefProjectInputError(f"invalid Berksfile lock graph at line {line_number}")
+        name = entry.group("name")
+        if name in graph_names:
+            raise ChefProjectInputError(f"duplicate Berksfile graph entry: {name}")
+        graph_names.add(name)
+        current_graph = {
+            "name": name,
+            "version": entry.group("constraint"),
+            "dependencies": [],
+        }
+        graph.append(current_graph)
+    if sections != {"DEPENDENCIES", "GRAPH"}:
+        raise ChefProjectInputError("Berksfile lock must contain DEPENDENCIES and GRAPH sections")
+    return {
+        "artifact_type": "berks_lock",
+        "document": {"direct": direct, "graph": graph, "legacy_format": False},
+    }
+
+
 def _parse_lock(source: str) -> dict[str, Any] | None:
     if not source.lstrip().startswith("{"):
         return None
@@ -457,6 +705,11 @@ def parse_chef_project(source: str, *, filename: str = "") -> dict[str, Any]:
     """Parse static Chef project/runtime files without executing Ruby."""
     if not source.strip():
         raise ChefProjectInputError("input is empty")
+    basename = Path(filename.replace("\\", "/")).name.casefold() if filename else ""
+    if basename == "berksfile":
+        return {"chef_project": _parse_berksfile(source)}
+    if basename == "berksfile.lock":
+        return {"chef_project": _parse_berks_lock(source)}
     artifact_type = _config_artifact_type(filename)
     parsed = (
         _parse_runtime_config(source, artifact_type)
@@ -491,6 +744,283 @@ def _source_risks(source: str, *, revision: str = "") -> tuple[str, list[str]]:
         risk = "dangerous"
         reasons.append("Its Git revision is a mutable branch, tag, or abbreviated commit.")
     return risk, reasons
+
+
+def _berks_location_risks(options: dict[str, str]) -> tuple[str, list[str]]:
+    source_key = next((key for key in ("git", "github", "path") if key in options), "")
+    source = options.get(source_key, "")
+    revision_key = next(
+        (key for key in ("revision", "ref", "commit", "tag", "branch") if key in options),
+        "",
+    )
+    revision = options.get(revision_key, "")
+    risk, reasons = _source_risks(source, revision=revision)
+    if source_key in {"git", "github"} and not _COMMIT.fullmatch(revision):
+        risk = "dangerous"
+        reasons.append("The Git source is not pinned to a full immutable commit.")
+    if revision_key in {"branch", "tag"}:
+        risk = "dangerous"
+        reasons.append("A branch or tag can resolve to different cookbook content over time.")
+    if source_key == "path":
+        reasons.append("The cookbook resolves local content outside this Berksfile.")
+    if re.search(
+        r"(?:^|[?&])(?:access.?key|api.?key|password|secret|token)=",
+        source,
+        re.IGNORECASE,
+    ):
+        risk = "dangerous"
+        reasons.append("The source URL query embeds a secret-like credential.")
+    if any(_SECRET.search(key) and value for key, value in options.items()):
+        risk = "dangerous"
+        reasons.append("A source option contains a literal secret-like value.")
+    return risk, reasons
+
+
+def _exact_version_value(value: str) -> str:
+    text = value.strip()
+    if not _EXACT_VERSION.fullmatch(text):
+        return ""
+    text = re.sub(r"^=\s*", "", text)
+    return text.removeprefix("v")
+
+
+def _berksfile_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes = [
+        _change(
+            "berksfile.workflow",
+            "berkshelf_legacy_workflow",
+            "review",
+            "Chef classifies Berkshelf as a legacy dependency workflow and recommends migrating "
+            "to Policyfiles for immutable resolution and promotion.",
+        )
+    ]
+    calls = document["calls"]
+    source_calls = [call for call in calls if call["name"] in {"site", "source"}]
+    for index, call in enumerate(source_calls, start=1):
+        endpoint = call["positionals"][0] if call["positionals"] else ""
+        risk, reasons = _source_risks(endpoint)
+        if not endpoint:
+            risk = "dangerous"
+            reasons.append("The source endpoint is not a static quoted value.")
+        if call["name"] == "site":
+            risk = "dangerous"
+            reasons.append(
+                "The obsolete site directive weakens compatibility and migration safety."
+            )
+        if re.search(
+            r"(?:^|[?&])(?:access.?key|api.?key|password|secret|token)=",
+            endpoint,
+            re.IGNORECASE,
+        ):
+            risk = "dangerous"
+            reasons.append("The source URL query embeds a secret-like credential.")
+        changes.append(
+            _change(
+                f"berksfile.source.{index}",
+                "berkshelf_source",
+                risk,
+                "Berkshelf searches this ordered cookbook source for executable dependencies. "
+                + " ".join(reasons),
+            )
+        )
+    if len(source_calls) > 1:
+        changes.append(
+            _change(
+                "berksfile.source_order",
+                "berkshelf_source_precedence",
+                "review",
+                "Berkshelf stops at the first source containing a suitable cookbook; review "
+                "private/public source order and dependency-confusion exposure.",
+            )
+        )
+    requires_default_source = any(
+        call["name"] == "metadata"
+        or (
+            call["name"] == "cookbook"
+            and not {"git", "github", "path"} & set(call["options"])
+        )
+        for call in calls
+    )
+    if not source_calls and requires_default_source:
+        changes.append(
+            _change(
+                "berksfile.source",
+                "berkshelf_missing_source",
+                "dangerous",
+                "Berksfile has dependencies that require an ordered cookbook source but declares "
+                "none statically.",
+            )
+        )
+    for call in calls:
+        address = f"berksfile.line.{call['line']}"
+        if call["name"] == "metadata":
+            changes.append(
+                _change(
+                    address,
+                    "berkshelf_metadata_dependency",
+                    "review",
+                    "Berkshelf imports dependencies from adjacent metadata.rb; its effective "
+                    "constraints and dynamic Ruby behavior are outside this file.",
+                )
+            )
+        elif call["name"] == "solver":
+            changes.append(
+                _change(
+                    address,
+                    "berkshelf_solver",
+                    "review",
+                    "Berksfile selects a dependency solver; review compatibility with the Chef "
+                    "Server resolver and reproducibility across Workstation versions.",
+                )
+            )
+        elif call["name"] == "cookbook":
+            positionals = call["positionals"]
+            version = positionals[1] if len(positionals) > 1 else ""
+            options = call["options"]
+            risk, reasons = _berks_location_risks(options)
+            revision = next(
+                (
+                    options[key]
+                    for key in ("revision", "ref", "commit")
+                    if key in options
+                ),
+                "",
+            )
+            if not _EXACT_VERSION.fullmatch(version) and not _COMMIT.fullmatch(revision):
+                risk = "dangerous"
+                reasons.append(
+                    "The cookbook is not pinned to one exact version or full Git commit."
+                )
+            groups = set(call["groups"])
+            inline_group = options.get("group", "")
+            if inline_group:
+                groups.add(inline_group)
+            if groups:
+                reasons.append(
+                    "Group selection can exclude this dependency from install, vendor, or upload."
+                )
+            changes.append(
+                _change(
+                    address,
+                    "berkshelf_cookbook_dependency",
+                    risk,
+                    "Berkshelf installs executable cookbook content. " + " ".join(reasons),
+                )
+            )
+    changes.extend(_dynamic_changes(document.get("dynamic", []), "Berksfile"))
+    changes.append(
+        _change(
+            "berksfile.effective_resolution",
+            "berkshelf_boundary",
+            "review",
+            "Effective resolution also depends on Berksfile.lock, adjacent metadata.rb, source "
+            "indexes, transitive cookbook metadata, group flags, Workstation/Berkshelf versions, "
+            "credentials, cache state, and runtime Ruby evaluation.",
+        )
+    )
+    return changes
+
+
+def _berks_lock_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = [
+        _change(
+            "berks_lock.workflow",
+            "berkshelf_legacy_workflow",
+            "review",
+            "This lock belongs to the legacy Berkshelf workflow; plan migration to a Policyfile "
+            "while preserving cookbook resolution and promotion behavior.",
+        )
+    ]
+    if document.get("legacy_format"):
+        changes.append(
+            _change(
+                "berks_lock.format",
+                "berkshelf_legacy_lock_format",
+                "dangerous",
+                "The lock uses Berkshelf's obsolete JSON format, which upstream treats as "
+                "untrustworthy and converts with a warning.",
+            )
+        )
+    graph = document.get("graph", [])
+    graph_by_name = {item["name"]: item for item in graph}
+    for index, dependency in enumerate(document.get("direct", []), start=1):
+        options = dependency.get("options", {})
+        risk, reasons = _berks_location_risks(options)
+        locked = graph_by_name.get(dependency["name"])
+        if locked is None:
+            risk = "dangerous"
+            reasons.append("The direct dependency has no resolved graph entry.")
+        elif not _EXACT_VERSION.fullmatch(str(locked.get("version", ""))):
+            risk = "dangerous"
+            reasons.append("The resolved version is missing or not an exact semantic version.")
+        else:
+            reasons.append("The dependency resolves to one exact cookbook version.")
+            constraint = str(dependency.get("constraint", ""))
+            if _exact_version_value(constraint) and _exact_version_value(
+                constraint
+            ) != _exact_version_value(str(locked.get("version", ""))):
+                risk = "dangerous"
+                reasons.append("The resolved version conflicts with the exact direct constraint.")
+        changes.append(
+            _change(
+                f"berks_lock.direct.{index}",
+                "berkshelf_direct_dependency",
+                risk,
+                "Berksfile.lock records a direct executable cookbook dependency. "
+                + " ".join(reasons),
+            )
+        )
+    graph_names = set(graph_by_name)
+    for index, item in enumerate(graph, start=1):
+        version = str(item.get("version", ""))
+        missing = [
+            dependency["name"]
+            for dependency in item.get("dependencies", [])
+            if dependency["name"] not in graph_names
+        ]
+        mismatched = [
+            dependency["name"]
+            for dependency in item.get("dependencies", [])
+            if dependency["name"] in graph_by_name
+            and _exact_version_value(str(dependency.get("constraint", "")))
+            and _exact_version_value(str(dependency.get("constraint", "")))
+            != _exact_version_value(str(graph_by_name[dependency["name"]].get("version", "")))
+        ]
+        risk = "review"
+        reasons = ["The graph resolves executable cookbook content to a fixed version."]
+        if not _EXACT_VERSION.fullmatch(version):
+            risk = "dangerous"
+            reasons = ["The graph entry has a missing or non-exact resolved version."]
+        if missing:
+            risk = "dangerous"
+            reasons.append(
+                f"The entry references {len(missing)} dependency graph node(s) that are absent."
+            )
+        if mismatched:
+            risk = "dangerous"
+            reasons.append(
+                f"The entry has {len(mismatched)} exact dependency constraint(s) that conflict "
+                "with resolved graph versions."
+            )
+        changes.append(
+            _change(
+                f"berks_lock.graph.{index}",
+                "berkshelf_resolved_cookbook",
+                risk,
+                " ".join(reasons),
+            )
+        )
+    changes.append(
+        _change(
+            "berks_lock.integrity_boundary",
+            "berkshelf_lock_integrity_boundary",
+            "review",
+            "Berksfile.lock pins versions and graph edges but does not record cookbook content "
+            "digests; source contents, cache integrity, deleted/replaced releases, metadata, and "
+            "the manifest-to-lock freshness check remain external.",
+        )
+    )
+    return changes
 
 
 def _policy_changes(document: dict[str, Any]) -> list[dict[str, str]]:
@@ -1084,6 +1614,8 @@ class ChefProjectAdapter(BaseAdapter):
                 "policyfile",
                 "lock",
                 "metadata",
+                "berksfile",
+                "berks_lock",
                 "client_config",
                 "workstation_config",
                 "solo_config",
@@ -1098,6 +1630,10 @@ class ChefProjectAdapter(BaseAdapter):
         document = project["document"]
         if artifact_type.endswith("_config"):
             return _runtime_config_changes(document, artifact_type)
+        if artifact_type == "berksfile":
+            return _berksfile_changes(document)
+        if artifact_type == "berks_lock":
+            return _berks_lock_changes(document)
         changes = {
             "policyfile": _policy_changes,
             "lock": _lock_changes,
@@ -1138,5 +1674,7 @@ def analyze_chef_project(data: dict[str, Any], *, catalog=None) -> dict[str, Any
     gate["artifact_type"] = project["artifact_type"]
     if project["artifact_type"].endswith("_config"):
         gate["setting_count"] = len(project["document"]["settings"])
+    if project["artifact_type"] == "berks_lock":
+        gate["dependency_count"] = len(project["document"]["graph"])
     gate["total_changes"] = len(changes)
     return gate

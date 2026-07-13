@@ -1,0 +1,4 @@
+source "https://supermarket.chef.io"
+metadata
+cookbook "base", "= 3.2.1"
+cookbook "pinned-git", git: "https://git.example.invalid/cookbooks/base.git", ref: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
