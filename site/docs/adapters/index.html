@@ -109,7 +109,8 @@ readtheplan docker-compose compose.yml
 readtheplan nomad job.nomad.hcl
 readtheplan packer image.pkr.hcl
 readtheplan skaffold skaffold.yaml
-readtheplan devspace devspace.yaml</code></pre>
+readtheplan devspace devspace.yaml
+readtheplan tilt Tiltfile</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -160,6 +161,17 @@ readtheplan devspace devspace.yaml</code></pre>
             mutations without invoking DevSpace or contacting a cluster:
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan devspace --framework soc2 devspace.yaml</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="tilt-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="tilt-title">Tilt development environments</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review executable Tiltfile behavior without evaluating Starlark, loading extensions,
+            building images, or contacting Docker and Kubernetes:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan tilt --framework soc2 Tiltfile</code></pre>
         </div>
       </section>
 

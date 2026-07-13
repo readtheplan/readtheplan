@@ -1,0 +1,65 @@
+load('ext://helm_resource', 'helm_resource', 'helm_repo')
+load_dynamic('../shared/Tiltfile')
+include('../platform/Tiltfile')
+
+api_token = 'literal-example'
+cluster = os.getenv('KUBE_CONTEXT', 'production')
+os.putenv('TILT_ENV', 'production')
+
+allow_k8s_contexts(cluster)
+default_registry('registry.example.test/platform')
+secret_settings(disable_scrub=True)
+
+docker_build(
+    'registry.example.test/platform/api:latest',
+    '../api',
+    dockerfile_contents='FROM python:latest',
+    build_args={'API_TOKEN': api_token},
+    live_update=[
+        sync('../api/src', '/workspace/src'),
+        run('pip install -r requirements.txt'),
+        restart_container(),
+    ],
+)
+
+custom_build(
+    'registry.example.test/platform/worker:latest',
+    './build-worker.sh',
+    deps=['../worker'],
+    env={'PUBLISH_TOKEN': api_token},
+)
+
+docker_compose('../compose/docker-compose.yml')
+local('./bootstrap-cluster.sh', env={'TOKEN': api_token})
+local_resource(
+    'database-migrate',
+    cmd='./migrate.sh',
+    serve_cmd='./watch-migrations.sh',
+    auto_init=True,
+    allow_parallel=True,
+)
+
+generated = local('./render-manifests.sh')
+k8s_yaml(generated)
+k8s_yaml('../deploy/admin.yaml')
+k8s_yaml(helm('../charts/platform', set=['api.token=literal-example']))
+k8s_yaml(kustomize('../deploy/overlays/prod', flags=['--enable-alpha-plugins']))
+
+k8s_custom_deploy(
+    'operator',
+    apply_cmd='./install-operator.sh',
+    delete_cmd='./remove-operator.sh',
+    deps=['../operator'],
+)
+
+k8s_resource(
+    workload='api',
+    port_forwards=[port_forward(8080, 8080, host='0.0.0.0')],
+    auto_init=True,
+)
+
+probe(exec_action(['sh', '-c', './healthcheck.sh']))
+read_file('../secrets/runtime.env')
+
+helm_repo('internal', 'https://charts.example.test')
+helm_resource('database', 'internal/postgresql', flags=['--set', 'password=literal-example'])

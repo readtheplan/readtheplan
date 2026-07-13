@@ -118,5 +118,6 @@ def test_entry_point_discovery_finds_builtins() -> None:
             "salt-project",
             "skaffold",
             "terraform-lock",
-        "terraform-state",
+            "terraform-state",
+            "tilt",
     } <= set(adapters)
