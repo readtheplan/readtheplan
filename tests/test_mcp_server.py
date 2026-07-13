@@ -883,6 +883,28 @@ def test_agent_gate_configuration_management_supports_test_kitchen() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_chef_habitat_plan() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "chef_habitat_risky" / "habitat" / "plan.sh"),
+        "chef-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "chef-project"
+    assert result["artifact_type"] == "habitat_plan"
+    assert result["language"] == "bash"
+    assert result["variable_count"] == 14
+    assert result["callback_count"] == 4
+    assert result["command_count"] == 7
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 27
+    assert result["risk_counts"]["dangerous"] == 20
+    assert "fixture-habitat" not in encoded
+    assert "fixture-password" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_berksfile_lock() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "chef_berkshelf_risky" / "Berksfile.lock"),

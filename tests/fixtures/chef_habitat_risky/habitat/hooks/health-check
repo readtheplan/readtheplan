@@ -1,0 +1,5 @@
+#!/bin/sh
+sleep 5
+hab sup status
+echo "token=$API_TOKEN"
+exit 0

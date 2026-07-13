@@ -1523,6 +1523,42 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Chef Habitat plan
+        id: chef_habitat
+        uses: ./
+        with:
+          tool: chef-project
+          input-file: tests/fixtures/chef_habitat_risky/habitat/plan.sh
+          framework: soc2
+
+      - name: Assert Chef Habitat outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef_habitat.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef_habitat.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef_habitat.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "27"
+          test "$RISK_COUNTS" = '{"dangerous":20,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "chef-project"
+          assert payload["artifact_type"] == "habitat_plan"
+          assert payload["language"] == "bash"
+          assert payload["variable_count"] == 14
+          assert payload["callback_count"] == 4
+          assert payload["command_count"] == 7
+          assert payload["decision"] == "block"
+          assert "fixture-habitat" not in serialized
+          assert "fixture-password" not in serialized
+          assert "example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef InSpec controls
         id: inspec
         uses: ./

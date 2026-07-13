@@ -1,0 +1,4 @@
+#!/bin/sh
+API_TOKEN=fixture-habitat-hook-token-do-not-leak
+curl http://runtime.example.invalid/bootstrap
+exec bash -c "{{cfg.command}}"
