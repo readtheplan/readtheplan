@@ -1,0 +1,23 @@
+---
+name: risky-profile
+version: 1.0.0
+supports:
+  - platform-name: "*"
+depends:
+  - name: mutable-baseline
+    git: http://fixture-user:fixture-password@example.invalid/baseline.git
+    branch: main
+  - name: escaped-local
+    path: ../../outside
+  - name: registry-profile
+    supermarket: fixture/registry-profile
+gem_dependencies:
+  - name: dangerous-gem
+    version: ">= 1.0"
+inputs:
+  - name: api_token
+    value: fixture-secret-value
+    sensitive: true
+  - name: inherited_setting
+    value: permissive
+    profile: registry-profile

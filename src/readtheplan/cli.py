@@ -421,6 +421,20 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     )
     chef_project.set_defaults(func=_chef_project_gate)
 
+    inspec = subparsers.add_parser(
+        "inspec",
+        help="Emit the agent-gate decision for Chef InSpec profile artifacts.",
+    )
+    inspec.add_argument("--framework", help="Include checks from a compliance framework.")
+    inspec.add_argument(
+        "input_file",
+        help=(
+            "Path to inspec.yml, inspec.lock, controls/*.rb, libraries/*.rb, or a waiver "
+            "YAML/JSON/CSV file."
+        ),
+    )
+    inspec.set_defaults(func=_inspec_gate)
+
     puppet = subparsers.add_parser(
         "puppet",
         help="Emit the agent-gate decision for a Puppet manifest.",
@@ -1806,6 +1820,35 @@ def _chef_project_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_chef_project(data, catalog=catalog))
+
+
+def _inspec_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Chef InSpec profile artifact."""
+    from readtheplan.adapters.inspec import (
+        InSpecAdapter,
+        InSpecInputError,
+        analyze_inspec,
+        parse_inspec,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_inspec(source, filename=args.input_file)
+    except InSpecInputError as exc:
+        print(f"Error: invalid Chef InSpec input: {exc}", file=sys.stderr)
+        return 1
+    if not InSpecAdapter().can_handle(data):
+        print("Error: input not recognized as a Chef InSpec artifact", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_inspec(data, catalog=catalog))
 
 
 def _puppet_gate(args: argparse.Namespace) -> int:
