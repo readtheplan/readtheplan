@@ -80,7 +80,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Tool | Command | Analysis level |
 |------|---------|----------------|
 | Project auto-discovery | `readtheplan scan .` | Recursively discovers high-confidence infrastructure inputs, skips dependency/build directories and symlinks, runs the matching local analyzers, and returns one deterministic aggregate gate with per-file results and validation errors |
-| Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff plus AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE resource-aware rules |
+| Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff plus plan format/integrity flags, deferred changes, drift, root outputs, checks, provider action invocations, state-forget operations, and AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm, New Relic, PagerDuty, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE resource-aware rules without exposing plan values |
 | Terraform configuration | `readtheplan terraform-config main.tf` | HCL/JSON providers, backends, modules, resources/data, provisioners, lifecycle, remote state, imports/moves/removals, secrets, and static exposure |
 | Terraform Stacks | `readtheplan terraform-stack stack.tfdeploy.hcl` | Native `.tfcomponent.hcl` and `.tfdeploy.hcl` analysis for module/provider provenance, component and deployment fan-out, removals/destroy/import, auto-approval, OIDC identities, variable stores, cross-Stack data, secrets, and static HCP runtime boundaries |
 | Terraform / OpenTofu dependency lock | `readtheplan terraform-lock .terraform.lock.hcl` | Strict provider source/version selection, constraint context, h1/zh checksum validity and coverage, custom/local origins, pre-releases, unknown hash schemes, and signer/platform/module/read-only-mode boundaries |
@@ -488,6 +488,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - **CLI-first** — single `pip install`, runs anywhere Python runs
 - **GitHub Action** — copy-paste into any workflow
 - **Resource-aware rules** — first-party AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE semantics for identity, data, compute, networking, edge security, incident response, source governance, CI/CD trust, traffic, secrets, security, and observability
+- **Plan-integrity gates** — Terraform/OpenTofu plan format compatibility, errored/not-applyable/incomplete plans, deferrals, out-of-band drift, root-output sensitivity, failed or unknown checks, state detachment, and Terraform provider actions are first-class findings even when the resource diff is empty
 - **Compliance evidence** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mappings with signed JSON envelopes
 - **Agent gate** — deterministic proceed/warn/block decisions for CI and AI agents
 - **Customer rule overlays** — org-specific risk escalations via YAML, no code changes needed
@@ -498,6 +499,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 ## What's not in scope
 
 - Full language interpretation for dynamic Jenkins, Chef, or Puppet code (unknown constructs require review)
+- Terraform/OpenTofu plan analysis consumes only the submitted stable JSON representation and never runs a provider, refreshes state, contacts a backend, or invokes a planned action. Plan values, check messages, action configuration, and deferred/drift before/after payloads are intentionally omitted from derived output; live credentials, remote state, policy results, apply-time checks, provider behavior, and post-plan drift remain external boundaries
 - Chef cookbook content is inspected statically and never executes Ruby or ERB; dynamic dispatch, metaprogramming, effective attribute resolution, helper/partial loading, resource call sites, rendered targets, external secrets/state, and generated files remain review boundaries
 - Chef Ohai analysis never loads or runs plugin Ruby; cookbook sync/install state, plugin paths and ordering, same-name definitions in other files, optional/disabled/minimal plugin settings, platform selection, hints, environment/filesystem/API values, collection timeouts, automatic-attribute allow/block policy, Chef Server persistence/search visibility, and downstream recipe behavior remain runtime boundaries
 - Chef runtime configuration is analyzed statically; merged fragments, command-line/environment overrides, plugins, external secrets, generated service state, and Ruby conditions remain review boundaries

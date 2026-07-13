@@ -1,6 +1,8 @@
 # readtheplan summary: examples/02-dangerous-replacement/plan.json
 Terraform version: 1.8.5
+Plan format version: 1.2
 Resource changes: 5
+Plan-level findings: 0
 
 ## Actions
 - delete/create: 2

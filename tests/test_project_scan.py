@@ -400,6 +400,36 @@ def test_project_scan_aggregates_mixed_tools_and_redacts_source_values(capsys) -
     assert "kubectl apply" not in encoded
 
 
+def test_project_scan_includes_terraform_plan_integrity_findings(tmp_path: Path) -> None:
+    shutil.copy(
+        FIXTURES / "terraform_plan_integrity_risky.json",
+        tmp_path / "plan.json",
+    )
+
+    payload = scan_project(tmp_path, display_root=".", framework="soc2")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["decision"] == "block"
+    assert payload["risk_counts"] == {
+        "safe": 1,
+        "review": 4,
+        "dangerous": 9,
+        "irreversible": 0,
+    }
+    assert payload["total_changes"] == 14
+    result = payload["files"][0]
+    assert result["tool"] == "terraform"
+    assert result["resource_change_count"] == 1
+    assert result["plan_finding_count"] == 13
+    assert result["total_changes"] == 14
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+    encoded = json.dumps(payload)
+    assert "fixture-action-payload-secret-do-not-leak" not in encoded
+    assert "fixture-ansible-token-do-not-leak" not in encoded
+
+
 def test_project_scan_analyzes_travis_drone_and_woodpecker(tmp_path: Path) -> None:
     fixture_names = {
         ".travis.yml": "travis_ci_risky.yml",

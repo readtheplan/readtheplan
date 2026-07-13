@@ -137,3 +137,32 @@ def test_derived_rule_fields_do_not_affect_hash() -> None:
     )
 
     assert _compute_plan_hash(strict) == _compute_plan_hash(lax)
+
+
+def test_plan_level_findings_are_identity_relevant_and_order_independent() -> None:
+    resource = (_change("aws_s3_bucket.logs", "aws_s3_bucket", ("create",)),)
+    errored = _change(
+        "terraform.plan.errored", "terraform_plan_errored", ("error",), "dangerous"
+    )
+    invocation = _change(
+        "action.aws_lambda_invoke.rotate",
+        "terraform_action_invocation",
+        ("invoke",),
+        "dangerous",
+    )
+    clean = _summary(resource, version="1.14.0")
+    first = PlanSummary(
+        path=Path("plan.json"),
+        terraform_version="1.14.0",
+        resource_changes=resource,
+        plan_findings=(errored, invocation),
+    )
+    reversed_findings = PlanSummary(
+        path=Path("elsewhere.json"),
+        terraform_version="1.14.0",
+        resource_changes=resource,
+        plan_findings=(invocation, errored),
+    )
+
+    assert _compute_plan_hash(clean) != _compute_plan_hash(first)
+    assert _compute_plan_hash(first) == _compute_plan_hash(reversed_findings)

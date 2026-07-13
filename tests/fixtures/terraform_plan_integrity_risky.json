@@ -1,0 +1,129 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.14.3",
+  "applyable": false,
+  "complete": false,
+  "errored": true,
+  "resource_changes": [
+    {
+      "address": "aws_s3_bucket.logs",
+      "type": "aws_s3_bucket",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"bucket": "fixture-plan-bucket-do-not-leak"}
+      }
+    }
+  ],
+  "deferred_changes": [
+    {
+      "reason": "provider_config_unknown",
+      "resource_change": {
+        "address": "kubernetes_manifest.application",
+        "type": "kubernetes_manifest",
+        "change": {
+          "actions": ["create"],
+          "after": {"manifest": {"token": "fixture-deferred-secret-do-not-leak"}}
+        }
+      }
+    }
+  ],
+  "resource_drift": [
+    {
+      "address": "aws_security_group.web",
+      "type": "aws_security_group",
+      "change": {
+        "actions": ["update"],
+        "before": {"description": "fixture-old-description-do-not-leak"},
+        "after": {"description": "fixture-new-description-do-not-leak"}
+      }
+    },
+    {
+      "address": "aws_db_instance.primary",
+      "type": "aws_db_instance",
+      "change": {
+        "actions": ["delete"],
+        "before": {"password": "fixture-drift-password-do-not-leak"},
+        "after": null
+      }
+    }
+  ],
+  "output_changes": {
+    "service_url": {
+      "actions": ["update"],
+      "before": "https://old.fixture.invalid",
+      "after": "https://new.fixture.invalid",
+      "before_sensitive": false,
+      "after_sensitive": false
+    },
+    "database_password": {
+      "actions": ["update"],
+      "before": "fixture-old-output-secret-do-not-leak",
+      "after": "fixture-new-output-secret-do-not-leak",
+      "before_sensitive": true,
+      "after_sensitive": false
+    }
+  },
+  "checks": [
+    {
+      "address": {
+        "kind": "resource",
+        "to_display": "aws_instance.web",
+        "type": "aws_instance",
+        "name": "web"
+      },
+      "status": "fail",
+      "instances": [
+        {
+          "address": {"to_display": "aws_instance.web[0]"},
+          "status": "fail",
+          "problems": [
+            {"message": "fixture-check-message-secret-do-not-leak"}
+          ]
+        }
+      ]
+    },
+    {
+      "address": {"kind": "output_value", "to_display": "output.health"},
+      "status": "error"
+    },
+    {
+      "address": {"kind": "check", "to_display": "check.api"},
+      "status": "unknown"
+    },
+    {
+      "address": {"kind": "check", "to_display": "check.ready"},
+      "status": "pass"
+    }
+  ],
+  "action_invocations": [
+    {
+      "address": "action.aws_lambda_invoke.rotate",
+      "type": "aws_lambda_invoke",
+      "name": "rotate",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "config_values": {
+        "function_name": "fixture-function-do-not-leak",
+        "payload": "fixture-action-payload-secret-do-not-leak"
+      },
+      "config_sensitive": {"payload": true},
+      "invoke_action_trigger": {}
+    },
+    {
+      "address": "action.ansible_playbook.reconfigure",
+      "type": "ansible_playbook",
+      "name": "reconfigure",
+      "config_values": {
+        "playbook": "fixture-playbook-do-not-leak",
+        "extra_vars": {"api_token": "fixture-ansible-token-do-not-leak"}
+      },
+      "config_sensitive": {"extra_vars": {"api_token": true}},
+      "lifecycle_action_trigger": {
+        "triggering_resource_address": "aws_instance.web",
+        "action_trigger_event": "after_update",
+        "action_trigger_block_index": 0,
+        "actions_list_index": 0
+      }
+    }
+  ]
+}
