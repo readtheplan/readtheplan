@@ -1213,6 +1213,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet runtime configuration
+        id: puppet_config
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/puppet_conf_risky.conf
+          framework: soc2
+
+      - name: Assert Puppet runtime configuration outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_config.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_config.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_config.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "34"
+          test "$RISK_COUNTS" = '{"dangerous":23,"irreversible":0,"review":11,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "config"
+          assert payload["decision"] == "block"
+          assert "fixture-puppet-proxy-password-do-not-leak" not in os.environ["SUMMARY_JSON"]
+          assert "fixture-puppet-header-token-do-not-leak" not in os.environ["SUMMARY_JSON"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

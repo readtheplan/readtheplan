@@ -620,6 +620,21 @@ def test_agent_gate_configuration_management_supports_ansible_inventory() -> Non
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_puppet_runtime_config() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "puppet_conf_risky.conf"),
+        "puppet-project",
+        "soc2",
+    )
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "config"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 34
+    assert "fixture-puppet-proxy-password-do-not-leak" not in json.dumps(result)
+    assert "fixture-puppet-header-token-do-not-leak" not in json.dumps(result)
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_dsc() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "powershell_dsc_risky.ps1"),
@@ -2174,6 +2189,31 @@ def test_stdio_server_tools_list() -> None:
         assert project_summary["discovered_file_count"] == 4
         assert project_summary["scanned_file_count"] == 4
         assert "project-scan-secret" not in project_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (puppet.conf) ---
+        puppet_req = {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str((FIXTURES / "puppet_conf_risky.conf").resolve()),
+                    "ecosystem": "puppet-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        puppet_resp = _send_jsonrpc(proc, puppet_req)
+        assert "result" in puppet_resp, f"puppet.conf tools/call failed: {puppet_resp}"
+        puppet_content = puppet_resp["result"]["content"]
+        assert len(puppet_content) == 1
+        puppet_summary = json.loads(puppet_content[0]["text"])
+        assert puppet_summary["adapter"] == "puppet-project"
+        assert puppet_summary["artifact_type"] == "config"
+        assert puppet_summary["total_changes"] == 34
+        assert "fixture-puppet-proxy-password-do-not-leak" not in puppet_content[0]["text"]
+        assert "fixture-puppet-header-token-do-not-leak" not in puppet_content[0]["text"]
 
     finally:
         proc.stdin.close()  # type: ignore[union-attr]

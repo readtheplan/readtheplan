@@ -411,11 +411,11 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     puppet_project = subparsers.add_parser(
         "puppet-project",
-        help="Emit the agent-gate decision for Puppet project dependency or Hiera files.",
+        help="Emit the agent-gate decision for Puppet project and runtime configuration.",
     )
     puppet_project.add_argument("--framework", help="Include checks from a compliance framework.")
     puppet_project.add_argument(
-        "input_file", help="Path to Puppetfile, module metadata.json, or hiera.yaml."
+        "input_file", help="Path to Puppetfile, metadata.json, hiera.yaml, or puppet.conf."
     )
     puppet_project.set_defaults(func=_puppet_project_gate)
 
@@ -1775,7 +1775,7 @@ def _puppet_gate(args: argparse.Namespace) -> int:
 
 
 def _puppet_project_gate(args: argparse.Namespace) -> int:
-    """Emit the agent-gate contract for Puppet project dependencies and Hiera."""
+    """Emit the agent-gate contract for Puppet project and runtime configuration."""
     from readtheplan.adapters.puppet_project import (
         PuppetProjectAdapter,
         PuppetProjectInputError,
@@ -1789,7 +1789,7 @@ def _puppet_project_gate(args: argparse.Namespace) -> int:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
     try:
-        data = parse_puppet_project(source)
+        data = parse_puppet_project(source, filename=args.input_file)
     except PuppetProjectInputError as exc:
         print(f"Error: invalid Puppet project input: {exc}", file=sys.stderr)
         return 1

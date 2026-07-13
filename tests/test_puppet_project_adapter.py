@@ -76,6 +76,47 @@ def test_hiera_v5_builtin_backends_and_relative_paths_stay_review_only() -> None
     )
 
 
+def test_puppet_conf_surfaces_trust_execution_fail_open_and_secret_risks() -> None:
+    changes = _changes("puppet_conf_risky.conf")
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [
+            {
+                "address": change.address,
+                "explanation": change.explanation,
+                "risk": change.risk,
+            }
+            for change in changes
+        ]
+    )
+
+    assert len(changes) == 34
+    assert sum(change.risk == "dangerous" for change in changes) == 23
+    assert sum(change.risk == "review" for change in changes) == 11
+    assert {
+        "puppet_project_certificate_autosign",
+        "puppet_project_certificate_revocation",
+        "puppet_project_external_command",
+        "puppet_project_external_node_classifier",
+        "puppet_project_cached_catalog_only",
+        "puppet_project_credential",
+        "puppet_project_report_processors",
+    } <= kinds
+    assert "fixture-puppet-proxy-password-do-not-leak" not in encoded
+    assert "fixture-puppet-header-token-do-not-leak" not in encoded
+    assert "primary.internal.example" not in encoded
+
+
+def test_puppet_conf_strong_trust_and_noop_remain_review_or_safe() -> None:
+    changes = _changes("puppet_conf_review.conf")
+
+    assert len(changes) == 15
+    assert {change.risk for change in changes} == {"review", "safe"}
+    assert sum(change.risk == "review" for change in changes) == 12
+    assert sum(change.risk == "safe" for change in changes) == 3
+    assert any(change.resource_type == "puppet_project_dry_run" for change in changes)
+
+
 def test_hiera_defaults_surface_custom_backend_secrets_and_windows_path_escape() -> None:
     data = parse_puppet_project(
         "version: 5\n"
@@ -139,6 +180,11 @@ def test_quote_scanner_handles_long_adversarial_escape_sequences_linearly() -> N
     assert dependencies[0].risk == "dangerous"
 
 
+def test_puppet_conf_filename_rejects_setting_before_section() -> None:
+    with pytest.raises(PuppetProjectInputError, match="appears before a section"):
+        parse_puppet_project("server = one\n", filename="puppet.conf")
+
+
 @pytest.mark.parametrize(
     ("source", "error"),
     [
@@ -156,6 +202,12 @@ def test_quote_scanner_handles_long_adversarial_escape_sequences_linearly() -> N
             "version: 5\ndefaults:\n  data_hash: yaml_data\n  lookup_key: custom::lookup\n",
             "only one lookup function",
         ),
+        ("[main]\nserver = one\nserver = two\n", "duplicate puppet.conf setting"),
+        ("[main]\nserver = one\n[main]\nserver = two\n", "duplicate puppet.conf section"),
+        ("[database]\nserver = one\n", "unsupported puppet.conf section"),
+        (" [main]\nserver = one\n", "must not be indented"),
+        ("[main]\nserver one\n", "invalid puppet.conf setting"),
+        ("[main]\n# no settings\n", "not a populated puppet.conf"),
     ],
 )
 def test_parser_rejects_unrelated_duplicate_or_malformed_input(source: str, error: str) -> None:
@@ -169,6 +221,7 @@ def test_parser_rejects_unrelated_duplicate_or_malformed_input(source: str, erro
         ("Puppetfile.project-risky", "puppetfile"),
         ("puppet_metadata_risky.json", "metadata"),
         ("hiera_project_risky.yaml", "hiera"),
+        ("puppet_conf_risky.conf", "config"),
     ],
 )
 def test_gate_and_cli_support_every_puppet_project_format(
