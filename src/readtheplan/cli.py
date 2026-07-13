@@ -477,6 +477,14 @@ def _build_parser() -> argparse.ArgumentParser:
     tilt.add_argument("input_file", help="Path to a Tiltfile.")
     tilt.set_defaults(func=_tiltfile_gate)
 
+    cue = subparsers.add_parser(
+        "cue",
+        help="Emit the agent-gate decision for CUE source, module, or workflow configuration.",
+    )
+    cue.add_argument("--framework", help="Include checks from a compliance framework.")
+    cue.add_argument("input_file", help="Path to a .cue source file.")
+    cue.set_defaults(func=_cue_gate)
+
     salt = subparsers.add_parser(
         "salt",
         help="Emit the agent-gate decision for a Salt SLS state file.",
@@ -1755,6 +1763,32 @@ def _tiltfile_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_tiltfile(data, catalog=catalog))
+
+
+def _cue_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for CUE source."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.cue import CueInputError, analyze_cue, parse_cue
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_cue(source, path.name)
+    except CueInputError as exc:
+        print(f"Error: invalid CUE input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "cue":
+        print("Error: input not recognized as CUE configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_cue(data, catalog=catalog))
 
 
 def _salt_gate(args: argparse.Namespace) -> int:

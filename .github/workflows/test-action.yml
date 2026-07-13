@@ -1432,6 +1432,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on CUE workflow
+        id: cue
+        uses: ./
+        with:
+          tool: cue
+          input-file: tests/fixtures/deploy_risky_tool.cue
+          framework: soc2
+
+      - name: Assert CUE outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.cue.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.cue.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.cue.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "20"
+          test "$RISK_COUNTS" = '{"dangerous":13,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "cue"
+          assert payload["artifact_type"] == "tool"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Salt states
         id: salt
         uses: ./
