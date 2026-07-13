@@ -35,13 +35,16 @@ credentials:
               password: ${REGISTRY_PASSWORD}
 
 unclassified:
-  globalLibraries:
+  globalUntrustedLibraries:
     libraries:
       - name: shared-deploy
         defaultVersion: 0123456789abcdef0123456789abcdef01234567
         implicit: false
+        allowVersionOverride: false
+        includeInChangesets: true
         retriever:
           modernSCM:
             scm:
               git:
                 remote: https://git.example.test/shared-deploy.git
+                credentialsId: shared-library-readonly

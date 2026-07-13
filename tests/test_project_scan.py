@@ -630,6 +630,34 @@ def test_root_bolt_inventory_wins_over_generic_ansible_inventory(tmp_path: Path)
     assert identify_project_input(inventory, "inventory.yaml") == "puppet-project"
 
 
+def test_project_scan_analyzes_jenkins_jcasc_library_trust(tmp_path: Path) -> None:
+    target = tmp_path / "jenkins" / "jenkins.yaml"
+    target.parent.mkdir()
+    target.write_text(
+        (FIXTURES / "jenkins_jcasc_risky.yml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "jenkins-jcasc"
+    assert payload["files"][0]["total_changes"] == 26
+    assert payload["files"][0]["risk_counts"] == {
+        "safe": 0,
+        "review": 7,
+        "dangerous": 19,
+        "irreversible": 0,
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-library-credential-do-not-leak" not in encoded
+    assert "git.example.test" not in encoded
+    assert "shared-deploy" not in encoded
+
+
 def test_project_scan_analyzes_jenkins_plugin_catalog(tmp_path: Path) -> None:
     jenkins_directory = tmp_path / "jenkins"
     jenkins_directory.mkdir()
