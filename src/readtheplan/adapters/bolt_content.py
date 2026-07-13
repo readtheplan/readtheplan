@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import tokenize
+from bisect import bisect_right
+from io import StringIO
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -18,6 +21,7 @@ _MAX_NODES = 100_000
 _MAX_DEPTH = 100
 _MAX_STEPS = 2_000
 _MAX_PARAMETERS = 2_000
+_MAX_SCRIPT_FINDINGS = 2_000
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _SECRET = re.compile(
     r"(?:password|passwd|token|secret|private.?key|client.?secret|api.?key|credential)",
@@ -117,6 +121,267 @@ _SENSITIVE_PATH = re.compile(
     r"(?:^|[/\\])(?:etc[/\\](?:shadow|sudoers)|\.ssh|\.gnupg|secrets?|credentials?)(?:[/\\]|$)",
     re.IGNORECASE,
 )
+_TASK_IMPLEMENTATION_SUFFIXES = {
+    ".bash": "shell",
+    ".ksh": "shell",
+    ".ps1": "powershell",
+    ".py": "python",
+    ".rb": "ruby",
+    ".sh": "shell",
+    ".zsh": "shell",
+}
+_TASK_IMPLEMENTATION_SHEBANGS = (
+    (re.compile(r"^#![^\n]*(?:^|[/ ])(?:bash|dash|ksh|sh|zsh)(?:\s|$)"), "shell"),
+    (re.compile(r"^#![^\n]*(?:^|[/ ])(?:powershell|pwsh)(?:\.exe)?(?:\s|$)", re.I), "powershell"),
+    (re.compile(r"^#![^\n]*(?:^|[/ ])python(?:\d+(?:\.\d+)?)?(?:\s|$)", re.I), "python"),
+    (re.compile(r"^#![^\n]*(?:^|[/ ])ruby(?:\d+(?:\.\d+)?)?(?:\s|$)", re.I), "ruby"),
+)
+_SCRIPT_PARAMETER_INPUTS = {
+    "powershell": re.compile(r"(?i)(?:\bparam\s*\(|\$env:PT_[A-Za-z_][A-Za-z0-9_]*|\$_noop\b)"),
+    "python": re.compile(
+        r"(?:\bos\.environ(?:\.get)?\s*\(?(?:[^\n]*PT_)|\bsys\.stdin\b|['\"]_noop['\"])",
+        re.I,
+    ),
+    "ruby": re.compile(r"(?:\bENV\s*\[[^\n]*PT_|\bSTDIN\.(?:read|gets)\b|['\"]_noop['\"])", re.I),
+    "shell": re.compile(r"(?:\bPT_[A-Za-z_][A-Za-z0-9_]*\b|\b_noop\b)"),
+}
+_SCRIPT_SECRET_ASSIGNMENT = re.compile(
+    r"(?i)(?:\$|\b)(?:[A-Za-z0-9_]*(?:password|passwd|token|secret|private_?key|"
+    r"client_?secret|api_?key|credential)[A-Za-z0-9_]*)\s*(?::=|=|:)"
+)
+_SCRIPT_FINDINGS = {
+    "shell": (
+        (
+            "dynamic_execution",
+            "dangerous",
+            re.compile(r"(?:\beval\b|\b(?:ba|da|k|z)?sh\s+-c\b|\$\(|`[^`]*`)", re.I),
+            "The task uses dynamic shell evaluation or command substitution; target-supplied "
+            "values can change the executed program.",
+        ),
+        (
+            "destructive_operation",
+            "dangerous",
+            re.compile(
+                r"(?:\brm\b[^\n]*(?:-[A-Za-z]*r|--recursive)|\bmkfs(?:\.|\b)|"
+                r"\bdd\s+if=|\b(?:shutdown|reboot|poweroff)\b)",
+                re.I,
+            ),
+            "The task contains a destructive filesystem or target lifecycle command.",
+        ),
+        (
+            "network_access",
+            "dangerous",
+            re.compile(r"(?:^|[;&|\s])(?:curl|wget|nc|ncat|socat)\b", re.I | re.M),
+            "The task opens a network or download boundary from the target; review destination "
+            "trust, TLS, credentials, and executed content.",
+        ),
+        (
+            "privilege_escalation",
+            "dangerous",
+            re.compile(r"(?:^|[;&|\s])(?:sudo|su|doas)\b", re.I | re.M),
+            "The task invokes a privilege-escalation utility on the target.",
+        ),
+        (
+            "remote_access",
+            "dangerous",
+            re.compile(r"(?:^|[;&|\s])(?:ssh|scp|sftp|rsync)\b", re.I | re.M),
+            "The task initiates remote access or transfer from the target, creating another "
+            "credential and host-trust boundary.",
+        ),
+        (
+            "system_mutation",
+            "dangerous",
+            re.compile(
+                r"(?:^|[;&|\s])(?:apk|apt(?:-get)?|dnf|yum|rpm|systemctl|service|"
+                r"useradd|usermod|userdel|groupadd|iptables|nft|mount|umount)\b",
+                re.I | re.M,
+            ),
+            "The task changes packages, services, identities, firewall policy, or mounted "
+            "filesystems on the target.",
+        ),
+        (
+            "permission_change",
+            "dangerous",
+            re.compile(r"(?:^|[;&|\s])(?:chmod|chown|chgrp|setfacl)\b", re.I | re.M),
+            "The task changes target ownership or permissions; review affected paths and least "
+            "privilege.",
+        ),
+    ),
+    "powershell": (
+        (
+            "dynamic_execution",
+            "dangerous",
+            re.compile(
+                r"\b(?:Invoke-Expression|iex|Add-Type)\b|"
+                r"\b(?:powershell|pwsh)(?:\.exe)?\s+-(?:e|enc|encodedcommand)\b",
+                re.I,
+            ),
+            "The task evaluates dynamic PowerShell or compiled code on the target.",
+        ),
+        (
+            "process_execution",
+            "dangerous",
+            re.compile(r"\bStart-Process\b|(?:^|[;|&]\s*)&\s*\$", re.I | re.M),
+            "The task starts another process or invokes a dynamically selected command on the "
+            "target.",
+        ),
+        (
+            "destructive_operation",
+            "dangerous",
+            re.compile(
+                r"\bRemove-Item\b[^\n]*-Recurse\b|"
+                r"\b(?:Clear-Disk|Format-Volume|Stop-Computer|Restart-Computer)\b",
+                re.I,
+            ),
+            "The task contains a destructive filesystem, disk, or target lifecycle operation.",
+        ),
+        (
+            "network_access",
+            "dangerous",
+            re.compile(
+                r"\b(?:Invoke-WebRequest|Invoke-RestMethod|New-PSSession|Enter-PSSession)\b|"
+                r"\b(?:DownloadString|DownloadFile)\s*\(",
+                re.I,
+            ),
+            "The task opens a network, remoting, or download boundary from the target.",
+        ),
+        (
+            "system_mutation",
+            "dangerous",
+            re.compile(
+                r"\b(?:Install-Package|Install-Module|Set-Service|New-Service|New-LocalUser|"
+                r"Set-LocalUser|Remove-LocalUser|New-NetFirewallRule|Set-NetFirewallRule|"
+                r"Disable-NetFirewallRule)\b",
+                re.I,
+            ),
+            "The task changes packages, services, identities, or firewall policy on the target.",
+        ),
+        (
+            "filesystem_mutation",
+            "dangerous",
+            re.compile(
+                r"\b(?:Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|"
+                r"Rename-Item)\b",
+                re.I,
+            ),
+            "The task writes, creates, copies, or moves target filesystem content.",
+        ),
+        (
+            "permission_change",
+            "dangerous",
+            re.compile(r"\b(?:Set-Acl|icacls|takeown)\b", re.I),
+            "The task changes target ownership or access control.",
+        ),
+    ),
+    "python": (
+        (
+            "dynamic_execution",
+            "dangerous",
+            re.compile(r"(?<![.\w])(?:eval|exec|compile)\s*\(|\bshell\s*=\s*True\b"),
+            "The task evaluates dynamic Python or enables shell command parsing on the target.",
+        ),
+        (
+            "process_execution",
+            "dangerous",
+            re.compile(
+                r"\b(?:os\.(?:system|popen)|"
+                r"subprocess\.(?:call|run|Popen|check_call|check_output))\s*\("
+            ),
+            "The task starts a process on the target; review argument separation, input "
+            "validation, environment, and exit handling.",
+        ),
+        (
+            "destructive_operation",
+            "dangerous",
+            re.compile(
+                r"\b(?:shutil\.rmtree|os\.(?:remove|unlink|rmdir)|Path\([^\n]*\)\.(?:unlink|rmdir))\s*\("
+            ),
+            "The task deletes target filesystem content.",
+        ),
+        (
+            "network_access",
+            "dangerous",
+            re.compile(
+                r"\b(?:requests|httpx)\.(?:get|post|put|patch|delete|request)\s*\(|\burllib\.request\.|\bsocket\.(?:socket|create_connection)\s*\("
+            ),
+            "The task opens a network or download boundary from the target.",
+        ),
+        (
+            "filesystem_mutation",
+            "dangerous",
+            re.compile(
+                r"\b(?:Path\([^\n]*\)\.(?:write_text|write_bytes|rename|replace|chmod)|shutil\.(?:copy|copy2|copytree|move)|os\.(?:rename|replace|chmod|chown))\s*\("
+            ),
+            "The task writes, moves, or changes permissions on target filesystem content.",
+        ),
+        (
+            "unsafe_deserialization",
+            "dangerous",
+            re.compile(r"\b(?:pickle|marshal)\.loads?\s*\(|\byaml\.(?:load|unsafe_load)\s*\("),
+            "The task invokes a deserializer that can construct executable or "
+            "attacker-controlled objects.",
+        ),
+        (
+            "privilege_change",
+            "dangerous",
+            re.compile(r"\bos\.set(?:e|re|res)?(?:uid|gid)\s*\("),
+            "The task changes its target identity or group privileges.",
+        ),
+    ),
+    "ruby": (
+        (
+            "dynamic_execution",
+            "dangerous",
+            re.compile(r"(?<![.\w])(?:eval|instance_eval|class_eval|module_eval)\s*(?:\(|\b)"),
+            "The task evaluates dynamic Ruby code on the target.",
+        ),
+        (
+            "process_execution",
+            "dangerous",
+            re.compile(
+                r"(?<![.\w])(?:system|exec|spawn)\s*(?:\(|\s)|"
+                r"\b(?:IO\.popen|Open3\.[A-Za-z_]+)\s*\(|`[^`]*`|"
+                r"%x\s*[^A-Za-z0-9\s]",
+                re.I,
+            ),
+            "The task starts a process or shell command on the target; review argument "
+            "separation and parameter interpolation.",
+        ),
+        (
+            "destructive_operation",
+            "dangerous",
+            re.compile(r"\b(?:FileUtils\.(?:rm|rm_f|rm_rf|rmtree)|File\.(?:delete|unlink))\s*\("),
+            "The task deletes target filesystem content.",
+        ),
+        (
+            "network_access",
+            "dangerous",
+            re.compile(r"\b(?:Net::HTTP|OpenURI|TCPSocket|UDPSocket)\b|\bURI\.open\s*\("),
+            "The task opens a network or download boundary from the target.",
+        ),
+        (
+            "filesystem_mutation",
+            "dangerous",
+            re.compile(
+                r"\b(?:File\.(?:write|rename|chmod|chown)|FileUtils\.(?:cp|cp_r|mv|mkdir|mkdir_p))\s*\("
+            ),
+            "The task writes, moves, or changes permissions on target filesystem content.",
+        ),
+        (
+            "unsafe_deserialization",
+            "dangerous",
+            re.compile(r"\b(?:YAML|Marshal)\.(?:load|restore)\s*\("),
+            "The task invokes a deserializer that can construct executable or "
+            "attacker-controlled objects.",
+        ),
+        (
+            "privilege_change",
+            "dangerous",
+            re.compile(r"\bProcess::Sys\.set(?:e|re|res)?(?:uid|gid)\s*\("),
+            "The task changes its target identity or group privileges.",
+        ),
+    ),
+}
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -214,6 +479,162 @@ def is_bolt_yaml_plan(filename: str) -> bool:
 def is_bolt_task_metadata(filename: str) -> bool:
     parts = _filename_parts(filename)
     return bool(parts and parts[-1].endswith(".json") and "tasks" in parts[:-1])
+
+
+def is_bolt_task_path(filename: str) -> bool:
+    parts = _filename_parts(filename)
+    return bool(parts and "tasks" in parts[:-1])
+
+
+def bolt_task_implementation_language(filename: str, source: str = "") -> str | None:
+    """Return a supported Bolt task implementation language without executing source."""
+    parts = _filename_parts(filename)
+    if not parts or "tasks" not in parts[:-1]:
+        return None
+    suffix = PurePosixPath(parts[-1]).suffix
+    language = _TASK_IMPLEMENTATION_SUFFIXES.get(suffix)
+    if language is not None:
+        return language
+    if suffix in {".json", ".md", ".pp", ".yaml", ".yml"}:
+        return None
+    first_line = source.splitlines()[0] if source.splitlines() else ""
+    for pattern, candidate in _TASK_IMPLEMENTATION_SHEBANGS:
+        if pattern.search(first_line):
+            return candidate
+    return None
+
+
+def is_bolt_task_implementation(filename: str, source: str = "") -> bool:
+    return bolt_task_implementation_language(filename, source) is not None
+
+
+def _mask_python_source(source: str, *, strings: bool) -> str:
+    lines = source.splitlines(keepends=True)
+    output = [list(line) for line in lines]
+    try:
+        tokens = tokenize.generate_tokens(StringIO(source).readline)
+        for token in tokens:
+            if token.type != tokenize.COMMENT and not (strings and token.type == tokenize.STRING):
+                continue
+            (start_line, start_column), (end_line, end_column) = token.start, token.end
+            for line_number in range(start_line, end_line + 1):
+                row = output[line_number - 1]
+                start = start_column if line_number == start_line else 0
+                end = end_column if line_number == end_line else len(row)
+                for column in range(start, min(end, len(row))):
+                    if row[column] not in "\r\n":
+                        row[column] = " "
+    except (IndentationError, tokenize.TokenError):
+        return _mask_quoted_source(source, language="python", strings=strings)
+    return "".join("".join(line) for line in output)
+
+
+def _mask_quoted_source(source: str, *, language: str, strings: bool) -> str:
+    output = list(source)
+    state = "code"
+    quote = ""
+    index = 0
+    line_start = 0
+    while index < len(source):
+        char = source[index]
+        if state == "line_comment":
+            if char in "\r\n":
+                state = "code"
+                line_start = index + 1
+            else:
+                output[index] = " "
+            index += 1
+            continue
+        if state == "block_comment":
+            if source.startswith("#>", index):
+                output[index : index + 2] = [" ", " "]
+                state = "code"
+                index += 2
+            else:
+                if char not in "\r\n":
+                    output[index] = " "
+                index += 1
+            continue
+        if state == "string":
+            if char == "\\" and language != "powershell":
+                if strings:
+                    output[index] = " "
+                    if index + 1 < len(source) and source[index + 1] not in "\r\n":
+                        output[index + 1] = " "
+                index += 2
+                continue
+            if language == "powershell" and char == "`":
+                if strings:
+                    output[index] = " "
+                    if index + 1 < len(source) and source[index + 1] not in "\r\n":
+                        output[index + 1] = " "
+                index += 2
+                continue
+            if char == quote:
+                if strings:
+                    output[index] = " "
+                state = "code"
+            elif strings and char not in "\r\n":
+                output[index] = " "
+            if char in "\r\n":
+                line_start = index + 1
+            index += 1
+            continue
+
+        if char in "\r\n":
+            line_start = index + 1
+            index += 1
+            continue
+        if language == "powershell" and source.startswith("<#", index):
+            output[index : index + 2] = [" ", " "]
+            state = "block_comment"
+            index += 2
+            continue
+        if char == "#" and (
+            language != "shell"
+            or index == line_start
+            or source[index - 1].isspace()
+            or source[index - 1] in ";|&()"
+        ):
+            if index == line_start and source.startswith("#!", index):
+                index += 2
+                continue
+            output[index] = " "
+            state = "line_comment"
+            index += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            if strings:
+                output[index] = " "
+            state = "string"
+            index += 1
+            continue
+        index += 1
+    return "".join(output)
+
+
+def _masked_script_source(source: str, *, language: str, strings: bool) -> str:
+    if language == "python":
+        return _mask_python_source(source, strings=strings)
+    return _mask_quoted_source(source, language=language, strings=strings)
+
+
+def parse_bolt_task_implementation(source: str, *, filename: str) -> dict[str, Any]:
+    label = "Bolt task implementation"
+    _source_checks(source, label)
+    language = bolt_task_implementation_language(filename, source)
+    if language is None:
+        raise BoltContentInputError(
+            "Bolt task implementation must be a supported shell, PowerShell, Python, or Ruby task"
+        )
+    _masked_script_source(source, language=language, strings=True)
+    return {
+        "source": source,
+        "language": language,
+        "line_count": len(source.splitlines()),
+        "task_name": PurePosixPath(filename.replace("\\", "/")).stem,
+    }
 
 
 def _mapping(value: Any, label: str) -> dict[str, Any]:
@@ -370,6 +791,107 @@ def parse_bolt_yaml_plan(source: str) -> dict[str, Any]:
 
 def _change(address: str, kind: str, risk: str, explanation: str) -> dict[str, str]:
     return {"Address": address, "Kind": kind, "Risk": risk, "Explanation": explanation}
+
+
+def _script_change(line: int, kind: str, risk: str, explanation: str) -> dict[str, str]:
+    change = _change(f"bolt_task_implementation.line.{line}.{kind}", kind, risk, explanation)
+    change["Action"] = "execute"
+    return change
+
+
+def bolt_task_implementation_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    source = document["source"]
+    language = document["language"]
+    masked = _masked_script_source(source, language=language, strings=True)
+    comments_removed = _masked_script_source(source, language=language, strings=False)
+    line_starts = [0]
+    line_starts.extend(index + 1 for index, char in enumerate(source) if char == "\n")
+    changes = [
+        _script_change(
+            1,
+            "bolt_task_implementation_execution",
+            "dangerous",
+            f"Bolt copies this {language} task implementation to a selected target and executes "
+            "it using the target interpreter; review target scope, input validation, effective "
+            "identity, interpreter provenance, exit behavior, and rollback.",
+        )
+    ]
+    seen: set[tuple[int, str]] = set()
+    truncated = False
+    for kind, risk, pattern, explanation in _SCRIPT_FINDINGS[language]:
+        for match in pattern.finditer(masked):
+            line = bisect_right(line_starts, max(match.end() - 1, match.start()))
+            identity = (line, kind)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            changes.append(_script_change(line, f"bolt_task_{kind}", risk, explanation))
+            if len(changes) >= _MAX_SCRIPT_FINDINGS:
+                truncated = True
+                break
+        if truncated:
+            break
+    if not truncated:
+        parameter_pattern = _SCRIPT_PARAMETER_INPUTS[language]
+        for match in parameter_pattern.finditer(comments_removed):
+            line = bisect_right(line_starts, match.start())
+            identity = (line, "bolt_task_parameter_input")
+            if identity in seen:
+                continue
+            seen.add(identity)
+            changes.append(
+                _script_change(
+                    line,
+                    "bolt_task_parameter_input",
+                    "review",
+                    "The implementation consumes Bolt parameters or the no-op metaparameter; "
+                    "verify the matching metadata type, sensitive flag, input method, "
+                    "validation, quoting, and no-op behavior.",
+                )
+            )
+            if len(changes) >= _MAX_SCRIPT_FINDINGS:
+                truncated = True
+                break
+    if not truncated:
+        for match in _SCRIPT_SECRET_ASSIGNMENT.finditer(comments_removed):
+            line = bisect_right(line_starts, match.start())
+            identity = (line, "bolt_task_secret_handling")
+            if identity in seen:
+                continue
+            seen.add(identity)
+            changes.append(
+                _script_change(
+                    line,
+                    "bolt_task_secret_handling",
+                    "review",
+                    "The implementation assigns a secret-like value; verify sensitive metadata, "
+                    "avoid command-line or log exposure, and clear temporary material.",
+                )
+            )
+            if len(changes) >= _MAX_SCRIPT_FINDINGS:
+                truncated = True
+                break
+    if truncated:
+        changes.append(
+            _script_change(
+                1,
+                "bolt_task_finding_limit",
+                "review",
+                "Task findings reached the bounded output limit; narrow or split the "
+                "implementation and review the remaining source manually.",
+            )
+        )
+    changes.append(
+        _script_change(
+            1,
+            "bolt_task_implementation_boundary",
+            "review",
+            "Static task inspection does not resolve its metadata implementation selection, "
+            "bundled files, interpreter version, input values, environment, target platform and "
+            "state, transport, privilege escalation, or runtime side effects.",
+        )
+    )
+    return changes
 
 
 def _path_escapes(value: Any) -> bool:
@@ -753,6 +1275,13 @@ def bolt_content_metadata(artifact_type: str, document: dict[str, Any]) -> dict[
             "step_count": len(document["steps"]),
             "parameter_count": len(document.get("parameters", {})),
             "dynamic_count": _dynamic_count(document),
+        }
+    if artifact_type == "bolt_task_implementation":
+        return {
+            "language": document["language"],
+            "source_kind": "target_task_implementation",
+            "source_line_count": document["line_count"],
+            "task_name": document["task_name"],
         }
     parameters = document.get("parameters", {})
     return {

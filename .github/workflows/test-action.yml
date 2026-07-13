@@ -1907,6 +1907,42 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet Bolt task implementation
+        id: puppet_bolt_task_implementation
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/bolt_task_implementation_risky/modules/fixture/tasks/deploy.sh
+          framework: soc2
+
+      - name: Assert Puppet Bolt task implementation outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_bolt_task_implementation.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_bolt_task_implementation.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_bolt_task_implementation.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "13"
+          test "$RISK_COUNTS" = '{"dangerous":8,"irreversible":0,"review":5,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "bolt_task_implementation"
+          assert payload["language"] == "shell"
+          assert payload["source_kind"] == "target_task_implementation"
+          assert payload["source_line_count"] == 12
+          assert payload["task_name"] == "deploy"
+          assert payload["decision"] == "block"
+          assert "fixture-bolt-implementation-secret-do-not-leak" not in serialized
+          assert "downloads.example.invalid" not in serialized
+          assert "deploy@example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

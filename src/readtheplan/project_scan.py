@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from readtheplan.adapters.bolt_content import bolt_task_implementation_language
 from readtheplan.rules import RISK_ORDER
 
 PROJECT_SCAN_SCHEMA = "rtp-agent-gate-v1"
@@ -247,6 +248,20 @@ def identify_project_input(
         return "puppet-project"
     if suffix == ".json" and "tasks" in parts[:-1] and _bolt_content_context(path, parts, "tasks"):
         return "puppet-project"
+    if "tasks" in parts[:-1] and _bolt_content_context(path, parts, "tasks"):
+        implementation_source = ""
+        if content is not None:
+            try:
+                implementation_source = content[:4096].decode("utf-8")
+            except UnicodeDecodeError:
+                implementation_source = ""
+        elif not suffix and inspect_content:
+            try:
+                implementation_source = path.read_bytes()[:4096].decode("utf-8")
+            except (OSError, UnicodeDecodeError):
+                implementation_source = ""
+        if bolt_task_implementation_language(relative_path, implementation_source):
+            return "puppet-project"
 
     if name == "ansible.cfg":
         return "ansible-project"
@@ -951,6 +966,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "language",
         "hook_name",
         "source_kind",
+        "task_name",
     ):
         if isinstance(payload.get(field), str):
             result[field] = payload[field]
