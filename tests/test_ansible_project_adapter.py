@@ -484,6 +484,131 @@ def test_ansible_project_parser_rejects_unrelated_or_ambiguous_input(
         parse_ansible_project(source)
 
 
+def test_controller_export_surfaces_execution_identity_rbac_and_automation_without_values() -> None:
+    changes = _changes("ansible_controller_export_risky.json")
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert len(changes) == 41
+    assert sum(change.risk == "dangerous" for change in changes) == 32
+    assert sum(change.risk == "review" for change in changes) == 9
+    assert "ansible_project_controller_credential_type" in kinds
+    assert "ansible_project_controller_mutable_project_revision" in kinds
+    assert "ansible_project_controller_inventory_launch_update" in kinds
+    assert "ansible_project_controller_mutable_execution_environment" in kinds
+    assert "ansible_project_controller_privilege_escalation" in kinds
+    assert "ansible_project_controller_workflow_graph" in kinds
+    assert "ansible_project_controller_rbac" in kinds
+    assert "ansible_project_controller_import_boundary" in kinds
+    for sensitive in (
+        "fixture-controller-password-do-not-leak",
+        "fixture-credential-secret-do-not-leak",
+        "fixture-job-token-do-not-leak",
+        "fixture-notification-token-do-not-leak",
+        "fixture-survey-password-do-not-leak",
+        "fixture-user",
+        "fixture-password",
+        "example.invalid",
+        "fixture-deploy",
+        "fixture-host",
+    ):
+        assert sensitive not in encoded
+
+
+def test_controller_export_supports_module_assets_wrapper_and_content_detection() -> None:
+    source = """
+assets:
+  credentials:
+    - name: fixture
+      inputs:
+        password: $encrypted$
+      natural_key:
+        name: fixture
+        type: credential
+  schedules:
+    - name: disabled
+      enabled: false
+      natural_key:
+        name: disabled
+        type: schedule
+"""
+    data = parse_ansible_project(source, filename="arbitrary-result.yml")
+    changes = AnsibleProjectAdapter().analyze(data)
+
+    assert data["ansible_project"]["artifact_type"] == "controller_export"
+    assert data["ansible_project"]["document"]["wrapped_assets"] is True
+    assert {change.risk for change in changes} == {"review"}
+    assert not any(
+        change.resource_type == "ansible_project_controller_literal_secret"
+        for change in changes
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "error"),
+    [
+        ("ordinary: yaml\n", "not a recognized Automation Controller"),
+        ("projects: {}\n", "projects must be a list"),
+        ("projects:\n  - nope\n", "entries must be mappings"),
+        ("projects:\n  - name: missing-key\n", "require a natural_key"),
+        (
+            "projects:\n  - natural_key: {type: inventory}\n",
+            "unexpected natural_key type",
+        ),
+        (
+            "projects:\n  - natural_key: {name: one, type: project}\n"
+            "  - natural_key: {name: one, type: project}\n",
+            "duplicate natural_key",
+        ),
+        (
+            "projects:\n  - natural_key: {type: project}\nunknown_assets: []\n",
+            "unsupported resource types",
+        ),
+        (
+            "projects:\n  - natural_key: {type: project}\n    related: []\n",
+            "related data must be a mapping",
+        ),
+        (
+            "projects:\n  - natural_key: {type: project}\n    name: one\n"
+            "    name: two\n",
+            "duplicate YAML key",
+        ),
+    ],
+)
+def test_controller_export_parser_rejects_malformed_canonical_bundles(
+    source: str, error: str
+) -> None:
+    with pytest.raises(AnsibleProjectInputError, match=error):
+        parse_ansible_project(source, filename="controller-export.yml")
+
+
+def test_controller_export_gate_and_cli_expose_only_structural_counts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = FIXTURES / "ansible_controller_export_risky.json"
+    data = parse_ansible_project(path.read_text(encoding="utf-8"), filename=str(path))
+    gate = analyze_ansible_project(data)
+
+    assert gate["adapter"] == "ansible-project"
+    assert gate["artifact_type"] == "controller_export"
+    assert gate["asset_count"] == 12
+    assert gate["asset_type_count"] == 12
+    assert gate["total_changes"] == 41
+    assert gate["decision"] == "block"
+
+    assert main(["ansible-project", "--framework", "soc2", str(path)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    encoded = json.dumps(payload)
+    assert payload["risk_counts"]["dangerous"] == 32
+    assert payload["asset_count"] == 12
+    assert "fixture-controller-password-do-not-leak" not in encoded
+    assert "fixture-deploy" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+
+
 @pytest.mark.parametrize(
     ("fixture", "artifact_type", "decision"),
     [
@@ -502,6 +627,7 @@ def test_ansible_project_parser_rejects_unrelated_or_ambiguous_input(
             "molecule",
             "block",
         ),
+        ("ansible_controller_export_risky.json", "controller_export", "block"),
         (
             "ansible_inventory_plugin_risky.aws_ec2.yml",
             "inventory_plugin",

@@ -661,6 +661,25 @@ def test_agent_gate_configuration_management_supports_ansible_content_policy() -
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_controller_exports() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "ansible_controller_export_risky.json"),
+        "ansible-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "ansible-project"
+    assert result["artifact_type"] == "controller_export"
+    assert result["asset_count"] == 12
+    assert result["asset_type_count"] == 12
+    assert result["total_changes"] == 41
+    assert result["decision"] == "block"
+    assert "fixture-controller-password-do-not-leak" not in encoded
+    assert "fixture-deploy" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_puppet_runtime_config() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_conf_risky.conf"),

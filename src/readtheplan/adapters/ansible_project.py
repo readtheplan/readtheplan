@@ -112,6 +112,57 @@ _ANSIBLE_LINT_FILENAMES = {
 _ROLE_META_FILENAMES = {"main.yaml", "main.yml"}
 _RUNTIME_META_FILENAMES = {"runtime.yaml", "runtime.yml"}
 _ARGUMENT_SPEC_FILENAMES = {"argument_specs.yaml", "argument_specs.yml"}
+_CONTROLLER_EXPORT_FILENAMES = {
+    "ansible-controller-export.json",
+    "ansible-controller-export.yaml",
+    "ansible-controller-export.yml",
+    "awx-export.json",
+    "awx-export.yaml",
+    "awx-export.yml",
+    "awx_export.json",
+    "awx_export.yaml",
+    "awx_export.yml",
+    "controller-export.json",
+    "controller-export.yaml",
+    "controller-export.yml",
+    "controller_export.json",
+    "controller_export.yaml",
+    "controller_export.yml",
+    "tower-export.json",
+    "tower-export.yaml",
+    "tower-export.yml",
+}
+_CONTROLLER_EXPORT_RESOURCES = {
+    "credential_types",
+    "credentials",
+    "execution_environments",
+    "inventory",
+    "inventory_sources",
+    "job_templates",
+    "notification_templates",
+    "organizations",
+    "projects",
+    "schedules",
+    "teams",
+    "users",
+    "workflow_job_templates",
+}
+_CONTROLLER_EXPORT_TYPES = {
+    "credential_types": {"credential_type"},
+    "credentials": {"credential"},
+    "execution_environments": {"execution_environment"},
+    "inventory": {"constructed_inventory", "inventory"},
+    "inventory_sources": {"inventory_source"},
+    "job_templates": {"job_template"},
+    "notification_templates": {"notification_template"},
+    "organizations": {"organization"},
+    "projects": {"project"},
+    "schedules": {"schedule"},
+    "teams": {"team"},
+    "users": {"user"},
+    "workflow_job_templates": {"workflow_job_template"},
+}
+_MAX_CONTROLLER_EXPORT_ASSETS = 10_000
 _GALAXY_KEYS = {
     "authors",
     "build_ignore",
@@ -979,6 +1030,98 @@ def _parse_molecule(document: Any) -> dict[str, Any]:
     return document
 
 
+def _freeze_controller_natural_key(value: Any) -> Any:
+    if isinstance(value, dict):
+        return tuple(
+            sorted(
+                (str(key), _freeze_controller_natural_key(child))
+                for key, child in value.items()
+            )
+        )
+    if isinstance(value, list):
+        return tuple(_freeze_controller_natural_key(child) for child in value)
+    return value
+
+
+def _controller_export_document(
+    document: Any, *, strict: bool = False
+) -> dict[str, Any] | None:
+    if not isinstance(document, dict):
+        return None
+    wrapped = isinstance(document.get("assets"), dict)
+    resources = document["assets"] if wrapped else document
+    if not isinstance(resources, dict):
+        return None
+    resource_keys = set(resources) & _CONTROLLER_EXPORT_RESOURCES
+    if not resource_keys:
+        return None
+    unknown_resources = set(resources) - _CONTROLLER_EXPORT_RESOURCES
+    if unknown_resources:
+        if not strict:
+            return None
+        raise AnsibleProjectInputError(
+            "Automation Controller export contains unsupported resource types"
+        )
+    total_assets = 0
+    for resource in resource_keys:
+        assets = resources[resource]
+        if not isinstance(assets, list):
+            if not strict:
+                return None
+            raise AnsibleProjectInputError(
+                f"Automation Controller export resource {resource} must be a list"
+            )
+        total_assets += len(assets)
+        if total_assets > _MAX_CONTROLLER_EXPORT_ASSETS:
+            raise AnsibleProjectInputError(
+                "Automation Controller export exceeds the asset count limit"
+            )
+        identities: set[Any] = set()
+        for asset in assets:
+            if not isinstance(asset, dict):
+                if not strict:
+                    return None
+                raise AnsibleProjectInputError(
+                    f"Automation Controller export resource {resource} entries must be mappings"
+                )
+            natural_key = asset.get("natural_key")
+            if not isinstance(natural_key, dict) or not isinstance(
+                natural_key.get("type"), str
+            ):
+                if not strict:
+                    return None
+                raise AnsibleProjectInputError(
+                    f"Automation Controller export resource {resource} entries require a "
+                    "natural_key mapping with a string type"
+                )
+            if natural_key["type"] not in _CONTROLLER_EXPORT_TYPES[resource]:
+                if not strict:
+                    return None
+                raise AnsibleProjectInputError(
+                    f"Automation Controller export resource {resource} has an unexpected "
+                    "natural_key type"
+                )
+            identity = _freeze_controller_natural_key(natural_key)
+            if identity in identities:
+                raise AnsibleProjectInputError(
+                    f"Automation Controller export resource {resource} has a duplicate "
+                    "natural_key"
+                )
+            identities.add(identity)
+            if "related" in asset and not isinstance(asset["related"], dict):
+                if not strict:
+                    return None
+                raise AnsibleProjectInputError(
+                    f"Automation Controller export resource {resource} related data must be a "
+                    "mapping"
+                )
+    _reject_recursive_artifact_aliases(resources, label="Automation Controller export")
+    return {
+        "resources": {resource: resources[resource] for resource in sorted(resource_keys)},
+        "wrapped_assets": wrapped,
+    }
+
+
 def parse_ansible_project(source: str, filename: str | None = None) -> dict[str, Any]:
     """Parse Ansible project configuration, dependencies, or inventory without execution."""
     if not source.strip():
@@ -1053,6 +1196,19 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
                 "document": _parse_navigator(document),
             }
         }
+    if artifact_filename in _CONTROLLER_EXPORT_FILENAMES:
+        document = _load_inventory_yaml(source)
+        controller_export = _controller_export_document(document, strict=True)
+        if controller_export is None:
+            raise AnsibleProjectInputError(
+                "input is not a recognized Automation Controller export bundle"
+            )
+        return {
+            "ansible_project": {
+                "artifact_type": "controller_export",
+                "document": controller_export,
+            }
+        }
     if _inventory_filename(filename) and filename_suffix == ".ini":
         inventory = _parse_inventory_ini(source)
         return {"ansible_project": {"artifact_type": "inventory_ini", "document": inventory}}
@@ -1074,6 +1230,14 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
             raise AnsibleProjectInputError("inventory plugin name must not be empty")
         return {
             "ansible_project": {"artifact_type": "inventory_plugin", "document": document}
+        }
+    controller_export = _controller_export_document(document)
+    if controller_export is not None:
+        return {
+            "ansible_project": {
+                "artifact_type": "controller_export",
+                "document": controller_export,
+            }
         }
     inventory_yaml = _parse_inventory_yaml(document)
     if inventory_yaml is not None:
@@ -3317,6 +3481,409 @@ def _ansible_lint_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     return changes
 
 
+def _walk_controller_scalars(value: Any, path: tuple[str, ...] = ()):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from _walk_controller_scalars(child, (*path, str(key).casefold()))
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_controller_scalars(child, path)
+    else:
+        yield path, value
+
+
+def _controller_has_password_default(value: Any) -> bool:
+    if isinstance(value, dict):
+        default = value.get("default")
+        if (
+            str(value.get("type") or "").casefold() == "password"
+            and default is not None
+            and default != ""
+        ):
+            return True
+        return any(_controller_has_password_default(child) for child in value.values())
+    if isinstance(value, list):
+        return any(_controller_has_password_default(child) for child in value)
+    return False
+
+
+def _controller_has_literal_secret(value: Any) -> bool:
+    if _controller_has_password_default(value):
+        return True
+    for path, scalar in _walk_controller_scalars(value):
+        if isinstance(scalar, str) and _embedded_url_credential(scalar):
+            return True
+        if (
+            not path
+            or scalar in {None, ""}
+            or (path[-1] == "secret" and isinstance(scalar, bool))
+            or not _SECRET_OPTIONS.search(path[-1])
+        ):
+            continue
+        if isinstance(scalar, _VaultValue):
+            continue
+        if isinstance(scalar, str):
+            text = scalar.strip()
+            if (
+                not text
+                or text.casefold() in {"$encrypted$", "ask", "prompt", "redacted"}
+                or "{{" in text
+                or "{%" in text
+            ):
+                continue
+        return True
+    return False
+
+
+def _controller_has_plaintext_endpoint(value: Any) -> bool:
+    return any(
+        isinstance(scalar, str)
+        and scalar.strip().casefold().startswith(("http://", "git://", "ftp://"))
+        for _, scalar in _walk_controller_scalars(value)
+    )
+
+
+def _controller_has_dynamic_template(value: Any) -> bool:
+    return any(
+        isinstance(scalar, str) and ("{{" in scalar or "{%" in scalar)
+        for _, scalar in _walk_controller_scalars(value)
+    )
+
+
+def _controller_related(asset: dict[str, Any], key: str) -> Any:
+    related = asset.get("related", {})
+    return related.get(key) if isinstance(related, dict) else None
+
+
+def _controller_asset_changes(
+    resource: str, index: int, asset: dict[str, Any]
+) -> list[dict[str, str]]:
+    address = f"controller_export.{resource}[{index}]"
+    baseline = {
+        "credential_types": (
+            "controller_credential_type",
+            "dangerous",
+            "A custom credential type can inject secret data into environment variables, files, "
+            "or job extra variables.",
+        ),
+        "credentials": (
+            "controller_credential",
+            "review",
+            "A controller credential grants jobs, projects, inventory sources, or notifications "
+            "access to an external identity or secret.",
+        ),
+        "execution_environments": (
+            "controller_execution_environment",
+            "dangerous",
+            "An execution environment supplies the containerized executable toolchain used by "
+            "controller jobs.",
+        ),
+        "inventory": (
+            "controller_inventory",
+            "review",
+            "Controller inventory defines managed targets, groups, and variables consumed by jobs.",
+        ),
+        "inventory_sources": (
+            "controller_inventory_source",
+            "dangerous",
+            "An inventory source executes a source plugin and imports target data from an external "
+            "system.",
+        ),
+        "job_templates": (
+            "controller_job_template",
+            "dangerous",
+            "A job template launches project playbooks against controller inventory with selected "
+            "credentials and execution settings.",
+        ),
+        "notification_templates": (
+            "controller_notification",
+            "dangerous",
+            "A notification template sends controller event data to an external service.",
+        ),
+        "organizations": (
+            "controller_organization",
+            "review",
+            "An organization establishes controller tenancy, quotas, execution defaults, and "
+            "resource ownership.",
+        ),
+        "projects": (
+            "controller_project",
+            "dangerous",
+            "A controller project supplies executable Ansible content from source control or a "
+            "local project directory.",
+        ),
+        "schedules": (
+            "controller_schedule",
+            "dangerous" if asset.get("enabled", True) is not False else "review",
+            "A controller schedule automatically launches its associated job, workflow, project "
+            "update, or inventory update." if asset.get("enabled", True) is not False else
+            "A disabled controller schedule preserves automation timing and launch inputs.",
+        ),
+        "teams": (
+            "controller_team",
+            "review",
+            "A controller team groups identities for role-based access assignments.",
+        ),
+        "users": (
+            "controller_user",
+            "review",
+            "A controller user creates an interactive or service identity in the imported state.",
+        ),
+        "workflow_job_templates": (
+            "controller_workflow",
+            "dangerous",
+            "A workflow template orchestrates jobs, approvals, project updates, inventory updates, "
+            "and success, failure, or always-run branches.",
+        ),
+    }[resource]
+    changes = [_change(address, *baseline)]
+
+    if _controller_has_literal_secret(asset):
+        changes.append(
+            _change(
+                f"{address}.literal_secret",
+                "controller_literal_secret",
+                "dangerous",
+                "The exported asset contains a literal secret-like value instead of an encrypted, "
+                "prompted, or templated reference.",
+            )
+        )
+    if _controller_has_plaintext_endpoint(asset):
+        changes.append(
+            _change(
+                f"{address}.plaintext_endpoint",
+                "controller_plaintext_transport",
+                "dangerous",
+                "The exported asset uses a plaintext endpoint for source, inventory, notification, "
+                "or authentication traffic.",
+            )
+        )
+    if _controller_has_dynamic_template(asset):
+        changes.append(
+            _change(
+                f"{address}.dynamic_value",
+                "controller_dynamic_value",
+                "review",
+                "The exported asset contains a template expression whose effective value depends "
+                "on later variable or secret resolution.",
+            )
+        )
+
+    roles = _controller_related(asset, "roles")
+    if roles:
+        changes.append(
+            _change(
+                f"{address}.roles",
+                "controller_rbac",
+                "dangerous",
+                "Related role assignments grant controller permissions to users or teams and can "
+                "change administrative, use, execute, update, or membership access.",
+            )
+        )
+    related_schedules = _controller_related(asset, "schedules")
+    if related_schedules:
+        changes.append(
+            _change(
+                f"{address}.schedules",
+                "controller_related_schedule",
+                "dangerous",
+                "The asset includes related schedules that can launch automation without an "
+                "interactive request.",
+            )
+        )
+    if any(
+        _controller_related(asset, key)
+        for key in (
+            "notification_templates_error",
+            "notification_templates_started",
+            "notification_templates_success",
+        )
+    ):
+        changes.append(
+            _change(
+                f"{address}.notifications",
+                "controller_related_notification",
+                "review",
+                "The asset routes lifecycle events and potentially sensitive job context to "
+                "notification integrations.",
+            )
+        )
+
+    if resource == "projects":
+        revision = str(asset.get("scm_branch") or "").strip()
+        if asset.get("scm_type") and not _COMMIT.fullmatch(revision):
+            changes.append(
+                _change(
+                    f"{address}.revision",
+                    "controller_mutable_project_revision",
+                    "dangerous",
+                    "The source-controlled project does not pin a full immutable commit, so syncs "
+                    "can load different executable content.",
+                )
+            )
+        if asset.get("scm_update_on_launch") or asset.get("allow_override"):
+            changes.append(
+                _change(
+                    f"{address}.launch_update",
+                    "controller_project_launch_update",
+                    "dangerous",
+                    "Launch-time project synchronization or revision override can change the code "
+                    "executed by a job after review.",
+                )
+            )
+        if asset.get("signature_validation_credential") is None:
+            changes.append(
+                _change(
+                    f"{address}.content_signature",
+                    "controller_project_signature",
+                    "review",
+                    "The export does not associate a content-signature validation credential with "
+                    "the project.",
+                )
+            )
+    elif resource == "execution_environments":
+        image = str(asset.get("image") or "")
+        if image and not _OCI_SHA256.search(image):
+            changes.append(
+                _change(
+                    f"{address}.image",
+                    "controller_mutable_execution_environment",
+                    "dangerous",
+                    "The execution-environment image is not pinned by an immutable digest.",
+                )
+            )
+        if str(asset.get("pull") or asset.get("pull_policy") or "").casefold() == "always":
+            changes.append(
+                _change(
+                    f"{address}.pull_policy",
+                    "controller_execution_environment_pull",
+                    "dangerous",
+                    "The controller always pulls the execution image, allowing registry changes to "
+                    "alter later job runs.",
+                )
+            )
+    elif resource == "inventory_sources":
+        if asset.get("overwrite") or asset.get("overwrite_vars"):
+            changes.append(
+                _change(
+                    f"{address}.overwrite",
+                    "controller_inventory_overwrite",
+                    "dangerous",
+                    "Inventory synchronization overwrites imported hosts, groups, or variables.",
+                )
+            )
+        if asset.get("update_on_launch"):
+            changes.append(
+                _change(
+                    f"{address}.launch_update",
+                    "controller_inventory_launch_update",
+                    "dangerous",
+                    "Inventory refresh runs at job launch, so targets and variables can change "
+                    "after "
+                    "the template was reviewed.",
+                )
+            )
+    elif resource == "job_templates":
+        if asset.get("become_enabled"):
+            changes.append(
+                _change(
+                    f"{address}.privilege_escalation",
+                    "controller_privilege_escalation",
+                    "dangerous",
+                    "The job template enables privilege escalation on managed targets.",
+                )
+            )
+        if _controller_related(asset, "credentials") or asset.get("credentials"):
+            changes.append(
+                _change(
+                    f"{address}.credentials",
+                    "controller_job_credentials",
+                    "dangerous",
+                    "The job template makes controller credentials available to executable "
+                    "automation content.",
+                )
+            )
+        if any(
+            value is True
+            for key, value in asset.items()
+            if key.startswith("ask_") and key.endswith("_on_launch")
+        ):
+            changes.append(
+                _change(
+                    f"{address}.launch_prompts",
+                    "controller_launch_override",
+                    "review",
+                    "Launch prompts allow operators or callers to override reviewed template "
+                    "inventory, credentials, variables, tags, limits, or execution settings.",
+                )
+            )
+        if asset.get("webhook_service") or asset.get("webhook_credential"):
+            changes.append(
+                _change(
+                    f"{address}.webhook",
+                    "controller_webhook_launch",
+                    "dangerous",
+                    "A source-control webhook can remotely trigger the job template.",
+                )
+            )
+    elif resource == "workflow_job_templates":
+        nodes = _controller_related(asset, "workflow_nodes") or _controller_related(
+            asset, "workflow_job_template_nodes"
+        )
+        if nodes:
+            changes.append(
+                _change(
+                    f"{address}.nodes",
+                    "controller_workflow_graph",
+                    "dangerous",
+                    "The workflow graph defines executable, approval, failure, success, and "
+                    "always-run control flow across controller resources.",
+                )
+            )
+        if asset.get("webhook_service") or asset.get("webhook_credential"):
+            changes.append(
+                _change(
+                    f"{address}.webhook",
+                    "controller_webhook_launch",
+                    "dangerous",
+                    "A source-control webhook can remotely trigger the workflow template.",
+                )
+            )
+    elif resource == "users" and (
+        asset.get("is_superuser") or asset.get("is_system_auditor")
+    ):
+        changes.append(
+            _change(
+                f"{address}.elevated_role",
+                "controller_elevated_user",
+                "dangerous",
+                "The imported user receives controller-wide superuser or system-auditor access.",
+            )
+        )
+    return changes
+
+
+def _controller_export_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for resource, assets in document["resources"].items():
+        for index, asset in enumerate(assets):
+            changes.extend(_controller_asset_changes(resource, index, asset))
+    changes.append(
+        _change(
+            "controller_export.effective_import",
+            "controller_import_boundary",
+            "review",
+            "Effective import behavior also depends on controller/AWX and awxkit versions, API "
+            "permissions and existing natural-key matches, encrypted-value handling, dependency "
+            "creation order, omitted resources, project and inventory sync results, credential "
+            "replacement, execution-environment availability, and live controller state. Import "
+            "updates or creates exported objects and does not prove that omitted relationships are "
+            "pruned.",
+        )
+    )
+    return changes
+
+
 class AnsibleProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -3332,6 +3899,7 @@ class AnsibleProjectAdapter(BaseAdapter):
                 "ansible_lint",
                 "argument_specs",
                 "collection_metadata",
+                "controller_export",
                 "inventory_ini",
                 "inventory_plugin",
                 "inventory_yaml",
@@ -3357,6 +3925,8 @@ class AnsibleProjectAdapter(BaseAdapter):
             changes = _argument_spec_changes(document)
         elif artifact_type == "collection_metadata":
             changes = _collection_metadata_changes(document)
+        elif artifact_type == "controller_export":
+            changes = _controller_export_changes(document)
         elif artifact_type == "role_metadata":
             changes = _role_metadata_changes(document)
         elif artifact_type == "runtime_metadata":
@@ -3386,6 +3956,7 @@ class AnsibleProjectAdapter(BaseAdapter):
             "ansible_lint",
             "argument_specs",
             "collection_metadata",
+            "controller_export",
             "execution_environment",
             "molecule",
             "navigator",
@@ -3425,5 +3996,9 @@ def analyze_ansible_project(data: dict[str, Any], *, catalog=None) -> dict[str, 
     if gate["artifact_type"] == "molecule":
         platforms = data["ansible_project"]["document"].get("platforms", [])
         gate["platform_count"] = len(platforms) if isinstance(platforms, list) else 0
+    if gate["artifact_type"] == "controller_export":
+        resources = data["ansible_project"]["document"]["resources"]
+        gate["asset_count"] = sum(len(assets) for assets in resources.values())
+        gate["asset_type_count"] = len(resources)
     gate["total_changes"] = len(changes)
     return gate
