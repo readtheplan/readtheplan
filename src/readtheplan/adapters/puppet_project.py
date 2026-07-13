@@ -37,6 +37,64 @@ _RUBY_DYNAMIC = re.compile(
 )
 _BUILTIN_DATA_HASHES = {"json_data", "yaml_data"}
 _BUILTIN_LOOKUP_KEYS = {"eyaml_lookup_key"}
+_PUPPET_CONFIG_SECTIONS = {"main", "server", "agent", "user"}
+_PUPPET_CONFIG_SETTING = re.compile(
+    r"^[ \t]*(?P<name>[a-z_][a-z0-9_]*)[ \t]*=[ \t]*(?P<value>.*)$",
+    re.IGNORECASE,
+)
+_PUPPET_SECRET_SETTINGS = {
+    "forge_authorization",
+    "http_proxy_password",
+    "password",
+    "passphrase",
+    "token",
+}
+_PUPPET_COMMAND_SETTINGS = {
+    "config_version",
+    "diff",
+    "external_nodes",
+    "postrun_command",
+    "prerun_command",
+    "trusted_external_command",
+}
+_PUPPET_CODE_PATH_SETTINGS = {
+    "basemodulepath",
+    "binder_config",
+    "codedir",
+    "default_manifest",
+    "environmentpath",
+    "factpath",
+    "hiera_config",
+    "libdir",
+    "manifest",
+    "modulepath",
+    "pluginsource",
+    "route_file",
+    "vendormoduledir",
+}
+_PUPPET_ENDPOINT_SETTINGS = {
+    "ca_server",
+    "http_proxy_host",
+    "report_server",
+    "server",
+    "server_list",
+}
+_PUPPET_IDENTITY_SETTINGS = {
+    "certname",
+    "node_name_fact",
+    "node_name_value",
+    "user",
+    "group",
+}
+_PUPPET_TERMINUS_SETTINGS = {
+    "catalog_cache_terminus",
+    "catalog_terminus",
+    "data_binding_terminus",
+    "node_cache_terminus",
+    "node_terminus",
+    "storeconfigs_backend",
+}
+_PUPPET_BUILTIN_REPORTS = {"console", "http", "log", "puppetdb", "store"}
 _METADATA_REQUIRED = {
     "author",
     "dependencies",
@@ -273,6 +331,57 @@ def _parse_hiera(source: str) -> dict[str, Any]:
     return {"artifact_type": "hiera", "document": document}
 
 
+def _parse_puppet_conf(source: str) -> dict[str, Any]:
+    sections: dict[str, dict[str, dict[str, Any]]] = {}
+    current_section: str | None = None
+    setting_count = 0
+    for line_number, line in enumerate(source.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("["):
+            if line != line.lstrip():
+                raise PuppetProjectInputError(
+                    f"puppet.conf section on line {line_number} must not be indented"
+                )
+            section_match = re.fullmatch(r"\[(?P<name>[A-Za-z][A-Za-z0-9_-]*)\]", stripped)
+            if section_match is None:
+                raise PuppetProjectInputError(
+                    f"invalid puppet.conf section declaration on line {line_number}"
+                )
+            current_section = section_match.group("name").lower()
+            if current_section not in _PUPPET_CONFIG_SECTIONS:
+                raise PuppetProjectInputError(
+                    f"unsupported puppet.conf section {current_section!r} on line {line_number}"
+                )
+            if current_section in sections:
+                raise PuppetProjectInputError(
+                    f"duplicate puppet.conf section {current_section!r} on line {line_number}"
+                )
+            sections[current_section] = {}
+            continue
+        if current_section is None:
+            raise PuppetProjectInputError(
+                f"puppet.conf setting on line {line_number} appears before a section"
+            )
+        setting_match = _PUPPET_CONFIG_SETTING.fullmatch(line)
+        if setting_match is None:
+            raise PuppetProjectInputError(f"invalid puppet.conf setting on line {line_number}")
+        name = setting_match.group("name").lower()
+        if name in sections[current_section]:
+            raise PuppetProjectInputError(
+                f"duplicate puppet.conf setting {name!r} in section {current_section!r}"
+            )
+        sections[current_section][name] = {
+            "value": setting_match.group("value").strip(),
+            "line": line_number,
+        }
+        setting_count += 1
+    if not sections or not setting_count:
+        raise PuppetProjectInputError("input is not a populated puppet.conf")
+    return {"artifact_type": "config", "document": {"sections": sections}}
+
+
 def _validate_hiera(document: dict[str, Any]) -> None:
     unknown = set(document) - {"version", "defaults", "hierarchy", "default_hierarchy"}
     if unknown:
@@ -319,8 +428,8 @@ def _validate_hiera_functions(values: dict[str, Any], address: str) -> None:
         )
 
 
-def parse_puppet_project(source: str) -> dict[str, Any]:
-    """Parse Puppetfile, module metadata, or Hiera config without executing code."""
+def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
+    """Parse Puppetfile, metadata, Hiera, or puppet.conf without executing code."""
     if not source.strip():
         raise PuppetProjectInputError("input is empty")
     parsed = _parse_json(source)
@@ -333,11 +442,12 @@ def parse_puppet_project(source: str) -> dict[str, Any]:
             ),
             "",
         )
-        parsed = (
-            _parse_hiera(source)
-            if first == "---" or re.match(r"^(?:version|defaults|hierarchy):", first)
-            else _parse_puppetfile(source)
-        )
+        if Path(filename).name.casefold() == "puppet.conf" or first.startswith("["):
+            parsed = _parse_puppet_conf(source)
+        elif first == "---" or re.match(r"^(?:version|defaults|hierarchy):", first):
+            parsed = _parse_hiera(source)
+        else:
+            parsed = _parse_puppetfile(source)
     return {"puppet_project": parsed}
 
 
@@ -775,6 +885,459 @@ def _hiera_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     return changes
 
 
+def _puppet_config_enabled(value: str) -> bool:
+    return value.strip().lower() in {"1", "on", "true", "yes"}
+
+
+def _puppet_config_disabled(value: str) -> bool:
+    return value.strip().lower() in {"0", "false", "no", "none", "off"}
+
+
+def _puppet_config_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    sections = document["sections"]
+    for section, settings in sections.items():
+        for name, setting in settings.items():
+            value = str(setting["value"])
+            lowered = value.strip().lower()
+            address = f"puppet_conf.{section}.{name}"
+
+            if name in _PUPPET_SECRET_SETTINGS and lowered not in {"", "none"}:
+                indirect = value.lstrip().startswith("$")
+                changes.append(
+                    _change(
+                        address,
+                        "credential",
+                        "review" if indirect else "dangerous",
+                        (
+                            "Puppet configuration references a credential through setting "
+                            f"{name!r}; verify the referenced value is supplied outside source "
+                            "control and protected from logs."
+                            if indirect
+                            else "Puppet configuration stores a literal credential in setting "
+                            f"{name!r}; move it to a protected external secret source."
+                        ),
+                    )
+                )
+                continue
+
+            if name == "autosign":
+                if _puppet_config_disabled(value):
+                    risk = "safe"
+                    explanation = "Puppet CA certificate autosigning is explicitly disabled."
+                elif _puppet_config_enabled(value):
+                    risk = "dangerous"
+                    explanation = (
+                        "Puppet CA autosigns every certificate request, allowing unreviewed "
+                        "nodes to receive trusted identities."
+                    )
+                else:
+                    risk = "review"
+                    explanation = (
+                        "Puppet CA delegates certificate autosigning to a policy/configuration "
+                        "file; verify its allowlist and permissions because executable files are "
+                        "run for every certificate request."
+                    )
+                changes.append(_change(address, "certificate_autosign", risk, explanation))
+                continue
+
+            if name == "certificate_revocation":
+                if _puppet_config_disabled(value):
+                    risk = "dangerous"
+                    explanation = "Puppet disables all certificate revocation checks."
+                elif lowered == "leaf":
+                    risk = "review"
+                    explanation = (
+                        "Puppet verifies only leaf certificate revocation and does not verify "
+                        "revocation across the complete CA chain."
+                    )
+                else:
+                    risk = "safe"
+                    explanation = "Puppet enables certificate revocation checking for its CA chain."
+                changes.append(_change(address, "certificate_revocation", risk, explanation))
+                continue
+
+            if name == "allow_duplicate_certs" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "duplicate_certificate_request",
+                        "review",
+                        "Puppet CA permits a new certificate request to replace an existing "
+                        "request; retain explicit cleanup and signing approval controls.",
+                    )
+                )
+                continue
+
+            if name == "digest_algorithm":
+                strong = lowered in {"sha224", "sha256", "sha384", "sha512"}
+                changes.append(
+                    _change(
+                        address,
+                        "content_digest",
+                        "safe" if strong else "dangerous",
+                        (
+                            "Puppet uses a modern SHA-2 digest for managed file integrity."
+                            if strong
+                            else "Puppet uses a weak or unrecognized digest for managed file "
+                            "integrity."
+                        ),
+                    )
+                )
+                continue
+
+            if name in _PUPPET_COMMAND_SETTINGS and lowered not in {"", "none"}:
+                risk = "review" if name == "diff" and lowered == "diff" else "dangerous"
+                changes.append(
+                    _change(
+                        address,
+                        "external_command",
+                        risk,
+                        f"Puppet setting {name!r} invokes an external command in a privileged "
+                        "configuration workflow; review ownership, arguments, and executable "
+                        "provenance.",
+                    )
+                )
+                continue
+
+            if name == "code" and value.strip():
+                changes.append(
+                    _change(
+                        address,
+                        "inline_code",
+                        "dangerous",
+                        "Puppet configuration injects inline manifest code directly into the "
+                        "runtime instead of loading reviewed environment content.",
+                    )
+                )
+                continue
+
+            if name == "node_terminus" and lowered == "exec":
+                changes.append(
+                    _change(
+                        address,
+                        "external_node_classifier",
+                        "dangerous",
+                        "Puppet delegates node classification to an executable external node "
+                        "classifier whose output controls classes, environments, and parameters.",
+                    )
+                )
+                continue
+
+            if name in _PUPPET_TERMINUS_SETTINGS and lowered not in {"", "none"}:
+                builtins = {
+                    "classifier",
+                    "compiler",
+                    "json",
+                    "msgpack",
+                    "plain",
+                    "puppetdb",
+                    "rest",
+                    "yaml",
+                }
+                custom = lowered not in builtins
+                changes.append(
+                    _change(
+                        address,
+                        "runtime_backend",
+                        "dangerous" if custom else "review",
+                        (
+                            f"Puppet setting {name!r} selects a custom runtime backend that can "
+                            "load extension code or redirect authoritative data."
+                            if custom
+                            else f"Puppet setting {name!r} changes the backend responsible for "
+                            "authoritative runtime data or cached state."
+                        ),
+                    )
+                )
+                continue
+
+            if name == "reports" and value.strip():
+                processors = {
+                    item.strip().lower() for item in value.split(",") if item.strip()
+                }
+                custom = processors - _PUPPET_BUILTIN_REPORTS
+                changes.append(
+                    _change(
+                        address,
+                        "report_processors",
+                        "dangerous" if custom else "review",
+                        (
+                            "Puppet loads one or more custom report processors as server-side "
+                            "extension code."
+                            if custom
+                            else "Puppet forwards or persists run reports through configured "
+                            "built-in processors; verify destinations and report-data exposure."
+                        ),
+                    )
+                )
+                continue
+
+            if name == "reporturl" and value.strip():
+                plaintext = lowered.startswith("http://")
+                changes.append(
+                    _change(
+                        address,
+                        "report_endpoint",
+                        "dangerous" if plaintext else "review",
+                        (
+                            "Puppet sends report data to a plaintext HTTP endpoint."
+                            if plaintext
+                            else "Puppet sends report data to an external endpoint; verify TLS, "
+                            "authentication, and data handling."
+                        ),
+                    )
+                )
+                continue
+
+            if name == "http_debug" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "http_debug_logging",
+                        "dangerous",
+                        "Puppet logs HTTP requests and responses, which can expose catalog, fact, "
+                        "certificate, or credential material.",
+                    )
+                )
+                continue
+
+            if name == "http_extra_headers" and value.strip() not in {"", "[]"}:
+                secret_like = bool(_SECRET.search(value))
+                changes.append(
+                    _change(
+                        address,
+                        "http_headers",
+                        "dangerous" if secret_like else "review",
+                        (
+                            "Puppet configuration places secret-like material in outbound HTTP "
+                            "headers."
+                            if secret_like
+                            else "Puppet adds custom outbound HTTP headers; verify their trust "
+                            "boundary and logging behavior."
+                        ),
+                    )
+                )
+                continue
+
+            if name == "show_diff" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "content_diff_logging",
+                        "dangerous",
+                        "Puppet logs managed file content differences, which can expose secrets "
+                        "or other sensitive configuration data.",
+                    )
+                )
+                continue
+
+            if name == "ignore_plugin_errors" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "plugin_error_bypass",
+                        "dangerous",
+                        "Puppet continues after plugin synchronization errors instead of failing "
+                        "the run closed.",
+                    )
+                )
+                continue
+
+            if name == "use_cached_catalog" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "cached_catalog_only",
+                        "dangerous",
+                        "Puppet applies only its cached catalog without requesting current policy "
+                        "or uploading current facts.",
+                    )
+                )
+                continue
+
+            if name == "usecacheonfailure" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "cached_catalog_fallback",
+                        "review",
+                        "Puppet can apply a previously cached catalog when current catalog "
+                        "compilation fails; review stale-policy tolerance.",
+                    )
+                )
+                continue
+
+            if name == "strict_variables" and _puppet_config_disabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "undefined_variable_tolerance",
+                        "dangerous",
+                        "Puppet permits undefined variables instead of failing catalog evaluation.",
+                    )
+                )
+                continue
+
+            if name == "strict" and lowered == "off":
+                changes.append(
+                    _change(
+                        address,
+                        "validation_strictness",
+                        "review",
+                        "Puppet disables strict validation warnings for potentially unsafe or "
+                        "deprecated behavior.",
+                    )
+                )
+                continue
+
+            if name == "preferred_serialization_format" and lowered == "pson":
+                changes.append(
+                    _change(
+                        address,
+                        "legacy_serialization",
+                        "dangerous",
+                        "Puppet prefers legacy PSON serialization, which cannot preserve all rich "
+                        "catalog data safely.",
+                    )
+                )
+                continue
+
+            if name == "allow_pson_serialization" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "legacy_serialization",
+                        "review",
+                        "Puppet permits fallback to legacy PSON serialization when modern formats "
+                        "cannot represent catalog data.",
+                    )
+                )
+                continue
+
+            if name in _PUPPET_CODE_PATH_SETTINGS and value.strip():
+                changes.append(
+                    _change(
+                        address,
+                        "code_source_path",
+                        "review",
+                        f"Puppet setting {name!r} changes a manifest, module, fact, plugin, route, "
+                        "or data source path that can affect compiled catalogs and runtime code.",
+                    )
+                )
+                continue
+
+            if name in _PUPPET_ENDPOINT_SETTINGS and lowered not in {"", "none"}:
+                changes.append(
+                    _change(
+                        address,
+                        "service_endpoint",
+                        "review",
+                        f"Puppet setting {name!r} changes a server, CA, reporting, or proxy trust "
+                        "boundary; verify identity, routing, and TLS expectations.",
+                    )
+                )
+                continue
+
+            if name in _PUPPET_IDENTITY_SETTINGS and value.strip():
+                changes.append(
+                    _change(
+                        address,
+                        "runtime_identity",
+                        "review",
+                        f"Puppet setting {name!r} changes certificate, node, user, or group "
+                        "identity used for authorization and privileged execution.",
+                    )
+                )
+                continue
+
+            if name == "environment" and value.strip():
+                global_environment = section == "main"
+                changes.append(
+                    _change(
+                        address,
+                        "environment_selection",
+                        "dangerous" if global_environment else "review",
+                        (
+                            "Puppet sets environment globally even though agent, server, and user "
+                            "contexts can require different code; move it to the intended "
+                            "application-specific section."
+                            if global_environment
+                            else "Puppet pins the code environment for this application context; "
+                            "verify environment assignment and promotion controls."
+                        ),
+                    )
+                )
+                continue
+
+            if name in {"ca_ttl", "dns_alt_names", "ssl_client_header", "ssl_client_verify_header"}:
+                changes.append(
+                    _change(
+                        address,
+                        "certificate_identity",
+                        "review",
+                        f"Puppet setting {name!r} changes certificate lifetime, trusted names, or "
+                        "reverse-proxy identity headers; review the CA and network trust model.",
+                    )
+                )
+                continue
+
+            if name in {"pluginsync", "report", "splay", "storeconfigs"} and _puppet_config_enabled(
+                value
+            ):
+                changes.append(
+                    _change(
+                        address,
+                        "runtime_integration",
+                        "review",
+                        f"Puppet enables {name!r}, changing plugin delivery, reporting, "
+                        "scheduling, or exported-resource state behavior.",
+                    )
+                )
+                continue
+
+            if name == "runinterval" and value.strip():
+                changes.append(
+                    _change(
+                        address,
+                        "agent_schedule",
+                        "review",
+                        "Puppet changes the recurring agent enforcement interval; review rollout "
+                        "load, convergence latency, and maintenance windows.",
+                    )
+                )
+                continue
+
+            if name == "noop" and _puppet_config_enabled(value):
+                changes.append(
+                    _change(
+                        address,
+                        "dry_run",
+                        "safe",
+                        "Puppet runs in no-op mode and reports proposed changes without enforcing "
+                        "resource state.",
+                    )
+                )
+                continue
+
+            if name in {"tasks", "manage_internal_file_permissions"}:
+                unsafe = (
+                    name == "tasks" and _puppet_config_enabled(value)
+                ) or (name == "manage_internal_file_permissions" and _puppet_config_disabled(value))
+                if unsafe:
+                    changes.append(
+                        _change(
+                            address,
+                            "runtime_safety_control",
+                            "dangerous",
+                            f"Puppet setting {name!r} enables experimental execution or disables "
+                            "protection of internal files.",
+                        )
+                    )
+
+    return changes
+
+
 class PuppetProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -784,7 +1347,7 @@ class PuppetProjectAdapter(BaseAdapter):
         project = input_data.get("puppet_project")
         return (
             isinstance(project, dict)
-            and project.get("artifact_type") in {"puppetfile", "metadata", "hiera"}
+            and project.get("artifact_type") in {"puppetfile", "metadata", "hiera", "config"}
             and isinstance(project.get("document"), dict)
         )
 
@@ -795,6 +1358,7 @@ class PuppetProjectAdapter(BaseAdapter):
             "puppetfile": _puppetfile_changes,
             "metadata": _metadata_changes,
             "hiera": _hiera_changes,
+            "config": _puppet_config_changes,
         }[artifact_type](project["document"])
         changes.append(
             _change(
@@ -803,7 +1367,8 @@ class PuppetProjectAdapter(BaseAdapter):
                 "review",
                 "Effective Puppet behavior also depends on deployed module contents, transitive "
                 "dependencies, environment/modulepath precedence, Code Manager or r10k settings, "
-                "Hiera data files, eyaml keys, PuppetDB, facts, and compiler-side extensions.",
+                "Hiera data files, eyaml keys, Puppet Server configuration, PuppetDB, facts, and "
+                "compiler-side extensions.",
             )
         )
         return changes

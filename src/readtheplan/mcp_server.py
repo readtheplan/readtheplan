@@ -2566,7 +2566,7 @@ def agent_gate_configuration_management(
         analyze = analyze_chef_project
     elif ecosystem == "puppet-project":
         try:
-            data = parse_puppet_project(source)
+            data = parse_puppet_project(source, filename=input_path)
         except PuppetProjectInputError as exc:
             raise MCPToolInputError(
                 code="INVALID_INPUT",

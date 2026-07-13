@@ -25,6 +25,9 @@ Karpenter node provisioning, disruption, cloud identity, image, and networking.
 Ansible coverage includes playbooks, controller configuration, Galaxy dependencies,
 static YAML/INI inventory, and dynamic inventory plugin configuration without
 executing plugins, resolving Vault values, contacting APIs, or connecting to hosts.
+Puppet coverage includes manifests, Puppetfile/module metadata, Hiera configuration,
+and duplicate-safe puppet.conf analysis for agent, server, CA, trust, execution,
+cached-catalog, plugin, reporting, identity, endpoint, and credential settings.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.
