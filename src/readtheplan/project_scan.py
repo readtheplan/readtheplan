@@ -78,10 +78,6 @@ _CONFIG_BASENAME_SOURCE_SUFFIXES = frozenset(
 )
 _KUBERNETES_HINT = re.compile(r"(?ms)^\s*apiVersion\s*:\s*[^\s#]+.*?^\s*kind\s*:\s*[^\s#]+")
 _ANSIBLE_HINT = re.compile(r"(?ms)^\s*-?\s*hosts\s*:.*?^\s*(?:tasks|roles)\s*:")
-_ANSIBLE_INVENTORY_YAML_HINT = re.compile(
-    r"(?ms)^\s*(?:all|ungrouped)\s*:\s*(?:#.*)?\n"
-    r"(?:\s+.*\n)*?\s+(?:children|hosts|vars)\s*:"
-)
 _ANSIBLE_INVENTORY_PLUGIN_HINT = re.compile(
     r"(?m)^\s*plugin\s*:\s*(?:ansible\.builtin\.[A-Za-z0-9_]+|"
     r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+)\s*(?:#.*)?$"
@@ -444,6 +440,41 @@ def _identify_from_content(path: Path, suffix: str) -> str | None:
     return _identify_from_content_bytes(raw, suffix)
 
 
+def _looks_like_ansible_inventory_yaml(text: str) -> bool:
+    """Recognize canonical static inventory structure in linear time."""
+    root_indent: int | None = None
+    for line in text.splitlines():
+        stripped = line.lstrip(" \t")
+        if not stripped or stripped.startswith("#") or stripped in {"---", "..."}:
+            continue
+
+        indent = len(line) - len(stripped)
+        content = stripped.split("#", 1)[0].rstrip()
+        key, separator, remainder = content.partition(":")
+        if not separator:
+            if root_indent is not None and indent <= root_indent:
+                return False
+            continue
+
+        key = key.strip()
+        if root_indent is None:
+            if key not in {"all", "ungrouped"}:
+                return False
+            root_indent = indent
+            inline_mapping = remainder.strip()
+            if inline_mapping.startswith("{") and any(
+                f"{child}:" in inline_mapping for child in ("children", "hosts", "vars")
+            ):
+                return True
+            continue
+
+        if indent <= root_indent:
+            return False
+        if key in {"children", "hosts", "vars"}:
+            return True
+    return False
+
+
 def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
     try:
         text = raw.decode("utf-8")
@@ -464,9 +495,7 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
             return "kubernetes"
         if _ANSIBLE_HINT.search(text):
             return "ansible"
-        if _ANSIBLE_INVENTORY_PLUGIN_HINT.search(text) or _ANSIBLE_INVENTORY_YAML_HINT.search(
-            text
-        ):
+        if _ANSIBLE_INVENTORY_PLUGIN_HINT.search(text) or _looks_like_ansible_inventory_yaml(text):
             return "ansible-project"
         if _CONCOURSE_HINT.search(text):
             return "concourse"

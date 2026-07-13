@@ -8,6 +8,7 @@ import pytest
 from readtheplan.cli import main
 from readtheplan.project_scan import (
     ProjectScanError,
+    _looks_like_ansible_inventory_yaml,
     _project_pr_comment,
     discover_project_inputs,
     identify_project_input,
@@ -112,6 +113,12 @@ def test_content_detection_for_ansible_static_and_plugin_inventory(tmp_path: Pat
 
     assert identify_project_input(static_inventory, static_inventory.name) == "ansible-project"
     assert identify_project_input(plugin_inventory, plugin_inventory.name) == "ansible-project"
+
+
+def test_ansible_inventory_detection_handles_adversarial_whitespace_linearly() -> None:
+    source = "all:\n" + (" \n" * 50_000) + "not_inventory: true\n"
+
+    assert _looks_like_ansible_inventory_yaml(source) is False
 
 
 def test_content_detection_for_concourse_pipeline(tmp_path: Path) -> None:
