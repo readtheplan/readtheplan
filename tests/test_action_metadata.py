@@ -219,8 +219,7 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/ansible_config_management_risky.yml" in workflow
     assert (
         "input-file: "
-        "tests/fixtures/ansible_role_content_risky/roles/application/tasks/main.yml"
-        in workflow
+        "tests/fixtures/ansible_role_content_risky/roles/application/tasks/main.yml" in workflow
     )
     assert "tool: ansible-project" in workflow
     assert "input-file: tests/fixtures/ansible_project_risky.cfg" in workflow
@@ -234,6 +233,7 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "tool: jenkins-project" in workflow
     assert "input-file: tests/fixtures/jenkins_plugins_risky.txt" in workflow
     assert "input-file: tests/fixtures/chef_config_management_risky.rb" in workflow
+    assert "input-file: tests/fixtures/chef_cookbook_risky/resources/application.rb" in workflow
     assert "tool: chef-project" in workflow
     assert "input-file: tests/fixtures/chef_policyfile_risky.rb" in workflow
     assert "input-file: tests/fixtures/chef_runtime/client.rb" in workflow
