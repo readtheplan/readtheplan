@@ -46,6 +46,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("chef/client.d/security.rb", "chef-project"),
         ("manifests/site.pp", "puppet"),
         ("puppet/puppet.conf", "puppet-project"),
+        ("puppet/r10k.yaml", "puppet-project"),
         ("bolt-project.yaml", "puppet-project"),
         ("bolt/inventory.yaml", "puppet-project"),
         ("states/web.sls", "salt"),
@@ -446,6 +447,28 @@ def test_project_scan_analyzes_puppet_runtime_configuration(tmp_path: Path) -> N
     encoded = json.dumps(payload)
     assert "fixture-puppet-proxy-password-do-not-leak" not in encoded
     assert "fixture-puppet-header-token-do-not-leak" not in encoded
+
+
+def test_project_scan_analyzes_r10k_deployment_configuration(tmp_path: Path) -> None:
+    target = tmp_path / "puppet" / "r10k.yaml"
+    target.parent.mkdir()
+    target.write_text(
+        (FIXTURES / "puppet_r10k_risky" / "r10k.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "puppet-project"
+    assert payload["files"][0]["adapter"] == "puppet-project"
+    assert payload["files"][0]["total_changes"] == 40
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-proxy-password" not in encoded
+    assert "fixture-forge-token-do-not-leak" not in encoded
 
 
 def test_project_scan_analyzes_bolt_project_and_inventory(tmp_path: Path) -> None:

@@ -46,7 +46,7 @@ matrix makes those boundaries explicit.
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
 | Chef project / dependencies / runtime | `Policyfile.rb`, `Policyfile.lock.json`, `Berksfile`, modern/legacy `Berksfile.lock`, `metadata.rb`, runtime configs, or supported `.d` fragments | `readtheplan chef-project Berksfile.lock` | Policy/run lists, cookbook provenance, Berkshelf migration/source ordering/groups/solver, direct and transitive lock graph integrity, exact constraint consistency, attributes/dependencies, client identity/convergence, Workstation bootstrap/SSH, Solo remote content, Server TLS/LDAP/database controls, credentials, duplicate overrides, and dynamic Ruby/external-state boundaries | Built-in |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Built-in and namespaced resource/state scanner covering execution/identity/connectivity, classes, dynamic data/templates, custom types, virtual/exported resources, collectors, refresh relationships, sources, and permissions | Conservative |
-| Puppet project / runtime / Bolt | `Puppetfile`, module `metadata.json`, `hiera.yaml`, `puppet.conf`, `bolt-project.yaml`, or Bolt `inventory.yaml` | `readtheplan puppet-project bolt-project.yaml` | Forge/Git source provenance, bounded dependencies, Hiera, duplicate-safe agent/server/CA settings, plus Bolt modules/plugins, dynamic target discovery, inherited transports, SSH/WinRM trust, credentials, privilege, command/interpreter overrides, and non-execution boundaries | Built-in |
+| Puppet project / runtime / deployment / Bolt | `Puppetfile`, module `metadata.json`, `hiera.yaml`, `puppet.conf`, `r10k.yaml`, `bolt-project.yaml`, or Bolt `inventory.yaml` | `readtheplan puppet-project r10k.yaml` | Forge/Git dependencies, Hiera, duplicate-safe runtime settings, r10k/Code Manager sources, branch mapping, targets, purge, hooks, Git/Forge trust and credentials, plus Bolt discovery, transports, privilege, commands, and non-execution boundaries | Built-in |
 | GitHub Actions | Workflow YAML | `readtheplan github-actions workflow.yml` | Token permissions, action/reusable-workflow pinning, secret inputs, environments, and run steps | Built-in |
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
@@ -118,7 +118,7 @@ the same optional `framework` parameter through its MCP tool.
   libraries remain external code boundaries. Chef policy-group/node assignment, Berkshelf source
   indexes/cache and manifest-to-lock freshness, credentials, config.rb,
   cookbook contents, server-side state, Puppet module contents and transitive dependencies,
-  Code Manager/r10k deployment settings, Hiera data, eyaml keys, `auth.conf`,
+  Hiera data, eyaml keys, `auth.conf`,
   autosign policy/config contents, Puppet Server HOCON, Ruby extensions,
   custom providers/types, Bolt configuration precedence, installed Bolt module/plugin code,
   resolved dynamic inventory and external secrets, target state, selected tasks/plans/commands,
@@ -128,6 +128,9 @@ the same optional `framework` parameter through its MCP tool.
 - Jenkins JCasC analysis parses one YAML file without resolving supplementary
   configuration files, secret-source/environment interpolation, installed-plugin
   schemas, init hooks, system properties, or live controller state.
+- r10k and Code Manager deployment analysis does not fetch repositories, enumerate remote
+  branches, read credential files, resolve Puppetfiles/modules, inspect managed directories,
+  execute hooks, or contact Puppet servers.
 - Jenkins Job Builder analysis does not load includes, render templates/Jinja, import component
   plugins, generate XML, or contact Jenkins. Effective defaults/macros, installed plugins,
   credentials, permissions, and controller state remain review boundaries.

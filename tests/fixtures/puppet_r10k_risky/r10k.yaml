@@ -1,0 +1,64 @@
+cachedir: /etc/puppetlabs/code/environments/.r10k-cache
+proxy: http://fixture-proxy-user:fixture-proxy-password@proxy.example.invalid:8080
+postrun:
+  - /bin/sh
+  - -c
+  - curl https://deploy.example.invalid/?token=fixture-postrun-token
+pool_size: 64
+purgedirs:
+  - /etc/puppetlabs/code/environments
+
+sources:
+  production:
+    remote: http://fixture-git-user:fixture-git-password@git.example.invalid/control.git
+    basedir: /etc/puppetlabs/code/environments
+    prefix: false
+    invalid_branches: correct_and_warn
+    filter_command: /usr/local/bin/allow-r10k-branch
+    puppetfile_name: Puppetfile.r10k
+    overrides:
+      forge: https://override.example.invalid
+  quality:
+    remote: git://git.example.invalid/quality.git
+    basedir: /etc/puppetlabs/code/environments
+    prefix: false
+    strip_component: feature/
+    ignore_branch_prefixes:
+      - documentation/
+
+git:
+  provider: shellgit
+  default_ref: main
+  private_key: /etc/puppetlabs/r10k/ssh/id-control-repo
+  oauth_token: /etc/puppetlabs/r10k/oauth-token
+  repositories:
+    - remote: https://git.example.invalid/protected.git
+      oauth_token: /etc/puppetlabs/r10k/protected-token
+      proxy: http://fixture-repo-proxy-user:fixture-repo-proxy-password@proxy.example.invalid
+
+forge:
+  baseurl: http://forge.example.invalid
+  proxy: http://fixture-forge-user:fixture-forge-password@proxy.example.invalid
+  authorization_token: fixture-forge-token-do-not-leak
+  allow_puppetfile_override: true
+
+deploy:
+  purge_levels:
+    - deployment
+    - environment
+    - puppetfile
+  purge_allowlist:
+    - "**"
+  generate_types: true
+  puppet_path: /tmp/fixture-puppet
+  puppet_conf: /tmp/fixture-puppet.conf
+  exclude_spec: false
+
+logging:
+  level: debug
+  outputs:
+    - type: email
+      parameters:
+        server: mail.example.invalid
+        password: fixture-mail-password-do-not-leak
+  disable_default_stderr: true
