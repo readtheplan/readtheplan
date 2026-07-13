@@ -1038,6 +1038,41 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Ansible lookup boundaries
+        id: ansible_lookups
+        uses: ./
+        with:
+          tool: ansible
+          input-file: tests/fixtures/ansible_lookup_risky.yml
+          framework: soc2
+
+      - name: Assert Ansible lookup outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.ansible_lookups.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.ansible_lookups.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.ansible_lookups.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "9"
+          test "$RISK_COUNTS" = '{"dangerous":7,"irreversible":0,"review":2,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "ansible"
+          assert payload["artifact_type"] == "playbook"
+          assert payload["lookup_count"] == 9
+          assert "command" in payload["lookup_capabilities"]
+          assert "secret" in payload["lookup_capabilities"]
+          assert payload["decision"] == "block"
+          assert "lookup command on the controller" in payload["pr_comment"]
+          assert "fixture-pipe-command-do-not-run" not in os.environ["SUMMARY_JSON"]
+          assert "fixture-vault-secret-do-not-leak" not in os.environ["SUMMARY_JSON"]
+          assert "FIXTURE_REGION_DO_NOT_READ" not in os.environ["SUMMARY_JSON"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Ansible role task file
         id: ansible_role_tasks
         uses: ./
