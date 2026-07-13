@@ -1,0 +1,18 @@
+allow_duplicates: true
+dependencies:
+  - role: example.mutable_role
+    version: main
+    become: true
+    vars:
+      fixture_role_password: fixture-role-password-do-not-leak
+  - src: https://example.invalid/immutable-role.git
+    version: 0123456789abcdef0123456789abcdef01234567
+collections:
+  - ansible.builtin
+  - example.untrusted
+argument_specs:
+  main:
+    options:
+      fixture_admin_password:
+        type: str
+        default: fixture-embedded-password-do-not-leak

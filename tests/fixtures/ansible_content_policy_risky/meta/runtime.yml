@@ -1,0 +1,22 @@
+requires_ansible: "<2.20"
+plugin_routing:
+  modules:
+    old_module:
+      redirect: example.other.replacement
+    removed_module:
+      tombstone:
+        removal_version: 3.0.0
+        warning_text: removed
+    deprecated_module:
+      deprecation:
+        removal_version: 4.0.0
+        warning_text: deprecated
+import_redirection:
+  example.risky.plugins.module_utils.old:
+    redirect: example.other.plugins.module_utils.new
+action_groups:
+  risky:
+    - example.risky.one
+    - metadata:
+        extend_group:
+          - example.other.inherited

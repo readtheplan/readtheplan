@@ -1,0 +1,17 @@
+namespace: example
+name: risky_collection
+version: 2.0.0-beta.1
+readme: README.md
+authors:
+  - Example Maintainer
+description: Risky fixture collection
+dependencies:
+  community.general: ">=1.0.0"
+  example.pinned: 3.2.1
+repository: http://fixture-user:fixture-password-do-not-leak@example.invalid/repository
+build_ignore:
+  - plugins/**
+manifest:
+  omit_default_directives: true
+  directives:
+    - exclude tests

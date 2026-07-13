@@ -36,7 +36,7 @@ matrix makes those boundaries explicit.
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
 | Pulumi project / stack / policy | `Pulumi.yaml`, `Pulumi.<stack>.yaml`, or `PulumiPolicy.yaml` | `readtheplan pulumi-project Pulumi.yaml` | Strict duplicate-safe YAML; runtime/compiler and path execution, backends, packages/plugins and provenance, project config schemas, encrypted/plaintext stack config, secrets providers, ESC imports, Pulumi YAML resources with deep rules, policy packs, and explicit evaluation boundaries | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles; privilege, controller delegation, check/error controls, includes, identity/host security, supply-chain inputs, TLS, and secret-bearing environments | Built-in |
-| Ansible project / inventory / execution environment / Molecule | `ansible.cfg`, Galaxy requirements, static/dynamic inventory, `execution-environment.yml`, `ansible-navigator.yml`/JSON, or `molecule/*/molecule.yml` | `readtheplan ansible-project molecule/default/molecule.yml` | Controller transport/privilege, plugins/callbacks, Galaxy dependencies, inventory scope/identity/trust, Builder and Navigator isolation/provenance, plus Molecule dependencies, drivers, platforms, images, provider options, mounts, registries, generated inventory, playbooks, sequences, cleanup, and verifiers | Built-in |
+| Ansible project / inventory / content policy / execution environment / Molecule | `ansible.cfg`, requirements, inventory, `galaxy.yml`, role `meta/main.yml`/`argument_specs.yml`, collection `meta/runtime.yml`, Ansible-lint config, `execution-environment.yml`, Navigator, or Molecule YAML | `readtheplan ansible-project galaxy.yml` | Controller trust/privilege, dependency provenance, inventory scope, collection packaging, recursive role dependencies, plugin/import routing, action groups, role input/secret validation, lint exclusions/downgrades/custom code, Builder/Navigator isolation, and Molecule providers/sequences/cleanup | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
 | Salt project | Master/minion YAML config, top files, or Salt SSH rosters | `readtheplan salt-project master` | PKI trust, remote authorization, state/Pillar/module roots, GitFS provenance, reactors/schedules/startup execution, fleet targeting, SSH privilege, credentials, proxies, and host verification | Built-in |
 | Nix / NixOS | `flake.nix`, `flake.lock`, or NixOS module source | `readtheplan nix flake.nix` | Input/lock provenance and graph integrity, substituters/trusted users/signatures/sandbox, fetchers/impurity/build code, users/SSH/sudo/firewall/services/systemd/kernel/storage/network/containers/secrets, and evaluation boundaries | Built-in |
@@ -114,9 +114,11 @@ the same optional `framework` parameter through its MCP tool.
   Docker Compose, Docker Buildx Bake, Dockerfiles, Nomad, Packer,
   Vagrant, cloud-init user-data, or provider code.
 - Ansible configuration/variable precedence, combined inventory sources, inventory-plugin code
-  and live API responses, transitive Galaxy dependencies, includes/roles, Molecule base-config
-  merges, environment interpolation, installed drivers/plugins, playbooks, verifier code, generated
-  inventory, provider state, and CLI destroy policy, and Jenkins shared
+  and live API responses, built collection artifacts and signatures, transitive Galaxy/role
+  dependencies, installed plugin/import loader precedence, role task behavior, effective lint CLI
+  options/custom Python rules/ignore files, Molecule base-config merges, environment interpolation,
+  installed drivers/plugins, playbooks, verifier code, generated inventory, provider state, and CLI
+  destroy policy, and Jenkins shared
   libraries remain external code boundaries. Chef policy-group/node assignment, Berkshelf source
   indexes/cache and manifest-to-lock freshness, credentials, config.rb,
   cookbook contents, server-side state, Puppet module contents and transitive dependencies,

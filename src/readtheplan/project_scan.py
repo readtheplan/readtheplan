@@ -228,6 +228,28 @@ def identify_project_input(
 
     if name == "ansible.cfg":
         return "ansible-project"
+    if name in {
+        ".ansible-lint",
+        ".ansible-lint.yaml",
+        ".ansible-lint.yml",
+        "ansible-lint.yaml",
+        "ansible-lint.yml",
+        "galaxy.yaml",
+        "galaxy.yml",
+    }:
+        return "ansible-project"
+    if len(parts) > 1 and parts[-2] == "meta" and name in {
+        "argument_specs.yaml",
+        "argument_specs.yml",
+        "runtime.yaml",
+        "runtime.yml",
+    }:
+        return "ansible-project"
+    if len(parts) > 1 and parts[-2] == "meta" and name in {"main.yaml", "main.yml"}:
+        role_markers = {"defaults", "files", "handlers", "tasks", "templates", "vars"}
+        role_root = path.parent.parent
+        if "roles" in parts[:-2] or any((role_root / marker).is_dir() for marker in role_markers):
+            return "ansible-project"
     if name in {"molecule.yaml", "molecule.yml"} or (
         name in {"config.yaml", "config.yml"} and "molecule" in parts[:-1]
     ):
