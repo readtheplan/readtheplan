@@ -30,6 +30,7 @@ from readtheplan.adapters.kustomize import KustomizeAdapter
 from readtheplan.adapters.loki import LokiAdapter
 from readtheplan.adapters.monitoring import AlertmanagerAdapter, PrometheusAdapter
 from readtheplan.adapters.nix import NixProjectAdapter
+from readtheplan.adapters.opa import OPAAdapter
 from readtheplan.adapters.otel_collector import OTelCollectorAdapter
 from readtheplan.adapters.packer import PackerInspectAdapter
 from readtheplan.adapters.pipelines import (
@@ -127,6 +128,7 @@ register_adapter(PrometheusAdapter())
 register_adapter(AlertmanagerAdapter())
 register_adapter(OTelCollectorAdapter())
 register_adapter(NixProjectAdapter())
+register_adapter(OPAAdapter())
 register_adapter(AnsibleAdapter())
 register_adapter(AnsibleProjectAdapter())
 register_adapter(JenkinsAdapter())
@@ -205,6 +207,7 @@ __all__ = [
     "NomadPlanAdapter",
     "NginxAdapter",
     "NixProjectAdapter",
+    "OPAAdapter",
     "HAProxyAdapter",
     "PackerInspectAdapter",
     "PulumiAdapter",

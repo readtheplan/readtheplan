@@ -514,6 +514,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cfengine.set_defaults(func=_cfengine_gate)
 
+    opa = subparsers.add_parser(
+        "opa",
+        help="Emit the agent-gate decision for Rego, OPA bundle metadata, or Conftest config.",
+    )
+    opa.add_argument("--framework", help="Include checks from a compliance framework.")
+    opa.add_argument(
+        "input_file",
+        help="Path to .rego, .manifest, .signatures.json, or conftest.toml.",
+    )
+    opa.set_defaults(func=_opa_gate)
+
     vagrant = subparsers.add_parser(
         "vagrant",
         help="Emit the agent-gate decision for a Vagrantfile.",
@@ -1787,6 +1798,30 @@ def _cfengine_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_cfengine(data, catalog=catalog))
+
+
+def _opa_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for standalone OPA/Rego configuration."""
+    from readtheplan.adapters.opa import OPAAdapter, OPAInputError, analyze_opa, parse_opa
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_opa(source, path.name)
+    except OPAInputError as exc:
+        print(f"Error: invalid OPA/Rego input: {exc}", file=sys.stderr)
+        return 1
+    if not OPAAdapter().can_handle(data):
+        print("Error: input not recognized as OPA/Rego configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_opa(data, catalog=catalog))
 
 
 def _vagrant_gate(args: argparse.Namespace) -> int:

@@ -1,0 +1,7 @@
+{
+  "metadata": {"owner": "platform"},
+  "rego_version": 0,
+  "wasm": [
+    {"entrypoint": "infrastructure/allow", "module": "policy.wasm"}
+  ]
+}

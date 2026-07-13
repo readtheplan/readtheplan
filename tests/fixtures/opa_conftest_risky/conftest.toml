@@ -1,0 +1,4 @@
+policy = "../shared-policy"
+namespace = ""
+data = "../organization-data"
+capabilities = "/etc/opa/capabilities.json"
