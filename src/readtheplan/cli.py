@@ -444,10 +444,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     nomad = subparsers.add_parser(
         "nomad",
-        help="Emit the agent-gate decision for a Nomad job plan API response.",
+        help="Emit the agent-gate decision for a Nomad plan response or jobspec source.",
     )
     nomad.add_argument("--framework", help="Include checks from a compliance framework.")
-    nomad.add_argument("input_file", help="Path to a Nomad job plan response JSON file.")
+    nomad.add_argument("input_file", help="Path to a Nomad plan JSON or HCL/JSON jobspec.")
     nomad.set_defaults(func=_workload_gate)
 
     packer = subparsers.add_parser(
@@ -1616,12 +1616,12 @@ def _workload_gate(args: argparse.Namespace) -> int:
         WorkloadInputError,
         analyze_workload,
         parse_docker_compose,
-        parse_nomad_plan,
+        parse_nomad,
     )
 
     adapters = {
         "docker-compose": (DockerComposeAdapter, parse_docker_compose),
-        "nomad": (NomadPlanAdapter, parse_nomad_plan),
+        "nomad": (NomadPlanAdapter, parse_nomad),
     }
     try:
         source = Path(args.input_file).read_text(encoding="utf-8")

@@ -385,6 +385,7 @@ def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
     [
         ("docker-compose", "docker_compose_risky.yml", "docker-compose"),
         ("nomad", "nomad_plan_risky.json", "nomad"),
+        ("nomad", "nomad_job_risky.nomad.hcl", "nomad"),
     ],
 )
 def test_agent_gate_workload_supports_framework_checks(

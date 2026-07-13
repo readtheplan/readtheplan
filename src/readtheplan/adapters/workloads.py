@@ -47,6 +47,21 @@ def parse_nomad_plan(source: str) -> dict[str, Any]:
     return {"nomad_plan": document}
 
 
+def parse_nomad(source: str) -> dict[str, Any]:
+    """Parse a Nomad plan API response or HCL/JSON jobspec source."""
+    try:
+        return parse_nomad_plan(source)
+    except WorkloadInputError as plan_error:
+        from readtheplan.adapters.nomad_job import NomadJobInputError, parse_nomad_job
+
+        try:
+            return parse_nomad_job(source)
+        except NomadJobInputError as job_error:
+            raise WorkloadInputError(
+                f"input is neither a Nomad plan response nor jobspec: {job_error}"
+            ) from plan_error
+
+
 def _change(address: str, kind: str, risk: str, explanation: str) -> dict[str, str]:
     return {
         "Address": address,
@@ -405,7 +420,16 @@ class NomadPlanAdapter(_WorkloadAdapter):
     def adapter_name(self) -> str:
         return "nomad"
 
+    def can_handle(self, input_data: dict[str, Any]) -> bool:
+        return isinstance(input_data.get("nomad_plan"), dict) or isinstance(
+            input_data.get("nomad_job"), dict
+        )
+
     def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        if "nomad_job" in input_data:
+            from readtheplan.adapters.nomad_job import nomad_job_changes
+
+            return nomad_job_changes(input_data["nomad_job"])
         plan = input_data[self.wrapper_key]
         changes: list[dict[str, Any]] = []
 
@@ -592,6 +616,8 @@ def analyze_workload(
     )
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name=adapter.tool_name)
     gate["adapter"] = adapter.adapter_name
+    if adapter.adapter_name == "nomad":
+        gate["artifact_type"] = "jobspec" if "nomad_job" in data else "plan"
     gate["total_changes"] = len(changes)
     return gate
 

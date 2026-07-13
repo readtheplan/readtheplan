@@ -11,7 +11,7 @@
 > [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review cloud plans, Kubernetes manifests, Docker Compose workloads, Nomad scheduler plans, configuration-management code, and CI pipelines through one deterministic local risk gate. Runs locally — no uploads, no accounts, no backend.
+**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review cloud plans, Kubernetes manifests, Docker Compose workloads, Nomad jobspecs and scheduler plans, configuration-management code, and CI pipelines through one deterministic local risk gate. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
 pip install readtheplan && readtheplan analyze plan.json
@@ -120,7 +120,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Atlantis | `readtheplan atlantis atlantis.yaml` | Repo/server configuration, mutation requirements, custom workflows, hooks, override permissions, locks, autoplan, policy checks, and execution ordering |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |
-| Nomad | `readtheplan nomad plan-response.json` | Structured scheduler diff, allocation replacement/stops, placement failures, drivers, images, and commands |
+| Nomad | `readtheplan nomad job.nomad.hcl` | HCL/JSON jobspecs plus structured scheduler plans: task drivers, commands/images, artifacts/templates, identities, Vault/Consul, services/networking, storage, secrets, placement, rollout, replacement, and stops |
 | Packer | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and inspect limitations |
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
 | cloud-init | `readtheplan cloud-init user-data.yml` | Users, SSH, packages, files, commands, storage, power state, includes, scripts, and merged configuration |
@@ -149,7 +149,7 @@ authorization and requirement overrides are evaluated alongside repo-defined com
 Salt parses static SLS YAML and conservatively scans Jinja-templated state files;
 render-time execution-module calls are dangerous and generated state remains review.
 Docker Compose parsing follows Docker's documented trust boundary without resolving
-external files. Nomad consumes the JSON response from the job plan HTTP API so
+external files. Nomad accepts HCL/JSON jobspec source or the JSON response from the job plan HTTP API so
 scheduler decisions remain structured rather than being inferred from HCL text.
 Packer consumes saved output from `packer inspect` or
 `packer inspect -machine-readable`; it enumerates executable components without

@@ -53,7 +53,7 @@ matrix makes those boundaries explicit.
 | Bitbucket Pipelines | `bitbucket-pipelines.yml` | `readtheplan bitbucket-pipelines bitbucket-pipelines.yml` | Images, self-hosted runners, OIDC, deployments, services, Docker daemon access, caches, scripts, pipes, artifacts, custom variables, imports, and external settings | Built-in |
 | Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
 | Dockerfile / Containerfile | Dockerfile source | `readtheplan dockerfile Dockerfile` | Frontends, base-image pinning, stages, commands/heredocs, BuildKit mounts, secret ARG/ENV, COPY/ADD, users, health, deferred instructions, and context boundaries | Built-in |
-| HashiCorp Nomad | `/v1/job/:id/plan` JSON response | `readtheplan nomad plan-response.json` | Scheduler diff, allocation placement/replacement/stops, failures, task drivers, images, commands, and secret-bearing fields | Built-in |
+| HashiCorp Nomad | HCL/JSON jobspec or `/v1/job/:id/plan` JSON response | `readtheplan nomad job.nomad.hcl` | Source task drivers, commands/images, artifacts/templates, identity, Vault/Consul, services/networking, storage/secrets, plus scheduler placement/replacement/stops and failures | Built-in |
 | HashiCorp Packer | Human or `-machine-readable` inspect output | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and explicit inspect limitations | Conservative |
 | HashiCorp Vagrant | Vagrantfile Ruby source | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and unresolved Ruby/configuration merging | Conservative |
 | cloud-init | Cloud-config YAML, scripts, boothooks, includes, or MIME user-data | `readtheplan cloud-init user-data.yml` | Packages, users, SSH trust, files, commands, storage, power state, external content, templates, and merged configuration | Built-in |
@@ -174,8 +174,8 @@ the same optional `framework` parameter through its MCP tool.
   without contacting Bitbucket or executing Pipes. Secured variables, deployment
   permissions, SSH keys, runner registration, and workspace/repository dynamic
   pipeline providers live outside YAML and remain an explicit review boundary.
-- Nomad analysis accepts the structured plan response returned by the HTTP API.
-  Generate it inside the existing Nomad trust boundary; readtheplan never contacts
+- Nomad analysis accepts HCL/JSON jobspec source or the structured plan response returned by
+  the HTTP API. Generate plans inside the existing Nomad trust boundary; readtheplan never contacts
   the cluster or submits a job.
 - Packer analysis accepts `packer inspect` output and never starts a build. Inspect
   enumerates components but does not validate plugin-specific configuration, so
