@@ -321,7 +321,7 @@ def identify_project_input(
         return "chef-project"
     if suffix == ".rb" and "recipes" in parts:
         return "chef"
-    if name in {"puppet.conf", "puppetfile", "hiera.yaml", "hiera.yml"}:
+    if name in {"puppet.conf", "puppetfile", "hiera.yaml", "hiera.yml", "r10k.yaml", "r10k.yml"}:
         return "puppet-project"
     if suffix == ".pp":
         return "puppet"

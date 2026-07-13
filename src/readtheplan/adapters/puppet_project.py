@@ -104,6 +104,75 @@ _METADATA_REQUIRED = {
     "summary",
     "version",
 }
+_R10K_ROOT_KEYS = {
+    "cachedir",
+    "deploy",
+    "deploy_settings",
+    "forge",
+    "forge_settings",
+    "git",
+    "git_settings",
+    "logging",
+    "pool_size",
+    "postrun",
+    "proxy",
+    "purgedirs",
+    "remote",
+    "r10k_basedir",
+    "sources",
+}
+_R10K_SOURCE_KEYS = {
+    "basedir",
+    "command",
+    "filter_command",
+    "ignore_branch_prefixes",
+    "invalid_branches",
+    "overrides",
+    "prefix",
+    "puppetfile_name",
+    "remote",
+    "strip_component",
+    "type",
+}
+_R10K_GIT_KEYS = {
+    "default_ref",
+    "github_app_id",
+    "github_app_key",
+    "github_app_ttl",
+    "oauth_token",
+    "private_key",
+    "provider",
+    "proxy",
+    "repositories",
+    "username",
+}
+_R10K_REPOSITORY_KEYS = {
+    "github_app_id",
+    "github_app_key",
+    "github_app_ttl",
+    "ignore_branch_prefixes",
+    "oauth_token",
+    "private_key",
+    "proxy",
+    "remote",
+}
+_R10K_FORGE_KEYS = {
+    "allow_puppetfile_override",
+    "authorization_token",
+    "baseurl",
+    "proxy",
+}
+_R10K_DEPLOY_KEYS = {
+    "exclude_spec",
+    "generate_types",
+    "puppet_conf",
+    "puppet_path",
+    "purge_allowlist",
+    "purge_levels",
+    "write_lock",
+}
+_R10K_LOGGING_KEYS = {"disable_default_stderr", "level", "outputs"}
+_R10K_DYNAMIC = re.compile(r"(?:\$\{|%\{|\{\{|<%|\$[A-Za-z_])")
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -392,6 +461,202 @@ def _parse_bolt_yaml(source: str, artifact_type: str) -> dict[str, Any]:
     return {"artifact_type": artifact_type, "document": document}
 
 
+def _r10k_mapping(
+    document: dict[str, Any],
+    key: str,
+    *,
+    allowed: set[str],
+) -> dict[str, Any]:
+    value = document.get(key, {})
+    if value is None:
+        value = {}
+    if not isinstance(value, dict):
+        raise PuppetProjectInputError(f"r10k {key} must be a mapping")
+    unknown = set(value) - allowed
+    if unknown:
+        raise PuppetProjectInputError(
+            f"unsupported r10k {key} key(s): " + ", ".join(sorted(map(str, unknown)))
+        )
+    return value
+
+
+def _r10k_scalar(value: Any, *, address: str) -> None:
+    if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+        raise PuppetProjectInputError(f"r10k {address} must be a scalar value")
+
+
+def _validate_r10k_source(name: Any, source: Any, index: int) -> None:
+    if not isinstance(name, str) or not name.strip():
+        raise PuppetProjectInputError(f"r10k source {index} must have a non-empty string name")
+    if not isinstance(source, dict):
+        raise PuppetProjectInputError(f"r10k source {index} must be a mapping")
+    unknown = set(source) - _R10K_SOURCE_KEYS
+    if unknown:
+        raise PuppetProjectInputError(
+            f"unsupported r10k source key(s) on entry {index}: "
+            + ", ".join(sorted(map(str, unknown)))
+        )
+    source_type = source.get("type", "git")
+    if not isinstance(source_type, str):
+        raise PuppetProjectInputError(f"r10k source {index} type must be a string")
+    if source_type.casefold() == "git" and not isinstance(source.get("remote"), str):
+        raise PuppetProjectInputError(f"r10k Git source {index} requires a string remote")
+    if not isinstance(source.get("basedir"), str):
+        raise PuppetProjectInputError(f"r10k source {index} requires a string basedir")
+    for key in (
+        "command",
+        "filter_command",
+        "invalid_branches",
+        "puppetfile_name",
+        "remote",
+        "strip_component",
+    ):
+        if key in source and not isinstance(source[key], str):
+            raise PuppetProjectInputError(f"r10k source {index} {key} must be a string")
+    if "prefix" in source and not isinstance(source["prefix"], (bool, str)):
+        raise PuppetProjectInputError(f"r10k source {index} prefix must be a boolean or string")
+    if "ignore_branch_prefixes" in source and not (
+        isinstance(source["ignore_branch_prefixes"], list)
+        and all(isinstance(item, str) for item in source["ignore_branch_prefixes"])
+    ):
+        raise PuppetProjectInputError(
+            f"r10k source {index} ignore_branch_prefixes must be a string list"
+        )
+    if "overrides" in source and not isinstance(source["overrides"], dict):
+        raise PuppetProjectInputError(f"r10k source {index} overrides must be a mapping")
+
+
+def _validate_r10k_git(document: dict[str, Any]) -> None:
+    git = _r10k_mapping(document, "git", allowed=_R10K_GIT_KEYS)
+    for key in _R10K_GIT_KEYS - {"repositories"}:
+        if key in git:
+            _r10k_scalar(git[key], address=f"git {key}")
+    repositories = git.get("repositories", [])
+    if not isinstance(repositories, list):
+        raise PuppetProjectInputError("r10k git repositories must be a list")
+    for index, repository in enumerate(repositories, start=1):
+        if not isinstance(repository, dict):
+            raise PuppetProjectInputError(f"r10k git repository {index} must be a mapping")
+        unknown = set(repository) - _R10K_REPOSITORY_KEYS
+        if unknown:
+            raise PuppetProjectInputError(
+                f"unsupported r10k git repository key(s) on entry {index}: "
+                + ", ".join(sorted(map(str, unknown)))
+            )
+        if not isinstance(repository.get("remote"), str):
+            raise PuppetProjectInputError(
+                f"r10k git repository {index} requires a string remote"
+            )
+        for key, value in repository.items():
+            if key == "ignore_branch_prefixes":
+                if not (
+                    isinstance(value, list) and all(isinstance(item, str) for item in value)
+                ):
+                    raise PuppetProjectInputError(
+                        f"r10k git repository {index} ignore_branch_prefixes must be a string list"
+                    )
+            else:
+                _r10k_scalar(value, address=f"git repository {index} {key}")
+
+
+def _validate_r10k_document(document: dict[str, Any]) -> None:
+    unknown = set(document) - _R10K_ROOT_KEYS
+    if unknown:
+        raise PuppetProjectInputError(
+            "unsupported top-level r10k key(s): " + ", ".join(sorted(map(str, unknown)))
+        )
+    if not document:
+        raise PuppetProjectInputError("r10k input does not contain settings")
+    for alias, canonical in (
+        ("git_settings", "git"),
+        ("forge_settings", "forge"),
+        ("deploy_settings", "deploy"),
+    ):
+        if alias in document and canonical in document:
+            raise PuppetProjectInputError(
+                f"r10k input cannot define both {canonical} and legacy {alias}"
+            )
+        if alias in document:
+            document[canonical] = document.pop(alias)
+
+    sources = document.get("sources", {})
+    if not isinstance(sources, dict):
+        raise PuppetProjectInputError("r10k sources must be a mapping")
+    for index, (name, source) in enumerate(sources.items(), start=1):
+        _validate_r10k_source(name, source, index)
+    if "remote" in document:
+        _r10k_scalar(document["remote"], address="remote")
+    if "r10k_basedir" in document:
+        _r10k_scalar(document["r10k_basedir"], address="r10k_basedir")
+    if sources and ({"remote", "r10k_basedir"} & set(document)):
+        raise PuppetProjectInputError(
+            "r10k sources cannot be combined with legacy remote or r10k_basedir"
+        )
+
+    _validate_r10k_git(document)
+    forge = _r10k_mapping(document, "forge", allowed=_R10K_FORGE_KEYS)
+    deploy = _r10k_mapping(document, "deploy", allowed=_R10K_DEPLOY_KEYS)
+    logging = _r10k_mapping(document, "logging", allowed=_R10K_LOGGING_KEYS)
+    for key in ("authorization_token", "baseurl", "proxy"):
+        if key in forge:
+            _r10k_scalar(forge[key], address=f"forge {key}")
+    if "allow_puppetfile_override" in forge and not isinstance(
+        forge["allow_puppetfile_override"], bool
+    ):
+        raise PuppetProjectInputError("r10k forge allow_puppetfile_override must be boolean")
+    for key in ("exclude_spec", "generate_types"):
+        if key in deploy and not isinstance(deploy[key], bool):
+            raise PuppetProjectInputError(f"r10k deploy {key} must be boolean")
+    for key in ("puppet_conf", "puppet_path", "write_lock"):
+        if key in deploy:
+            _r10k_scalar(deploy[key], address=f"deploy {key}")
+    for key in ("purge_allowlist", "purge_levels"):
+        if key in deploy and not (
+            isinstance(deploy[key], list) and all(isinstance(item, str) for item in deploy[key])
+        ):
+            raise PuppetProjectInputError(f"r10k deploy {key} must be a string list")
+    if "outputs" in logging and not isinstance(logging["outputs"], list):
+        raise PuppetProjectInputError("r10k logging outputs must be a list")
+    if "disable_default_stderr" in logging and not isinstance(
+        logging["disable_default_stderr"], bool
+    ):
+        raise PuppetProjectInputError("r10k logging disable_default_stderr must be boolean")
+    if "level" in logging:
+        _r10k_scalar(logging["level"], address="logging level")
+    if "postrun" in document and not (
+        isinstance(document["postrun"], list)
+        and document["postrun"]
+        and all(isinstance(item, str) for item in document["postrun"])
+    ):
+        raise PuppetProjectInputError("r10k postrun must be a non-empty string list")
+    if "pool_size" in document and (
+        not isinstance(document["pool_size"], int)
+        or isinstance(document["pool_size"], bool)
+        or document["pool_size"] < 1
+    ):
+        raise PuppetProjectInputError("r10k pool_size must be a positive integer")
+    for key in ("cachedir", "proxy"):
+        if key in document:
+            _r10k_scalar(document[key], address=key)
+    if "purgedirs" in document and not isinstance(document["purgedirs"], list):
+        raise PuppetProjectInputError("r10k purgedirs must be a list")
+
+
+def _parse_r10k_yaml(source: str) -> dict[str, Any]:
+    try:
+        documents = list(yaml.load_all(source, Loader=_UniqueKeyLoader))  # noqa: S506
+    except PuppetProjectInputError:
+        raise
+    except yaml.YAMLError as exc:
+        raise PuppetProjectInputError(str(exc)) from exc
+    documents = [document for document in documents if document is not None]
+    if len(documents) != 1 or not isinstance(documents[0], dict):
+        raise PuppetProjectInputError("r10k input must contain one YAML mapping")
+    document = documents[0]
+    _validate_r10k_document(document)
+    return {"artifact_type": "r10k", "document": document}
+
+
 def _validate_bolt_inventory_group(
     group: dict[str, Any], address: str, *, require_name: bool
 ) -> None:
@@ -571,11 +836,13 @@ def _validate_hiera_functions(values: dict[str, Any], address: str) -> None:
 
 
 def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
-    """Parse Puppet, Hiera, or Bolt project configuration without executing code."""
+    """Parse Puppet, Hiera, Bolt, or r10k configuration without executing code."""
     if not source.strip():
         raise PuppetProjectInputError("input is empty")
     basename = Path(filename).name.casefold()
-    if basename == "bolt-project.yaml":
+    if basename in {"r10k.yaml", "r10k.yml"}:
+        parsed = _parse_r10k_yaml(source)
+    elif basename == "bolt-project.yaml":
         parsed = _parse_bolt_yaml(source, "bolt_project")
     elif basename in {"inventory.yaml", "inventory.yml"}:
         parsed = _parse_bolt_yaml(source, "bolt_inventory")
@@ -1915,6 +2182,577 @@ def _bolt_inventory_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     return changes
 
 
+def _r10k_endpoint_risk(value: str) -> tuple[str, list[str]]:
+    risk, reasons = _source_risks(value)
+    if _R10K_DYNAMIC.search(value):
+        risk = "dangerous"
+        reasons.append("The endpoint is dynamically interpolated at deployment time.")
+    try:
+        parsed = urlsplit(value.removeprefix("git+"))
+    except ValueError:
+        parsed = None
+    if parsed and re.search(
+        r"(?:^|&)(?:access_?token|api_?key|client_?secret|password|secret|token)=",
+        parsed.query,
+        re.IGNORECASE,
+    ):
+        risk = "dangerous"
+        reasons.append("The endpoint query contains credential-like parameters.")
+    return risk, reasons
+
+
+def _r10k_endpoint_change(
+    address: str,
+    kind: str,
+    value: str,
+    explanation: str,
+    *,
+    mutable: bool = False,
+) -> dict[str, str]:
+    risk, reasons = _r10k_endpoint_risk(value)
+    if mutable:
+        risk = "dangerous"
+        reasons.insert(
+            0,
+            "Branches from this repository can become executable Puppet environments.",
+        )
+    if not reasons:
+        reasons.append("The endpoint uses an authenticated or encrypted transport shape.")
+    return _change(address, kind, risk, f"{explanation} {' '.join(reasons)}")
+
+
+def _r10k_path_is_relative(value: str) -> bool:
+    normalized = value.replace("\\", "/")
+    path = PurePosixPath(normalized)
+    return not path.is_absolute() and not bool(re.match(r"^[A-Za-z]:/", normalized))
+
+
+def _r10k_path_has_traversal(value: str) -> bool:
+    normalized = value.replace("\\", "/")
+    return ".." in PurePosixPath(normalized).parts or bool(urlsplit(normalized).scheme)
+
+
+def _r10k_path_contains(parent: str, child: str) -> bool:
+    normalized_parent = parent.replace("\\", "/").rstrip("/")
+    normalized_child = child.replace("\\", "/").rstrip("/")
+    return bool(normalized_parent) and (
+        normalized_child == normalized_parent
+        or normalized_child.startswith(f"{normalized_parent}/")
+    )
+
+
+def _r10k_sources(document: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    sources = list(document.get("sources", {}).items())
+    if "remote" in document:
+        sources.append(
+            (
+                "legacy",
+                {
+                    "remote": document["remote"],
+                    "basedir": document.get("r10k_basedir", ""),
+                    "type": "git",
+                    "legacy": True,
+                },
+            )
+        )
+    return sources
+
+
+def _r10k_source_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    sources = _r10k_sources(document)
+    basedirs: dict[str, list[dict[str, Any]]] = {}
+    for index, (_, source) in enumerate(sources, start=1):
+        address = f"r10k.sources.{index}"
+        source_type = str(source.get("type", "git")).casefold()
+        remote = str(source.get("remote", ""))
+        basedir = str(source.get("basedir", ""))
+        if source.get("legacy"):
+            changes.append(
+                _change(
+                    f"{address}.legacy",
+                    "r10k_legacy_source",
+                    "review",
+                    "r10k uses the legacy global remote/r10k_basedir source form; migrate to a "
+                    "named sources mapping before adding another control repository.",
+                )
+            )
+        if remote:
+            changes.append(
+                _r10k_endpoint_change(
+                    f"{address}.remote",
+                    "r10k_environment_source",
+                    remote,
+                    "r10k fetches a control repository to create Puppet environments.",
+                    mutable=True,
+                )
+            )
+        elif source_type == "git":
+            changes.append(
+                _change(
+                    f"{address}.remote",
+                    "r10k_environment_source",
+                    "dangerous",
+                    "The Git environment source has no static remote, so deployed code provenance "
+                    "cannot be established.",
+                )
+            )
+        if basedir:
+            risk = "dangerous"
+            reasons = [
+                "r10k fully manages this environment directory and can remove unmanaged content."
+            ]
+            if _r10k_path_is_relative(basedir) or _r10k_path_has_traversal(basedir):
+                reasons.append("The directory is relative or contains parent traversal.")
+            if basedir.replace("\\", "/").rstrip("/") in {"", "/", "/etc", "/opt", "/var"}:
+                reasons.append("The target is an unusually broad system directory.")
+            changes.append(
+                _change(
+                    f"{address}.basedir",
+                    "r10k_environment_target",
+                    risk,
+                    " ".join(reasons),
+                )
+            )
+            basedirs.setdefault(basedir.replace("\\", "/").rstrip("/").casefold(), []).append(
+                source
+            )
+        else:
+            changes.append(
+                _change(
+                    f"{address}.basedir",
+                    "r10k_environment_target",
+                    "dangerous",
+                    "The environment source has no static basedir; verify the effective Puppet "
+                    "environmentpath before deployment.",
+                )
+            )
+        if source_type == "exec" or source.get("command"):
+            changes.append(
+                _change(
+                    f"{address}.command",
+                    "r10k_source_command",
+                    "dangerous",
+                    "The environment source executes an external command to discover deployable "
+                    "environments.",
+                )
+            )
+        elif source_type not in {"git", "svn", "yaml", "yamldir"}:
+            changes.append(
+                _change(
+                    f"{address}.type",
+                    "r10k_custom_source",
+                    "dangerous",
+                    "The environment source uses a custom provider whose code and provenance are "
+                    "not available in this configuration.",
+                )
+            )
+        if source.get("filter_command"):
+            changes.append(
+                _change(
+                    f"{address}.filter_command",
+                    "r10k_branch_filter_command",
+                    "dangerous",
+                    "r10k executes a shell command for every candidate branch while selecting "
+                    "Puppet environments.",
+                )
+            )
+        if source.get("invalid_branches", "correct_and_warn") != "error":
+            changes.append(
+                _change(
+                    f"{address}.invalid_branches",
+                    "r10k_branch_normalization",
+                    "review",
+                    "Invalid Git branch names can be corrected into Puppet environment names; "
+                    "review normalization collisions and rejected branches.",
+                )
+            )
+        if source.get("prefix") in {False, None, ""}:
+            changes.append(
+                _change(
+                    f"{address}.prefix",
+                    "r10k_environment_namespace",
+                    "review",
+                    "The source does not namespace generated environment names with a prefix.",
+                )
+            )
+        if source.get("strip_component"):
+            changes.append(
+                _change(
+                    f"{address}.strip_component",
+                    "r10k_branch_mapping",
+                    "review",
+                    "r10k rewrites branch names before mapping them to Puppet environments.",
+                )
+            )
+        if source.get("ignore_branch_prefixes"):
+            changes.append(
+                _change(
+                    f"{address}.ignore_branch_prefixes",
+                    "r10k_branch_scope",
+                    "review",
+                    "The source excludes branch prefixes from environment deployment; verify that "
+                    "the filter covers every non-deployable branch class.",
+                )
+            )
+        if source.get("puppetfile_name"):
+            changes.append(
+                _change(
+                    f"{address}.puppetfile_name",
+                    "r10k_puppetfile_boundary",
+                    "review",
+                    "The source selects a non-default Puppetfile whose module graph must be "
+                    "reviewed separately.",
+                )
+            )
+        if source.get("overrides"):
+            changes.append(
+                _change(
+                    f"{address}.overrides",
+                    "r10k_source_override",
+                    "dangerous",
+                    "Source-specific overrides can replace effective module or deployment "
+                    "settings.",
+                )
+            )
+    for index, grouped in enumerate(basedirs.values(), start=1):
+        if len(grouped) < 2:
+            continue
+        unprefixed = sum(source.get("prefix") in {False, None, ""} for source in grouped)
+        if unprefixed > 1:
+            changes.append(
+                _change(
+                    f"r10k.basedir_collisions.{index}",
+                    "r10k_environment_collision",
+                    "dangerous",
+                    "Multiple unprefixed sources manage the same basedir, so identical branch "
+                    "names can collide or overwrite environment state.",
+                )
+            )
+    return changes
+
+
+def _r10k_git_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    git = document.get("git", {})
+    if not git:
+        return []
+    changes: list[dict[str, str]] = []
+    if "provider" in git:
+        provider = str(git["provider"]).casefold()
+        risk = "review" if provider in {"rugged", "shellgit"} else "dangerous"
+        explanation = (
+            "r10k delegates repository operations to the system Git executable."
+            if provider == "shellgit"
+            else "r10k selects a Git provider that determines credential, proxy, and transport "
+            "behavior."
+        )
+        changes.append(_change("r10k.git.provider", "r10k_git_provider", risk, explanation))
+    if "default_ref" in git:
+        default_ref = str(git["default_ref"])
+        pinned = bool(_COMMIT.fullmatch(default_ref))
+        changes.append(
+            _change(
+                "r10k.git.default_ref",
+                "r10k_default_revision",
+                "review" if pinned else "dangerous",
+                "The default module revision is pinned to an immutable commit."
+                if pinned
+                else "Modules without an explicit ref follow a mutable or dynamic default "
+                "revision.",
+            )
+        )
+    for key in ("private_key", "oauth_token", "github_app_id", "github_app_key"):
+        if key in git:
+            changes.append(
+                _change(
+                    f"r10k.git.{key}",
+                    "r10k_git_credential",
+                    "review",
+                    "r10k reads Git authentication material from an external credential or key "
+                    "boundary; verify file ownership, scope, and rotation.",
+                )
+            )
+    if "proxy" in git:
+        changes.append(
+            _r10k_endpoint_change(
+                "r10k.git.proxy",
+                "r10k_git_proxy",
+                str(git["proxy"]),
+                "r10k routes Git HTTP operations through a configured proxy.",
+            )
+        )
+    for index, repository in enumerate(git.get("repositories", []), start=1):
+        remote = str(repository["remote"])
+        changes.append(
+            _r10k_endpoint_change(
+                f"r10k.git.repositories.{index}.remote",
+                "r10k_repository_override",
+                remote,
+                "r10k applies repository-specific Git behavior to a remote.",
+            )
+        )
+        if any(
+            key in repository
+            for key in ("private_key", "oauth_token", "github_app_id", "github_app_key")
+        ):
+            changes.append(
+                _change(
+                    f"r10k.git.repositories.{index}.credentials",
+                    "r10k_git_credential",
+                    "review",
+                    "A repository selects dedicated authentication material; verify least "
+                    "privilege, file permissions, and rotation.",
+                )
+            )
+        if "proxy" in repository:
+            changes.append(
+                _r10k_endpoint_change(
+                    f"r10k.git.repositories.{index}.proxy",
+                    "r10k_git_proxy",
+                    str(repository["proxy"]),
+                    "A repository overrides the global Git proxy.",
+                )
+            )
+    return changes
+
+
+def _r10k_forge_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    forge = document.get("forge", {})
+    changes: list[dict[str, str]] = []
+    if "baseurl" in forge:
+        changes.append(
+            _r10k_endpoint_change(
+                "r10k.forge.baseurl",
+                "r10k_forge_endpoint",
+                str(forge["baseurl"]),
+                "r10k downloads executable Puppet modules from a configured Forge endpoint.",
+            )
+        )
+    if "proxy" in forge:
+        changes.append(
+            _r10k_endpoint_change(
+                "r10k.forge.proxy",
+                "r10k_forge_proxy",
+                str(forge["proxy"]),
+                "r10k routes Forge downloads through a configured proxy.",
+            )
+        )
+    if "authorization_token" in forge:
+        changes.append(
+            _change(
+                "r10k.forge.authorization_token",
+                "r10k_literal_credential",
+                "dangerous",
+                "The r10k file contains a literal Forge authorization token; move it to a "
+                "protected external secret boundary and rotate exposed values.",
+            )
+        )
+    if forge.get("allow_puppetfile_override") is True:
+        changes.append(
+            _change(
+                "r10k.forge.allow_puppetfile_override",
+                "r10k_forge_override",
+                "dangerous",
+                "Puppetfiles can override the centrally configured Forge endpoint, expanding the "
+                "module supply-chain trust boundary.",
+            )
+        )
+    return changes
+
+
+def _r10k_deploy_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    deploy = document.get("deploy", {})
+    changes: list[dict[str, str]] = []
+    if "purgedirs" in document:
+        changes.append(
+            _change(
+                "r10k.purgedirs",
+                "r10k_deprecated_purge",
+                "dangerous",
+                "The deprecated purgedirs setting is no longer respected, creating false "
+                "assurance about deletion scope.",
+            )
+        )
+    if "purge_levels" in deploy:
+        levels = {str(level).casefold() for level in deploy["purge_levels"]}
+        risk = "dangerous" if levels else "review"
+        reasons = ["r10k removes unmanaged content at configured deployment levels."]
+        if "environment" in levels:
+            reasons.append(
+                "Environment-level purge can delete unmanaged files inside environments."
+            )
+        changes.append(
+            _change(
+                "r10k.deploy.purge_levels",
+                "r10k_purge_scope",
+                risk,
+                " ".join(reasons),
+            )
+        )
+    if "purge_allowlist" in deploy:
+        broad = any(str(item).strip() in {"*", "**", "**/*"} for item in deploy["purge_allowlist"])
+        changes.append(
+            _change(
+                "r10k.deploy.purge_allowlist",
+                "r10k_purge_exception",
+                "dangerous" if broad else "review",
+                "The purge allowlist is broad enough to defeat expected cleanup."
+                if broad
+                else "Purge exceptions preserve unmanaged paths; review patterns against the "
+                "effective environment layout.",
+            )
+        )
+    if deploy.get("generate_types") is True:
+        changes.append(
+            _change(
+                "r10k.deploy.generate_types",
+                "r10k_type_generation",
+                "dangerous",
+                "r10k invokes Puppet type generation after deployment, executing code from the "
+                "new environment.",
+            )
+        )
+    if "puppet_path" in deploy:
+        changes.append(
+            _change(
+                "r10k.deploy.puppet_path",
+                "r10k_executable_path",
+                "dangerous",
+                "r10k executes a configured Puppet binary during deployment workflows.",
+            )
+        )
+    if "puppet_conf" in deploy:
+        changes.append(
+            _change(
+                "r10k.deploy.puppet_conf",
+                "r10k_puppet_config_boundary",
+                "review",
+                "r10k reads an external puppet.conf whose environmentpath and runtime settings "
+                "must match deployment targets.",
+            )
+        )
+    if deploy.get("exclude_spec") is False:
+        changes.append(
+            _change(
+                "r10k.deploy.exclude_spec",
+                "r10k_deployment_content",
+                "review",
+                "r10k deploys module test/spec content into live Puppet environments.",
+            )
+        )
+    if "write_lock" in deploy:
+        changes.append(
+            _change(
+                "r10k.deploy.write_lock",
+                "r10k_deployment_lock",
+                "review",
+                "A deployment write lock is configured; verify orchestration honors the lock "
+                "before changing code state.",
+            )
+        )
+    return changes
+
+
+def _r10k_operational_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    cachedir = str(document.get("cachedir", ""))
+    if cachedir:
+        reasons = ["r10k stores mirrored Git repositories in a persistent local cache."]
+        risk = "review"
+        if _r10k_path_is_relative(cachedir) or _r10k_path_has_traversal(cachedir):
+            risk = "dangerous"
+            reasons.append("The cache path is relative or contains parent traversal.")
+        for _, source in _r10k_sources(document):
+            basedir = str(source.get("basedir", ""))
+            if basedir and (
+                _r10k_path_contains(basedir, cachedir)
+                or _r10k_path_contains(cachedir, basedir)
+            ):
+                risk = "dangerous"
+                reasons.append("The cache and managed environment directory overlap.")
+                break
+        changes.append(
+            _change(
+                "r10k.cachedir",
+                "r10k_repository_cache",
+                risk,
+                " ".join(reasons),
+            )
+        )
+    if "proxy" in document:
+        changes.append(
+            _r10k_endpoint_change(
+                "r10k.proxy",
+                "r10k_global_proxy",
+                str(document["proxy"]),
+                "r10k routes global HTTP and HTTPS operations through a configured proxy.",
+            )
+        )
+    if "postrun" in document:
+        changes.append(
+            _change(
+                "r10k.postrun",
+                "r10k_postrun_command",
+                "dangerous",
+                "r10k executes a configured command after deploying environments or modules.",
+            )
+        )
+    if "pool_size" in document:
+        pool_size = int(document["pool_size"])
+        changes.append(
+            _change(
+                "r10k.pool_size",
+                "r10k_deployment_concurrency",
+                "dangerous" if pool_size > 16 else "review",
+                "High deployment concurrency can amplify repository, filesystem, and Puppet "
+                "environment races."
+                if pool_size > 16
+                else "r10k installs modules concurrently; verify repository and filesystem limits.",
+            )
+        )
+    logging = document.get("logging", {})
+    if str(logging.get("level", "")).casefold() in {"debug", "debug1", "debug2"}:
+        changes.append(
+            _change(
+                "r10k.logging.level",
+                "r10k_debug_logging",
+                "review",
+                "Debug logging can expose repository, proxy, branch, command, and filesystem "
+                "metadata.",
+            )
+        )
+    if logging.get("outputs"):
+        changes.append(
+            _change(
+                "r10k.logging.outputs",
+                "r10k_log_destination",
+                "review",
+                "r10k sends deployment logs to additional plugin-defined destinations.",
+            )
+        )
+    if logging.get("disable_default_stderr") is True:
+        changes.append(
+            _change(
+                "r10k.logging.disable_default_stderr",
+                "r10k_observability",
+                "review",
+                "r10k disables its default stderr output; ensure failures remain visible to "
+                "automation and operators.",
+            )
+        )
+    return changes
+
+
+def _r10k_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    return [
+        *_r10k_source_changes(document),
+        *_r10k_git_changes(document),
+        *_r10k_forge_changes(document),
+        *_r10k_deploy_changes(document),
+        *_r10k_operational_changes(document),
+    ]
+
+
 class PuppetProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -1925,7 +2763,15 @@ class PuppetProjectAdapter(BaseAdapter):
         return (
             isinstance(project, dict)
             and project.get("artifact_type")
-            in {"puppetfile", "metadata", "hiera", "config", "bolt_project", "bolt_inventory"}
+            in {
+                "puppetfile",
+                "metadata",
+                "hiera",
+                "config",
+                "bolt_project",
+                "bolt_inventory",
+                "r10k",
+            }
             and isinstance(project.get("document"), dict)
         )
 
@@ -1939,6 +2785,7 @@ class PuppetProjectAdapter(BaseAdapter):
             "config": _puppet_config_changes,
             "bolt_project": _bolt_project_changes,
             "bolt_inventory": _bolt_inventory_changes,
+            "r10k": _r10k_changes,
         }[artifact_type](project["document"])
         if artifact_type.startswith("bolt_"):
             boundary = (
@@ -1948,12 +2795,21 @@ class PuppetProjectAdapter(BaseAdapter):
                 "commands, scripts, and Puppet code selected at runtime."
             )
             address = "bolt.effective_project"
+        elif artifact_type == "r10k":
+            boundary = (
+                "Effective r10k and Code Manager deployment also depends on command-line and "
+                "environment overrides, enumerated remote branches, Git and Forge client trust, "
+                "credential file contents, Puppetfiles and module locks, filesystem ownership, "
+                "the effective Puppet environmentpath, deployment orchestration, hooks, and live "
+                "server state; readtheplan does not fetch repositories or execute deployments."
+            )
+            address = "r10k.effective_deployment"
         else:
             boundary = (
                 "Effective Puppet behavior also depends on deployed module contents, transitive "
-                "dependencies, environment/modulepath precedence, Code Manager or r10k settings, "
-                "Hiera data files, eyaml keys, Puppet Server configuration, PuppetDB, facts, and "
-                "compiler-side extensions."
+                "dependencies, environment/modulepath precedence, Hiera data files, eyaml keys, "
+                "Puppet Server configuration, PuppetDB, facts, compiler-side extensions, and any "
+                "r10k or Code Manager configuration analyzed separately."
             )
             address = "puppet.effective_project"
         changes.append(_change(address, "project_boundary", "review", boundary))
@@ -1979,5 +2835,7 @@ def analyze_puppet_project(data: dict[str, Any], *, catalog=None) -> dict[str, A
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="Puppet project")
     gate["adapter"] = "puppet-project"
     gate["artifact_type"] = data["puppet_project"]["artifact_type"]
+    if data["puppet_project"]["artifact_type"] == "r10k":
+        gate["source_count"] = len(_r10k_sources(data["puppet_project"]["document"]))
     gate["total_changes"] = len(changes)
     return gate

@@ -430,8 +430,8 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     puppet_project.add_argument(
         "input_file",
         help=(
-            "Path to Puppetfile, metadata.json, hiera.yaml, puppet.conf, bolt-project.yaml, "
-            "or Bolt inventory.yaml."
+            "Path to Puppetfile, metadata.json, hiera.yaml, puppet.conf, r10k.yaml, "
+            "bolt-project.yaml, or Bolt inventory.yaml."
         ),
     )
     puppet_project.set_defaults(func=_puppet_project_gate)
