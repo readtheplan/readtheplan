@@ -1,0 +1,16 @@
+---
+- name: inspect role state
+  ansible.builtin.debug:
+    msg: ready
+
+- name: load additional checks
+  ansible.builtin.include_tasks: checks.yml
+
+- name: render configuration
+  ansible.builtin.template:
+    src: application.conf.j2
+    dest: /etc/application.conf
+
+- name: validate a dynamic condition
+  ansible.builtin.assert:
+    that: "{{ application_ready }}"

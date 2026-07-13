@@ -250,6 +250,8 @@ def identify_project_input(
 
     if name == "ansible.cfg":
         return "ansible-project"
+    if suffix in _YAML_SUFFIXES and _ansible_role_content_context(path, parts):
+        return "ansible"
     if name in {
         ".ansible-lint",
         ".ansible-lint.yaml",
@@ -696,6 +698,18 @@ def _bolt_content_context(path: Path, parts: tuple[str, ...], directory: str) ->
     return False
 
 
+def _ansible_role_content_context(path: Path, parts: tuple[str, ...]) -> bool:
+    """Recognize executable task/handler YAML in standard role layouts."""
+    for index, part in enumerate(parts[:-2]):
+        if part == "roles" and parts[index + 2] in {"tasks", "handlers"}:
+            return True
+    if len(parts) > 2 and parts[-2] in {"tasks", "handlers"}:
+        role_root = path.parent.parent
+        role_markers = {"defaults", "files", "handlers", "meta", "tasks", "templates", "vars"}
+        return sum((role_root / marker).exists() for marker in role_markers) >= 2
+    return False
+
+
 def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
     try:
         text = raw.decode("utf-8")
@@ -898,6 +912,8 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "callback_count",
         "template_count",
         "step_count",
+        "task_count",
+        "handler_count",
         "parameter_count",
         "implementation_count",
         "file_count",

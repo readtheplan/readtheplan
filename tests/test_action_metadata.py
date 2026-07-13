@@ -217,6 +217,11 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "tool: sam" in workflow
     assert "input-file: tests/fixtures/sam_template_risky.yml" in workflow
     assert "input-file: tests/fixtures/ansible_config_management_risky.yml" in workflow
+    assert (
+        "input-file: "
+        "tests/fixtures/ansible_role_content_risky/roles/application/tasks/main.yml"
+        in workflow
+    )
     assert "tool: ansible-project" in workflow
     assert "input-file: tests/fixtures/ansible_project_risky.cfg" in workflow
     assert "input-file: tests/fixtures/ansible_inventory_plugin_risky.aws_ec2.yml" in workflow

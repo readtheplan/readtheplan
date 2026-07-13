@@ -2445,7 +2445,12 @@ def agent_gate_configuration_management(
     framework: str | None = None,
 ) -> dict[str, object]:
     """Return a gate for major configuration-management source formats."""
-    from readtheplan.adapters.ansible import AnsibleAdapter, analyze_ansible
+    from readtheplan.adapters.ansible import (
+        AnsibleAdapter,
+        AnsibleInputError,
+        analyze_ansible,
+        parse_ansible,
+    )
     from readtheplan.adapters.ansible_project import (
         AnsibleProjectAdapter,
         AnsibleProjectInputError,
@@ -2541,21 +2546,12 @@ def agent_gate_configuration_management(
 
     if ecosystem == "ansible":
         try:
-            import yaml
-
-            documents = list(yaml.safe_load_all(source))
-        except yaml.YAMLError as exc:
+            data = parse_ansible(source, filename=input_path)
+        except AnsibleInputError as exc:
             raise MCPToolInputError(
-                code="INPUT_ERROR",
-                message=f"Cannot parse Ansible input {input_path}: {exc}",
+                code="INVALID_INPUT",
+                message=f"Invalid Ansible input {input_path}: {exc}",
             ) from exc
-        plays: list[object] = []
-        for document in documents:
-            if isinstance(document, list):
-                plays.extend(document)
-            elif isinstance(document, dict):
-                plays.append(document)
-        data = {"plays": plays}
         adapter = AnsibleAdapter()
         analyze = analyze_ansible
     elif ecosystem == "ansible-project":

@@ -992,6 +992,39 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Ansible role task file
+        id: ansible_role_tasks
+        uses: ./
+        with:
+          tool: ansible
+          input-file: tests/fixtures/ansible_role_content_risky/roles/application/tasks/main.yml
+          framework: soc2
+
+      - name: Assert Ansible role task outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.ansible_role_tasks.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.ansible_role_tasks.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.ansible_role_tasks.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "11"
+          test "$RISK_COUNTS" = '{"dangerous":7,"irreversible":0,"review":4,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "ansible"
+          assert payload["artifact_type"] == "task_file"
+          assert payload["task_count"] == 11
+          assert payload["handler_count"] == 0
+          assert payload["dynamic_count"] == 2
+          assert payload["decision"] == "block"
+          assert "fixture-task-token-do-not-leak" not in os.environ["SUMMARY_JSON"]
+          assert "fixture-environment-token-do-not-leak" not in os.environ["SUMMARY_JSON"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Ansible project configuration
         id: ansible_project
         uses: ./

@@ -1,0 +1,5 @@
+---
+- name: publish status
+  ansible.builtin.debug:
+    msg: status changed
+  listen: status-updated
