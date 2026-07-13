@@ -144,6 +144,44 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("plan_file", help="Path to Terraform plan JSON.")
     analyze.set_defaults(func=_analyze)
 
+    scan = subparsers.add_parser(
+        "scan",
+        help="Discover and gate supported infrastructure files across a project.",
+    )
+    scan.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog in every file gate. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    scan.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="Exclude a repository-relative glob. Repeatable.",
+    )
+    scan.add_argument(
+        "--max-files",
+        type=int,
+        default=500,
+        help="Maximum supported inputs to analyze. Defaults to 500.",
+    )
+    scan.add_argument(
+        "--max-file-bytes",
+        type=int,
+        default=10 * 1024 * 1024,
+        help="Maximum size of one discovered input. Defaults to 10 MiB.",
+    )
+    scan.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Project directory or supported input file. Defaults to the current directory.",
+    )
+    scan.set_defaults(func=_scan_project)
+
     agent_gate = subparsers.add_parser(
         "agent-gate",
         help="Emit the local coding-agent gate decision for a Terraform plan JSON file.",
@@ -1096,6 +1134,27 @@ def _analyze(args: argparse.Namespace) -> int:
     else:
         _print_summary(summary, sys.stdout, catalog=catalog)
     return _fail_on_exit_code(summary, args.fail_on)
+
+
+def _scan_project(args: argparse.Namespace) -> int:
+    """Discover and aggregate infrastructure gates across one project tree."""
+    from readtheplan.project_scan import ProjectScanError, scan_project
+
+    if args.framework and _adapter_catalog(args.framework) is None:
+        return 1
+    try:
+        gate = scan_project(
+            Path(args.path),
+            display_root=str(args.path),
+            framework=args.framework,
+            excludes=tuple(args.exclude),
+            max_files=args.max_files,
+            max_file_bytes=args.max_file_bytes,
+        )
+    except ProjectScanError as exc:
+        print(f"Error: cannot scan project: {exc}", file=sys.stderr)
+        return 1
+    return _write_adapter_gate(gate)
 
 
 def _fail_on_exit_code(summary: PlanSummary, threshold: str | None) -> int:

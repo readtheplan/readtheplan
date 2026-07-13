@@ -7,6 +7,9 @@ CI/CD, policy, and configuration artifacts without executing them or contacting
 infrastructure. It classifies changes as safe, review, dangerous, or irreversible
 and can map findings to six built-in compliance catalogs.
 
+Use `readtheplan scan .` to discover supported infrastructure files across a
+repository and return one aggregate gate with per-file analyzer results.
+
 Every product feature is free. There is no paid tier, enterprise tier, trial,
 product account, or hosted raw-plan upload workflow.
 

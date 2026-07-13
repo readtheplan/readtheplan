@@ -4,11 +4,11 @@ author: readtheplan maintainers
 
 inputs:
   tool:
-    description: "Input tool: terraform, terraform-config, terraform-lock, terraform-state, terragrunt, terramate, spacelift, cloudformation, cdk, azure, bicep, kubernetes, helm, helmfile, kustomize, skaffold, devspace, tilt, cue, jsonnet, tanka, ytt, vendir, kbld, imgpkg, kapp, crossplane, serverless, sam, pulumi, pulumi-project, ansible, ansible-project, jenkins, jenkins-jcasc, chef, chef-project, puppet, puppet-project, github-actions, gitlab-ci, circleci, azure-pipelines, bitbucket-pipelines, buildkite, atlantis, docker-compose, dockerfile, nomad, packer, salt, salt-project, nix, dsc, cfengine, opa, sentinel, vagrant, cloud-init, systemd, nginx, haproxy, envoy, traefik, caddy, grafana, loki, vault, consul, prometheus, alertmanager, or otel-collector."
+    description: "Input tool: terraform, scan, terraform-config, terraform-lock, terraform-state, terragrunt, terramate, spacelift, cloudformation, cdk, azure, bicep, kubernetes, helm, helmfile, kustomize, skaffold, devspace, tilt, cue, jsonnet, tanka, ytt, vendir, kbld, imgpkg, kapp, crossplane, serverless, sam, pulumi, pulumi-project, ansible, ansible-project, jenkins, jenkins-jcasc, chef, chef-project, puppet, puppet-project, github-actions, gitlab-ci, circleci, azure-pipelines, bitbucket-pipelines, buildkite, atlantis, docker-compose, dockerfile, nomad, packer, salt, salt-project, nix, dsc, cfengine, opa, sentinel, vagrant, cloud-init, systemd, nginx, haproxy, envoy, traefik, caddy, grafana, loki, vault, consul, prometheus, alertmanager, or otel-collector."
     required: false
     default: "terraform"
   input-file:
-    description: Path to the plan, manifest, playbook, pipeline, recipe, or other supported input.
+    description: Path to a project directory, plan, manifest, playbook, pipeline, recipe, or other supported input.
     required: false
     default: ""
   plan-file:
@@ -77,7 +77,7 @@ runs:
 
         TOOL="${TOOL,,}"
         case "$TOOL" in
-          terraform|terraform-config|terraform-lock|terraform-state|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|puppet|puppet-project|github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|atlantis|docker-compose|dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|vagrant|cloud-init|systemd|nginx|haproxy|envoy|traefik|caddy|grafana|loki|vault|consul|prometheus|alertmanager|otel-collector) ;;
+          terraform|scan|terraform-config|terraform-lock|terraform-state|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|puppet|puppet-project|github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|atlantis|docker-compose|dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|vagrant|cloud-init|systemd|nginx|haproxy|envoy|traefik|caddy|grafana|loki|vault|consul|prometheus|alertmanager|otel-collector) ;;
           *) echo "::error::unsupported tool: $TOOL"; exit 1 ;;
         esac
 
@@ -122,8 +122,8 @@ runs:
         echo "RESOLVED_INPUT_FILE=$INPUT_FILE" >> "$GITHUB_ENV"
         echo "RESOLVED_FRAMEWORK=${FRAMEWORK:-}" >> "$GITHUB_ENV"
 
-        if [ ! -f "$INPUT_FILE" ]; then
-          echo "::error::Input file not found: $INPUT_FILE"
+        if [ ! -e "$INPUT_FILE" ]; then
+          echo "::error::Input path not found: $INPUT_FILE"
           exit 1
         fi
 

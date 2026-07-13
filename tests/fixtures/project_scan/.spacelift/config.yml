@@ -1,0 +1,10 @@
+version: "2"
+stack_defaults:
+  runner_image: ghcr.io/example/infra-runner:latest
+  before_apply:
+    - ./deploy-production.sh
+  environment:
+    SPACELIFT_API_TOKEN: project-scan-secret
+stacks:
+  production:
+    project_root: infra

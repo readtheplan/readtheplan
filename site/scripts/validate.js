@@ -56,6 +56,7 @@ for (const token of [
   "rtp-evidence-soc2.json",
   "Good first issues tagged",
   "pip install readtheplan",
+  "readtheplan scan .",
   "fail-on-threshold",
   "readtheplan-evidence.json",
   "readtheplan[sign]",

@@ -52,7 +52,16 @@
       <section class="g" aria-labelledby="basic-title">
         <div class="gc utility-panel-wide">
           <h2 id="basic-title">Basic setup</h2>
-          <p style="color:var(--muted);margin:8px 0 16px">Set <code>tool</code> and <code>input-file</code> for any supported infrastructure artifact. Terraform remains the default for backward compatibility:</p>
+          <p style="color:var(--muted);margin:8px 0 16px">Scan a whole checked-out repository without choosing adapters file by file:</p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Gate infrastructure project
+  id: rtp
+  uses: readtheplan/readtheplan@v0.4.0
+  with:
+    tool: scan
+    input-file: .
+    framework: soc2
+    fail-on-threshold: dangerous</code></pre>
+          <p style="color:var(--muted);margin:16px 0">Or set <code>tool</code> and <code>input-file</code> for one supported infrastructure artifact. Terraform remains the default for backward compatibility:</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Analyze Terraform plan
   id: rtp
   uses: readtheplan/readtheplan@v0.4.0
@@ -77,7 +86,7 @@
     fail-on-threshold: dangerous
 
 # Other tool values:
-# terraform-config, terraform-lock, terraform-state, terragrunt, terramate, spacelift, cloudformation, cdk, bicep, azure, kubernetes, helmfile, skaffold, devspace, tilt, cue, jsonnet, tanka, ytt, vendir, kbld, imgpkg, kapp, pulumi-project, ansible, ansible-project, salt, salt-project, nix, dsc, cfengine, opa, sentinel, jenkins, jenkins-jcasc, chef, chef-project, puppet, puppet-project</code></pre>
+# scan, terraform-config, terraform-lock, terraform-state, terragrunt, terramate, spacelift, cloudformation, cdk, bicep, azure, kubernetes, helmfile, skaffold, devspace, tilt, cue, jsonnet, tanka, ytt, vendir, kbld, imgpkg, kapp, pulumi-project, ansible, ansible-project, salt, salt-project, nix, dsc, cfengine, opa, sentinel, jenkins, jenkins-jcasc, chef, chef-project, puppet, puppet-project</code></pre>
           <p style="color:var(--muted);margin-top:12px">Generate structured plans or rendered manifests with their upstream tools first. For example, run <code>helm template</code> or <code>kubectl kustomize</code> before the action, then select <code>tool: kubernetes</code>. The action never executes infrastructure source code itself.</p>
         </div>
       </section>

@@ -29,6 +29,7 @@ def _legacy_site_has_client_onboarding_surface() -> None:
     assert "fail-on-threshold" in html
     assert 'class="terminal"' in html
     assert "readtheplan analyze --framework" in html
+    assert "readtheplan scan ." in html
     assert "Terraform + OpenTofu" in html
     assert "pip install readtheplan" in html
     assert "/tools/terraform-risk-calculator/" in html

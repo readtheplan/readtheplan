@@ -14,7 +14,7 @@
 **Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review cloud plans, Kubernetes manifests, Docker Compose workloads, Nomad jobspecs and scheduler plans, configuration-management code, and CI pipelines through one deterministic local risk gate. Runs locally — no uploads, no accounts, no backend.
 
 ```bash
-pip install readtheplan && readtheplan analyze plan.json
+pip install readtheplan && readtheplan scan .
 ```
 
 Requires Python 3.10+.
@@ -79,6 +79,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 
 | Tool | Command | Analysis level |
 |------|---------|----------------|
+| Project auto-discovery | `readtheplan scan .` | Recursively discovers high-confidence infrastructure inputs, skips dependency/build directories and symlinks, runs the matching local analyzers, and returns one deterministic aggregate gate with per-file results and validation errors |
 | Terraform / OpenTofu | `readtheplan analyze plan.json` | Structured plan diff plus AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE resource-aware rules |
 | Terraform configuration | `readtheplan terraform-config main.tf` | HCL/JSON providers, backends, modules, resources/data, provisioners, lifecycle, remote state, imports/moves/removals, secrets, and static exposure |
 | Terraform / OpenTofu dependency lock | `readtheplan terraform-lock .terraform.lock.hcl` | Strict provider source/version selection, constraint context, h1/zh checksum validity and coverage, custom/local origins, pre-releases, unknown hash schemes, and signer/platform/module/read-only-mode boundaries |
@@ -270,6 +271,12 @@ Try the [interactive playground](https://readtheplan.dev/playground/) to see rea
 ```bash
 # Install
 pip install readtheplan
+
+# Scan an entire repository and auto-select the matching analyzers
+readtheplan scan .
+
+# Add compliance checks and omit generated paths
+readtheplan scan --framework soc2 --exclude 'generated/**' .
 
 # No Terraform handy? After cloning the repo, analyze a bundled example:
 #   readtheplan analyze examples/01-small-create/plan.json

@@ -61,8 +61,10 @@
 
       <section class="g" aria-labelledby="plan-title">
         <div class="gc utility-panel-wide">
-          <h2 id="plan-title">2. Generate a plan</h2>
-          <p style="color:var(--muted); margin:8px 0 16px">If you have Terraform, generate a plan JSON:</p>
+          <h2 id="plan-title">2. Scan a project or generate a plan</h2>
+          <p style="color:var(--muted); margin:8px 0 16px">Fastest path: scan the current repository and let readtheplan select the matching analyzers:</p>
+          <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>readtheplan scan --framework soc2 .</code></pre>
+          <p style="color:var(--muted); margin:16px 0">If you have a saved Terraform plan, generate its stable JSON representation:</p>
           <pre style="background:var(--surface); padding:16px 20px; border-radius:8px; border:1px solid var(--border); overflow-x:auto; font-size:14px"><code>terraform plan -out=tfplan -input=false
 terraform show -json tfplan &gt; plan.json</code></pre>
           <p style="color:var(--muted); margin:16px 0 8px">No Terraform? Try the example plans in the repo:</p>

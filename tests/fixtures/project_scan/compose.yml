@@ -1,0 +1,9 @@
+services:
+  api:
+    image: example/api:latest
+    privileged: true
+    network_mode: host
+    volumes:
+      - /:/host
+    ports:
+      - "0.0.0.0:8080:8080"

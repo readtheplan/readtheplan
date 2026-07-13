@@ -21,7 +21,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "input-file" in action
     assert "tool:" in action
     assert (
-        "terraform-config|terraform-lock|terraform-state|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|"
+        "scan|terraform-config|terraform-lock|terraform-state|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|"
         "ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|"
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
@@ -33,6 +33,7 @@ def test_action_uses_json_cli_contract() -> None:
         "otel-collector"
     ) in action
     assert "RESOLVED_INPUT_FILE" in action
+    assert '[ ! -e "$INPUT_FILE" ]' in action
     assert "p.get('risks', p.get('risk_counts', {}))" in action
     assert "deprecationMessage" in action
     assert "risk_counts=" in action
@@ -53,6 +54,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     workflow = (ROOT / ".github" / "workflows" / "test-action.yml").read_text(encoding="utf-8")
 
     assert "tests/fixtures/valid_plan.json" in workflow
+    assert "tool: scan" in workflow
+    assert "input-file: tests/fixtures/project_scan" in workflow
     provider_fixtures = (
         "cloudflare_plan_risky.json",
         "github_provider_plan_risky.json",
