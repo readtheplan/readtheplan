@@ -1522,6 +1522,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Terramate
+        id: terramate
+        uses: ./
+        with:
+          tool: terramate
+          input-file: tests/fixtures/terramate_risky.tm.hcl
+          framework: soc2
+
+      - name: Assert Terramate outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.terramate.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.terramate.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.terramate.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "35"
+          test "$RISK_COUNTS" = '{"dangerous":21,"irreversible":0,"review":14,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "terramate"
+          assert payload["artifact_type"] == "configuration"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Salt states
         id: salt
         uses: ./

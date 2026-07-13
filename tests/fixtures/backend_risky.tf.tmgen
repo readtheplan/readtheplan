@@ -1,0 +1,14 @@
+terraform {
+  backend "s3" {
+    bucket = global.state_bucket
+    key    = "${terramate.stack.id}/terraform.tfstate"
+  }
+}
+
+module "network" {
+  source = tm_vendor("github.com/example/network?ref=main")
+}
+
+locals {
+  secret = tm_file("../secrets/runtime.txt")
+}
