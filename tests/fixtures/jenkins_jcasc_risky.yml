@@ -53,11 +53,20 @@ unclassified:
       - name: shared-deploy
         defaultVersion: main
         implicit: true
+        allowVersionOverride: true
+        includeInChangesets: false
+        cachingConfiguration:
+          refreshTimeMinutes: 5
+          excludedVersionsStr: feature/
         retriever:
           modernSCM:
             scm:
               git:
                 remote: http://git.example.test/shared-deploy.git
+                credentialsId: fixture-library-credential-do-not-leak
+                traits:
+                  - gitHubForkDiscovery:
+                      trust: gitHubTrustEveryone
   scriptApproval:
     approvedSignatures:
       - method java.lang.Runtime exec java.lang.String

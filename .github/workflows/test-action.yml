@@ -1181,15 +1181,20 @@ jobs:
           RISK_COUNTS: ${{ steps.jenkins_jcasc.outputs['risk-counts'] }}
         run: |
           set -euo pipefail
-          test "$CHANGE_COUNT" = "20"
-          test "$RISK_COUNTS" = '{"dangerous":14,"irreversible":0,"review":6,"safe":0}'
+          test "$CHANGE_COUNT" = "26"
+          test "$RISK_COUNTS" = '{"dangerous":19,"irreversible":0,"review":7,"safe":0}'
           python - <<'PY'
           import json
           import os
           payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
           assert payload["adapter"] == "jenkins-jcasc"
+          assert payload["library_count"] == 1
+          assert payload["trusted_library_count"] == 1
           assert payload["decision"] == "block"
           assert "security realm" in payload["pr_comment"]
+          assert "fixture-library-credential-do-not-leak" not in serialized
+          assert "git.example.test" not in serialized
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
