@@ -112,6 +112,7 @@ readtheplan chef default.rb
 readtheplan chef-project Policyfile.rb
 readtheplan puppet site.pp
 readtheplan puppet-project Puppetfile
+readtheplan puppet-project puppet.conf
 readtheplan github-actions .github/workflows/deploy.yml
 readtheplan gitlab-ci .gitlab-ci.yml
 readtheplan circleci .circleci/config.yml
@@ -157,7 +158,7 @@ readtheplan kapp kapp-config.yml</code></pre>
             conservative scanner. Docker Compose and Buildx Bake definitions are parsed structurally without resolving external
             files, build contexts, caches, or registries, while Nomad accepts HCL/JSON jobspec source or the scheduler's structured job-plan API response and
             Packer consumes saved human or machine-readable inspect output.
-            Jenkinsfiles, Chef recipes/projects, Puppet manifests/projects, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning;
+            Jenkinsfiles, Chef recipes/projects, Puppet manifests/projects, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning; <code>puppet.conf</code> is parsed as duplicate-safe sectioned configuration for agent, server, and CA trust and execution settings;
             Jenkins JCasC YAML is parsed structurally for controller identity, credentials, agents, libraries, and script authority:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
