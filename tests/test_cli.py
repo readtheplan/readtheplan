@@ -84,6 +84,67 @@ def test_analyze_valid_plan_can_print_json(capsys) -> None:
     }
 
 
+def test_analyze_plan_integrity_outputs_findings_without_sensitive_values(capsys) -> None:
+    exit_code = main(
+        [
+            "analyze",
+            "--format",
+            "json",
+            "--framework",
+            "soc2",
+            "--fail-on",
+            "dangerous",
+            str(FIXTURES / "terraform_plan_integrity_risky.json"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 2
+    assert payload["resource_change_count"] == 1
+    assert payload["plan_finding_count"] == 13
+    assert payload["risks"] == {"dangerous": 9, "review": 4, "safe": 1}
+    assert len(payload["plan_findings"]) == 13
+    assert all(finding["controls"] for finding in payload["plan_findings"])
+    assert captured.err == "fail-on: 9 change(s) at or above dangerous\n"
+    encoded = json.dumps(payload)
+    assert "fixture-action-payload-secret-do-not-leak" not in encoded
+    assert "fixture-ansible-token-do-not-leak" not in encoded
+
+
+def test_agent_gate_plan_integrity_blocks_action_only_and_partial_plans(capsys) -> None:
+    exit_code = main(
+        ["agent-gate", str(FIXTURES / "terraform_plan_integrity_risky.json")]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 2
+    assert payload["decision"] == "block"
+    assert payload["resource_change_count"] == 1
+    assert payload["plan_finding_count"] == 13
+    assert payload["total_changes"] == 14
+    assert "fixture-function-do-not-leak" not in captured.out
+
+
+def test_analyze_plan_integrity_human_summary_separates_resource_and_plan_findings(
+    capsys,
+) -> None:
+    exit_code = main(
+        ["analyze", str(FIXTURES / "terraform_plan_integrity_risky.json")]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Plan format version: 1.2" in captured.out
+    assert "Resource changes: 1" in captured.out
+    assert "Plan-level findings: 13" in captured.out
+    assert "## Changes" in captured.out
+    assert "## Plan-level findings" in captured.out
+    assert "terraform_action_invocation" in captured.out
+    assert "fixture-action-payload-secret-do-not-leak" not in captured.out
+
+
 def test_analyze_kernel_mode_does_not_construct_evolution_engine(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

@@ -16,13 +16,14 @@
     "plan_sha256": "873ecb53f02309675f0ac046b1c0cbe4c7d46cf44ca6816f119aa8d7b32f9f82",
     "source": "terraform-show-json",
     "run_id": "examples/02-dangerous-replacement",
-    "signature": "LoY96cJiCwkojDssTzW0NE9wW7LsFeOBq3DQtvqP1Hk=",
+    "signature": "KVz00aP8kUFJtrpVhygrOyIHy6Xj5o4orAVFCj897qU=",
     "provenance": [],
-    "cert": "{\"readtheplan_examples_fixture_v1\":{\"identity\":\"examples-fixture@readtheplan.dev\",\"oidc_issuer\":\"https://issuer.example.test\",\"rekor_uuid\":\"examples-fixture-rekor-0001\",\"signature\":\"LoY96cJiCwkojDssTzW0NE9wW7LsFeOBq3DQtvqP1Hk=\"}}"
+    "cert": "{\"readtheplan_examples_fixture_v1\":{\"identity\":\"examples-fixture@readtheplan.dev\",\"oidc_issuer\":\"https://issuer.example.test\",\"rekor_uuid\":\"examples-fixture-rekor-0001\",\"signature\":\"KVz00aP8kUFJtrpVhygrOyIHy6Xj5o4orAVFCj897qU=\"}}"
   },
   "reviewer": null,
   "summary": {
     "resource_change_count": 5,
+    "plan_finding_count": 0,
     "actions": {
       "delete/create": 2,
       "update": 3

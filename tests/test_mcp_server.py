@@ -118,6 +118,24 @@ def test_agent_gate_matches_cli_json(capsys) -> None:
     assert agent_gate(str(plan)) == json.loads(captured.out)
 
 
+def test_terraform_plan_integrity_mcp_tools_include_findings_and_redact_values() -> None:
+    plan = FIXTURES / "terraform_plan_integrity_risky.json"
+
+    summary = analyze_plan(str(plan), "soc2")
+    gate = agent_gate(str(plan), "soc2")
+    encoded = json.dumps({"summary": summary, "gate": gate})
+
+    assert summary["resource_change_count"] == 1
+    assert summary["plan_finding_count"] == 13
+    assert len(summary["plan_findings"]) == 13
+    assert gate["decision"] == "block"
+    assert gate["plan_finding_count"] == 13
+    assert gate["total_changes"] == 14
+    assert "rtp.control.soc2.CC8.1" in gate["required_checks"]
+    assert "fixture-action-payload-secret-do-not-leak" not in encoded
+    assert "fixture-ansible-token-do-not-leak" not in encoded
+
+
 def test_agent_gate_pulumi_supports_framework_checks() -> None:
     result = agent_gate_pulumi(str(FIXTURES / "pulumi_preview_mixed.json"), "soc2")
     assert result["adapter"] == "pulumi"
@@ -2735,6 +2753,38 @@ def test_stdio_server_tools_list() -> None:
         cli_summary = json.loads(cli_out)
 
         assert mcp_summary == cli_summary
+
+        # --- tools/call: analyze_plan (plan integrity and provider actions) ---
+        integrity_req = {
+            "jsonrpc": "2.0",
+            "id": 78,
+            "method": "tools/call",
+            "params": {
+                "name": "analyze_plan",
+                "arguments": {
+                    "plan_path": str(
+                        (FIXTURES / "terraform_plan_integrity_risky.json").resolve()
+                    ),
+                    "framework": "soc2",
+                },
+            },
+        }
+        integrity_resp = _send_jsonrpc(proc, integrity_req)
+        assert "result" in integrity_resp, (
+            f"plan integrity tools/call failed: {integrity_resp}"
+        )
+        integrity_content = integrity_resp["result"]["content"]
+        assert len(integrity_content) == 1
+        integrity_summary = json.loads(integrity_content[0]["text"])
+        assert integrity_summary["resource_change_count"] == 1
+        assert integrity_summary["plan_finding_count"] == 13
+        assert len(integrity_summary["plan_findings"]) == 13
+        assert "fixture-action-payload-secret-do-not-leak" not in (
+            integrity_content[0]["text"]
+        )
+        assert "fixture-ansible-token-do-not-leak" not in (
+            integrity_content[0]["text"]
+        )
 
         # --- tools/call: agent_gate_project ---
         project_req = {

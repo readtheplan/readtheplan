@@ -6,7 +6,7 @@ matrix makes those boundaries explicit.
 
 | Ecosystem | Input | Command | Analysis depth | Maturity |
 |---|---|---|---|---|
-| Terraform / OpenTofu | `terraform show -json` plan | `readtheplan analyze plan.json` | Native plan diff, old/new state, resource-aware rules, evidence and signing | Stable |
+| Terraform / OpenTofu | `terraform show -json` / `tofu show -json` plan | `readtheplan analyze plan.json` | Native resource diff plus format compatibility, errored/not-applyable/incomplete plans, deferred changes, drift, root-output sensitivity, checks, state-forget operations, Terraform provider action invocations, resource-aware rules, evidence and signing; derived output omits plan values and action configuration | Stable |
 | Terraform / OpenTofu state | `terraform show -json` / `tofu show -json` state or raw v4 snapshot | `readtheplan terraform-state state.json` | Value-safe output/resource inventory, sensitivity gaps, failed checks, tainted/deposed instances, current resource posture, deep rules, and backend/freshness/schema boundaries; never modifies state | Built-in |
 | OPA / Rego / Conftest | Rego module, OPA `.manifest` / `.signatures.json`, or `conftest.toml` | `readtheplan opa policy.rego` | Runtime/network/debug built-ins, fail-open rules, exceptions, data dependencies, bundle roots/revisions/Wasm/signature metadata, policy paths, and non-evaluation boundaries | Built-in |
 | HashiCorp Sentinel | `.sentinel` policy or `sentinel.hcl` / `sentinel.json` CLI configuration | `readtheplan sentinel policy.sentinel` | HTTP/runtime/Terraform/custom imports, main-rule posture, parameters, remote policy/module sources, enforcement, executable plugins, mocks, secrets, test assertions, and non-execution boundaries | Built-in |
@@ -175,6 +175,11 @@ the same optional `framework` parameter through its MCP tool.
   permissions, read controller caches, or evaluate plugin-specific retriever and trait behavior.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
+- Terraform/OpenTofu plan analysis never runs providers, refreshes state, contacts a backend,
+  evaluates policy, or invokes provider actions. It intentionally omits raw before/after values,
+  check problem messages, deferred/drift payloads, and action configuration from derived output;
+  apply-time checks, provider behavior, live policy results, credentials, remote state, and drift
+  after plan generation remain external trust boundaries.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
   be resolved statically. Those cases must remain `review` rather than receiving
   false-safe classifications.

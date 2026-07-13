@@ -82,6 +82,14 @@ def main():
         gate_comment = payload["pr_comment"]
     else:
         resource_change_count = payload["resource_change_count"]
+        plan_finding_count = payload.get("plan_finding_count", 0)
+        plan_findings = payload.get("plan_findings", [])
+        if not isinstance(plan_finding_count, int) or not isinstance(plan_findings, list):
+            print(
+                "::error::readtheplan plan finding fields must be an integer and list",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
         action_values = payload["actions"]
         risk_values = payload["risks"]
         changes = payload["changes"]
@@ -115,6 +123,7 @@ def main():
         else:
             summary.write("## readtheplan\n\n")
             summary.write(f"- Resource changes: {resource_change_count}\n")
+            summary.write(f"- Plan-level findings: {plan_finding_count}\n")
             summary.write(f"- Actions: `{action_counts}`\n")
             summary.write(f"- Risks: `{risk_counts}`\n")
         if changes:
@@ -139,8 +148,38 @@ def main():
             remaining = len(changes) - 20
             if remaining > 0:
                 summary.write(f"\n_{remaining} additional changes omitted from summary._\n")
+        if gate_comment is None and plan_findings:
+            summary.write("\n### Plan-level findings\n\n")
+            summary.write("| Risk | Signal | Address | Explanation |\n")
+            summary.write("| --- | --- | --- | --- |\n")
+            for finding in plan_findings[:20]:
+                summary.write(
+                    "| "
+                    + " | ".join(
+                        [
+                            _markdown_cell(finding.get("risk", "")),
+                            _markdown_cell(finding.get("type", "")),
+                            _markdown_cell(finding.get("address", "")),
+                            _markdown_cell(finding.get("explanation", "")),
+                        ]
+                    )
+                    + " |\n"
+                )
+            remaining = len(plan_findings) - 20
+            if remaining > 0:
+                summary.write(
+                    f"\n_{remaining} additional plan-level findings omitted from summary._\n"
+                )
 
-    print(f"::notice::readtheplan analyzed {resource_change_count} resource changes")
+    finding_suffix = (
+        f" and {plan_finding_count} plan-level findings"
+        if not is_agent_gate
+        else ""
+    )
+    print(
+        f"::notice::readtheplan analyzed {resource_change_count} resource changes"
+        f"{finding_suffix}"
+    )
     for risk in ("dangerous", "irreversible"):
         count = int(risk_values.get(risk, 0))
         if count:

@@ -1062,6 +1062,8 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "file_count",
         "sensitive_parameter_count",
         "source_line_count",
+        "resource_change_count",
+        "plan_finding_count",
     ):
         if isinstance(payload.get(field), int):
             result[field] = payload[field]

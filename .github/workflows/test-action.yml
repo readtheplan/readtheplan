@@ -48,6 +48,52 @@ jobs:
           assert payload["changes"][0]["address"] == "aws_s3_bucket.logs"
           PY
 
+      - name: Run action on Terraform plan integrity signals
+        id: terraform_plan_integrity
+        uses: ./
+        with:
+          tool: terraform
+          input-file: tests/fixtures/terraform_plan_integrity_risky.json
+          framework: soc2
+
+      - name: Assert Terraform plan integrity outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.terraform_plan_integrity.outputs['summary-json'] }}
+          RESOURCE_CHANGE_COUNT: ${{ steps.terraform_plan_integrity.outputs['resource-change-count'] }}
+          ACTION_COUNTS: ${{ steps.terraform_plan_integrity.outputs['action-counts'] }}
+          RISK_COUNTS: ${{ steps.terraform_plan_integrity.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$RESOURCE_CHANGE_COUNT" = "1"
+          test "$ACTION_COUNTS" = '{"create":1}'
+          test "$RISK_COUNTS" = '{"dangerous":9,"review":4,"safe":1}'
+
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["format_version"] == "1.2"
+          assert payload["resource_change_count"] == 1
+          assert payload["plan_finding_count"] == 13
+          assert len(payload["plan_findings"]) == 13
+          assert {
+              "terraform_plan_errored",
+              "terraform_plan_not_applyable",
+              "terraform_plan_incomplete",
+              "terraform_deferred_change",
+              "terraform_resource_drift",
+              "terraform_output_sensitive_exposure",
+              "terraform_check_fail",
+              "terraform_action_invocation",
+          } <= {finding["type"] for finding in payload["plan_findings"]}
+          assert "fixture-action-payload-secret-do-not-leak" not in serialized
+          assert "fixture-ansible-token-do-not-leak" not in serialized
+          PY
+
       - name: Run action on mixed infrastructure project
         id: project_scan
         uses: ./

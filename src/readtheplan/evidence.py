@@ -78,7 +78,7 @@ def build_evidence(
         sorted(
             {
                 change.source
-                for change in plan_summary.resource_changes
+                for change in plan_summary.all_changes
                 if getattr(change, "source", "builtin") not in ("", "builtin")
             }
         )
@@ -99,7 +99,7 @@ def build_evidence(
     reviewer_payload = _reviewer_to_dict(reviewer)
 
     changes = tuple(
-        _change_to_dict(change, catalog) for change in plan_summary.resource_changes
+        _change_to_dict(change, catalog) for change in plan_summary.all_changes
     )
     controls_touched = sorted(
         {
@@ -124,6 +124,7 @@ def build_evidence(
         reviewer=reviewer_payload,
         summary={
             "resource_change_count": len(plan_summary.resource_changes),
+            "plan_finding_count": len(plan_summary.plan_findings),
             "actions": dict(sorted(plan_summary.action_counts.items())),
             "risks": dict(sorted(plan_summary.risk_counts.items())),
             "controls_touched": controls_touched,

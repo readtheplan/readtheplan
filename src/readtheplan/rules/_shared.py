@@ -144,6 +144,11 @@ def action_explanation(actions: tuple[str, ...], *, tool_name: str = "Terraform"
             f"{tool_name} will update this resource in place. Review the changed "
             "attributes and rollout timing before applying."
         )
+    if "forget" in action_set:
+        return (
+            f"{tool_name} will remove this resource from state without destroying the remote "
+            "object. Review ownership, drift, re-import, and recovery before applying."
+        )
     if action_set <= {"no-op", "read"}:
         return f"{tool_name} is only reading or refreshing this resource."
     if "create" in action_set and action_set <= {"create", "no-op", "read", "update"}:

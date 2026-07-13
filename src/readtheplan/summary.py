@@ -25,6 +25,16 @@ def summary_to_dict(
                 actions=change.actions,
             )
         ]
+    for finding, finding_payload in zip(
+        summary.plan_findings, payload["plan_findings"]
+    ):
+        finding_payload["controls"] = [
+            control_to_dict(control)
+            for control in catalog.controls_for(
+                resource_type=finding.resource_type,
+                actions=finding.actions,
+            )
+        ]
     return payload
 
 

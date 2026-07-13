@@ -9,6 +9,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Terraform/OpenTofu plan-integrity findings across the CLI, GitHub Action, project scan,
+  evidence, and MCP. Stable JSON analysis now validates supported plan format versions and
+  surfaces errored, not-applyable, and incomplete plans, deferred changes, out-of-band drift,
+  root-output changes and sensitivity regressions, failed/error/unknown checks, state-forget
+  operations, and Terraform 1.14+ provider action invocations while omitting raw plan values,
+  check messages, and action configuration from derived output.
 - Puppet Bolt task-implementation gates across the CLI, GitHub Action, project scan, and MCP.
   Bounded, non-executing inspection now recognizes shell, PowerShell, Python, and Ruby task
   programs (including extensionless shebang scripts) and surfaces target execution, dynamic code

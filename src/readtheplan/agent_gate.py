@@ -68,6 +68,9 @@ def agent_gate_to_dict(
             summary, decision, risk, counts, tool_name=tool_name
         ),
         "risk_counts": counts,
+        "resource_change_count": len(summary.resource_changes),
+        "plan_finding_count": len(summary.plan_findings),
+        "total_changes": len(summary.all_changes),
         "mode": mode,
     }
 
@@ -93,7 +96,9 @@ def agent_gate_to_dict(
             plan_summary={
                 "path": str(summary.path),
                 "terraform_version": summary.terraform_version,
-                "change_count": len(summary.resource_changes),
+                "change_count": len(summary.all_changes),
+                "resource_change_count": len(summary.resource_changes),
+                "plan_finding_count": len(summary.plan_findings),
             },
             resource_changes=resource_changes,
         )
@@ -159,6 +164,22 @@ def _compute_plan_hash(summary: PlanSummary) -> str:
         "terraform_version": summary.terraform_version,
         "changes": changes,
     }
+    if summary.plan_findings:
+        payload["plan_findings"] = [
+            {
+                "address": finding.address,
+                "type": finding.resource_type,
+                "actions": list(finding.actions),
+            }
+            for finding in sorted(
+                summary.plan_findings,
+                key=lambda finding: (
+                    finding.address,
+                    finding.resource_type,
+                    finding.actions,
+                ),
+            )
+        ]
     canonical = json.dumps(
         payload,
         sort_keys=True,
@@ -204,10 +225,10 @@ def _handoff_protocol(evolution_result: dict) -> list[dict]:
 
 
 def _max_risk(summary: PlanSummary) -> str:
-    if not summary.resource_changes:
+    if not summary.all_changes:
         return "safe"
     return max(
-        (change.risk for change in summary.resource_changes),
+        (change.risk for change in summary.all_changes),
         key=lambda risk: RISK_ORDER.get(risk, RISK_ORDER["review"]),
     )
 
@@ -235,7 +256,7 @@ def _required_checks(
                 _CHECK_EVIDENCE_PACKET,
             ]
         )
-        if any(change.risk == "irreversible" for change in summary.resource_changes):
+        if any(change.risk == "irreversible" for change in summary.all_changes):
             checks.append(_CHECK_RECOVERY_PLAN)
     elif decision == "warn":
         checks.extend([_CHECK_PEER_REVIEW, _CHECK_CHANGE_EVIDENCE])
@@ -252,7 +273,7 @@ def _control_check_ids(
         return []
 
     checks: list[str] = []
-    for change in summary.resource_changes:
+    for change in summary.all_changes:
         for control in catalog.controls_for(
             resource_type=change.resource_type,
             actions=change.actions,
@@ -295,21 +316,28 @@ def _reason(
     *,
     tool_name: str = "Terraform",
 ) -> str:
-    if not summary.resource_changes:
+    if not summary.all_changes:
         return f"No {tool_name} changes were found; the agent may continue."
+    has_findings = bool(summary.plan_findings)
+    scope = (
+        f"{len(summary.resource_changes)} resource change(s) and "
+        f"{len(summary.plan_findings)} plan-level finding(s)"
+        if has_findings
+        else f"{tool_name} change(s)"
+    )
     if decision == "block":
         flagged = counts["dangerous"] + counts["irreversible"]
         return (
-            f"Block because {flagged} {tool_name} change(s) are dangerous or "
+            f"Block because {flagged} {'of ' if has_findings else ''}{scope} are dangerous or "
             f"irreversible; human approval, change evidence, and security review "
             f"are required before merge or apply."
         )
     if decision == "warn":
         return (
-            f"Warn because the highest {tool_name} risk tier is {risk}; reviewer "
+            f"Warn because the highest risk across {scope} is {risk}; reviewer "
             f"approval and change evidence are required before merge or apply."
         )
-    return f"Proceed because all {tool_name} changes are safe-tier."
+    return f"Proceed because all {scope} are safe-tier."
 
 
 def _pr_comment(
@@ -325,12 +353,16 @@ def _pr_comment(
         reason,
         "",
         f"- Highest risk: `{risk}`",
-        f"- Analyzed changes: `{len(summary.resource_changes)}`",
-        (
-            "- Required checks: "
-            f"`{', '.join(required_checks) if required_checks else 'none'}`"
-        ),
     ]
+    if summary.plan_findings:
+        lines.append(f"- Resource changes: `{len(summary.resource_changes)}`")
+        lines.append(f"- Plan-level findings: `{len(summary.plan_findings)}`")
+    else:
+        lines.append(f"- Analyzed changes: `{len(summary.resource_changes)}`")
+    lines.append(
+        "- Required checks: "
+        f"`{', '.join(required_checks) if required_checks else 'none'}`"
+    )
     flagged = _flagged_changes(summary)
     if flagged:
         lines.append("- Flagged resources:")
@@ -382,11 +414,17 @@ def _auditor_summary(
     *,
     tool_name: str = "Terraform",
 ) -> str:
+    evaluated = (
+        f"{len(summary.resource_changes)} {tool_name} resource change(s) and "
+        f"{len(summary.plan_findings)} plan-level finding(s)"
+        if summary.plan_findings
+        else f"{len(summary.resource_changes)} {tool_name} change(s)"
+    )
     return (
-        f"readtheplan evaluated {len(summary.resource_changes)} {tool_name} change(s). "
-        f"The agent gate decision is {decision} with maximum risk {risk}. "
-        f"Risk counts: safe={counts['safe']}, review={counts['review']}, "
-        f"dangerous={counts['dangerous']}, irreversible={counts['irreversible']}."
+        f"readtheplan evaluated {evaluated}. The agent gate decision is {decision} with "
+        f"maximum risk {risk}. Risk counts: safe={counts['safe']}, "
+        f"review={counts['review']}, dangerous={counts['dangerous']}, "
+        f"irreversible={counts['irreversible']}."
     )
 
 
@@ -400,7 +438,7 @@ def _risk_counts(counts: Counter[str]) -> dict[str, int]:
 def _flagged_changes(summary: PlanSummary) -> list[ResourceChange]:
     return [
         change
-        for change in summary.resource_changes
+        for change in summary.all_changes
         if change.risk in {"review", "dangerous", "irreversible"}
     ]
 
