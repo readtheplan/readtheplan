@@ -113,7 +113,8 @@ readtheplan devspace devspace.yaml
 readtheplan tilt Tiltfile
 readtheplan cue deploy_tool.cue
 readtheplan jsonnet main.jsonnet
-readtheplan tanka environments/production/spec.json</code></pre>
+readtheplan tanka environments/production/spec.json
+readtheplan helmfile helmfile.yaml.gotmpl</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -200,6 +201,18 @@ readtheplan cue cue.mod/module.cue</code></pre>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan jsonnet --framework soc2 main.jsonnet
 readtheplan tanka environments/production/spec.json
 readtheplan jsonnet jsonnetfile.lock.json</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="helmfile-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="helmfile-title">Helmfile orchestration</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review templated state and dependency locks without executing processes, reading files,
+            resolving secrets, downloading charts, loading kubeconfig, or contacting Kubernetes:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan helmfile --framework soc2 helmfile.yaml.gotmpl
+readtheplan helmfile helmfile.lock</code></pre>
         </div>
       </section>
 

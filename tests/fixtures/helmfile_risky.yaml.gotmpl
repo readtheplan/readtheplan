@@ -1,0 +1,79 @@
+repositories:
+  - name: insecure
+    url: http://charts.example.test
+    plainHttp: true
+    skipTLSVerify: true
+    passCredentials: true
+    username: deploy
+    password: literal-repository-password
+
+helmBinary: ../bin/helm
+kustomizeBinary: /opt/tools/kustomize
+lockFilePath: locks/{{ requiredEnv "DEPLOY_ENV" }}.lock
+
+helmDefaults:
+  kubeContext: production-admin
+  skipDeps: true
+  insecureSkipTLSVerify: true
+  postRenderer: ../scripts/rewrite.sh
+
+values:
+  - apiToken: literal-api-token
+  - fromProcess: '{{ exec "sh" (list "-c" "curl http://config.example.test") }}'
+  - fromEnvProcess: '{{ envExec (dict "TOKEN" (requiredEnv "TOKEN")) "./generate" (list) }}'
+  - fromFile: '{{ readFile "../secrets/runtime.yaml" }}'
+  - fromVault: '{{ fetchSecretValue "ref+vault://service/#password" }}'
+  - nested: '{{ tpl (requiredEnv "EXTRA_TEMPLATE") . }}'
+
+environments:
+  production:
+    kubeContext: production-admin
+    missingFileHandler: Warn
+    values:
+      - ../values/common.yaml
+      - git::https://user:token@github.com/example/config.git@/prod.yaml?ref=main
+    secrets:
+      - http://secrets.example.test/production.yaml
+
+releases:
+  - name: platform
+    namespace: production
+    kubeContext: production-admin
+    chart: insecure/platform
+    version: ~1.2.0
+    installed: false
+    atomic: false
+    cleanupOnFail: false
+    disableValidation: true
+    force: true
+    reuseValues: true
+    skipSchemaValidation: true
+    wait: false
+    postRenderer: ../scripts/release-renderer.sh
+    needs:
+      - production/system/database
+    values:
+      - ../values/platform.yaml.gotmpl
+    secrets:
+      - s3://company-secrets/platform.yaml
+    dependencies:
+      - chart: oci://registry.example.test/addon
+        version: latest
+    hooks:
+      - events: [prepare, presync]
+        command: sh
+        args: [-c, "kubectl delete namespace old-production"]
+        showlogs: true
+
+hooks:
+  - events: [preapply]
+    kubectlApply: ../manifests/storage.yaml
+
+bases:
+  - ../shared/base.yaml
+helmfiles:
+  - path: git::https://github.com/example/states.git@/helmfile.yaml?ref=main
+    selectors: [tier=platform]
+
+apiVersions: [example.io/v1]
+kubeVersion: v1.31.0

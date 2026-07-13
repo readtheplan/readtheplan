@@ -371,6 +371,7 @@ for (const token of [
   "agent_gate_tilt",
   "agent_gate_cue",
   "agent_gate_jsonnet",
+  "agent_gate_helmfile",
   "agent_gate_terraform_lock",
   "agent_gate_terraform_state",
   "jenkins-jcasc",

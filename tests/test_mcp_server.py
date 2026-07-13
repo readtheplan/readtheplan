@@ -33,6 +33,7 @@ from readtheplan.mcp_server import (
     agent_gate_envoy,
     agent_gate_grafana,
     agent_gate_helm,
+    agent_gate_helmfile,
     agent_gate_jsonnet,
     agent_gate_kubernetes,
     agent_gate_kustomize,
@@ -462,6 +463,14 @@ def test_agent_gate_jsonnet_supports_framework_checks() -> None:
     result = agent_gate_jsonnet(str(FIXTURES / "tanka_main_risky.jsonnet"), "soc2")
     assert result["adapter"] == "jsonnet"
     assert result["artifact_type"] == "source"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_helmfile_supports_framework_checks() -> None:
+    result = agent_gate_helmfile(str(FIXTURES / "helmfile_risky.yaml.gotmpl"), "soc2")
+    assert result["adapter"] == "helmfile"
+    assert result["artifact_type"] == "state"
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -1129,6 +1138,18 @@ def test_agent_gate_jsonnet_rejects_path_outside_root(monkeypatch, tmp_path) -> 
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_helmfile_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "helmfile.yaml"
+    outside.write_text("releases: []\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_helmfile(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1479,6 +1500,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_tilt" in tool_names
         assert "agent_gate_cue" in tool_names
         assert "agent_gate_jsonnet" in tool_names
+        assert "agent_gate_helmfile" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
@@ -1536,6 +1558,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(cue_schema["properties"])
         jsonnet_schema = tools_by_name["agent_gate_jsonnet"]["inputSchema"]
         assert {"input_path", "framework"} <= set(jsonnet_schema["properties"])
+        helmfile_schema = tools_by_name["agent_gate_helmfile"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(helmfile_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]

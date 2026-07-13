@@ -1492,6 +1492,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Helmfile
+        id: helmfile
+        uses: ./
+        with:
+          tool: helmfile
+          input-file: tests/fixtures/helmfile_risky.yaml.gotmpl
+          framework: soc2
+
+      - name: Assert Helmfile outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.helmfile.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.helmfile.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.helmfile.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "50"
+          test "$RISK_COUNTS" = '{"dangerous":42,"irreversible":0,"review":8,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "helmfile"
+          assert payload["artifact_type"] == "state"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Salt states
         id: salt
         uses: ./

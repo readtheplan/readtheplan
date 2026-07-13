@@ -505,6 +505,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     tanka.set_defaults(func=_jsonnet_gate)
 
+    helmfile = subparsers.add_parser(
+        "helmfile",
+        help="Emit the agent-gate decision for Helmfile state or lock configuration.",
+    )
+    helmfile.add_argument("--framework", help="Include checks from a compliance framework.")
+    helmfile.add_argument("input_file", help="Path to helmfile YAML/Go-template state or lock.")
+    helmfile.set_defaults(func=_helmfile_gate)
+
     salt = subparsers.add_parser(
         "salt",
         help="Emit the agent-gate decision for a Salt SLS state file.",
@@ -1835,6 +1843,36 @@ def _jsonnet_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_jsonnet(data, catalog=catalog))
+
+
+def _helmfile_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Helmfile state and lock files."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.helmfile import (
+        HelmfileInputError,
+        analyze_helmfile,
+        parse_helmfile,
+    )
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_helmfile(source, path.name)
+    except HelmfileInputError as exc:
+        print(f"Error: invalid Helmfile input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "helmfile":
+        print("Error: input not recognized as Helmfile configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_helmfile(data, catalog=catalog))
 
 
 def _salt_gate(args: argparse.Namespace) -> int:
