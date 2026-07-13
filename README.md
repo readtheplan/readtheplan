@@ -125,6 +125,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Skaffold | `readtheplan skaffold skaffold.yaml` | Config dependencies, build backends/artifacts/hooks, manifest renderers, deploy engines/flags, verification, custom actions, profiles, port forwarding, secrets, and non-execution boundaries |
 | DevSpace | `readtheplan devspace devspace.yaml` | Imports/dependencies, POSIX pipelines/functions/commands, image builders, Helm/Kubernetes deployments, live development mutation/sync/ports/SSH, hooks, profiles, registry credentials, plugins, and non-execution boundaries |
 | Tilt | `readtheplan tilt Tiltfile` | AST-backed Tiltfile scanning for host commands, extensions, image builders, Compose/Kubernetes deploys, Helm/Kustomize, custom deployers, live updates, file/environment access, ports, secrets, and dynamic Starlark boundaries |
+| CUE | `readtheplan cue deploy_tool.cue` | Source/tool/module/local-module analysis for OCI dependencies, replacements, workflow capabilities/tasks, process/file/HTTP/OS operations, imports, secrets, embedding, injection, generated configuration, and evaluation boundaries |
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
 | cloud-init | `readtheplan cloud-init user-data.yml` | Users, SSH, packages, files, commands, storage, power state, includes, scripts, and merged configuration |
 | systemd | `readtheplan systemd example.service` | Commands, identities, capabilities, credentials, sandboxing, filesystems, devices, sockets, timers, mounts, restart behavior, and merged-unit boundaries |
@@ -164,6 +165,8 @@ DevSpace YAML is parsed without resolving imports, dependencies, variables, expr
 or profiles and without executing pipelines, hooks, plugins, builds, or deployments.
 Tiltfiles receive AST-backed static analysis with a conservative source fallback; neither
 mode evaluates Starlark, loads extensions, runs commands/builds, or contacts infrastructure.
+CUE source is scanned without evaluation or unification; modules are not downloaded and
+workflow tasks, file access, HTTP requests, process execution, and exports never run.
 Vagrantfiles are scanned as Ruby source without evaluation; known DSL operations,
 host-command escape hatches, and merged configuration boundaries remain visible.
 cloud-init user-data is parsed without executing guest code; scripts, boothooks,

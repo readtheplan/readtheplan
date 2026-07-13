@@ -26,6 +26,7 @@ from readtheplan.mcp_server import (
     agent_gate_configuration_management,
     agent_gate_consul,
     agent_gate_crossplane,
+    agent_gate_cue,
     agent_gate_devspace,
     agent_gate_dockerfile,
     agent_gate_dsc,
@@ -444,6 +445,14 @@ def test_agent_gate_tilt_supports_framework_checks() -> None:
     result = agent_gate_tilt(str(FIXTURES / "Tiltfile.risky"), "soc2")
     assert result["adapter"] == "tilt"
     assert result["syntax_mode"] == "ast"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_cue_supports_framework_checks() -> None:
+    result = agent_gate_cue(str(FIXTURES / "deploy_risky_tool.cue"), "soc2")
+    assert result["adapter"] == "cue"
+    assert result["artifact_type"] == "tool"
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -1086,6 +1095,19 @@ def test_agent_gate_tilt_rejects_path_outside_root(monkeypatch, tmp_path) -> Non
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_cue_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "config.cue"
+    outside.write_text("package example\nvalue: true\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_cue(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1434,6 +1456,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_skaffold" in tool_names
         assert "agent_gate_devspace" in tool_names
         assert "agent_gate_tilt" in tool_names
+        assert "agent_gate_cue" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
@@ -1487,6 +1510,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(devspace_schema["properties"])
         tilt_schema = tools_by_name["agent_gate_tilt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(tilt_schema["properties"])
+        cue_schema = tools_by_name["agent_gate_cue"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(cue_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]

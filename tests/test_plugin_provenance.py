@@ -112,6 +112,7 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "nix",
             "dsc",
             "devspace",
+            "cue",
         "cfengine",
         "puppet-project",
         "pulumi-project",

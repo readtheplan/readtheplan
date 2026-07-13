@@ -110,7 +110,8 @@ readtheplan nomad job.nomad.hcl
 readtheplan packer image.pkr.hcl
 readtheplan skaffold skaffold.yaml
 readtheplan devspace devspace.yaml
-readtheplan tilt Tiltfile</code></pre>
+readtheplan tilt Tiltfile
+readtheplan cue deploy_tool.cue</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -172,6 +173,18 @@ readtheplan tilt Tiltfile</code></pre>
             building images, or contacting Docker and Kubernetes:
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan tilt --framework soc2 Tiltfile</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="cue-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="cue-title">CUE configuration and workflows</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review source, module dependencies/replacements, and executable workflow tasks without
+            evaluating CUE, downloading OCI modules, or running <code>cue cmd</code>:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cue --framework soc2 deploy_tool.cue
+readtheplan cue cue.mod/module.cue</code></pre>
         </div>
       </section>
 

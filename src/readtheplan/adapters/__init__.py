@@ -17,6 +17,7 @@ from readtheplan.adapters.chef_project import ChefProjectAdapter
 from readtheplan.adapters.cloud_init import CloudInitAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.crossplane import CrossplaneAdapter
+from readtheplan.adapters.cue import CueAdapter
 from readtheplan.adapters.devspace import DevSpaceAdapter
 from readtheplan.adapters.dockerfile import DockerfileAdapter
 from readtheplan.adapters.dsc import DscAdapter
@@ -114,6 +115,7 @@ def load_entry_point_adapters() -> list[str]:
 # Auto-register builtin adapters, then discover external plugins (best-effort).
 register_adapter(CloudFormationAdapter())
 register_adapter(CrossplaneAdapter())
+register_adapter(CueAdapter())
 register_adapter(CaddyAdapter())
 register_adapter(CdkAdapter())
 register_adapter(AtlantisAdapter())
@@ -193,6 +195,7 @@ __all__ = [
     "CircleCIAdapter",
     "CloudFormationAdapter",
     "CrossplaneAdapter",
+    "CueAdapter",
     "CloudInitAdapter",
     "DockerComposeAdapter",
     "DockerfileAdapter",
