@@ -91,20 +91,34 @@ def _embedded_credential(value: str) -> bool:
 
 def _family(document: dict[str, Any]) -> str | None:
     api = str(document.get("apiVersion") or "")
+    api_group, separator, _version = api.partition("/")
     kind = str(document.get("kind") or "")
-    if api.startswith("vendir.k14s.io/") and kind in {"Config", "LockConfig"}:
+    if separator and api_group == "vendir.k14s.io" and kind in {"Config", "LockConfig"}:
         return "vendir-lock" if kind == "LockConfig" else "vendir"
-    if api.startswith("kbld.k14s.io/") and kind in {
-        "Config",
-        "ImageDestinations",
-        "ImageKeys",
-        "ImageOverrides",
-        "Sources",
-    }:
+    if (
+        separator
+        and api_group == "kbld.k14s.io"
+        and kind
+        in {
+            "Config",
+            "ImageDestinations",
+            "ImageKeys",
+            "ImageOverrides",
+            "Sources",
+        }
+    ):
         return "kbld"
-    if api.startswith("imgpkg.carvel.dev/") and kind in {"BundleLock", "ImagesLock"}:
+    if (
+        separator
+        and api_group == "imgpkg.carvel.dev"
+        and kind
+        in {
+            "BundleLock",
+            "ImagesLock",
+        }
+    ):
         return "imgpkg-lock"
-    if api.startswith("kapp.k14s.io/") and kind == "Config":
+    if separator and api_group == "kapp.k14s.io" and kind == "Config":
         return "kapp"
     if _contains_kapp_annotations(document):
         return "kapp"
@@ -113,7 +127,7 @@ def _family(document: dict[str, Any]) -> str | None:
 
 def _contains_kapp_annotations(value: Any) -> bool:
     if isinstance(value, dict):
-        return any(str(key).startswith("kapp.k14s.io/") for key in value) or any(
+        return any(str(key).partition("/")[:2] == ("kapp.k14s.io", "/") for key in value) or any(
             _contains_kapp_annotations(child) for child in value.values()
         )
     if isinstance(value, list):
@@ -553,8 +567,8 @@ def _kapp_annotation_changes(value: Any, address: str) -> list[dict[str, str]]:
         for key, child in value.items():
             child_address = f"{address}.{key}"
             key_text = str(key)
-            if key_text.startswith("kapp.k14s.io/"):
-                suffix = key_text.split("/", 1)[1]
+            group, separator, suffix = key_text.partition("/")
+            if separator and group == "kapp.k14s.io":
                 dangerous = any(
                     token in suffix
                     for token in ("owned-for-deletion", "update-strategy", "rebase-rule")
@@ -578,7 +592,8 @@ def _kapp_changes(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
     changes: list[dict[str, str]] = []
     for index, document in enumerate(documents):
         address = f"kapp.documents[{index}]"
-        if str(document.get("apiVersion") or "").startswith("kapp.k14s.io/"):
+        api_group, separator, _version = str(document.get("apiVersion") or "").partition("/")
+        if separator and api_group == "kapp.k14s.io":
             changes.append(
                 _change(
                     address,
