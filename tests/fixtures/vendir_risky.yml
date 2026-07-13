@@ -1,0 +1,47 @@
+apiVersion: vendir.k14s.io/v1alpha1
+kind: Config
+minimumRequiredVersion: 0.46.0
+directories:
+  - path: ../managed
+    contents:
+      - path: platform
+        git:
+          url: http://user:token@git.example.test/platform.git
+          ref: main
+          secretRef:
+            name: git-credentials
+      - path: binary
+        http:
+          url: http://downloads.example.test/release.tgz
+          sha256: ""
+          disableAutoChecksumValidation: true
+          secretRef:
+            name: download-credentials
+      - path: chart
+        helmChart:
+          name: example/platform
+          version: latest
+          repository:
+            url: http://charts.example.test
+            secretRef:
+              name: chart-credentials
+      - path: image
+        image:
+          url: registry.example.test/platform:latest
+      - path: local
+        directory:
+          path: ../../outside
+      - path: injected
+        inline:
+          pathsFrom:
+            - secretRef:
+                name: runtime-secrets
+      - path: selected
+        githubRelease:
+          slug: example/platform
+          tag: latest
+          disableAutoChecksumValidation: true
+        includePaths: ["config/**"]
+        excludePaths: ["config/policy/**"]
+        newRootPath: config
+        permissions: 0777

@@ -1,0 +1,26 @@
+apiVersion: kapp.k14s.io/v1alpha1
+kind: Config
+minimumRequiredVersion: 0.63.0
+rebaseRules:
+  - path: [data, password]
+    type: ytt
+    sources: [existing, new]
+  - path: [spec, replicas]
+    type: copy
+    sources: [new]
+ownershipLabelRules:
+  - path: [metadata, labels]
+changeGroupBindings:
+  - name: platform
+    resourceMatchers: []
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  annotations:
+    kapp.k14s.io/change-rule: "upsert after upserting platform/db"
+    kapp.k14s.io/update-strategy: fallback-on-replace
+    kapp.k14s.io/owned-for-deletion: ""
+data:
+  api_token: literal-kapp-token

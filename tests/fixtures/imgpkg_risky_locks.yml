@@ -1,0 +1,10 @@
+apiVersion: imgpkg.carvel.dev/v1alpha1
+kind: ImagesLock
+images:
+  - image: registry.example.test/platform@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  - image: registry.example.test/worker:latest
+---
+apiVersion: imgpkg.carvel.dev/v1alpha1
+kind: BundleLock
+bundle:
+  image: registry.example.test/bundles/platform:latest

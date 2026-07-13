@@ -115,7 +115,12 @@ readtheplan cue deploy_tool.cue
 readtheplan jsonnet main.jsonnet
 readtheplan tanka environments/production/spec.json
 readtheplan helmfile helmfile.yaml.gotmpl
-readtheplan terramate terramate.tm.hcl</code></pre>
+readtheplan terramate terramate.tm.hcl
+readtheplan ytt config.yml
+readtheplan vendir vendir.yml
+readtheplan kbld kbld.yml
+readtheplan imgpkg .imgpkg/images.yml
+readtheplan kapp kapp-config.yml</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -227,6 +232,22 @@ readtheplan helmfile helmfile.lock</code></pre>
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan terramate --framework soc2 terramate.tm.hcl
 readtheplan terramate backend.tf.tmgen</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="carvel-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="carvel-title">Carvel supply chain and deployment</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Follow the Carvel path from fetched inputs through ytt rendering, image build/locking,
+            OCI bundles, and kapp live-resource ownership without fetching, building, pushing,
+            rendering, or contacting Kubernetes:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan ytt --framework soc2 config.yml
+readtheplan vendir vendir.yml
+readtheplan kbld kbld.yml
+readtheplan imgpkg .imgpkg/images.yml
+readtheplan kapp kapp-config.yml</code></pre>
         </div>
       </section>
 
