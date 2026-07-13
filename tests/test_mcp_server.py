@@ -47,6 +47,7 @@ from readtheplan.mcp_server import (
     agent_gate_sam,
     agent_gate_sentinel,
     agent_gate_serverless,
+    agent_gate_skaffold,
     agent_gate_systemd,
     agent_gate_terraform_config,
     agent_gate_terraform_lock,
@@ -419,6 +420,14 @@ def test_agent_gate_packer_supports_native_template() -> None:
     assert result["artifact_type"] == "template"
     assert result["decision"] == "block"
     assert result["total_changes"] == 29
+
+
+def test_agent_gate_skaffold_supports_framework_checks() -> None:
+    result = agent_gate_skaffold(str(FIXTURES / "skaffold_risky.yaml"), "soc2")
+    assert result["adapter"] == "skaffold"
+    assert result["config_count"] == 2
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
 def test_agent_gate_salt_supports_framework_checks() -> None:
@@ -1020,6 +1029,19 @@ def test_agent_gate_packer_rejects_path_outside_root(monkeypatch, tmp_path) -> N
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_skaffold_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "skaffold.yaml"
+    outside.write_text("apiVersion: skaffold/v4beta13\nkind: Config\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_skaffold(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1365,6 +1387,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_pipeline" in tool_names
         assert "agent_gate_workload" in tool_names
         assert "agent_gate_packer" in tool_names
+        assert "agent_gate_skaffold" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
@@ -1412,6 +1435,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "ecosystem", "framework"} <= set(workload_schema["properties"])
         packer_schema = tools_by_name["agent_gate_packer"]["inputSchema"]
         assert {"input_path", "framework"} <= set(packer_schema["properties"])
+        skaffold_schema = tools_by_name["agent_gate_skaffold"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(skaffold_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]

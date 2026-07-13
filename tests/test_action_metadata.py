@@ -21,7 +21,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "input-file" in action
     assert "tool:" in action
     assert (
-        "terraform-config|terraform-lock|terraform-state|terragrunt|cloudformation|cdk|azure|bicep|kubernetes|helm|kustomize|crossplane|serverless|sam|pulumi|pulumi-project|"
+        "terraform-config|terraform-lock|terraform-state|terragrunt|cloudformation|cdk|azure|bicep|kubernetes|helm|kustomize|skaffold|crossplane|serverless|sam|pulumi|pulumi-project|"
         "ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|"
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
@@ -102,6 +102,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/kubernetes_mesh_policy_serverless_risky.yml" in workflow
     assert "tool: packer" in workflow
     assert "input-file: tests/fixtures/packer_inspect_risky.txt" in workflow
+    assert "tool: skaffold" in workflow
+    assert "input-file: tests/fixtures/skaffold_risky.yaml" in workflow
     assert "tool: salt" in workflow
     assert "input-file: tests/fixtures/salt_states_risky.sls" in workflow
     assert "tool: salt-project" in workflow
