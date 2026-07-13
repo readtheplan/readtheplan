@@ -197,6 +197,88 @@ def test_navigator_surfaces_container_host_secret_and_command_risk() -> None:
     )
 
 
+def test_molecule_surfaces_provider_isolation_supply_chain_and_execution_risk() -> None:
+    changes = _changes("ansible_molecule_risky/molecule/default/molecule.yml")
+    by_type = {change.resource_type: change for change in changes}
+    dangerous_types = {change.resource_type for change in changes if change.risk == "dangerous"}
+
+    dangerous = {
+        "ansible_project_molecule_dependency_execution",
+        "ansible_project_molecule_dependency_command",
+        "ansible_project_molecule_dependency_tls_verification",
+        "ansible_project_molecule_dependency_literal_secret",
+        "ansible_project_molecule_driver_boundary",
+        "ansible_project_molecule_custom_driver",
+        "ansible_project_molecule_login_command",
+        "ansible_project_molecule_connection_override",
+        "ansible_project_molecule_platform_image",
+        "ansible_project_molecule_platform_isolation",
+        "ansible_project_molecule_platform_volume",
+        "ansible_project_molecule_platform_ports",
+        "ansible_project_molecule_platform_runtime",
+        "ansible_project_molecule_provider_options",
+        "ansible_project_molecule_provider_tls_verification",
+        "ansible_project_molecule_platform_literal_secret",
+        "ansible_project_molecule_ansible_arguments",
+        "ansible_project_molecule_ansible_configuration",
+        "ansible_project_molecule_playbook_boundary",
+        "ansible_project_molecule_inventory_injection",
+        "ansible_project_molecule_scenario_mutation",
+        "ansible_project_molecule_custom_sequence_step",
+        "ansible_project_molecule_verifier_execution",
+        "ansible_project_molecule_lint_command",
+    }
+    assert dangerous <= dangerous_types
+    assert by_type["ansible_project_molecule_platform_scope"].risk == "review"
+    assert by_type["ansible_project_molecule_unmanaged_platform"].risk == "review"
+    assert by_type["ansible_project_molecule_idempotence_omitted"].risk == "review"
+    assert by_type["ansible_project_molecule_boundary"].risk == "review"
+
+
+def test_molecule_explanations_and_metadata_do_not_expose_values() -> None:
+    fixture = "ansible_molecule_risky/molecule/default/molecule.yml"
+    data = parse_ansible_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
+    gate = analyze_ansible_project(data)
+    encoded = json.dumps(gate)
+
+    assert gate["artifact_type"] == "molecule"
+    assert gate["platform_count"] == 2
+    assert "privileged-platform" not in encoded
+    assert "fixture-molecule-registry-password-do-not-leak" not in encoded
+    assert "fixture-molecule-inventory-password-do-not-leak" not in encoded
+    assert "MOLECULE_VERIFY_TOKEN" not in encoded
+
+
+def test_digest_pinned_minimal_molecule_scenario_stays_review_only() -> None:
+    digest = "b" * 64
+    data = parse_ansible_project(
+        f"""
+driver:
+  name: default
+platforms:
+  - name: isolated
+    image: registry.example.test/automation/test@sha256:{digest}
+scenario:
+  test_sequence:
+    - converge
+    - idempotence
+    - verify
+    - destroy
+""",
+        filename="molecule/default/molecule.yml",
+    )
+
+    changes = AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+    assert data["ansible_project"]["artifact_type"] == "molecule"
+    assert {change.risk for change in changes} == {"dangerous", "review"}
+    assert {change.resource_type for change in changes if change.risk == "dangerous"} == {
+        "ansible_project_molecule_driver_boundary",
+        "ansible_project_molecule_scenario_mutation",
+    }
+
+
 def test_digest_pinned_execution_environment_stays_review_only() -> None:
     digest = "a" * 64
     data = parse_ansible_project(
@@ -235,6 +317,35 @@ def test_navigator_json_uses_canonical_filename_routing() -> None:
         ("execution-environment.yml", "version: 3\nunknown: true\n", "unsupported"),
         ("ansible-navigator.yml", "[defaults]\nforks=5\n", "document start"),
         ("ansible-navigator.yml", "other: {}\n", "ansible-navigator mapping"),
+        ("molecule.yml", "platforms: nope\n", "platforms must be a list"),
+        ("molecule.yml", "platforms:\n  - image: alpine\n", "name must be"),
+        ("molecule.yml", "platforms: []\nunknown: true\n", "unsupported top-level"),
+        (
+            "molecule.yml",
+            "platforms: []\nscenario:\n  test_sequence: converge\n",
+            "string list",
+        ),
+        ("molecule.yml", "dependency: {}\nplatforms: []\n", "dependency name"),
+        (
+            "molecule.yml",
+            "driver:\n  name: mystery\nplatforms: []\n",
+            "driver name is unsupported",
+        ),
+        (
+            "molecule.yml",
+            "ansible:\n  executor:\n    args: become\n",
+            "executor args must be a mapping",
+        ),
+        (
+            "molecule.yml",
+            "platforms: &platforms\n  - name: one\n    groups: *platforms\n",
+            "recursive YAML alias",
+        ),
+        (
+            "molecule.yml",
+            "platforms: []\nscenario: {}\nscenario: {}\n",
+            "duplicate YAML key",
+        ),
     ],
 )
 def test_execution_layer_parser_rejects_malformed_canonical_files(
@@ -275,6 +386,11 @@ def test_ansible_project_parser_rejects_unrelated_or_ambiguous_input(
         ),
         ("ansible_navigator/ansible-navigator.yml", "navigator", "block"),
         (
+            "ansible_molecule_risky/molecule/default/molecule.yml",
+            "molecule",
+            "block",
+        ),
+        (
             "ansible_inventory_plugin_risky.aws_ec2.yml",
             "inventory_plugin",
             "block",
@@ -304,6 +420,7 @@ def test_ansible_project_cli_reads_both_formats(
         "ansible_inventory_plugin_risky.aws_ec2.yml",
         "ansible_execution_environment/execution-environment.yml",
         "ansible_navigator/ansible-navigator.yml",
+        "ansible_molecule_risky/molecule/default/molecule.yml",
     ):
         source = tmp_path / Path(fixture).name
         source.write_text((FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8")

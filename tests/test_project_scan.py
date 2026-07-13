@@ -34,6 +34,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("execution-environment.yml", "ansible-project"),
         ("ansible-navigator.yml", "ansible-project"),
         (".ansible-navigator.json", "ansible-project"),
+        ("molecule/default/molecule.yml", "ansible-project"),
+        (".config/molecule/config.yml", "ansible-project"),
         ("Jenkinsfile.deploy", "jenkins"),
         ("plugins.txt", "jenkins-project"),
         ("jenkins/plugins.yaml", "jenkins-project"),
@@ -425,6 +427,30 @@ def test_project_scan_analyzes_ansible_static_and_dynamic_inventory(tmp_path: Pa
     encoded = json.dumps(payload)
     assert "fixture-inventory-password-do-not-leak" not in encoded
     assert "fixture-aws-access-key-do-not-leak" not in encoded
+
+
+def test_project_scan_analyzes_molecule_scenarios(tmp_path: Path) -> None:
+    target = tmp_path / "molecule" / "default" / "molecule.yml"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        (FIXTURES / "ansible_molecule_risky" / "molecule" / "default" / "molecule.yml").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "ansible-project"
+    assert payload["files"][0]["artifact_type"] == "molecule"
+    assert payload["files"][0]["platform_count"] == 2
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-molecule-registry-password-do-not-leak" not in encoded
+    assert "privileged-platform" not in encoded
 
 
 def test_project_scan_analyzes_puppet_runtime_configuration(tmp_path: Path) -> None:

@@ -633,6 +633,20 @@ def test_agent_gate_configuration_management_supports_execution_environments() -
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_molecule_scenarios() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "ansible_molecule_risky" / "molecule" / "default" / "molecule.yml"),
+        "ansible-project",
+        "soc2",
+    )
+    assert result["adapter"] == "ansible-project"
+    assert result["artifact_type"] == "molecule"
+    assert result["platform_count"] == 2
+    assert result["decision"] == "block"
+    assert "fixture-molecule-registry-password-do-not-leak" not in json.dumps(result)
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_puppet_runtime_config() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_conf_risky.conf"),
@@ -2389,6 +2403,40 @@ def test_stdio_server_tools_list() -> None:
         assert chef_runtime_summary["total_changes"] == 18
         assert "fixture-chef" not in chef_runtime_content[0]["text"]
         assert "example.invalid" not in chef_runtime_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Molecule) ---
+        molecule_req = {
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "ansible_molecule_risky"
+                            / "molecule"
+                            / "default"
+                            / "molecule.yml"
+                        ).resolve()
+                    ),
+                    "ecosystem": "ansible-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        molecule_resp = _send_jsonrpc(proc, molecule_req)
+        assert "result" in molecule_resp, f"Molecule tools/call failed: {molecule_resp}"
+        molecule_content = molecule_resp["result"]["content"]
+        assert len(molecule_content) == 1
+        molecule_summary = json.loads(molecule_content[0]["text"])
+        assert molecule_summary["adapter"] == "ansible-project"
+        assert molecule_summary["artifact_type"] == "molecule"
+        assert molecule_summary["platform_count"] == 2
+        assert molecule_summary["total_changes"] == 39
+        assert "fixture-molecule" not in molecule_content[0]["text"]
+        assert "privileged-platform" not in molecule_content[0]["text"]
 
     finally:
         proc.stdin.close()  # type: ignore[union-attr]
