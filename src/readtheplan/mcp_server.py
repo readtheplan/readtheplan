@@ -809,6 +809,45 @@ def agent_gate_cue(
     return analyze_cue(data, catalog=catalog)
 
 
+def agent_gate_jsonnet(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local Jsonnet or Tanka input."""
+    from readtheplan.adapters.jsonnet import (
+        JsonnetAdapter,
+        JsonnetInputError,
+        analyze_jsonnet,
+        parse_jsonnet,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Jsonnet/Tanka input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_jsonnet(source, Path(input_path).name)
+    except JsonnetInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Jsonnet/Tanka input in {input_path}: {exc}",
+        ) from exc
+    if not JsonnetAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Jsonnet/Tanka configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_jsonnet(data, catalog=catalog)
+
+
 def agent_gate_salt(
     input_path: str,
     framework: str | None = None,
@@ -2143,6 +2182,7 @@ def create_server() -> Any:
     agent_gate_devspace_handler = agent_gate_devspace
     agent_gate_tilt_handler = agent_gate_tilt
     agent_gate_cue_handler = agent_gate_cue
+    agent_gate_jsonnet_handler = agent_gate_jsonnet
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_nix_handler = agent_gate_nix
     agent_gate_dsc_handler = agent_gate_dsc
@@ -2391,6 +2431,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_cue_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_jsonnet")
+    def _agent_gate_jsonnet_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Jsonnet source, Tanka environments, or dependency metadata.
+
+        Args:
+            input_path: Local path to Jsonnet/Tanka source or metadata.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_jsonnet_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_salt")
     def _agent_gate_salt_tool(

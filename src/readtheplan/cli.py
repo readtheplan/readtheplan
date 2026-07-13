@@ -485,6 +485,26 @@ def _build_parser() -> argparse.ArgumentParser:
     cue.add_argument("input_file", help="Path to a .cue source file.")
     cue.set_defaults(func=_cue_gate)
 
+    jsonnet = subparsers.add_parser(
+        "jsonnet",
+        help="Emit the agent-gate decision for Jsonnet source or jsonnet-bundler metadata.",
+    )
+    jsonnet.add_argument("--framework", help="Include checks from a compliance framework.")
+    jsonnet.add_argument(
+        "input_file", help="Path to Jsonnet source, spec.json, or jsonnetfile metadata."
+    )
+    jsonnet.set_defaults(func=_jsonnet_gate)
+
+    tanka = subparsers.add_parser(
+        "tanka",
+        help="Emit the agent-gate decision for a Grafana Tanka environment or Jsonnet source.",
+    )
+    tanka.add_argument("--framework", help="Include checks from a compliance framework.")
+    tanka.add_argument(
+        "input_file", help="Path to Tanka main.jsonnet, spec.json, or dependency metadata."
+    )
+    tanka.set_defaults(func=_jsonnet_gate)
+
     salt = subparsers.add_parser(
         "salt",
         help="Emit the agent-gate decision for a Salt SLS state file.",
@@ -1789,6 +1809,32 @@ def _cue_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_cue(data, catalog=catalog))
+
+
+def _jsonnet_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Jsonnet and Tanka artifacts."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.jsonnet import JsonnetInputError, analyze_jsonnet, parse_jsonnet
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_jsonnet(source, path.name)
+    except JsonnetInputError as exc:
+        print(f"Error: invalid Jsonnet/Tanka input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "jsonnet":
+        print("Error: input not recognized as Jsonnet/Tanka configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_jsonnet(data, catalog=catalog))
 
 
 def _salt_gate(args: argparse.Namespace) -> int:

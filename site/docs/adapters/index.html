@@ -111,7 +111,9 @@ readtheplan packer image.pkr.hcl
 readtheplan skaffold skaffold.yaml
 readtheplan devspace devspace.yaml
 readtheplan tilt Tiltfile
-readtheplan cue deploy_tool.cue</code></pre>
+readtheplan cue deploy_tool.cue
+readtheplan jsonnet main.jsonnet
+readtheplan tanka environments/production/spec.json</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -185,6 +187,19 @@ readtheplan cue deploy_tool.cue</code></pre>
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cue --framework soc2 deploy_tool.cue
 readtheplan cue cue.mod/module.cue</code></pre>
+        </div>
+      </section>
+      <section class="g" aria-labelledby="jsonnet-title">
+        <div>
+          <h2 id="jsonnet-title">Jsonnet and Grafana Tanka</h2>
+          <p>
+            Scan Jsonnet source, Tanka Environment metadata, and jsonnet-bundler manifests and
+            locks without evaluating imports, native callbacks, Helm/Kustomize, kubeconfig, or
+            Kubernetes cluster state:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan jsonnet --framework soc2 main.jsonnet
+readtheplan tanka environments/production/spec.json
+readtheplan jsonnet jsonnetfile.lock.json</code></pre>
         </div>
       </section>
 
