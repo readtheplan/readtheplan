@@ -65,7 +65,9 @@ _RUBY_DYNAMIC = re.compile(
     r"(?:ENV\s*\[|File\.(?:read|open|foreach)|Dir\.|\#\{|\.send\s*\(|"
     r"const_get\s*\(|define_method\s*\()",
 )
-_CONTROL = re.compile(r"(?m)^\s*control\s+(?:\(|\s)*(['\"])(?:\\.|(?!\1).)*\1")
+_CONTROL = re.compile(
+    r'''(?mx)^\s*control(?:\s+|\(\s*)(?:'(?:\\[^\n]|[^\\'\n])*'|"(?:\\[^\n]|[^\\"\n])*")'''
+)
 _PROFILE_INCLUDE = re.compile(r"(?m)^\s*(include_controls|require_controls|skip_control)\b")
 _EXEC_RESOURCES = re.compile(
     r"(?m)^\s*describe(?:\.one)?\s+(?:\(|\s)*(command|powershell|bash|script)\s*\(?"

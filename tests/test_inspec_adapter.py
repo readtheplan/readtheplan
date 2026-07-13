@@ -163,6 +163,26 @@ def test_embedded_erb_is_never_rendered_and_is_reported_as_execution() -> None:
     assert "PROFILE_NAME" not in json.dumps([change.to_dict() for change in changes])
 
 
+def test_control_scanner_handles_adversarial_escape_sequences_linearly() -> None:
+    escaped = r"\a" * 100_000
+    source = (
+        "payload = 'multiline literal\n"
+        f'control "{escaped}\n'
+        "end of literal'\n"
+        "control 'real-control' do\n"
+        "  impact 1.0\n"
+        "  describe file('/tmp/example') do\n"
+        "    it { should exist }\n"
+        "  end\n"
+        "end\n"
+    )
+
+    data = parse_inspec(source, filename="controls/adversarial.rb")
+    changes = InSpecAdapter().analyze(data)
+
+    assert sum(change.resource_type == "inspec_control" for change in changes) == 1
+
+
 @pytest.mark.parametrize(
     ("source", "filename", "error"),
     [
