@@ -127,6 +127,9 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Woodpecker CI | `readtheplan woodpecker-ci .woodpecker.yml` | Workflows, runner selection, images/plugins, commands, host volumes, privileges, secrets, services, and dependencies |
 | Concourse CI | `readtheplan concourse pipeline.yml` | Resources/types, variable sources, tasks, privileged execution, images, mutations, child pipelines, runtime variables, hooks, and soft failures |
 | Bamboo Specs | `readtheplan bamboo bamboo-specs/bamboo.yml` | Multi-document plans/deployments, permissions, repositories, variables, triggers, jobs/tasks, agents, Docker, artifacts, and cleanup |
+| AWS CodeBuild | `readtheplan codebuild buildspec.yml` | Build phases/commands, identities, plaintext and managed secrets, exported variables, failure policy, runtimes, batches, artifacts, reports, caches, and proxies |
+| Google Cloud Build | `readtheplan cloud-build cloudbuild.yaml` | Step images/commands, Secret Manager/KMS values, service accounts, substitutions, volumes, failure policy, artifacts, published images, worker options, and logging |
+| AWS CodePipeline | `readtheplan codepipeline codepipeline.json` | Pipeline/action IAM roles, artifact stores/flows, source/build/test/deploy/invoke/approval actions, provider configuration, triggers, variables, regions, and execution modes |
 | Atlantis | `readtheplan atlantis atlantis.yaml` | Repo/server configuration, mutation requirements, custom workflows, hooks, override permissions, locks, autoplan, policy checks, and execution ordering |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |

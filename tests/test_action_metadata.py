@@ -26,6 +26,7 @@ def test_action_uses_json_cli_contract() -> None:
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "travis-ci|drone-ci|woodpecker-ci|concourse|bamboo|"
+        "codebuild|cloud-build|codepipeline|"
         "atlantis|"
         "docker-compose|"
         "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|vagrant|"
@@ -164,6 +165,12 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/bamboo_risky.yml" in workflow
     assert "tool: teamcity" in workflow
     assert "input-file: tests/fixtures/teamcity_risky.kts" in workflow
+    assert "tool: codebuild" in workflow
+    assert "input-file: tests/fixtures/codebuild_risky.yml" in workflow
+    assert "tool: cloud-build" in workflow
+    assert "input-file: tests/fixtures/google_cloud_build_risky.yml" in workflow
+    assert "tool: codepipeline" in workflow
+    assert "input-file: tests/fixtures/codepipeline_risky.json" in workflow
     assert "tool: atlantis" in workflow
     assert "input-file: tests/fixtures/atlantis_risky.yaml" in workflow
     assert "tool: envoy" in workflow

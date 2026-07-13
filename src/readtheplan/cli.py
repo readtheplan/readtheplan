@@ -510,6 +510,30 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     bamboo.add_argument("input_file", help="Path to bamboo-specs/bamboo.yml.")
     bamboo.set_defaults(func=_pipeline_gate)
 
+    codebuild = subparsers.add_parser(
+        "codebuild",
+        help="Emit the agent-gate decision for an AWS CodeBuild buildspec.",
+    )
+    codebuild.add_argument("--framework", help="Include checks from a compliance framework.")
+    codebuild.add_argument("input_file", help="Path to buildspec.yml.")
+    codebuild.set_defaults(func=_cloud_ci_gate)
+
+    cloud_build = subparsers.add_parser(
+        "cloud-build",
+        help="Emit the agent-gate decision for a Google Cloud Build configuration.",
+    )
+    cloud_build.add_argument("--framework", help="Include checks from a compliance framework.")
+    cloud_build.add_argument("input_file", help="Path to cloudbuild.yaml or cloudbuild.json.")
+    cloud_build.set_defaults(func=_cloud_ci_gate)
+
+    codepipeline = subparsers.add_parser(
+        "codepipeline",
+        help="Emit the agent-gate decision for an AWS CodePipeline definition.",
+    )
+    codepipeline.add_argument("--framework", help="Include checks from a compliance framework.")
+    codepipeline.add_argument("input_file", help="Path to a CodePipeline JSON or YAML file.")
+    codepipeline.set_defaults(func=_cloud_ci_gate)
+
     atlantis = subparsers.add_parser(
         "atlantis",
         help="Emit the agent-gate decision for Atlantis repo or server configuration.",
@@ -1795,6 +1819,45 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_pipeline(adapter, data, catalog=catalog))
+
+
+def _cloud_ci_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for cloud-native CI/CD configuration."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.cloud_ci import (
+        CloudCIInputError,
+        CodeBuildAdapter,
+        CodePipelineAdapter,
+        GoogleCloudBuildAdapter,
+        analyze_cloud_ci,
+        parse_cloud_ci,
+    )
+
+    adapters = {
+        "codebuild": CodeBuildAdapter,
+        "cloud-build": GoogleCloudBuildAdapter,
+        "codepipeline": CodePipelineAdapter,
+    }
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_cloud_ci(source, args.command)
+    except CloudCIInputError as exc:
+        print(f"Error: invalid {args.command} configuration: {exc}", file=sys.stderr)
+        return 1
+
+    adapter = detect_adapter(data)
+    expected = adapters[args.command]
+    if adapter is None or not isinstance(adapter, expected):
+        print(f"Error: input not recognized as {args.command} configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_cloud_ci(adapter, data, catalog=catalog))
 
 
 def _atlantis_gate(args: argparse.Namespace) -> int:

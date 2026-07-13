@@ -399,6 +399,9 @@ def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
         ("woodpecker-ci", "woodpecker_ci_risky.yml"),
         ("concourse", "concourse_risky.yml"),
         ("bamboo", "bamboo_risky.yml"),
+        ("codebuild", "codebuild_risky.yml"),
+        ("cloud-build", "google_cloud_build_risky.yml"),
+        ("codepipeline", "codepipeline_risky.json"),
     ],
 )
 def test_agent_gate_pipeline_supports_additional_ci_ecosystems(

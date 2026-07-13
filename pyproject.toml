@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "travis-ci", "drone-ci", "woodpecker-ci", "concourse", "bamboo", "teamcity", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "travis-ci", "drone-ci", "woodpecker-ci", "concourse", "bamboo", "teamcity", "codebuild", "cloud-build", "codepipeline", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -62,8 +62,11 @@ concourse = "readtheplan.adapters.pipelines:ConcourseAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
 cdk = "readtheplan.adapters.cdk:CdkAdapter"
 cloud-init = "readtheplan.adapters.cloud_init:CloudInitAdapter"
+cloud-build = "readtheplan.adapters.cloud_ci:GoogleCloudBuildAdapter"
 cfengine = "readtheplan.adapters.cfengine:CFEngineAdapter"
 consul = "readtheplan.adapters.hashicorp:ConsulAdapter"
+codebuild = "readtheplan.adapters.cloud_ci:CodeBuildAdapter"
+codepipeline = "readtheplan.adapters.cloud_ci:CodePipelineAdapter"
 crossplane = "readtheplan.adapters.crossplane:CrossplaneAdapter"
 docker-compose = "readtheplan.adapters.workloads:DockerComposeAdapter"
 dockerfile = "readtheplan.adapters.dockerfile:DockerfileAdapter"

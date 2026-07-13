@@ -15,6 +15,11 @@ from readtheplan.adapters.cdk import CdkAdapter
 from readtheplan.adapters.cfengine import CFEngineAdapter
 from readtheplan.adapters.chef import ChefAdapter
 from readtheplan.adapters.chef_project import ChefProjectAdapter
+from readtheplan.adapters.cloud_ci import (
+    CodeBuildAdapter,
+    CodePipelineAdapter,
+    GoogleCloudBuildAdapter,
+)
 from readtheplan.adapters.cloud_init import CloudInitAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.crossplane import CrossplaneAdapter
@@ -177,6 +182,9 @@ register_adapter(WoodpeckerCIAdapter())
 register_adapter(ConcourseAdapter())
 register_adapter(BambooAdapter())
 register_adapter(TeamCityAdapter())
+register_adapter(CodeBuildAdapter())
+register_adapter(GoogleCloudBuildAdapter())
+register_adapter(CodePipelineAdapter())
 register_adapter(DockerComposeAdapter())
 register_adapter(NomadPlanAdapter())
 register_adapter(PackerInspectAdapter())
@@ -219,6 +227,8 @@ __all__ = [
     "CircleCIAdapter",
     "ConcourseAdapter",
     "CloudFormationAdapter",
+    "CodeBuildAdapter",
+    "CodePipelineAdapter",
     "CrossplaneAdapter",
     "CueAdapter",
     "CloudInitAdapter",
@@ -229,6 +239,7 @@ __all__ = [
     "DevSpaceAdapter",
     "EnvoyAdapter",
     "GrafanaAdapter",
+    "GoogleCloudBuildAdapter",
     "HelmAdapter",
     "HelmfileAdapter",
     "VaultAdapter",
