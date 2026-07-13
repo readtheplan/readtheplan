@@ -384,11 +384,11 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     jenkins_project = subparsers.add_parser(
         "jenkins-project",
-        help="Emit the agent-gate decision for Jenkins plugin installation catalogs.",
+        help="Emit the agent-gate decision for Jenkins plugin catalogs or Job Builder files.",
     )
     jenkins_project.add_argument("--framework", help="Include checks from a compliance framework.")
     jenkins_project.add_argument(
-        "input_file", help="Path to a Plugin Installation Manager .txt or YAML catalog."
+        "input_file", help="Path to a Plugin Installation Manager catalog or JJB YAML/JSON file."
     )
     jenkins_project.set_defaults(func=_jenkins_project_gate)
 
@@ -1721,7 +1721,7 @@ def _jenkins_jcasc_gate(args: argparse.Namespace) -> int:
 
 
 def _jenkins_project_gate(args: argparse.Namespace) -> int:
-    """Emit the agent-gate contract for a Jenkins plugin installation catalog."""
+    """Emit the agent-gate contract for a Jenkins plugin catalog or JJB definition file."""
     from readtheplan.adapters.jenkins_project import (
         JenkinsProjectAdapter,
         JenkinsProjectInputError,
@@ -1737,10 +1737,10 @@ def _jenkins_project_gate(args: argparse.Namespace) -> int:
     try:
         data = parse_jenkins_project(source, filename=args.input_file)
     except JenkinsProjectInputError as exc:
-        print(f"Error: invalid Jenkins plugin catalog: {exc}", file=sys.stderr)
+        print(f"Error: invalid Jenkins project input: {exc}", file=sys.stderr)
         return 1
     if not JenkinsProjectAdapter().can_handle(data):
-        print("Error: input not recognized as a Jenkins plugin catalog", file=sys.stderr)
+        print("Error: input not recognized as a Jenkins project artifact", file=sys.stderr)
         return 1
     catalog = _adapter_catalog(args.framework)
     if args.framework and catalog is None:

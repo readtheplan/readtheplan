@@ -266,6 +266,23 @@ def identify_project_input(
         return "jenkins"
     if name in {"jenkins-plugins.txt", "jenkins-plugins.yaml", "jenkins-plugins.yml"}:
         return "jenkins-project"
+    if name in {
+        "jenkins-job-builder.json",
+        "jenkins-job-builder.yaml",
+        "jenkins-job-builder.yml",
+        "jenkins-jobs.json",
+        "jenkins-jobs.yaml",
+        "jenkins-jobs.yml",
+        "jjb.json",
+        "jjb.yaml",
+        "jjb.yml",
+    }:
+        return "jenkins-project"
+    if suffix in {".json", ".yaml", ".yml"} and any(
+        part in {".jjb", "jenkins-job-builder", "jenkins-jobs", "jjb"}
+        for part in parts[:-1]
+    ):
+        return "jenkins-project"
     if name == "plugins.txt" and (
         len(parts) == 1
         or any(part in {"jenkins", ".jenkins", "jenkins_home"} for part in parts[:-1])
