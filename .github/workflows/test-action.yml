@@ -1258,6 +1258,40 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Jenkins Shared Library source
+        id: jenkins_shared_library
+        uses: ./
+        with:
+          tool: jenkins-project
+          input-file: tests/fixtures/jenkins_shared_library_risky/vars/deploy.groovy
+          framework: soc2
+
+      - name: Assert Jenkins Shared Library outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.jenkins_shared_library.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.jenkins_shared_library.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.jenkins_shared_library.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "14"
+          test "$RISK_COUNTS" = '{"dangerous":11,"irreversible":0,"review":3,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "jenkins-project"
+          assert payload["artifact_type"] == "shared_library_var"
+          assert payload["source_kind"] == "global_variable"
+          assert payload["source_line_count"] == 20
+          assert payload["decision"] == "block"
+          assert "fixture-shared-library-secret-do-not-leak" not in serialized
+          assert "fixture-jenkins-credential-do-not-leak" not in serialized
+          assert "shared-library.example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef recipe
         id: chef
         uses: ./

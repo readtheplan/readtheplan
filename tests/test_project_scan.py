@@ -672,6 +672,39 @@ def test_project_scan_analyzes_jenkins_job_builder_definitions(tmp_path: Path) -
     assert "fixture-parameter-secret-do-not-leak" not in encoded
 
 
+def test_project_scan_analyzes_jenkins_shared_library_without_generic_groovy(
+    tmp_path: Path,
+) -> None:
+    fixture_root = FIXTURES / "jenkins_shared_library_risky"
+    targets = (
+        "vars/deploy.groovy",
+        "src/org/example/Helper.groovy",
+    )
+    for relative in targets:
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((fixture_root / relative).read_text(encoding="utf-8"), encoding="utf-8")
+    generic = tmp_path / "application" / "src" / "main" / "groovy" / "App.groovy"
+    generic.parent.mkdir(parents=True)
+    generic.write_text("class App {}\n", encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 2
+    assert payload["scanned_file_count"] == 2
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"jenkins-project"}
+    assert {item["artifact_type"] for item in payload["files"]} == {
+        "shared_library_class",
+        "shared_library_var",
+    }
+    assert payload["total_changes"] == 23
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-shared-library-secret-do-not-leak" not in encoded
+    assert "fixture-controller-path-do-not-leak" not in encoded
+
+
 def test_project_scan_analyzes_chef_runtime_configuration(tmp_path: Path) -> None:
     source = FIXTURES / "chef_runtime"
     targets = {

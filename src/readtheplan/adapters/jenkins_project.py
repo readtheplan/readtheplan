@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -15,7 +15,7 @@ from readtheplan.plan import PlanSummary, ResourceChange
 
 
 class JenkinsProjectInputError(ValueError):
-    """Raised when input is not a Jenkins plugin installation catalog."""
+    """Raised when input is not recognizable static Jenkins project configuration."""
 
 
 _PLUGIN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -45,6 +45,123 @@ _PRIVILEGED_PLUGINS = {
 }
 _MAX_PLUGINS = 5_000
 _MAX_DEFINITIONS = 10_000
+_MAX_GROOVY_SOURCE_BYTES = 2 * 1024 * 1024
+_SECRET_NAME = re.compile(
+    r"(?:password|passwd|token|secret|private.?key|client.?secret|api.?key|credential)",
+    re.IGNORECASE,
+)
+_GROOVY_IDENTIFIER = re.compile(r"\b[A-Za-z_$][A-Za-z0-9_$]*")
+_GROOVY_FINDINGS = (
+    (
+        "dependency_loader",
+        "dangerous",
+        re.compile(r"(?:@Grab\b|\bGrape\.grab\s*\()"),
+        "The shared library loads a third-party JVM dependency into Jenkins' runtime; review "
+        "repository trust, artifact integrity, and controller cache effects.",
+    ),
+    (
+        "controller_api",
+        "dangerous",
+        re.compile(
+            r"(?:\bJenkins\s*\.(?:get|instance)\b|\bjenkins\.model\.|\bhudson\.|"
+            r"\bScriptApproval\b|\bACL\s*\.)"
+        ),
+        "The shared library accesses Jenkins or Hudson controller internals that can bypass "
+        "ordinary Pipeline abstractions and sandbox boundaries.",
+    ),
+    (
+        "raw_build_api",
+        "dangerous",
+        re.compile(r"(?:\brawBuild\b|\bgetRawBuild\s*\(|\bgetContext\s*\()"),
+        "The shared library accesses raw build or execution context objects with controller-side "
+        "capabilities outside the stable Pipeline step boundary.",
+    ),
+    (
+        "dynamic_code",
+        "dangerous",
+        re.compile(
+            r"(?:\bGroovyShell\b|\bEval\.me\s*\(|\bClass\.forName\s*\(|"
+            r"\bclassLoader\b|\bmetaClass\b|\bevaluate\s*\(|\bload\s*\()"
+        ),
+        "The shared library dynamically loads or evaluates code, so the executed behavior cannot "
+        "be established from this source alone.",
+    ),
+    (
+        "process_execution",
+        "dangerous",
+        re.compile(
+            r"(?:\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\s*\(|"
+            r"\bProcessBuilder\s*\(|\bSystem\.exit\s*\(|\.execute\s*\()"
+        ),
+        "The shared library can start a process or terminate a JVM process outside Jenkins' "
+        "audited Pipeline command-step boundary.",
+    ),
+    (
+        "agent_command",
+        "dangerous",
+        re.compile(r"\b(?:sh|bat|powershell|pwsh)\s*(?:\(|\b)"),
+        "The shared library invokes a command-capable Pipeline step on a build agent.",
+    ),
+    (
+        "credential_access",
+        "dangerous",
+        re.compile(r"\b(?:withCredentials|sshagent|credentials)\s*\("),
+        "The shared library exposes a Jenkins-managed credential to Pipeline code or agent "
+        "processes.",
+    ),
+    (
+        "filesystem_access",
+        "dangerous",
+        re.compile(
+            r"(?:\bnew\s+File\s*\(|\bFile\s*\.(?:newInstance|createTempFile)\s*\(|"
+            r"\bFiles\s*\.|\bwriteFile\s*(?:\(|\b)|\bdeleteDir\s*\()"
+        ),
+        "The shared library reads, writes, or deletes filesystem state; the effective target and "
+        "agent/controller location require review.",
+    ),
+    (
+        "network_access",
+        "dangerous",
+        re.compile(
+            r"(?:\bnew\s+(?:URL|URI|Socket)\s*\(|\.openConnection\s*\(|"
+            r"\bhttpRequest\s*(?:\(|\b))"
+        ),
+        "The shared library can communicate across a network trust boundary and may transmit "
+        "build data or credentials.",
+    ),
+    (
+        "mutable_global_state",
+        "dangerous",
+        re.compile(r"(?:^|\s)@Field\b"),
+        "A global-variable script declares shared mutable field state; Jenkins may retain the "
+        "script object across calls within a build, creating concurrency and serialization risk.",
+    ),
+    (
+        "non_cps",
+        "review",
+        re.compile(r"(?:^|\s)@NonCPS\b"),
+        "The method opts out of Pipeline CPS transformation; Pipeline steps and non-serializable "
+        "state must not cross this execution boundary.",
+    ),
+    (
+        "declarative_pipeline",
+        "dangerous",
+        re.compile(r"\bpipeline\s*\{"),
+        "The global variable defines a Declarative Pipeline and can determine an entire job's "
+        "execution behavior.",
+    ),
+    (
+        "downstream_build",
+        "review",
+        re.compile(r"\bbuild\s*(?:\(|job\s*:)"),
+        "The shared library can invoke another Jenkins job; review parameter flow, permissions, "
+        "and downstream deployment effects.",
+    ),
+)
+_LIBRARY_RESOURCE = re.compile(r"\blibraryResource\s*\(")
+_DYNAMIC_LIBRARY_RESOURCE = re.compile(r"\blibraryResource\s*\(\s*[A-Za-z_$]")
+_CLASS_DECLARATION = re.compile(r"\bclass\s+[A-Za-z_$][A-Za-z0-9_$]*")
+_SERIALIZABLE_CLASS = re.compile(r"\bimplements\s+[^\n{]*\bSerializable\b")
 _JJB_DEFINITION_TYPES = {
     "builder",
     "defaults",
@@ -457,8 +574,119 @@ def _parse_job_builder_json(source: str) -> dict[str, Any]:
     return _parse_job_builder_document(document, artifact_type="job_builder_json")
 
 
+def _mask_groovy_comments_and_strings(
+    source: str,
+) -> tuple[str, list[tuple[int, str, bool]]]:
+    """Mask Groovy comments and quoted strings while preserving offsets and lines."""
+    output = list(source)
+    literals: list[tuple[int, str, bool]] = []
+    state = "code"
+    quote = ""
+    triple = False
+    literal: list[str] = []
+    literal_line = 1
+    line = 1
+    index = 0
+    while index < len(source):
+        char = source[index]
+        following = source[index + 1] if index + 1 < len(source) else ""
+        if state == "code":
+            if char == "/" and following == "/":
+                output[index] = output[index + 1] = " "
+                state = "line_comment"
+                index += 2
+                continue
+            if char == "/" and following == "*":
+                output[index] = output[index + 1] = " "
+                state = "block_comment"
+                index += 2
+                continue
+            if char in {"'", '"'}:
+                quote = char
+                triple = source.startswith(char * 3, index)
+                width = 3 if triple else 1
+                for offset in range(width):
+                    output[index + offset] = " "
+                literal = []
+                literal_line = line
+                state = "string"
+                index += width
+                continue
+        elif state == "line_comment":
+            if char == "\n":
+                state = "code"
+            else:
+                output[index] = " "
+        elif state == "block_comment":
+            if char == "*" and following == "/":
+                output[index] = output[index + 1] = " "
+                state = "code"
+                index += 2
+                continue
+            if char != "\n":
+                output[index] = " "
+        else:
+            width = 3 if triple else 1
+            if source.startswith(quote * width, index):
+                for offset in range(width):
+                    output[index + offset] = " "
+                value = "".join(literal)
+                interpolated = quote == '"' and bool(
+                    re.search(r"(?:\$\{|\$[A-Za-z_])", value)
+                )
+                literals.append((literal_line, value, interpolated))
+                state = "code"
+                index += width
+                continue
+            output[index] = "\n" if char == "\n" else " "
+            if char == "\\" and index + 1 < len(source):
+                literal.extend((char, source[index + 1]))
+                if source[index + 1] == "\n":
+                    line += 1
+                    output[index + 1] = "\n"
+                else:
+                    output[index + 1] = " "
+                index += 2
+                continue
+            literal.append(char)
+        if char == "\n":
+            line += 1
+        index += 1
+    if state == "string":
+        raise JenkinsProjectInputError("unterminated Groovy string")
+    if state == "block_comment":
+        raise JenkinsProjectInputError("unterminated Groovy block comment")
+    return "".join(output), literals
+
+
+def _parse_shared_library(source: str, *, filename: str) -> dict[str, Any]:
+    if len(source.encode("utf-8")) > _MAX_GROOVY_SOURCE_BYTES:
+        raise JenkinsProjectInputError("Groovy input exceeds the static-analysis size limit")
+    normalized = filename.replace("\\", "/")
+    path = PurePosixPath(normalized)
+    if path.suffix.casefold() != ".groovy":
+        raise JenkinsProjectInputError("shared library source must use a .groovy filename")
+    directories = tuple(part.casefold() for part in path.parts[:-1])
+    under_vars = "vars" in directories
+    under_src = "src" in directories
+    if under_vars == under_src:
+        raise JenkinsProjectInputError(
+            "Groovy input must be identified by exactly one shared-library vars/ or src/ path"
+        )
+    if under_vars and directories[-1] != "vars":
+        raise JenkinsProjectInputError("shared-library vars Groovy files cannot be nested")
+    _mask_groovy_comments_and_strings(source)
+    return {
+        "artifact_type": "shared_library_var" if under_vars else "shared_library_class",
+        "document": {
+            "source": source,
+            "line_count": len(source.splitlines()),
+        },
+    }
+
+
 def parse_jenkins_project(source: str, *, filename: str = "") -> dict[str, Any]:
-    """Parse Jenkins plugin catalogs or Job Builder definitions without execution."""
+    """Parse Jenkins project artifacts without rendering templates or executing source."""
     if not source.strip():
         raise JenkinsProjectInputError("input is empty")
     suffix = Path(filename).suffix.casefold()
@@ -470,7 +698,9 @@ def parse_jenkins_project(source: str, *, filename: str = "") -> dict[str, Any]:
         ),
         "",
     )
-    if suffix == ".json":
+    if suffix == ".groovy":
+        parsed = _parse_shared_library(source, filename=filename)
+    elif suffix == ".json":
         parsed = _parse_job_builder_json(source)
     elif suffix in {".yaml", ".yml"} or first == "plugins:" or first.startswith("-"):
         document = _load_yaml(source)
@@ -806,6 +1036,134 @@ def _job_builder_changes(definitions: list[dict[str, Any]]) -> list[dict[str, st
     return changes
 
 
+def _shared_library_change(
+    line: int,
+    kind: str,
+    risk: str,
+    explanation: str,
+) -> dict[str, str]:
+    return {
+        "Address": f"jenkins_shared_library.line.{line}.{kind}",
+        "Kind": kind,
+        "Action": "execute",
+        "Risk": risk,
+        "Explanation": explanation,
+    }
+
+
+def _has_secret_assignment(line: str) -> bool:
+    for match in _GROOVY_IDENTIFIER.finditer(line):
+        if not _SECRET_NAME.search(match.group()):
+            continue
+        remainder = line[match.end() :].lstrip()
+        if remainder.startswith("=") and not remainder.startswith("=="):
+            return True
+    return False
+
+
+def _shared_library_changes(source: str, *, artifact_type: str) -> list[dict[str, str]]:
+    code, literals = _mask_groovy_comments_and_strings(source)
+    literal_lines = {line_number for line_number, _, _ in literals}
+    changes: list[dict[str, str]] = [
+        _shared_library_change(
+            1,
+            "executable_source",
+            "review",
+            (
+                "This file defines executable Jenkins Shared Library Groovy. Its effective "
+                "privileges depend on global or folder library configuration, SCM ownership, "
+                "sandboxing, and script approvals."
+            ),
+        )
+    ]
+    for line_number, line in enumerate(code.splitlines(), start=1):
+        for kind, risk, pattern, explanation in _GROOVY_FINDINGS:
+            if pattern.search(line):
+                changes.append(_shared_library_change(line_number, kind, risk, explanation))
+        if _LIBRARY_RESOURCE.search(line):
+            dynamic = bool(_DYNAMIC_LIBRARY_RESOURCE.search(line))
+            changes.append(
+                _shared_library_change(
+                    line_number,
+                    "library_resource",
+                    "dangerous" if dynamic else "review",
+                    (
+                        "The resource path is computed at runtime, so static analysis cannot "
+                        "establish which bundled content will be loaded."
+                        if dynamic
+                        else "The shared library loads bundled resource content; review its "
+                        "integrity, sensitivity, and subsequent use."
+                    ),
+                )
+            )
+        if line_number in literal_lines and _has_secret_assignment(line):
+            changes.append(
+                _shared_library_change(
+                    line_number,
+                    "literal_secret",
+                    "dangerous",
+                    "A credential-like variable is assigned a literal value in shared-library "
+                    "source; the identifier and value are intentionally redacted.",
+                )
+            )
+
+    for line_number, literal, interpolated in literals:
+        if _SECRET_NAME.search(literal) and re.search(r"[:=]", literal):
+            changes.append(
+                _shared_library_change(
+                    line_number,
+                    "literal_secret",
+                    "dangerous",
+                    "Shared-library source contains a credential-like literal; its contents are "
+                    "intentionally redacted.",
+                )
+            )
+        if interpolated:
+            changes.append(
+                _shared_library_change(
+                    line_number,
+                    "runtime_interpolation",
+                    "review",
+                    "A double-quoted Groovy value is computed from runtime state; review the "
+                    "effective command, path, endpoint, or data flow.",
+                )
+            )
+
+    if artifact_type == "shared_library_class":
+        class_match = _CLASS_DECLARATION.search(code)
+        if class_match and not _SERIALIZABLE_CLASS.search(code):
+            line_number = code.count("\n", 0, class_match.start()) + 1
+            changes.append(
+                _shared_library_change(
+                    line_number,
+                    "cps_serialization",
+                    "review",
+                    "A shared-library class does not visibly implement Serializable; retained "
+                    "instances or Pipeline state may fail across CPS suspension and restart.",
+                )
+            )
+
+    changes.append(
+        {
+            "Address": "jenkins_shared_library.effective_execution",
+            "Kind": "resolution_boundary",
+            "Action": "execute",
+            "Risk": "review",
+            "Explanation": (
+                "Effective Shared Library behavior also depends on library trust level, SCM "
+                "revision and ownership, implicit loading and version override settings, folder "
+                "permissions, controller plugins, sandbox approvals, replay, CPS transformation, "
+                "bundled resources, credentials, and runtime values; readtheplan does not contact "
+                "Jenkins or execute Groovy."
+            ),
+        }
+    )
+    unique: dict[tuple[str, str], dict[str, str]] = {}
+    for change in changes:
+        unique[(change["Address"], change["Kind"])] = change
+    return list(unique.values())
+
+
 class JenkinsProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -820,12 +1178,19 @@ class JenkinsProjectAdapter(BaseAdapter):
             return isinstance(project["document"].get("plugins"), list)
         if artifact_type in {"job_builder_yaml", "job_builder_json"}:
             return isinstance(project["document"].get("definitions"), list)
+        if artifact_type in {"shared_library_var", "shared_library_class"}:
+            return isinstance(project["document"].get("source"), str)
         return False
 
     def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
         project = input_data["jenkins_project"]
         if project["artifact_type"] in {"job_builder_yaml", "job_builder_json"}:
             return _job_builder_changes(project["document"]["definitions"])
+        if project["artifact_type"] in {"shared_library_var", "shared_library_class"}:
+            return _shared_library_changes(
+                project["document"]["source"],
+                artifact_type=project["artifact_type"],
+            )
         plugins = project["document"]["plugins"]
         changes = [_plugin_change(plugin) for plugin in plugins]
         changes.append(
@@ -867,11 +1232,18 @@ def analyze_jenkins_project(data: dict[str, Any], *, catalog=None) -> dict[str, 
     gate["artifact_type"] = project["artifact_type"]
     if project["artifact_type"] in {"plugins_txt", "plugins_yaml"}:
         gate["plugin_count"] = len(project["document"]["plugins"])
-    else:
+    elif project["artifact_type"] in {"job_builder_yaml", "job_builder_json"}:
         definitions = project["document"]["definitions"]
         gate["definition_count"] = len(definitions)
         gate["job_count"] = sum(
             definition["kind"] in {"job", "job-template"} for definition in definitions
         )
+    else:
+        gate["source_kind"] = (
+            "global_variable"
+            if project["artifact_type"] == "shared_library_var"
+            else "class"
+        )
+        gate["source_line_count"] = project["document"]["line_count"]
     gate["total_changes"] = len(changes)
     return gate
