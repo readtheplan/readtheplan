@@ -100,6 +100,95 @@ _NAVIGATOR_FILENAMES = {
     "ansible-navigator.yaml",
     "ansible-navigator.yml",
 }
+_MOLECULE_FILENAMES = {"molecule.yaml", "molecule.yml"}
+_MOLECULE_DRIVER_NAMES = {
+    "azure",
+    "containers",
+    "default",
+    "delegated",
+    "digitalocean",
+    "docker",
+    "ec2",
+    "gce",
+    "kubevirt",
+    "libvirt",
+    "lxd",
+    "openstack",
+    "podman",
+    "vagrant",
+}
+_MOLECULE_TOP_LEVEL_KEYS = {
+    "ansible",
+    "dependency",
+    "driver",
+    "lint",
+    "log",
+    "platforms",
+    "prerun",
+    "provisioner",
+    "role_name_check",
+    "scenario",
+    "shared_state",
+    "verifier",
+}
+_MOLECULE_PLATFORM_CORE_KEYS = {
+    "box",
+    "cgroupns_mode",
+    "children",
+    "command",
+    "cpus",
+    "dockerfile",
+    "env",
+    "environment",
+    "groups",
+    "hostname",
+    "image",
+    "interfaces",
+    "memory",
+    "name",
+    "network_mode",
+    "networks",
+    "pkg_extras",
+    "pre_build_image",
+    "privileged",
+    "provider_options",
+    "provider_raw_config_args",
+    "registry",
+    "tmpfs",
+    "ulimits",
+    "volumes",
+}
+_MOLECULE_SEQUENCE_STEPS = {
+    "check",
+    "cleanup",
+    "converge",
+    "create",
+    "dependency",
+    "destroy",
+    "idempotence",
+    "lint",
+    "prepare",
+    "side_effect",
+    "syntax",
+    "test",
+    "verify",
+}
+_MOLECULE_SCENARIO_KEYS = {
+    "check_sequence",
+    "cleanup_sequence",
+    "converge_sequence",
+    "create_sequence",
+    "dependency_sequence",
+    "destroy_sequence",
+    "idempotence_sequence",
+    "lint_sequence",
+    "name",
+    "prepare_sequence",
+    "side_effect_sequence",
+    "syntax_sequence",
+    "test_sequence",
+    "verify_sequence",
+}
 _EE_KEYS = {
     "additional_build_files",
     "additional_build_steps",
@@ -468,6 +557,199 @@ def _parse_navigator(document: Any) -> dict[str, Any]:
     return settings
 
 
+def _molecule_filename(filename: str | None) -> bool:
+    if not filename:
+        return False
+    normalized = PurePosixPath(filename.replace("\\", "/"))
+    name = normalized.name.lower()
+    if name in _MOLECULE_FILENAMES:
+        return True
+    return name in {"config.yaml", "config.yml"} and "molecule" in {
+        part.lower() for part in normalized.parts[:-1]
+    }
+
+
+def _require_mapping(document: dict[str, Any], key: str) -> dict[str, Any]:
+    value = document.get(key, {})
+    if not isinstance(value, dict):
+        raise AnsibleProjectInputError(f"Molecule {key} must be a mapping")
+    return value
+
+
+def _reject_recursive_molecule_aliases(value: Any, active: set[int] | None = None) -> None:
+    if not isinstance(value, (dict, list)):
+        return
+    if active is None:
+        active = set()
+    object_id = id(value)
+    if object_id in active:
+        raise AnsibleProjectInputError("Molecule configuration contains a recursive YAML alias")
+    active.add(object_id)
+    items = value.values() if isinstance(value, dict) else value
+    for item in items:
+        _reject_recursive_molecule_aliases(item, active)
+    active.remove(object_id)
+
+
+def _parse_molecule(document: Any) -> dict[str, Any]:
+    if not isinstance(document, dict) or not document:
+        raise AnsibleProjectInputError("Molecule configuration must be a non-empty YAML mapping")
+    _reject_recursive_molecule_aliases(document)
+    unknown = set(document) - _MOLECULE_TOP_LEVEL_KEYS
+    if unknown:
+        fields = ", ".join(sorted(str(item) for item in unknown))
+        raise AnsibleProjectInputError(
+            f"Molecule configuration contains unsupported top-level key(s): {fields}"
+        )
+
+    for key in ("log", "prerun", "shared_state"):
+        if key in document and not isinstance(document[key], bool):
+            raise AnsibleProjectInputError(f"Molecule {key} must be a boolean")
+    role_name_check = document.get("role_name_check")
+    if role_name_check is not None and (
+        not isinstance(role_name_check, int)
+        or isinstance(role_name_check, bool)
+        or role_name_check not in {0, 1, 2}
+    ):
+        raise AnsibleProjectInputError("Molecule role_name_check must be 0, 1, or 2")
+    if "lint" in document and not isinstance(document["lint"], str):
+        raise AnsibleProjectInputError("Molecule lint must be a command string")
+
+    dependency = _require_mapping(document, "dependency") if "dependency" in document else {}
+    if "dependency" in document:
+        unknown_dependency = set(dependency) - {"command", "enabled", "env", "name", "options"}
+        if unknown_dependency:
+            raise AnsibleProjectInputError("Molecule dependency contains unsupported fields")
+        if dependency.get("name") not in {"galaxy", "shell"}:
+            raise AnsibleProjectInputError("Molecule dependency name must be galaxy or shell")
+        if "enabled" in dependency and not isinstance(dependency["enabled"], bool):
+            raise AnsibleProjectInputError("Molecule dependency enabled must be a boolean")
+        for key in ("env", "options"):
+            if key in dependency and not isinstance(dependency[key], dict):
+                raise AnsibleProjectInputError(f"Molecule dependency {key} must be a mapping")
+        if dependency.get("command") is not None and not isinstance(dependency.get("command"), str):
+            raise AnsibleProjectInputError("Molecule dependency command must be a string")
+
+    driver = _require_mapping(document, "driver") if "driver" in document else {}
+    if driver:
+        if "name" in driver and (
+            not isinstance(driver["name"], str) or not driver["name"].strip()
+        ):
+            raise AnsibleProjectInputError("Molecule driver name must be a non-empty string")
+        driver_name = driver.get("name")
+        if isinstance(driver_name, str) and (
+            driver_name not in _MOLECULE_DRIVER_NAMES
+            and not re.fullmatch(r"(?:custom|molecule)[_-][A-Za-z0-9:_.-]+", driver_name)
+        ):
+            raise AnsibleProjectInputError("Molecule driver name is unsupported")
+        if "options" in driver and not isinstance(driver["options"], dict):
+            raise AnsibleProjectInputError("Molecule driver options must be a mapping")
+
+    platforms = document.get("platforms", [])
+    if not isinstance(platforms, list):
+        raise AnsibleProjectInputError("Molecule platforms must be a list")
+    for index, platform in enumerate(platforms, start=1):
+        if not isinstance(platform, dict):
+            raise AnsibleProjectInputError(f"Molecule platform {index} must be a mapping")
+        if not isinstance(platform.get("name"), str) or not platform["name"].strip():
+            raise AnsibleProjectInputError(
+                f"Molecule platform {index} name must be a non-empty string"
+            )
+        for key in ("children", "groups", "interfaces", "networks", "tmpfs", "ulimits", "volumes"):
+            if key in platform and not isinstance(platform[key], list):
+                raise AnsibleProjectInputError(f"Molecule platform {index} {key} must be a list")
+        for key in ("env", "environment", "provider_options", "registry"):
+            if key in platform and not isinstance(platform[key], dict):
+                raise AnsibleProjectInputError(f"Molecule platform {index} {key} must be a mapping")
+
+    ansible = _require_mapping(document, "ansible") if "ansible" in document else {}
+    if set(ansible) - {"cfg", "env", "executor", "playbooks"}:
+        raise AnsibleProjectInputError("Molecule ansible contains unsupported fields")
+    for key in ("cfg", "env", "executor", "playbooks"):
+        if key in ansible and not isinstance(ansible[key], dict):
+            raise AnsibleProjectInputError(f"Molecule ansible {key} must be a mapping")
+    executor = ansible.get("executor", {})
+    if isinstance(executor, dict):
+        if set(executor) - {"args", "backend"}:
+            raise AnsibleProjectInputError("Molecule ansible executor contains unsupported fields")
+        if executor.get("backend", "ansible-playbook") not in {
+            "ansible-navigator",
+            "ansible-playbook",
+        }:
+            raise AnsibleProjectInputError("Molecule ansible executor backend is unsupported")
+        executor_args = executor.get("args", {})
+        if not isinstance(executor_args, dict):
+            raise AnsibleProjectInputError("Molecule ansible executor args must be a mapping")
+        if set(executor_args) - {"ansible_navigator", "ansible_playbook"}:
+            raise AnsibleProjectInputError(
+                "Molecule ansible executor args contain unsupported fields"
+            )
+        if any(
+            not isinstance(value, list)
+            or not all(isinstance(item, str) for item in value)
+            for value in executor_args.values()
+        ):
+            raise AnsibleProjectInputError(
+                "Molecule ansible executor arguments must be string lists"
+            )
+
+    provisioner = _require_mapping(document, "provisioner") if "provisioner" in document else {}
+    if provisioner and provisioner.get("name", "ansible") != "ansible":
+        raise AnsibleProjectInputError("Molecule provisioner name must be ansible")
+    if "log" in provisioner and not isinstance(provisioner["log"], bool):
+        raise AnsibleProjectInputError("Molecule provisioner log must be a boolean")
+    for key in ("config_options", "env", "inventory", "playbooks"):
+        if key in provisioner and not isinstance(provisioner[key], dict):
+            raise AnsibleProjectInputError(f"Molecule provisioner {key} must be a mapping")
+    if "ansible_args" in provisioner and (
+        not isinstance(provisioner["ansible_args"], list)
+        or not all(isinstance(item, str) for item in provisioner["ansible_args"])
+    ):
+        raise AnsibleProjectInputError("Molecule provisioner ansible_args must be a string list")
+
+    scenario = _require_mapping(document, "scenario") if "scenario" in document else {}
+    if set(scenario) - _MOLECULE_SCENARIO_KEYS:
+        raise AnsibleProjectInputError("Molecule scenario contains unsupported fields")
+    if "name" in scenario and not isinstance(scenario["name"], str):
+        raise AnsibleProjectInputError("Molecule scenario name must be a string")
+    for key, value in scenario.items():
+        if key.endswith("_sequence") and (
+            not isinstance(value, list) or not all(isinstance(item, str) for item in value)
+        ):
+            raise AnsibleProjectInputError(f"Molecule scenario {key} must be a string list")
+
+    verifier = _require_mapping(document, "verifier") if "verifier" in document else {}
+    if set(verifier) - {
+        "additional_files_or_dirs",
+        "directory",
+        "enabled",
+        "env",
+        "name",
+        "options",
+    }:
+        raise AnsibleProjectInputError("Molecule verifier contains unsupported fields")
+    if verifier and verifier.get("name", "ansible") not in {
+        "ansible",
+        "goss",
+        "inspec",
+        "testinfra",
+    }:
+        raise AnsibleProjectInputError("Molecule verifier name is unsupported")
+    for key in ("env", "options"):
+        if key in verifier and not isinstance(verifier[key], dict):
+            raise AnsibleProjectInputError(f"Molecule verifier {key} must be a mapping")
+    if "enabled" in verifier and not isinstance(verifier["enabled"], bool):
+        raise AnsibleProjectInputError("Molecule verifier enabled must be a boolean")
+    if "directory" in verifier and not isinstance(verifier["directory"], str):
+        raise AnsibleProjectInputError("Molecule verifier directory must be a string")
+    files = verifier.get("additional_files_or_dirs", [])
+    if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
+        raise AnsibleProjectInputError(
+            "Molecule verifier additional_files_or_dirs must be a string list"
+        )
+    return document
+
+
 def parse_ansible_project(source: str, filename: str | None = None) -> dict[str, Any]:
     """Parse Ansible project configuration, dependencies, or inventory without execution."""
     if not source.strip():
@@ -476,6 +758,14 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
         PurePosixPath(filename.replace("\\", "/")).suffix.lower() if filename else ""
     )
     artifact_filename = _artifact_filename(filename)
+    if _molecule_filename(filename):
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "molecule",
+                "document": _parse_molecule(document),
+            }
+        }
     if artifact_filename in _EXECUTION_ENVIRONMENT_FILENAMES:
         document = _load_inventory_yaml(source)
         return {
@@ -1699,6 +1989,530 @@ def _plugin_inventory_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     return changes
 
 
+def _molecule_secret_changes(
+    value: Any,
+    *,
+    address: str,
+    kind: str,
+    context: str,
+) -> list[dict[str, str]]:
+    pairs = _walk_key_values(value)
+    changes: list[dict[str, str]] = []
+    if any(_literal_secret(key, item) for key, item in pairs):
+        changes.append(
+            _change(
+                f"{address}.literal_credentials",
+                f"molecule_{kind}_literal_secret",
+                "dangerous",
+                f"{context} contains a literal secret-like value that can leak through source "
+                "history, process environments, generated inventory, or executed content.",
+            )
+        )
+    if any(
+        _SECRET_OPTIONS.search(key) and _external_or_encrypted_value(item) for key, item in pairs
+    ):
+        changes.append(
+            _change(
+                f"{address}.secret_references",
+                f"molecule_{kind}_secret_boundary",
+                "review",
+                f"{context} resolves secret material externally; verify identity scope, secret "
+                "source authorization, rotation, and log redaction.",
+            )
+        )
+    return changes
+
+
+def _molecule_image_change(image: Any, index: int) -> dict[str, str] | None:
+    if not isinstance(image, str) or not image.strip():
+        return None
+    text = image.strip()
+    risk = "review" if _OCI_SHA256.search(text) else "dangerous"
+    explanation = (
+        "The Molecule platform image is pinned by digest; review registry trust, signatures, "
+        "and image contents."
+        if risk == "review"
+        else "The Molecule platform uses a mutable image name or tag. Pin an immutable digest "
+        "because the image supplies executable code used by the scenario."
+    )
+    if text.lower().startswith("http://") or _embedded_url_credential(text):
+        risk = "dangerous"
+        explanation = (
+            "The Molecule platform image uses unsafe transport or embeds credentials; use a "
+            "trusted registry, remove inline credentials, and pin an immutable digest."
+        )
+    return _change(
+        f"molecule.platforms.{index}.image",
+        "molecule_platform_image",
+        risk,
+        explanation,
+    )
+
+
+def _molecule_runtime_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    dependency = document.get("dependency", {})
+    if isinstance(dependency, dict) and not _disabled(dependency.get("enabled", True)):
+        dependency_name = str(dependency.get("name", ""))
+        shell_dependency = dependency_name == "shell"
+        changes.append(
+            _change(
+                "molecule.dependency",
+                "molecule_dependency_execution",
+                "dangerous" if shell_dependency else "review",
+                "Molecule executes an arbitrary dependency command on the controller."
+                if shell_dependency
+                else "Molecule installs executable Galaxy roles or collections before the "
+                "scenario; verify requirements, versions, signatures, and server policy.",
+            )
+        )
+        if dependency.get("command"):
+            changes.append(
+                _change(
+                    "molecule.dependency.command",
+                    "molecule_dependency_command",
+                    "dangerous",
+                    "Molecule executes the configured dependency command on the controller; it "
+                    "can download code, alter the workspace, or expose controller credentials.",
+                )
+            )
+        options = dependency.get("options", {})
+        if isinstance(options, dict) and any(
+            (
+                re.search(
+                    r"(?:ignore.?cert|validate.?cert|verify.?ssl|tls.?verify)", str(key), re.I
+                )
+                and (_enabled(value) if "ignore" in str(key).lower() else _disabled(value))
+            )
+            for key, value in options.items()
+        ):
+            changes.append(
+                _change(
+                    "molecule.dependency.options",
+                    "molecule_dependency_tls_verification",
+                    "dangerous",
+                    "Molecule dependency installation disables certificate verification, "
+                    "allowing untrusted content to replace executable roles or collections.",
+                )
+            )
+        changes.extend(
+            _molecule_secret_changes(
+                dependency,
+                address="molecule.dependency",
+                kind="dependency",
+                context="Molecule dependency configuration",
+            )
+        )
+
+    driver = document.get("driver", {})
+    if isinstance(driver, dict) and (driver or document.get("platforms")):
+        driver_name = str(driver.get("name", ""))
+        changes.append(
+            _change(
+                "molecule.driver",
+                "molecule_driver_boundary",
+                "dangerous",
+                "The Molecule driver and its create/destroy playbooks can provision, mutate, or "
+                "delete containers, virtual machines, cloud resources, services, or arbitrary "
+                "Ansible-managed systems.",
+            )
+        )
+        if driver_name.startswith(("custom-", "custom_", "molecule-", "molecule_")):
+            changes.append(
+                _change(
+                    "molecule.driver.name",
+                    "molecule_custom_driver",
+                    "dangerous",
+                    "Molecule loads a custom driver plugin as controller-side Python code; verify "
+                    "package provenance, version pinning, and plugin permissions.",
+                )
+            )
+        options = driver.get("options", {})
+        if isinstance(options, dict):
+            if options.get("login_cmd_template"):
+                changes.append(
+                    _change(
+                        "molecule.driver.options.login_cmd_template",
+                        "molecule_login_command",
+                        "dangerous",
+                        "The driver defines an interactive login command template that executes "
+                        "locally with platform-derived connection data.",
+                    )
+                )
+            if options.get("ansible_connection_options"):
+                changes.append(
+                    _change(
+                        "molecule.driver.options.ansible_connection_options",
+                        "molecule_connection_override",
+                        "dangerous",
+                        "The driver overrides generated Ansible connection settings, which can "
+                        "change transport, identity, interpreter, privilege, and host trust.",
+                    )
+                )
+            if _disabled(options.get("managed", True)):
+                changes.append(
+                    _change(
+                        "molecule.driver.options.managed",
+                        "molecule_unmanaged_platform",
+                        "review",
+                        "Molecule treats scenario platforms as externally managed; verify target "
+                        "ownership and ensure tests cannot reach shared or production systems.",
+                    )
+                )
+        changes.extend(
+            _molecule_secret_changes(
+                driver,
+                address="molecule.driver",
+                kind="driver",
+                context="Molecule driver configuration",
+            )
+        )
+
+    platforms = document.get("platforms", [])
+    if isinstance(platforms, list):
+        changes.append(
+            _change(
+                "molecule.platforms",
+                "molecule_platform_scope",
+                "review",
+                f"Molecule declares {len(platforms)} platform(s). Verify they are isolated test "
+                "targets with bounded credentials, network reachability, cost, and cleanup.",
+            )
+        )
+        for index, platform in enumerate(platforms, start=1):
+            if not isinstance(platform, dict):
+                continue
+            image_finding = _molecule_image_change(platform.get("image"), index)
+            if image_finding:
+                changes.append(image_finding)
+            privileged = _enabled(platform.get("privileged"))
+            host_namespace = any(
+                str(platform.get(key, "")).lower() == "host"
+                for key in ("cgroupns_mode", "ipc_mode", "network_mode", "pid_mode", "userns_mode")
+            )
+            escalation_fields = any(
+                platform.get(key)
+                for key in (
+                    "cap_add",
+                    "capabilities",
+                    "devices",
+                    "device_requests",
+                    "security_opts",
+                )
+            )
+            if privileged or host_namespace or escalation_fields:
+                changes.append(
+                    _change(
+                        f"molecule.platforms.{index}.isolation",
+                        "molecule_platform_isolation",
+                        "dangerous",
+                        "A Molecule platform expands container privilege, device access, security "
+                        "settings, or host namespace sharing. Compromise may escape test isolation "
+                        "or affect the controller host.",
+                    )
+                )
+            volumes = platform.get("volumes", [])
+            if isinstance(volumes, list) and volumes:
+                sensitive = any(
+                    re.search(
+                        r"(?:^/|^[.][.]?/|docker[.]sock|[.]ssh|[.]aws|[.]kube|credentials|secrets?)",
+                        str(volume),
+                        re.I,
+                    )
+                    for volume in volumes
+                )
+                read_write = any(not str(volume).lower().endswith(":ro") for volume in volumes)
+                changes.append(
+                    _change(
+                        f"molecule.platforms.{index}.volumes",
+                        "molecule_platform_volume",
+                        "dangerous" if sensitive or read_write else "review",
+                        "Molecule mounts host or engine-managed storage into a test platform; "
+                        "review path sensitivity, write access, ownership, and cross-run "
+                        "isolation.",
+                    )
+                )
+            if any(
+                platform.get(key)
+                for key in ("exposed_ports", "published_ports", "ports", "port_bindings")
+            ):
+                changes.append(
+                    _change(
+                        f"molecule.platforms.{index}.ports",
+                        "molecule_platform_ports",
+                        "dangerous",
+                        "Molecule publishes platform ports beyond generated inventory; bind them "
+                        "to loopback or an isolated network and verify firewall exposure.",
+                    )
+                )
+            if (
+                platform.get("command")
+                or platform.get("dockerfile")
+                or platform.get("provider_raw_config_args")
+            ):
+                changes.append(
+                    _change(
+                        f"molecule.platforms.{index}.runtime",
+                        "molecule_platform_runtime",
+                        "dangerous",
+                        "The platform supplies a startup command, build file, or raw provider "
+                        "arguments that can execute code and alter provider behavior.",
+                    )
+                )
+            extension_keys = set(platform) - _MOLECULE_PLATFORM_CORE_KEYS
+            if platform.get("provider_options") or platform.get("interfaces") or extension_keys:
+                changes.append(
+                    _change(
+                        f"molecule.platforms.{index}.provider",
+                        "molecule_provider_options",
+                        "dangerous",
+                        "Driver-specific provider settings can create externally billed or "
+                        "network-reachable infrastructure; verify account, region, network, IAM, "
+                        "quotas, and deletion safeguards.",
+                    )
+                )
+            platform_pairs = _walk_key_values(platform)
+            if any(
+                re.search(
+                    r"(?:ignore.?cert|validate.?cert|verify.?ssl|tls.?verify)", key, re.I
+                )
+                and (_enabled(value) if "ignore" in key else _disabled(value))
+                for key, value in platform_pairs
+            ):
+                changes.append(
+                    _change(
+                        f"molecule.platforms.{index}.tls",
+                        "molecule_provider_tls_verification",
+                        "dangerous",
+                        "Molecule platform or provider settings disable TLS certificate "
+                        "verification for an external API or registry.",
+                    )
+                )
+            registry = platform.get("registry", {})
+            if isinstance(registry, dict) and registry:
+                changes.append(
+                    _change(
+                        f"molecule.platforms.{index}.registry",
+                        "molecule_registry_boundary",
+                        "review",
+                        "Molecule authenticates to an external container registry; verify TLS, "
+                        "credential scope, image signatures, and pull provenance.",
+                    )
+                )
+            changes.extend(
+                _molecule_secret_changes(
+                    platform,
+                    address=f"molecule.platforms.{index}",
+                    kind="platform",
+                    context="Molecule platform configuration",
+                )
+            )
+
+    modern_ansible = document.get("ansible", {})
+    legacy_provisioner = document.get("provisioner", {})
+    for address, settings in (
+        ("molecule.ansible", modern_ansible),
+        ("molecule.provisioner", legacy_provisioner),
+    ):
+        if not isinstance(settings, dict) or not settings:
+            continue
+        executor = settings.get("executor", {})
+        executor_args = executor.get("args", {}) if isinstance(executor, dict) else {}
+        arguments = settings.get("ansible_args", [])
+        if arguments or executor_args:
+            changes.append(
+                _change(
+                    f"{address}.arguments",
+                    "molecule_ansible_arguments",
+                    "dangerous",
+                    "Molecule injects Ansible command-line arguments that can change inventory, "
+                    "targeting, privilege, transport, tags, check mode, secrets, and execution.",
+                )
+            )
+        config = settings.get("cfg", settings.get("config_options", {}))
+        if isinstance(config, dict) and config:
+            pairs = _walk_key_values(config)
+            disables_host_trust = any(
+                key == "host_key_checking" and _disabled(value) for key, value in pairs
+            )
+            changes.append(
+                _change(
+                    f"{address}.configuration",
+                    "molecule_ansible_configuration",
+                    "dangerous" if disables_host_trust else "review",
+                    "Molecule overrides Ansible configuration for scenario execution; review "
+                    "host trust, plugins, callbacks, privilege, logging, caching, and connection "
+                    "settings.",
+                )
+            )
+        inventory = settings.get("inventory", {})
+        if isinstance(inventory, dict) and inventory:
+            changes.append(
+                _change(
+                    f"{address}.inventory",
+                    "molecule_inventory_injection",
+                    "dangerous",
+                    "Molecule injects or links inventory data into the scenario. Verify target "
+                    "isolation, connection identity, privilege, external links, and variable "
+                    "precedence.",
+                )
+            )
+        if settings.get("playbooks"):
+            changes.append(
+                _change(
+                    f"{address}.playbooks",
+                    "molecule_playbook_boundary",
+                    "dangerous",
+                    "Molecule selects scenario playbooks that execute on the controller or "
+                    "platforms; their tasks, includes, roles, plugins, and resolved paths are "
+                    "outside this configuration artifact.",
+                )
+            )
+        changes.extend(
+            _molecule_secret_changes(
+                settings,
+                address=address,
+                kind="ansible",
+                context="Molecule Ansible execution settings",
+            )
+        )
+
+    scenario = document.get("scenario", {})
+    if isinstance(scenario, dict):
+        sequences = {
+            key: value
+            for key, value in scenario.items()
+            if key.endswith("_sequence") and isinstance(value, list)
+        }
+        all_steps = {str(step) for sequence in sequences.values() for step in sequence}
+        if all_steps & {"cleanup", "create", "destroy", "side_effect", "test"}:
+            changes.append(
+                _change(
+                    "molecule.scenario.sequences",
+                    "molecule_scenario_mutation",
+                    "dangerous",
+                    "Molecule sequences create, mutate, run side effects against, clean up, or "
+                    "destroy test infrastructure. Verify targeting and deletion safeguards before "
+                    "running the scenario.",
+                )
+            )
+        if all_steps - _MOLECULE_SEQUENCE_STEPS:
+            changes.append(
+                _change(
+                    "molecule.scenario.custom_steps",
+                    "molecule_custom_sequence_step",
+                    "dangerous",
+                    "Molecule declares custom sequence steps whose implementation and execution "
+                    "effects come from installed plugins or project code.",
+                )
+            )
+        test_sequence = scenario.get("test_sequence")
+        if isinstance(test_sequence, list):
+            if "idempotence" not in test_sequence:
+                changes.append(
+                    _change(
+                        "molecule.scenario.test_sequence.idempotence",
+                        "molecule_idempotence_omitted",
+                        "review",
+                        "The Molecule test sequence omits idempotence verification, so repeated "
+                        "configuration drift may not be detected.",
+                    )
+                )
+            if "destroy" not in test_sequence:
+                changes.append(
+                    _change(
+                        "molecule.scenario.test_sequence.destroy",
+                        "molecule_destroy_omitted",
+                        "dangerous",
+                        "The Molecule test sequence omits destroy, which can leave reachable or "
+                        "billable infrastructure and persisted test data behind.",
+                    )
+                )
+
+    verifier = document.get("verifier", {})
+    if isinstance(verifier, dict) and verifier and not _disabled(verifier.get("enabled", True)):
+        changes.append(
+            _change(
+                "molecule.verifier",
+                "molecule_verifier_execution",
+                "dangerous",
+                "Molecule executes verifier playbooks or test code with access to generated "
+                "inventory and scenario environments; verify code provenance and credential "
+                "exposure.",
+            )
+        )
+        if verifier.get("directory") or verifier.get("additional_files_or_dirs"):
+            changes.append(
+                _change(
+                    "molecule.verifier.files",
+                    "molecule_verifier_files",
+                    "review",
+                    "The verifier loads tests from configured paths; resolved files, symlinks, and "
+                    "test-runner behavior are outside this artifact.",
+                )
+            )
+        changes.extend(
+            _molecule_secret_changes(
+                verifier,
+                address="molecule.verifier",
+                kind="verifier",
+                context="Molecule verifier configuration",
+            )
+        )
+
+    if document.get("lint"):
+        changes.append(
+            _change(
+                "molecule.lint",
+                "molecule_lint_command",
+                "dangerous",
+                "Molecule's deprecated lint setting executes a shell command on the controller; "
+                "move linting to an explicit, reviewed CI step.",
+            )
+        )
+    if _enabled(document.get("prerun")):
+        changes.append(
+            _change(
+                "molecule.prerun",
+                "molecule_prerun_dependency_installation",
+                "review",
+                "Molecule prerun can prepare the project and install missing collection "
+                "dependencies before the scenario; review resolved requirements and cache state.",
+            )
+        )
+    if _enabled(document.get("shared_state")):
+        changes.append(
+            _change(
+                "molecule.shared_state",
+                "molecule_shared_state",
+                "review",
+                "Molecule shares state between scenarios, creating ordering and cross-scenario "
+                "isolation dependencies that can alter cleanup and target selection.",
+            )
+        )
+    if document.get("role_name_check") == 0:
+        changes.append(
+            _change(
+                "molecule.role_name_check",
+                "molecule_role_name_validation",
+                "review",
+                "Molecule disables role-name validation, allowing content layout that may behave "
+                "differently across Galaxy, collections, and local scenario execution.",
+            )
+        )
+    changes.append(
+        _change(
+            "molecule.effective_scenario",
+            "molecule_boundary",
+            "review",
+            "Effective Molecule behavior also depends on base configuration merges, environment "
+            "interpolation, installed drivers and plugins, playbooks, roles, collections, "
+            "inventory links, container or cloud state, command-line options, and destroy policy.",
+        )
+    )
+    return changes
+
+
 class AnsibleProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -1715,6 +2529,7 @@ class AnsibleProjectAdapter(BaseAdapter):
                 "inventory_plugin",
                 "inventory_yaml",
                 "execution_environment",
+                "molecule",
                 "navigator",
                 "requirements",
             }
@@ -1733,6 +2548,8 @@ class AnsibleProjectAdapter(BaseAdapter):
             changes = _execution_environment_changes(document)
         elif artifact_type == "navigator":
             changes = _navigator_changes(document)
+        elif artifact_type == "molecule":
+            changes = _molecule_runtime_changes(document)
         elif artifact_type == "inventory_plugin":
             changes = _plugin_inventory_changes(document)
         else:
@@ -1746,7 +2563,7 @@ class AnsibleProjectAdapter(BaseAdapter):
             "options, inventory, variables, vault/secret files, installed collections, roles, "
             "and controller plugin code."
         )
-        if artifact_type not in {"execution_environment", "navigator"}:
+        if artifact_type not in {"execution_environment", "molecule", "navigator"}:
             changes.append(
                 _change(
                     "ansible.effective_project",
@@ -1777,5 +2594,8 @@ def analyze_ansible_project(data: dict[str, Any], *, catalog=None) -> dict[str, 
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="Ansible project")
     gate["adapter"] = "ansible-project"
     gate["artifact_type"] = data["ansible_project"]["artifact_type"]
+    if gate["artifact_type"] == "molecule":
+        platforms = data["ansible_project"]["document"].get("platforms", [])
+        gate["platform_count"] = len(platforms) if isinstance(platforms, list) else 0
     gate["total_changes"] = len(changes)
     return gate
