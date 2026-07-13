@@ -746,6 +746,48 @@ def test_agent_gate_configuration_management_supports_bolt_inventory() -> None:
     assert "fixture-ssh-password-do-not-leak" not in json.dumps(result)
 
 
+def test_agent_gate_configuration_management_supports_bolt_yaml_plan() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "bolt_content_risky" / "modules" / "fixture" / "plans" / "deploy.yaml"),
+        "puppet-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "bolt_yaml_plan"
+    assert result["step_count"] == 10
+    assert result["parameter_count"] == 2
+    assert result["dynamic_count"] == 8
+    assert result["total_changes"] == 37
+    assert result["risk_counts"]["dangerous"] == 24
+    assert result["decision"] == "block"
+    assert "fixture-bolt" not in encoded
+    assert "example.invalid" not in encoded
+    assert "fixture-package" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_configuration_management_supports_bolt_task_metadata() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "bolt_content_risky" / "modules" / "fixture" / "tasks" / "deploy.json"),
+        "puppet-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "bolt_task_metadata"
+    assert result["parameter_count"] == 4
+    assert result["implementation_count"] == 2
+    assert result["file_count"] == 3
+    assert result["sensitive_parameter_count"] == 0
+    assert result["total_changes"] == 12
+    assert result["risk_counts"]["dangerous"] == 6
+    assert result["decision"] == "block"
+    assert "fixture-bolt" not in encoded
+    assert "deploy.sh" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_r10k_configuration() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_r10k_risky" / "r10k.yaml"),
@@ -1037,9 +1079,7 @@ def test_agent_gate_dockerfile_supports_framework_checks() -> None:
 
 
 def test_agent_gate_docker_bake_supports_framework_checks_and_redacts_values() -> None:
-    result = agent_gate_docker_bake(
-        str(FIXTURES / "docker-bake.risky.hcl"), "soc2"
-    )
+    result = agent_gate_docker_bake(str(FIXTURES / "docker-bake.risky.hcl"), "soc2")
     assert result["adapter"] == "docker-bake"
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
@@ -1367,9 +1407,7 @@ def test_agent_gate_project_honors_excludes_and_default_dependency_skips(
     assert result["files"][0]["path"] == "infra/main.tf"
 
 
-def test_agent_gate_project_detects_content_sniffed_manifest(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_agent_gate_project_detects_content_sniffed_manifest(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "root"
     project = root / "project"
     project.mkdir(parents=True)
@@ -1422,9 +1460,7 @@ def test_agent_gate_project_rejects_path_outside_root(monkeypatch, tmp_path: Pat
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
-def test_agent_gate_project_skips_static_symlink_outside_root(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_agent_gate_project_skips_static_symlink_outside_root(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "root"
     project = root / "project"
     project.mkdir(parents=True)
@@ -1442,9 +1478,7 @@ def test_agent_gate_project_skips_static_symlink_outside_root(
     assert result["discovered_file_count"] == 0
 
 
-def test_agent_gate_project_rejects_validate_open_swap(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_agent_gate_project_rejects_validate_open_swap(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "root"
     project = root / "project"
     project.mkdir(parents=True)
@@ -1512,9 +1546,7 @@ def test_agent_gate_project_rejects_swap_to_different_target_inside_root(
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
-def test_agent_gate_project_revalidates_every_walked_directory(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_agent_gate_project_revalidates_every_walked_directory(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "root"
     project = root / "project"
     project.mkdir(parents=True)
@@ -1550,9 +1582,7 @@ def test_agent_gate_project_fails_closed_on_supported_file_limit(
     assert exc_info.value.code == "LIMIT_EXCEEDED"
 
 
-def test_agent_gate_project_fails_closed_on_candidate_limit(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_agent_gate_project_fails_closed_on_candidate_limit(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "root"
     project = root / "project"
     project.mkdir(parents=True)
@@ -2541,9 +2571,7 @@ def test_stdio_server_tools_list() -> None:
             "params": {
                 "name": "agent_gate_configuration_management",
                 "arguments": {
-                    "input_path": str(
-                        (FIXTURES / "jenkins_plugins_risky.txt").resolve()
-                    ),
+                    "input_path": str((FIXTURES / "jenkins_plugins_risky.txt").resolve()),
                     "ecosystem": "jenkins-project",
                     "framework": "soc2",
                 },
@@ -2572,18 +2600,14 @@ def test_stdio_server_tools_list() -> None:
             "params": {
                 "name": "agent_gate_configuration_management",
                 "arguments": {
-                    "input_path": str(
-                        (FIXTURES / "chef_runtime" / "client.rb").resolve()
-                    ),
+                    "input_path": str((FIXTURES / "chef_runtime" / "client.rb").resolve()),
                     "ecosystem": "chef-project",
                     "framework": "soc2",
                 },
             },
         }
         chef_runtime_resp = _send_jsonrpc(proc, chef_runtime_req)
-        assert "result" in chef_runtime_resp, (
-            f"Chef runtime tools/call failed: {chef_runtime_resp}"
-        )
+        assert "result" in chef_runtime_resp, f"Chef runtime tools/call failed: {chef_runtime_resp}"
         chef_runtime_content = chef_runtime_resp["result"]["content"]
         assert len(chef_runtime_content) == 1
         chef_runtime_summary = json.loads(chef_runtime_content[0]["text"])
@@ -2603,12 +2627,7 @@ def test_stdio_server_tools_list() -> None:
                 "name": "agent_gate_configuration_management",
                 "arguments": {
                     "input_path": str(
-                        (
-                            FIXTURES
-                            / "inspec_profile_risky"
-                            / "controls"
-                            / "main.rb"
-                        ).resolve()
+                        (FIXTURES / "inspec_profile_risky" / "controls" / "main.rb").resolve()
                     ),
                     "ecosystem": "inspec",
                     "framework": "soc2",
@@ -2670,11 +2689,7 @@ def test_stdio_server_tools_list() -> None:
                 "name": "agent_gate_configuration_management",
                 "arguments": {
                     "input_path": str(
-                        (
-                            FIXTURES
-                            / "ansible_content_policy_risky"
-                            / ".ansible-lint"
-                        ).resolve()
+                        (FIXTURES / "ansible_content_policy_risky" / ".ansible-lint").resolve()
                     ),
                     "ecosystem": "ansible-project",
                     "framework": "soc2",
@@ -2682,9 +2697,7 @@ def test_stdio_server_tools_list() -> None:
             },
         }
         ansible_lint_resp = _send_jsonrpc(proc, ansible_lint_req)
-        assert "result" in ansible_lint_resp, (
-            f"Ansible-lint tools/call failed: {ansible_lint_resp}"
-        )
+        assert "result" in ansible_lint_resp, f"Ansible-lint tools/call failed: {ansible_lint_resp}"
         ansible_lint_content = ansible_lint_resp["result"]["content"]
         assert len(ansible_lint_content) == 1
         ansible_lint_summary = json.loads(ansible_lint_content[0]["text"])
@@ -2702,11 +2715,7 @@ def test_stdio_server_tools_list() -> None:
                 "name": "agent_gate_configuration_management",
                 "arguments": {
                     "input_path": str(
-                        (
-                            FIXTURES
-                            / "puppet_server_policy_risky"
-                            / "auth.conf"
-                        ).resolve()
+                        (FIXTURES / "puppet_server_policy_risky" / "auth.conf").resolve()
                     ),
                     "ecosystem": "puppet-project",
                     "framework": "soc2",

@@ -76,6 +76,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("puppetserver/conf.d/web-routes.conf", "puppet-project"),
         ("bolt-project.yaml", "puppet-project"),
         ("bolt/inventory.yaml", "puppet-project"),
+        ("modules/demo/plans/deploy.yaml", "puppet-project"),
+        ("site-modules/demo/tasks/deploy.json", "puppet-project"),
         ("states/web.sls", "salt"),
         ("flake.nix", "nix"),
         ("policy/main.rego", "opa"),
@@ -579,9 +581,7 @@ def test_project_scan_analyzes_puppet_server_and_environment_policy(tmp_path: Pa
     for source_name, destination in destinations.items():
         target = tmp_path / destination
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            (source_root / source_name).read_text(encoding="utf-8"), encoding="utf-8"
-        )
+        target.write_text((source_root / source_name).read_text(encoding="utf-8"), encoding="utf-8")
 
     payload = scan_project(tmp_path, display_root=".")
 
@@ -632,12 +632,68 @@ def test_project_scan_analyzes_bolt_project_and_inventory(tmp_path: Path) -> Non
     assert "fixture-ssh-password-do-not-leak" not in encoded
 
 
+def test_project_scan_analyzes_bolt_plans_and_task_metadata(tmp_path: Path) -> None:
+    for fixture in ("bolt_content_risky", "bolt_content_review"):
+        source = FIXTURES / fixture / "modules" / "fixture"
+        for kind, name in (("plans", "deploy.yaml"), ("tasks", "deploy.json")):
+            if fixture.endswith("review"):
+                name = "inspect.yaml" if kind == "plans" else "inspect.json"
+            target = tmp_path / "modules" / fixture / kind / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text((source / kind / name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 4
+    assert payload["scanned_file_count"] == 4
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"puppet-project"}
+    assert {item["artifact_type"] for item in payload["files"]} == {
+        "bolt_task_metadata",
+        "bolt_yaml_plan",
+    }
+    plan = next(item for item in payload["files"] if item["path"].endswith("deploy.yaml"))
+    assert plan["step_count"] == 10
+    assert plan["parameter_count"] == 2
+    assert plan["dynamic_count"] == 8
+    task = next(item for item in payload["files"] if item["path"].endswith("deploy.json"))
+    assert task["implementation_count"] == 2
+    assert task["file_count"] == 3
+    assert task["sensitive_parameter_count"] == 0
+    assert payload["total_changes"] == 62
+    assert payload["risk_counts"]["dangerous"] == 30
+    assert payload["risk_counts"]["review"] == 32
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-bolt" not in encoded
+    assert "example.invalid" not in encoded
+    assert "fixture-package" not in encoded
+
+
 def test_root_bolt_inventory_wins_over_generic_ansible_inventory(tmp_path: Path) -> None:
     (tmp_path / "bolt-project.yaml").write_text("name: root_project\n", encoding="utf-8")
     inventory = tmp_path / "inventory.yaml"
     inventory.write_text("targets:\n  - target.example.com\n", encoding="utf-8")
 
     assert identify_project_input(inventory, "inventory.yaml") == "puppet-project"
+
+
+def test_root_bolt_content_uses_project_or_module_context(tmp_path: Path) -> None:
+    plans = tmp_path / "plans"
+    tasks = tmp_path / "tasks"
+    plans.mkdir()
+    tasks.mkdir()
+    plan = plans / "deploy.yaml"
+    task = tasks / "deploy.json"
+    plan.write_text("steps:\n  - message: ok\n", encoding="utf-8")
+    task.write_text('{"supports_noop":true}', encoding="utf-8")
+
+    assert identify_project_input(plan, "plans/deploy.yaml") is None
+    assert identify_project_input(task, "tasks/deploy.json") is None
+
+    (tmp_path / "bolt-project.yaml").write_text("name: demo\n", encoding="utf-8")
+    assert identify_project_input(plan, "plans/deploy.yaml") == "puppet-project"
+    assert identify_project_input(task, "tasks/deploy.json") == "puppet-project"
 
 
 def test_project_scan_analyzes_jenkins_jcasc_library_trust(tmp_path: Path) -> None:

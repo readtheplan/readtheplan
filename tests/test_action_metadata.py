@@ -239,6 +239,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/puppet_config_management_risky.pp" in workflow
     assert "tool: puppet-project" in workflow
     assert "input-file: tests/fixtures/Puppetfile.project-risky" in workflow
+    assert (
+        "input-file: tests/fixtures/bolt_content_risky/modules/fixture/plans/deploy.yaml"
+        in workflow
+    )
     assert "input-file: tests/fixtures/puppet_server_policy_risky/auth.conf" in workflow
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow

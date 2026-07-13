@@ -10,6 +10,16 @@ import yaml
 
 from readtheplan.adapters._puppet_hocon import PuppetHoconError, parse_puppet_hocon
 from readtheplan.adapters.base import BaseAdapter
+from readtheplan.adapters.bolt_content import (
+    BoltContentInputError,
+    bolt_content_metadata,
+    bolt_task_metadata_changes,
+    bolt_yaml_plan_changes,
+    is_bolt_task_metadata,
+    is_bolt_yaml_plan,
+    parse_bolt_task_metadata,
+    parse_bolt_yaml_plan,
+)
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.plan import PlanSummary, ResourceChange
 
@@ -553,14 +563,10 @@ def _validate_r10k_git(document: dict[str, Any]) -> None:
                 + ", ".join(sorted(map(str, unknown)))
             )
         if not isinstance(repository.get("remote"), str):
-            raise PuppetProjectInputError(
-                f"r10k git repository {index} requires a string remote"
-            )
+            raise PuppetProjectInputError(f"r10k git repository {index} requires a string remote")
         for key, value in repository.items():
             if key == "ignore_branch_prefixes":
-                if not (
-                    isinstance(value, list) and all(isinstance(item, str) for item in value)
-                ):
+                if not (isinstance(value, list) and all(isinstance(item, str) for item in value)):
                     raise PuppetProjectInputError(
                         f"r10k git repository {index} ignore_branch_prefixes must be a string list"
                     )
@@ -689,9 +695,7 @@ def _validate_bolt_inventory_group(
             and isinstance(group["features"].get("_plugin"), str)
         )
     ):
-        raise PuppetProjectInputError(
-            f"Bolt {address} features must be a list or plugin mapping"
-        )
+        raise PuppetProjectInputError(f"Bolt {address} features must be a list or plugin mapping")
 
     groups = group.get("groups", [])
     if isinstance(groups, dict):
@@ -809,9 +813,7 @@ def _parse_environment_conf(source: str) -> dict[str, Any]:
             raise PuppetProjectInputError("environment.conf must not contain config sections")
         match = _PUPPET_CONFIG_SETTING.fullmatch(cleaned)
         if match is None:
-            raise PuppetProjectInputError(
-                f"invalid environment.conf setting on line {line_number}"
-            )
+            raise PuppetProjectInputError(f"invalid environment.conf setting on line {line_number}")
         name = match.group("name").casefold()
         if name not in _ENVIRONMENT_SETTINGS:
             raise PuppetProjectInputError(
@@ -823,9 +825,7 @@ def _parse_environment_conf(source: str) -> dict[str, Any]:
             )
         value = match.group("value").strip()
         if not value:
-            raise PuppetProjectInputError(
-                f"empty environment.conf setting on line {line_number}"
-            )
+            raise PuppetProjectInputError(f"empty environment.conf setting on line {line_number}")
         settings[name] = {"value": value, "line": line_number}
     if not settings:
         raise PuppetProjectInputError("environment.conf does not contain settings")
@@ -906,20 +906,33 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
     if not source.strip():
         raise PuppetProjectInputError("input is empty")
     basename = Path(filename).name.casefold()
-    if basename in {"r10k.yaml", "r10k.yml"}:
-        parsed = _parse_r10k_yaml(source)
-    elif basename == "environment.conf":
-        parsed = _parse_environment_conf(source)
-    elif basename == "puppetdb.conf":
-        parsed = _parse_puppetdb_conf(source)
-    elif basename in _PUPPET_SERVER_HOCON_FILES:
-        parsed = _parse_puppet_server_hocon(source, _PUPPET_SERVER_HOCON_FILES[basename])
-    elif basename == "bolt-project.yaml":
-        parsed = _parse_bolt_yaml(source, "bolt_project")
-    elif basename in {"inventory.yaml", "inventory.yml"}:
-        parsed = _parse_bolt_yaml(source, "bolt_inventory")
-    else:
-        parsed = _parse_json(source)
+    try:
+        if is_bolt_yaml_plan(filename):
+            parsed = {
+                "artifact_type": "bolt_yaml_plan",
+                "document": parse_bolt_yaml_plan(source),
+            }
+        elif is_bolt_task_metadata(filename):
+            parsed = {
+                "artifact_type": "bolt_task_metadata",
+                "document": parse_bolt_task_metadata(source),
+            }
+        elif basename in {"r10k.yaml", "r10k.yml"}:
+            parsed = _parse_r10k_yaml(source)
+        elif basename == "environment.conf":
+            parsed = _parse_environment_conf(source)
+        elif basename == "puppetdb.conf":
+            parsed = _parse_puppetdb_conf(source)
+        elif basename in _PUPPET_SERVER_HOCON_FILES:
+            parsed = _parse_puppet_server_hocon(source, _PUPPET_SERVER_HOCON_FILES[basename])
+        elif basename == "bolt-project.yaml":
+            parsed = _parse_bolt_yaml(source, "bolt_project")
+        elif basename in {"inventory.yaml", "inventory.yml"}:
+            parsed = _parse_bolt_yaml(source, "bolt_inventory")
+        else:
+            parsed = _parse_json(source)
+    except BoltContentInputError as exc:
+        raise PuppetProjectInputError(str(exc)) from exc
     if parsed is None:
         first = next(
             (
@@ -1540,9 +1553,7 @@ def _puppet_config_changes(document: dict[str, Any]) -> list[dict[str, str]]:
                 continue
 
             if name == "reports" and value.strip():
-                processors = {
-                    item.strip().lower() for item in value.split(",") if item.strip()
-                }
+                processors = {item.strip().lower() for item in value.split(",") if item.strip()}
                 custom = processors - _PUPPET_BUILTIN_REPORTS
                 changes.append(
                     _change(
@@ -1808,9 +1819,9 @@ def _puppet_config_changes(document: dict[str, Any]) -> list[dict[str, str]]:
                 continue
 
             if name in {"tasks", "manage_internal_file_permissions"}:
-                unsafe = (
-                    name == "tasks" and _puppet_config_enabled(value)
-                ) or (name == "manage_internal_file_permissions" and _puppet_config_disabled(value))
+                unsafe = (name == "tasks" and _puppet_config_enabled(value)) or (
+                    name == "manage_internal_file_permissions" and _puppet_config_disabled(value)
+                )
                 if unsafe:
                     changes.append(
                         _change(
@@ -2737,8 +2748,7 @@ def _r10k_operational_changes(document: dict[str, Any]) -> list[dict[str, str]]:
         for _, source in _r10k_sources(document):
             basedir = str(source.get("basedir", ""))
             if basedir and (
-                _r10k_path_contains(basedir, cachedir)
-                or _r10k_path_contains(cachedir, basedir)
+                _r10k_path_contains(basedir, cachedir) or _r10k_path_contains(cachedir, basedir)
             ):
                 risk = "dangerous"
                 reasons.append("The cache and managed environment directory overlap.")
@@ -3222,8 +3232,7 @@ def _server_web_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     protocols = web.get("ssl-protocols", [])
     protocol_values = protocols if isinstance(protocols, list) else [protocols]
     if any(
-        str(item).casefold() in {"sslv3", "tlsv1", "tlsv1.0", "tlsv1.1"}
-        for item in protocol_values
+        str(item).casefold() in {"sslv3", "tlsv1", "tlsv1.0", "tlsv1.1"} for item in protocol_values
     ):
         changes.append(
             _change(
@@ -3438,11 +3447,7 @@ def _server_routes_changes(document: dict[str, Any]) -> list[dict[str, str]]:
         changed = 0
         for key, value in routes.items():
             expected = next(
-                (
-                    route
-                    for marker, route in expected_routes.items()
-                    if marker in key.casefold()
-                ),
+                (route for marker, route in expected_routes.items() if marker in key.casefold()),
                 None,
             )
             if expected is None or value != expected:
@@ -3478,6 +3483,8 @@ class PuppetProjectAdapter(BaseAdapter):
                 "config",
                 "bolt_project",
                 "bolt_inventory",
+                "bolt_task_metadata",
+                "bolt_yaml_plan",
                 "environment",
                 "puppetdb",
                 "r10k",
@@ -3500,6 +3507,8 @@ class PuppetProjectAdapter(BaseAdapter):
             "config": _puppet_config_changes,
             "bolt_project": _bolt_project_changes,
             "bolt_inventory": _bolt_inventory_changes,
+            "bolt_task_metadata": bolt_task_metadata_changes,
+            "bolt_yaml_plan": bolt_yaml_plan_changes,
             "environment": _environment_changes,
             "puppetdb": _puppetdb_changes,
             "r10k": _r10k_changes,
@@ -3585,5 +3594,15 @@ def analyze_puppet_project(data: dict[str, Any], *, catalog=None) -> dict[str, A
         auth = _server_config(data["puppet_project"]["document"], "authorization")
         rules = auth.get("rules", [])
         gate["rule_count"] = len(rules) if isinstance(rules, list) else 0
+    if data["puppet_project"]["artifact_type"] in {
+        "bolt_task_metadata",
+        "bolt_yaml_plan",
+    }:
+        gate.update(
+            bolt_content_metadata(
+                data["puppet_project"]["artifact_type"],
+                data["puppet_project"]["document"],
+            )
+        )
     gate["total_changes"] = len(changes)
     return gate
