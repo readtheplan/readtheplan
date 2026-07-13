@@ -356,6 +356,27 @@ jobs:
           input-file: tests/fixtures/woodpecker_ci_risky.yml
           framework: soc2
 
+      - name: Run action on Concourse
+        uses: ./
+        with:
+          tool: concourse
+          input-file: tests/fixtures/concourse_risky.yml
+          framework: soc2
+
+      - name: Run action on Bamboo Specs
+        uses: ./
+        with:
+          tool: bamboo
+          input-file: tests/fixtures/bamboo_risky.yml
+          framework: soc2
+
+      - name: Run action on TeamCity Kotlin DSL
+        uses: ./
+        with:
+          tool: teamcity
+          input-file: tests/fixtures/teamcity_risky.kts
+          framework: soc2
+
       - name: Run action on Atlantis configuration
         id: atlantis
         uses: ./

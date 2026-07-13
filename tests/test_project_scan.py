@@ -41,6 +41,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
         (".drone.yml", "drone-ci"),
         (".woodpecker.yml", "woodpecker-ci"),
         (".woodpecker/deploy.yaml", "woodpecker-ci"),
+        ("bamboo-specs/bamboo.yml", "bamboo"),
+        (".concourse/pipeline.yml", "concourse"),
+        (".teamcity/settings.kts", "teamcity"),
         ("Chart.yaml", "helm"),
         ("kustomization.yaml", "kustomize"),
         ("helmfile.yaml.gotmpl", "helmfile"),
@@ -78,6 +81,15 @@ def test_content_detection_for_kubernetes_ansible_and_terraform(tmp_path: Path) 
     assert identify_project_input(kubernetes, kubernetes.name) == "kubernetes"
     assert identify_project_input(ansible, ansible.name) == "ansible"
     assert identify_project_input(terraform, terraform.name) == "terraform"
+
+
+def test_content_detection_for_concourse_pipeline(tmp_path: Path) -> None:
+    pipeline = tmp_path / "pipeline.yml"
+    pipeline.write_text(
+        "jobs:\n  - name: build\n    plan:\n      - task: test\n        file: ci/test.yml\n",
+        encoding="utf-8",
+    )
+    assert identify_project_input(pipeline, pipeline.name) == "concourse"
 
 
 def test_large_terraform_plan_is_detected_from_a_bounded_prefix(tmp_path: Path) -> None:
@@ -206,6 +218,34 @@ def test_project_scan_analyzes_travis_drone_and_woodpecker(tmp_path: Path) -> No
     encoded = json.dumps(payload)
     assert "literal-example-token" not in encoded
     assert "literal-job-token" not in encoded
+
+
+def test_project_scan_analyzes_concourse_bamboo_and_teamcity(tmp_path: Path) -> None:
+    destinations = {
+        ".concourse/pipeline.yml": "concourse_risky.yml",
+        "bamboo-specs/bamboo.yml": "bamboo_risky.yml",
+        ".teamcity/settings.kts": "teamcity_risky.kts",
+    }
+    for destination, fixture in destinations.items():
+        target = tmp_path / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 3
+    assert payload["scanned_file_count"] == 3
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {
+        "concourse",
+        "bamboo",
+        "teamcity",
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "literal-concourse-token" not in encoded
+    assert "literal-bamboo-token" not in encoded
+    assert "literal-teamcity-token" not in encoded
 
 
 def test_malformed_discovered_input_becomes_redacted_validation_error(tmp_path: Path) -> None:

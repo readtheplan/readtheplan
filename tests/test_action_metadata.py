@@ -22,10 +22,10 @@ def test_action_uses_json_cli_contract() -> None:
     assert "tool:" in action
     assert (
         "scan|terraform-config|terraform-lock|terraform-state|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|"
-        "ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|"
+        "ansible|ansible-project|jenkins|jenkins-jcasc|teamcity|chef|chef-project|"
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
-        "travis-ci|drone-ci|woodpecker-ci|"
+        "travis-ci|drone-ci|woodpecker-ci|concourse|bamboo|"
         "atlantis|"
         "docker-compose|"
         "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|vagrant|"
@@ -158,6 +158,12 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/drone_ci_risky.yml" in workflow
     assert "tool: woodpecker-ci" in workflow
     assert "input-file: tests/fixtures/woodpecker_ci_risky.yml" in workflow
+    assert "tool: concourse" in workflow
+    assert "input-file: tests/fixtures/concourse_risky.yml" in workflow
+    assert "tool: bamboo" in workflow
+    assert "input-file: tests/fixtures/bamboo_risky.yml" in workflow
+    assert "tool: teamcity" in workflow
+    assert "input-file: tests/fixtures/teamcity_risky.kts" in workflow
     assert "tool: atlantis" in workflow
     assert "input-file: tests/fixtures/atlantis_risky.yaml" in workflow
     assert "tool: envoy" in workflow

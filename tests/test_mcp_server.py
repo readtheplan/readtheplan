@@ -397,6 +397,8 @@ def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
         ("travis-ci", "travis_ci_risky.yml"),
         ("drone-ci", "drone_ci_risky.yml"),
         ("woodpecker-ci", "woodpecker_ci_risky.yml"),
+        ("concourse", "concourse_risky.yml"),
+        ("bamboo", "bamboo_risky.yml"),
     ],
 )
 def test_agent_gate_pipeline_supports_additional_ci_ecosystems(
@@ -613,6 +615,17 @@ def test_agent_gate_configuration_management_supports_cfengine() -> None:
     assert result["adapter"] == "cfengine"
     assert result["artifact_type"] == "augments"
     assert result["decision"] == "block"
+
+
+def test_agent_gate_configuration_management_supports_teamcity() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "teamcity_risky.kts"),
+        "teamcity",
+        "soc2",
+    )
+    assert result["adapter"] == "teamcity"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
 def test_agent_gate_configuration_management_rejects_unknown_ecosystem() -> None:

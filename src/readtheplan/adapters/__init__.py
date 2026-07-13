@@ -40,9 +40,11 @@ from readtheplan.adapters.otel_collector import OTelCollectorAdapter
 from readtheplan.adapters.packer import PackerInspectAdapter
 from readtheplan.adapters.pipelines import (
     AzurePipelinesAdapter,
+    BambooAdapter,
     BitbucketPipelinesAdapter,
     BuildkiteAdapter,
     CircleCIAdapter,
+    ConcourseAdapter,
     DroneCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
@@ -61,6 +63,7 @@ from readtheplan.adapters.serverless import SamTemplateAdapter, ServerlessFramew
 from readtheplan.adapters.skaffold import SkaffoldAdapter
 from readtheplan.adapters.spacelift import SpaceliftAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
+from readtheplan.adapters.teamcity import TeamCityAdapter
 from readtheplan.adapters.terraform_config import TerraformConfigAdapter, TerragruntAdapter
 from readtheplan.adapters.terraform_lock import TerraformLockAdapter
 from readtheplan.adapters.terraform_state import TerraformStateAdapter
@@ -171,6 +174,9 @@ register_adapter(CircleCIAdapter())
 register_adapter(TravisCIAdapter())
 register_adapter(DroneCIAdapter())
 register_adapter(WoodpeckerCIAdapter())
+register_adapter(ConcourseAdapter())
+register_adapter(BambooAdapter())
+register_adapter(TeamCityAdapter())
 register_adapter(DockerComposeAdapter())
 register_adapter(NomadPlanAdapter())
 register_adapter(PackerInspectAdapter())
@@ -200,6 +206,7 @@ __all__ = [
     "BaseAdapter",
     "AzureWhatIfAdapter",
     "AzurePipelinesAdapter",
+    "BambooAdapter",
     "BicepAdapter",
     "BitbucketPipelinesAdapter",
     "BuildkiteAdapter",
@@ -210,6 +217,7 @@ __all__ = [
     "ChefProjectAdapter",
     "CFEngineAdapter",
     "CircleCIAdapter",
+    "ConcourseAdapter",
     "CloudFormationAdapter",
     "CrossplaneAdapter",
     "CueAdapter",
@@ -259,6 +267,7 @@ __all__ = [
     "TerraformStateAdapter",
     "TerramateAdapter",
     "TiltfileAdapter",
+    "TeamCityAdapter",
     "TerragruntAdapter",
     "TraefikAdapter",
     "TravisCIAdapter",

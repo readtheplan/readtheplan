@@ -52,10 +52,11 @@ def parse_pipeline_yaml(source: str, ecosystem: str) -> dict[str, Any]:
         list("tTfF"),
     )
     try:
-        if ecosystem == "drone-ci":
+        if ecosystem in {"drone-ci", "bamboo"}:
             documents = list(yaml.load_all(source, Loader=WorkflowLoader))
             if not documents or any(not isinstance(document, dict) for document in documents):
-                raise PipelineInputError("Drone pipeline YAML documents must be objects")
+                label = "Drone pipeline" if ecosystem == "drone-ci" else "Bamboo Specs"
+                raise PipelineInputError(f"{label} YAML documents must be objects")
             parsed: Any = {"documents": documents}
         else:
             parsed = yaml.load(source, Loader=WorkflowLoader)
@@ -66,11 +67,13 @@ def parse_pipeline_yaml(source: str, ecosystem: str) -> dict[str, Any]:
 
     wrappers = {
         "azure-pipelines": "azure_pipelines",
+        "bamboo": "bamboo",
         "bitbucket-pipelines": "bitbucket_pipelines",
         "buildkite": "buildkite",
         "github-actions": "github_actions",
         "gitlab-ci": "gitlab_ci",
         "circleci": "circleci",
+        "concourse": "concourse",
         "drone-ci": "drone_ci",
         "travis-ci": "travis_ci",
         "woodpecker-ci": "woodpecker_ci",
@@ -2165,6 +2168,486 @@ class WoodpeckerCIAdapter(_ContainerPipelineAdapter):
         return "woodpecker-ci"
 
 
+class ConcourseAdapter(_PipelineAdapter):
+    wrapper_key = "concourse"
+    tool_name = "Concourse CI"
+
+    @property
+    def adapter_name(self) -> str:
+        return "concourse"
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        pipeline = input_data[self.wrapper_key]
+        changes: list[dict[str, Any]] = []
+        self._resources(pipeline.get("resource_types"), "resource_types", changes, custom=True)
+        self._resources(pipeline.get("resources"), "resources", changes, custom=False)
+        var_sources = pipeline.get("var_sources")
+        if isinstance(var_sources, list):
+            for index, source in enumerate(var_sources):
+                changes.append(
+                    _change(
+                        f"var_sources[{index}]",
+                        "var_source",
+                        "dangerous",
+                        "Concourse variable source connects the pipeline to a credential store; "
+                        "verify authentication, TLS, paths, and pipeline/team scope.",
+                    )
+                )
+        jobs = pipeline.get("jobs")
+        if isinstance(jobs, list):
+            for index, job in enumerate(jobs):
+                address = f"jobs[{index}]"
+                if not isinstance(job, dict):
+                    changes.append(
+                        _change(address, "unresolved", "review", "Concourse job is malformed.")
+                    )
+                    continue
+                if job.get("public") is True:
+                    changes.append(
+                        _change(
+                            f"{address}.public",
+                            "public_job",
+                            "dangerous",
+                            "Public Concourse job exposes build output and resource metadata.",
+                        )
+                    )
+                for key in ("serial", "serial_groups", "max_in_flight", "interruptible"):
+                    if job.get(key) is not None:
+                        changes.append(
+                            _change(
+                                f"{address}.{key}",
+                                "scheduling",
+                                "review",
+                                "Concourse scheduling changes concurrency and interruption "
+                                "behavior.",
+                            )
+                        )
+                self._steps(job.get("plan"), f"{address}.plan", changes)
+                for hook in ("on_success", "on_failure", "on_abort", "ensure"):
+                    if job.get(hook) is not None:
+                        self._steps([job[hook]], f"{address}.{hook}", changes)
+        if not changes:
+            changes.append(
+                _change(
+                    "pipeline",
+                    "unresolved",
+                    "review",
+                    "Concourse pipeline has no statically analyzable jobs or resources.",
+                )
+            )
+        changes.append(
+            _change(
+                "pipeline.effective_configuration",
+                "effective_configuration",
+                "review",
+                "Concourse execution also depends on teams, credential managers, workers, "
+                "resource implementations, and variables supplied by fly or parent pipelines.",
+            )
+        )
+        return changes
+
+    def _resources(
+        self,
+        value: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        *,
+        custom: bool,
+    ) -> None:
+        if not isinstance(value, list):
+            return
+        for index, resource in enumerate(value):
+            item_address = f"{address}[{index}]"
+            if not isinstance(resource, dict):
+                changes.append(
+                    _change(item_address, "unresolved", "review", "Resource is malformed.")
+                )
+                continue
+            kind = "resource_type" if custom else "resource"
+            changes.append(
+                _change(
+                    item_address,
+                    kind,
+                    "dangerous" if custom else "review",
+                    "Custom Concourse resource types execute external container code."
+                    if custom
+                    else "Concourse resource reads or writes an external system; review source, "
+                    "resource implementation, credentials, and version constraints.",
+                )
+            )
+            if resource.get("public") is True:
+                changes.append(
+                    _change(
+                        f"{item_address}.public",
+                        "public_resource",
+                        "dangerous",
+                        "Public resource exposes version metadata outside the pipeline team.",
+                    )
+                )
+            source = resource.get("source")
+            if source is not None and _pipeline_contains_sensitive_input(source):
+                changes.append(
+                    _change(
+                        f"{item_address}.source",
+                        "secret_input",
+                        "dangerous",
+                        "Concourse resource source receives credentials; use scoped dynamic vars "
+                        "and verify that resource logs cannot disclose them.",
+                    )
+                )
+
+    def _steps(self, value: Any, address: str, changes: list[dict[str, Any]]) -> None:
+        steps = value if isinstance(value, list) else [value] if value is not None else []
+        for index, step in enumerate(steps):
+            step_address = f"{address}[{index}]"
+            if not isinstance(step, dict):
+                changes.append(
+                    _change(step_address, "unresolved", "review", "Concourse step is malformed.")
+                )
+                continue
+            if "task" in step:
+                changes.append(
+                    _change(
+                        step_address,
+                        "task",
+                        "dangerous",
+                        "Concourse task executes arbitrary code in a worker container.",
+                    )
+                )
+                if step.get("privileged") is True:
+                    changes.append(
+                        _change(
+                            f"{step_address}.privileged",
+                            "privileged",
+                            "dangerous",
+                            "Privileged Concourse task escapes the worker user namespace and can "
+                            "gain host-level capabilities.",
+                        )
+                    )
+                config = step.get("config")
+                if isinstance(config, dict):
+                    self._task_config(config, f"{step_address}.config", changes)
+                if step.get("file") is not None:
+                    changes.append(
+                        _change(
+                            f"{step_address}.file",
+                            "external_task",
+                            "review",
+                            "External Concourse task configuration is not expanded; review the "
+                            "selected artifact and pull-request trust boundary.",
+                        )
+                    )
+            if "put" in step:
+                changes.append(
+                    _change(
+                        step_address,
+                        "put",
+                        "dangerous",
+                        "Concourse put step mutates an external resource or publishes artifacts.",
+                    )
+                )
+            if "set_pipeline" in step:
+                changes.append(
+                    _change(
+                        step_address,
+                        "set_pipeline",
+                        "dangerous",
+                        "Concourse set_pipeline step can create or replace pipeline configuration.",
+                    )
+                )
+            if "load_var" in step:
+                changes.append(
+                    _change(
+                        step_address,
+                        "load_var",
+                        "dangerous",
+                        "Concourse load_var imports file content into runtime interpolation; "
+                        "verify source trust and disclosure paths.",
+                    )
+                )
+            if "get" in step:
+                changes.append(
+                    _change(
+                        step_address,
+                        "get",
+                        "review",
+                        "Concourse get step imports external artifacts into the build.",
+                    )
+                )
+            if "try" in step:
+                changes.append(
+                    _change(
+                        f"{step_address}.try",
+                        "soft_fail",
+                        "dangerous",
+                        "Concourse try modifier ignores failure and can bypass a security gate.",
+                    )
+                )
+                self._steps([step["try"]], f"{step_address}.try.steps", changes)
+            for key in ("params", "vars", "instance_vars"):
+                if step.get(key) is not None and _pipeline_contains_sensitive_input(step[key]):
+                    changes.append(
+                        _change(
+                            f"{step_address}.{key}",
+                            "secret_input",
+                            "dangerous",
+                            "Concourse step receives credential-like input; verify dynamic-var "
+                            "resolution, scope, and log redaction.",
+                        )
+                    )
+            for key in ("in_parallel", "do", "across"):
+                nested = step.get(key)
+                if nested is None:
+                    continue
+                changes.append(
+                    _change(
+                        f"{step_address}.{key}",
+                        "orchestration",
+                        "review",
+                        "Concourse orchestration changes fan-out, ordering, and concurrency.",
+                    )
+                )
+                if key == "in_parallel" and isinstance(nested, dict):
+                    nested = nested.get("steps")
+                if key != "across":
+                    self._steps(nested, f"{step_address}.{key}.steps", changes)
+            for key in ("timeout", "attempts", "tags"):
+                if step.get(key) is not None:
+                    changes.append(
+                        _change(
+                            f"{step_address}.{key}",
+                            "execution_policy",
+                            "review",
+                            "Concourse modifier changes retries, duration, or worker selection.",
+                        )
+                    )
+            for hook in ("on_success", "on_failure", "on_abort", "ensure"):
+                if step.get(hook) is not None:
+                    self._steps([step[hook]], f"{step_address}.{hook}", changes)
+
+    def _task_config(
+        self, config: dict[str, Any], address: str, changes: list[dict[str, Any]]
+    ) -> None:
+        image = config.get("image_resource")
+        if image is not None:
+            source = image.get("source", {}) if isinstance(image, dict) else {}
+            pinned = isinstance(source, dict) and (
+                bool(source.get("digest"))
+                or "@sha256:" in str(source.get("repository", "")).lower()
+            )
+            changes.append(
+                _change(
+                    f"{address}.image_resource",
+                    "image",
+                    "review" if pinned else "dangerous",
+                    "Concourse task image executes build code; pin a trusted digest and verify "
+                    "the resource type and registry credentials.",
+                )
+            )
+        if config.get("run") is not None:
+            changes.append(
+                _change(
+                    f"{address}.run",
+                    "command",
+                    "dangerous",
+                    "Concourse task run configuration executes arbitrary commands.",
+                )
+            )
+        if config.get("params") is not None and _pipeline_contains_sensitive_input(
+            config["params"]
+        ):
+            changes.append(
+                _change(
+                    f"{address}.params",
+                    "secret_input",
+                    "dangerous",
+                    "Concourse task parameters contain credential-like values or references.",
+                )
+            )
+
+
+class BambooAdapter(_PipelineAdapter):
+    wrapper_key = "bamboo"
+    tool_name = "Bamboo Specs"
+    _RESERVED = {
+        "version",
+        "plan",
+        "deployment",
+        "plan-permissions",
+        "deployment-permissions",
+        "stages",
+        "branches",
+        "triggers",
+        "notifications",
+        "variables",
+        "repositories",
+        "release-naming",
+        "environments",
+        "docker",
+        "other",
+    }
+
+    @property
+    def adapter_name(self) -> str:
+        return "bamboo"
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        wrapped = input_data[self.wrapper_key]
+        documents = wrapped.get("documents") if isinstance(wrapped, dict) else None
+        documents = documents if isinstance(documents, list) else [wrapped]
+        changes: list[dict[str, Any]] = []
+        for index, document in enumerate(documents):
+            address = f"documents[{index}]" if len(documents) > 1 else "spec"
+            if not isinstance(document, dict):
+                continue
+            self._document(document, address, changes)
+        if not changes:
+            changes.append(
+                _change(
+                    "spec",
+                    "unresolved",
+                    "review",
+                    "Bamboo Specs document has no statically analyzable plan or deployment.",
+                )
+            )
+        return changes
+
+    def _document(
+        self, document: dict[str, Any], address: str, changes: list[dict[str, Any]]
+    ) -> None:
+        for key in ("plan", "deployment"):
+            if document.get(key) is not None:
+                changes.append(
+                    _change(
+                        f"{address}.{key}",
+                        key,
+                        "dangerous" if key == "deployment" else "review",
+                        "Bamboo deployment can mutate target environments."
+                        if key == "deployment"
+                        else "Bamboo plan defines executable build configuration.",
+                    )
+                )
+        for key in ("plan-permissions", "deployment-permissions"):
+            if document.get(key) is not None:
+                changes.append(
+                    _change(
+                        f"{address}.{key}",
+                        "permissions",
+                        "dangerous",
+                        "Bamboo Specs changes who can view, edit, build, or deploy this entity.",
+                    )
+                )
+        for key in ("triggers", "branches", "notifications", "release-naming"):
+            if document.get(key) is not None:
+                changes.append(
+                    _change(
+                        f"{address}.{key}",
+                        "trigger" if key == "triggers" else key.replace("-", "_"),
+                        "review",
+                        "Bamboo automation changes execution, release, or notification policy.",
+                    )
+                )
+        for key in ("variables", "repositories"):
+            if document.get(key) is not None:
+                sensitive = _pipeline_contains_sensitive_input(document[key])
+                changes.append(
+                    _change(
+                        f"{address}.{key}",
+                        "secret_input" if sensitive else key,
+                        "dangerous" if sensitive else "review",
+                        "Bamboo configuration crosses a repository or credential boundary; "
+                        "verify linked-repository permissions and encrypted variables.",
+                    )
+                )
+        if document.get("docker") is not None:
+            changes.append(
+                _change(
+                    f"{address}.docker",
+                    "container",
+                    "dangerous",
+                    "Bamboo Docker runner changes the build image, mounts, and host access.",
+                )
+            )
+        environments = document.get("environments")
+        environment_names = (
+            {str(name) for name in environments} if isinstance(environments, list) else set()
+        )
+        for key, value in document.items():
+            if key in self._RESERVED or key in environment_names or not isinstance(value, dict):
+                continue
+            self._job(value, f"{address}.{key}", changes)
+        if isinstance(environments, list):
+            for name in environments:
+                config = document.get(str(name))
+                if isinstance(config, dict):
+                    self._job(config, f"{address}.environment.{name}", changes)
+        changes.append(
+            _change(
+                f"{address}.effective_configuration",
+                "effective_configuration",
+                "review",
+                "Bamboo execution also depends on linked repositories, agent capabilities, "
+                "global variables, project permissions, and server-side plugins.",
+            )
+        )
+
+    def _job(
+        self, job: dict[str, Any], address: str, changes: list[dict[str, Any]]
+    ) -> None:
+        for key in ("tasks", "final-tasks"):
+            tasks = job.get(key)
+            if not isinstance(tasks, list):
+                continue
+            for index, task in enumerate(tasks):
+                task_address = f"{address}.{key}[{index}]"
+                if isinstance(task, str):
+                    task_name = task
+                elif isinstance(task, dict) and task:
+                    task_name = str(next(iter(task)))
+                else:
+                    task_name = "unresolved"
+                safe = task_name == "test-parser"
+                risk = (
+                    "safe"
+                    if safe
+                    else "review"
+                    if task_name == "artifact-download"
+                    else "dangerous"
+                )
+                changes.append(
+                    _change(
+                        task_address,
+                        "task",
+                        risk,
+                        "Bamboo task records or retrieves build output without executing commands."
+                        if safe
+                        else f"Bamboo task '{task_name}' can execute code or mutate external "
+                        "state.",
+                    )
+                )
+                if _pipeline_contains_sensitive_input(task):
+                    changes.append(
+                        _change(
+                            f"{task_address}.secrets",
+                            "secret_input",
+                            "dangerous",
+                            "Bamboo task receives credential-like values; use encrypted or "
+                            "server-managed variables and verify log redaction.",
+                        )
+                    )
+        for key in ("artifacts", "requirements", "clean-working-dir", "docker"):
+            if job.get(key) is not None:
+                changes.append(
+                    _change(
+                        f"{address}.{key}",
+                        key.replace("-", "_"),
+                        "dangerous" if key in {"clean-working-dir", "docker"} else "review",
+                        "Bamboo job setting changes agents, persistence, cleanup, or artifact "
+                        "flow.",
+                    )
+                )
+
+
 def analyze_pipeline(
     adapter: _PipelineAdapter, data: dict[str, Any], *, catalog=None
 ) -> dict[str, Any]:
@@ -2214,3 +2697,11 @@ def analyze_drone_ci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
 
 def analyze_woodpecker_ci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
     return analyze_pipeline(WoodpeckerCIAdapter(), data, catalog=catalog)
+
+
+def analyze_concourse(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(ConcourseAdapter(), data, catalog=catalog)
+
+
+def analyze_bamboo(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(BambooAdapter(), data, catalog=catalog)

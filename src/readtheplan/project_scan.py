@@ -78,6 +78,10 @@ _CONFIG_BASENAME_SOURCE_SUFFIXES = frozenset(
 )
 _KUBERNETES_HINT = re.compile(r"(?ms)^\s*apiVersion\s*:\s*[^\s#]+.*?^\s*kind\s*:\s*[^\s#]+")
 _ANSIBLE_HINT = re.compile(r"(?ms)^\s*-?\s*hosts\s*:.*?^\s*(?:tasks|roles)\s*:")
+_CONCOURSE_HINT = re.compile(
+    r"(?ms)^\s*jobs\s*:\s*\n.*?^\s*-\s*name\s*:.*?^\s*plan\s*:\s*\n"
+    r".*?^\s*-\s*(?:task|get|put|set_pipeline|load_var)\s*:"
+)
 
 
 class ProjectScanError(ValueError):
@@ -211,6 +215,8 @@ def identify_project_input(
         return "ansible"
     if _named_config_variant(name, suffix, "jenkinsfile"):
         return "jenkins"
+    if ".teamcity" in parts and suffix in {".kt", ".kts"}:
+        return "teamcity"
     if name in {"jenkins.yaml", "jenkins.yml"} and any(
         part in {"jenkins", "jcasc", "casc_configs"} for part in parts[:-1]
     ):
@@ -273,6 +279,12 @@ def identify_project_input(
         return "bitbucket-pipelines"
     if ".buildkite" in parts and name in {"pipeline.yml", "pipeline.yaml"}:
         return "buildkite"
+    if lowered in {"bamboo-specs/bamboo.yml", "bamboo-specs/bamboo.yaml"}:
+        return "bamboo"
+    if name in {".concourse.yml", ".concourse.yaml", "concourse.yml", "concourse.yaml"} or (
+        ".concourse" in parts and suffix in _YAML_SUFFIXES
+    ):
+        return "concourse"
     if name in {"atlantis.yaml", "atlantis.yml"} or (
         name in {"repos.yaml", "repos.yml"}
         and any(part in {".atlantis", "atlantis"} for part in parts[:-1])
@@ -392,6 +404,8 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
             return "kubernetes"
         if _ANSIBLE_HINT.search(text):
             return "ansible"
+        if _CONCOURSE_HINT.search(text):
+            return "concourse"
         return None
     try:
         document = json.loads(text)

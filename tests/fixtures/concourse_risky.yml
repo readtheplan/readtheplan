@@ -1,0 +1,51 @@
+resource_types:
+  - name: custom-resource
+    type: registry-image
+    source:
+      repository: example/custom-resource
+      tag: latest
+resources:
+  - name: source
+    type: git
+    public: true
+    source:
+      uri: git@example.test:platform/repo.git
+      private_key: ((git-private-key))
+  - name: production
+    type: registry-image
+    source:
+      repository: example/production
+var_sources:
+  - name: vault
+    type: vault
+    config:
+      url: https://vault.example.test
+jobs:
+  - name: deploy
+    public: true
+    serial: true
+    plan:
+      - get: source
+        trigger: true
+      - task: build
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: docker
+              tag: latest
+          params:
+            API_TOKEN: literal-concourse-token
+          run:
+            path: sh
+            args: [-c, docker build -t example/app .]
+      - put: production
+      - set_pipeline: child
+        file: source/ci/child.yml
+      - load_var: release
+        file: source/release.txt
+      - try:
+          task: optional-policy
+          file: source/ci/policy.yml

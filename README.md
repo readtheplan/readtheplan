@@ -111,6 +111,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | HashiCorp Sentinel | `readtheplan sentinel policy.sentinel` | Policy imports, HTTP/runtime/Terraform data, fail-open main rules, parameters and secrets; CLI policy/module sources, enforcement levels, executable plugins, mocks, test assertions, and runtime boundaries without execution |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
 | Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |
+| TeamCity | `readtheplan teamcity .teamcity/settings.kts` | Kotlin DSL commands, credentials, VCS roots, triggers, dependencies, agents, integrations, cleanup, images, artifacts, and settings-generation code |
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
 | Chef project | `readtheplan chef-project Policyfile.rb` | Policyfiles, resolved locks, cookbook metadata, run lists, source provenance, immutable revisions, attributes, gems, compatibility, privacy, and Ruby boundaries |
 | Puppet | `readtheplan puppet site.pp` | Built-in/custom resources, state, identities, classes, lookups/templates, virtual/exported resources, collectors, refresh relationships, and sources/permissions |
@@ -124,6 +125,8 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Travis CI | `readtheplan travis-ci .travis.yml` | Imports, elevated workers, services, command phases, deployments, secrets, caches, conditions, and matrix failure policy |
 | Drone CI | `readtheplan drone-ci .drone.yml` | Multi-document pipelines, runner selection, images, commands, host volumes, privileged containers, secrets, services, and failure policy |
 | Woodpecker CI | `readtheplan woodpecker-ci .woodpecker.yml` | Workflows, runner selection, images/plugins, commands, host volumes, privileges, secrets, services, and dependencies |
+| Concourse CI | `readtheplan concourse pipeline.yml` | Resources/types, variable sources, tasks, privileged execution, images, mutations, child pipelines, runtime variables, hooks, and soft failures |
+| Bamboo Specs | `readtheplan bamboo bamboo-specs/bamboo.yml` | Multi-document plans/deployments, permissions, repositories, variables, triggers, jobs/tasks, agents, Docker, artifacts, and cleanup |
 | Atlantis | `readtheplan atlantis atlantis.yaml` | Repo/server configuration, mutation requirements, custom workflows, hooks, override permissions, locks, autoplan, policy checks, and execution ordering |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |

@@ -8,9 +8,11 @@ import pytest
 from readtheplan.adapters import detect_adapter
 from readtheplan.adapters.pipelines import (
     AzurePipelinesAdapter,
+    BambooAdapter,
     BitbucketPipelinesAdapter,
     BuildkiteAdapter,
     CircleCIAdapter,
+    ConcourseAdapter,
     DroneCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
@@ -453,6 +455,87 @@ steps:
     assert by_type[f"{prefix}_volume"] == "review"
 
 
+def test_concourse_flags_resources_privilege_mutation_and_soft_failures() -> None:
+    source = (Path(__file__).parent / "fixtures" / "concourse_risky.yml").read_text(
+        encoding="utf-8"
+    )
+    data = parse_pipeline_yaml(source, "concourse")
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, ConcourseAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    kinds = {change.resource_type: change.risk for change in changes}
+
+    assert kinds["concourse_resource_type"] == "dangerous"
+    assert kinds["concourse_public_resource"] == "dangerous"
+    assert kinds["concourse_var_source"] == "dangerous"
+    assert kinds["concourse_public_job"] == "dangerous"
+    assert kinds["concourse_task"] == "dangerous"
+    assert kinds["concourse_privileged"] == "dangerous"
+    assert kinds["concourse_image"] == "dangerous"
+    assert kinds["concourse_command"] == "dangerous"
+    assert kinds["concourse_put"] == "dangerous"
+    assert kinds["concourse_set_pipeline"] == "dangerous"
+    assert kinds["concourse_load_var"] == "dangerous"
+    assert kinds["concourse_soft_fail"] == "dangerous"
+    assert sum(change.resource_type == "concourse_task" for change in changes) == 2
+    assert sum(change.resource_type == "concourse_external_task" for change in changes) == 1
+    payload = analyze_pipeline(adapter, data)
+    assert "literal-concourse-token" not in json.dumps(payload)
+
+
+def test_bamboo_supports_multi_document_plan_deployment_and_permissions() -> None:
+    source = (Path(__file__).parent / "fixtures" / "bamboo_risky.yml").read_text(
+        encoding="utf-8"
+    )
+    data = parse_pipeline_yaml(source, "bamboo")
+    assert len(data["bamboo"]["documents"]) == 3
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, BambooAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+
+    assert by_type["bamboo_plan"] == ["review"]
+    assert by_type["bamboo_deployment"] == ["dangerous"]
+    assert by_type["bamboo_permissions"] == ["dangerous"]
+    assert len(by_type["bamboo_secret_input"]) == 3
+    assert set(by_type["bamboo_secret_input"]) == {"dangerous"}
+    assert "dangerous" in by_type["bamboo_task"]
+    assert "safe" in by_type["bamboo_task"]
+    assert by_type["bamboo_clean_working_dir"] == ["dangerous"]
+    assert by_type["bamboo_docker"] == ["dangerous"]
+    payload = analyze_pipeline(adapter, data)
+    assert "literal-bamboo-token" not in json.dumps(payload)
+
+
+def test_bamboo_rejects_non_object_yaml_documents() -> None:
+    with pytest.raises(PipelineInputError, match="Bamboo Specs YAML documents"):
+        parse_pipeline_yaml("version: 2\nplan: {}\n---\n- invalid\n", "bamboo")
+
+
+def test_concourse_digest_pinned_task_image_is_review() -> None:
+    source = """
+jobs:
+  - name: test
+    plan:
+      - task: test
+        config:
+          image_resource:
+            type: registry-image
+            source:
+              repository: alpine
+              digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          run: {path: echo, args: [test]}
+"""
+    data = parse_pipeline_yaml(source, "concourse")
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, ConcourseAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    image = next(change for change in changes if change.resource_type == "concourse_image")
+    assert image.risk == "review"
+
+
 @pytest.mark.parametrize(
     ("tool", "source", "expected_code", "expected_adapter"),
     [
@@ -505,6 +588,20 @@ steps:
             "steps:\n  - name: deploy\n    image: alpine\n    commands: [./deploy.sh]\n",
             2,
             "woodpecker-ci",
+        ),
+        (
+            "concourse",
+            "jobs:\n  - name: deploy\n    plan:\n      - task: deploy\n"
+            "        config:\n          run: {path: ./deploy.sh}\n",
+            2,
+            "concourse",
+        ),
+        (
+            "bamboo",
+            "version: 2\nplan: {project-key: TEST, key: BUILD, name: Build}\n"
+            "Build job:\n  tasks:\n    - script: [./build.sh]\n",
+            2,
+            "bamboo",
         ),
     ],
 )
