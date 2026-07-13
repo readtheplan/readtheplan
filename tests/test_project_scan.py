@@ -33,6 +33,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("ansible/collections/requirements.yml", "ansible-project"),
         ("execution-environment.yml", "ansible-project"),
         ("ansible-navigator.yml", "ansible-project"),
+        ("controller-export.json", "ansible-project"),
+        ("awx/resources.yml", "ansible-project"),
         (".ansible-navigator.json", "ansible-project"),
         ("molecule/default/molecule.yml", "ansible-project"),
         (".config/molecule/config.yml", "ansible-project"),
@@ -783,6 +785,29 @@ def test_project_scan_analyzes_test_kitchen_configuration(tmp_path: Path) -> Non
     encoded = json.dumps(payload)
     assert "fixture-cloud-secret-do-not-leak" not in encoded
     assert "fixture-local-command-do-not-run" not in encoded
+    assert "example.invalid" not in encoded
+
+
+def test_project_scan_analyzes_automation_controller_export(tmp_path: Path) -> None:
+    fixture = FIXTURES / "ansible_controller_export_risky.json"
+    target = tmp_path / "controller-export.json"
+    target.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    result = payload["files"][0]
+    assert result["tool"] == "ansible-project"
+    assert result["artifact_type"] == "controller_export"
+    assert result["asset_count"] == 12
+    assert result["asset_type_count"] == 12
+    assert payload["total_changes"] == 41
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-controller-password-do-not-leak" not in encoded
+    assert "fixture-deploy" not in encoded
     assert "example.invalid" not in encoded
 
 

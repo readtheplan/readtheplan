@@ -221,6 +221,7 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/ansible_project_risky.cfg" in workflow
     assert "input-file: tests/fixtures/ansible_inventory_plugin_risky.aws_ec2.yml" in workflow
     assert "input-file: tests/fixtures/ansible_content_policy_risky/.ansible-lint" in workflow
+    assert "input-file: tests/fixtures/ansible_controller_export_risky.json" in workflow
     assert "input-file: tests/fixtures/Jenkinsfile.config-management-risky" in workflow
     assert "tool: jenkins-jcasc" in workflow
     assert "input-file: tests/fixtures/jenkins_jcasc_risky.yml" in workflow
