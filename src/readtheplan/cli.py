@@ -428,7 +428,11 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     )
     puppet_project.add_argument("--framework", help="Include checks from a compliance framework.")
     puppet_project.add_argument(
-        "input_file", help="Path to Puppetfile, metadata.json, hiera.yaml, or puppet.conf."
+        "input_file",
+        help=(
+            "Path to Puppetfile, metadata.json, hiera.yaml, puppet.conf, bolt-project.yaml, "
+            "or Bolt inventory.yaml."
+        ),
     )
     puppet_project.set_defaults(func=_puppet_project_gate)
 

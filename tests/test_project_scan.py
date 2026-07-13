@@ -41,6 +41,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("chef/client.d/security.rb", "chef-project"),
         ("manifests/site.pp", "puppet"),
         ("puppet/puppet.conf", "puppet-project"),
+        ("bolt-project.yaml", "puppet-project"),
+        ("bolt/inventory.yaml", "puppet-project"),
         ("states/web.sls", "salt"),
         ("flake.nix", "nix"),
         ("policy/main.rego", "opa"),
@@ -439,6 +441,42 @@ def test_project_scan_analyzes_puppet_runtime_configuration(tmp_path: Path) -> N
     encoded = json.dumps(payload)
     assert "fixture-puppet-proxy-password-do-not-leak" not in encoded
     assert "fixture-puppet-header-token-do-not-leak" not in encoded
+
+
+def test_project_scan_analyzes_bolt_project_and_inventory(tmp_path: Path) -> None:
+    bolt_directory = tmp_path / "bolt"
+    bolt_directory.mkdir()
+    (bolt_directory / "bolt-project.yaml").write_text(
+        (FIXTURES / "bolt_project" / "bolt-project.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (bolt_directory / "inventory.yaml").write_text(
+        (FIXTURES / "bolt_inventory" / "inventory.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 2
+    assert payload["scanned_file_count"] == 2
+    assert payload["error_count"] == 0
+    assert {item["path"] for item in payload["files"]} == {
+        "bolt/bolt-project.yaml",
+        "bolt/inventory.yaml",
+    }
+    assert {item["adapter"] for item in payload["files"]} == {"puppet-project"}
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-bolt-token-do-not-leak" not in encoded
+    assert "fixture-ssh-password-do-not-leak" not in encoded
+
+
+def test_root_bolt_inventory_wins_over_generic_ansible_inventory(tmp_path: Path) -> None:
+    (tmp_path / "bolt-project.yaml").write_text("name: root_project\n", encoding="utf-8")
+    inventory = tmp_path / "inventory.yaml"
+    inventory.write_text("targets:\n  - target.example.com\n", encoding="utf-8")
+
+    assert identify_project_input(inventory, "inventory.yaml") == "puppet-project"
 
 
 def test_project_scan_analyzes_jenkins_plugin_catalog(tmp_path: Path) -> None:

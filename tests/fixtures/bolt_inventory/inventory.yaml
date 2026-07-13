@@ -1,0 +1,36 @@
+groups:
+  - name: cloud
+    targets:
+      _plugin: aws_inventory
+      region: us-east-1
+    config:
+      transport: ssh
+      ssh:
+        user: root
+        password: fixture-ssh-password-do-not-leak
+        host-key-check: false
+        private-key:
+          key-data: fixture-private-key-do-not-leak
+        proxyjump: jump.internal.example
+        kex-algorithms:
+          - defaults
+          - diffie-hellman-group1-sha1
+        run-as-command:
+          - sudo
+          - -n
+  - name: windows
+    targets:
+      - uri: winrm://windows.internal.example
+    config:
+      transport: winrm
+      winrm:
+        ssl: false
+        ssl-verify: false
+        cleanup: false
+        password:
+          _plugin: env_var
+          var: BOLT_WINRM_PASSWORD
+targets:
+  - uri: http://api.internal.example
+    config:
+      transport: local

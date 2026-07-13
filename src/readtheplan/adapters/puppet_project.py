@@ -331,6 +331,148 @@ def _parse_hiera(source: str) -> dict[str, Any]:
     return {"artifact_type": "hiera", "document": document}
 
 
+def _parse_bolt_yaml(source: str, artifact_type: str) -> dict[str, Any]:
+    try:
+        documents = list(yaml.load_all(source, Loader=_UniqueKeyLoader))  # noqa: S506
+    except PuppetProjectInputError:
+        raise
+    except yaml.YAMLError as exc:
+        raise PuppetProjectInputError(str(exc)) from exc
+    documents = [document for document in documents if document is not None]
+    if len(documents) != 1 or not isinstance(documents[0], dict):
+        raise PuppetProjectInputError("Bolt input must contain one YAML mapping")
+    document = documents[0]
+    if artifact_type == "bolt_project":
+        for key in (
+            "apply-settings",
+            "future",
+            "log",
+            "module-install",
+            "plugin-cache",
+            "plugin-hooks",
+            "plugins",
+            "puppetdb",
+            "puppetdb-instances",
+        ):
+            if key in document and not isinstance(document[key], dict):
+                raise PuppetProjectInputError(f"Bolt project {key} must be a mapping")
+        for key in ("disable-warnings", "modules", "plans", "policies", "tasks"):
+            if key in document and not isinstance(document[key], list):
+                raise PuppetProjectInputError(f"Bolt project {key} must be a list")
+        if "modulepath" in document and not isinstance(document["modulepath"], (str, list)):
+            raise PuppetProjectInputError("Bolt project modulepath must be a string or list")
+    else:
+        allowed = {"config", "facts", "features", "groups", "targets", "vars", "version"}
+        unknown = set(document) - allowed
+        if unknown:
+            raise PuppetProjectInputError(
+                "unsupported top-level Bolt inventory key(s): "
+                + ", ".join(sorted(map(str, unknown)))
+            )
+        for key in ("config", "facts", "vars"):
+            if key in document and not isinstance(document[key], dict):
+                raise PuppetProjectInputError(f"Bolt inventory {key} must be a mapping")
+        if "features" in document and not (
+            isinstance(document["features"], list)
+            or (
+                isinstance(document["features"], dict)
+                and isinstance(document["features"].get("_plugin"), str)
+            )
+        ):
+            raise PuppetProjectInputError(
+                "Bolt inventory features must be a list or plugin mapping"
+            )
+        for key in ("groups", "targets"):
+            value = document.get(key, [])
+            if not isinstance(value, (list, dict)):
+                raise PuppetProjectInputError(
+                    f"Bolt inventory {key} must be a list or plugin mapping"
+                )
+        _validate_bolt_inventory_group(document, "inventory", require_name=False)
+    return {"artifact_type": artifact_type, "document": document}
+
+
+def _validate_bolt_inventory_group(
+    group: dict[str, Any], address: str, *, require_name: bool
+) -> None:
+    allowed = {"config", "facts", "features", "groups", "name", "targets", "vars"}
+    if not require_name:
+        allowed.add("version")
+    unknown = set(group) - allowed
+    if unknown:
+        raise PuppetProjectInputError(
+            f"unsupported Bolt {address} key(s): " + ", ".join(sorted(map(str, unknown)))
+        )
+    if require_name and not isinstance(group.get("name"), str):
+        raise PuppetProjectInputError(f"Bolt {address} must have a string name")
+    for key in ("config", "facts", "vars"):
+        if key in group and not isinstance(group[key], dict):
+            raise PuppetProjectInputError(f"Bolt {address} {key} must be a mapping")
+    if "features" in group and not (
+        isinstance(group["features"], list)
+        or (
+            isinstance(group["features"], dict)
+            and isinstance(group["features"].get("_plugin"), str)
+        )
+    ):
+        raise PuppetProjectInputError(
+            f"Bolt {address} features must be a list or plugin mapping"
+        )
+
+    groups = group.get("groups", [])
+    if isinstance(groups, dict):
+        if not isinstance(groups.get("_plugin"), str):
+            raise PuppetProjectInputError(f"Bolt {address} groups plugin must name _plugin")
+    elif isinstance(groups, list):
+        for index, child in enumerate(groups):
+            if not isinstance(child, dict):
+                raise PuppetProjectInputError(f"Bolt {address} group {index} must be a mapping")
+            _validate_bolt_inventory_group(child, f"{address} group {index}", require_name=True)
+    else:
+        raise PuppetProjectInputError(f"Bolt {address} groups must be a list or plugin mapping")
+
+    targets = group.get("targets", [])
+    if isinstance(targets, dict):
+        if not isinstance(targets.get("_plugin"), str):
+            raise PuppetProjectInputError(f"Bolt {address} targets plugin must name _plugin")
+    elif isinstance(targets, list):
+        allowed_target = {"alias", "config", "facts", "features", "name", "uri", "vars"}
+        for index, target in enumerate(targets):
+            if isinstance(target, str):
+                continue
+            if not isinstance(target, dict):
+                raise PuppetProjectInputError(
+                    f"Bolt {address} target {index} must be a string or mapping"
+                )
+            unknown_target = set(target) - allowed_target
+            if unknown_target:
+                raise PuppetProjectInputError(
+                    f"unsupported Bolt {address} target {index} key(s): "
+                    + ", ".join(sorted(map(str, unknown_target)))
+                )
+            if not isinstance(target.get("name") or target.get("uri"), str):
+                raise PuppetProjectInputError(
+                    f"Bolt {address} target {index} must have a string name or uri"
+                )
+            for key in ("config", "facts", "vars"):
+                if key in target and not isinstance(target[key], dict):
+                    raise PuppetProjectInputError(
+                        f"Bolt {address} target {index} {key} must be a mapping"
+                    )
+            if "features" in target and not (
+                isinstance(target["features"], list)
+                or (
+                    isinstance(target["features"], dict)
+                    and isinstance(target["features"].get("_plugin"), str)
+                )
+            ):
+                raise PuppetProjectInputError(
+                    f"Bolt {address} target {index} features must be a list or plugin mapping"
+                )
+    else:
+        raise PuppetProjectInputError(f"Bolt {address} targets must be a list or plugin mapping")
+
+
 def _parse_puppet_conf(source: str) -> dict[str, Any]:
     sections: dict[str, dict[str, dict[str, Any]]] = {}
     current_section: str | None = None
@@ -429,10 +571,16 @@ def _validate_hiera_functions(values: dict[str, Any], address: str) -> None:
 
 
 def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
-    """Parse Puppetfile, metadata, Hiera, or puppet.conf without executing code."""
+    """Parse Puppet, Hiera, or Bolt project configuration without executing code."""
     if not source.strip():
         raise PuppetProjectInputError("input is empty")
-    parsed = _parse_json(source)
+    basename = Path(filename).name.casefold()
+    if basename == "bolt-project.yaml":
+        parsed = _parse_bolt_yaml(source, "bolt_project")
+    elif basename in {"inventory.yaml", "inventory.yml"}:
+        parsed = _parse_bolt_yaml(source, "bolt_inventory")
+    else:
+        parsed = _parse_json(source)
     if parsed is None:
         first = next(
             (
@@ -442,7 +590,7 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
             ),
             "",
         )
-        if Path(filename).name.casefold() == "puppet.conf" or first.startswith("["):
+        if basename == "puppet.conf" or first.startswith("["):
             parsed = _parse_puppet_conf(source)
         elif first == "---" or re.match(r"^(?:version|defaults|hierarchy):", first):
             parsed = _parse_hiera(source)
@@ -1338,6 +1486,435 @@ def _puppet_config_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     return changes
 
 
+_BOLT_BUILTIN_PLUGINS = {
+    "aws_inventory",
+    "azure_inventory",
+    "env_var",
+    "gcloud_inventory",
+    "json",
+    "pkcs7",
+    "prompt",
+    "puppetdb",
+    "terraform",
+    "vault",
+    "yaml",
+}
+_BOLT_DYNAMIC_INVENTORY_PLUGINS = {
+    "aws_inventory",
+    "azure_inventory",
+    "gcloud_inventory",
+    "puppetdb",
+    "terraform",
+    "yaml",
+}
+_BOLT_PRIVILEGED_USERS = {"administrator", "root"}
+
+
+def _bolt_address_segment(value: object) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]", "_", str(value))[:80] or "key"
+
+
+def _bolt_walk(value: Any, address: str = "bolt") -> list[tuple[str, str, Any]]:
+    found: list[tuple[str, str, Any]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key)
+            child_address = f"{address}.{_bolt_address_segment(key_text)}"
+            found.append((child_address, key_text.casefold(), child))
+            found.extend(_bolt_walk(child, child_address))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(_bolt_walk(child, f"{address}.{index}"))
+    return found
+
+
+def _bolt_plugin_changes(document: dict[str, Any], *, inventory: bool) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for address, key, value in _bolt_walk(document):
+        if key != "_plugin" or not isinstance(value, str):
+            continue
+        plugin = value.casefold()
+        if (
+            inventory
+            and plugin in _BOLT_DYNAMIC_INVENTORY_PLUGINS
+            and (".targets._plugin" in address or ".groups._plugin" in address)
+        ):
+            risk = "dangerous"
+            kind = "bolt_dynamic_inventory"
+            explanation = (
+                "Bolt executes a reference plugin while loading inventory to determine target "
+                "scope. Review the query, credentials, returned targets, and plugin provenance."
+            )
+        elif plugin in _BOLT_BUILTIN_PLUGINS:
+            risk = "review"
+            kind = "bolt_reference_plugin"
+            explanation = (
+                "Bolt resolves a built-in reference plugin at runtime; verify its external data "
+                "source, secret handling, and effective returned value."
+            )
+        else:
+            risk = "dangerous"
+            kind = "bolt_custom_plugin"
+            explanation = (
+                "Bolt resolves a module-provided or unknown plugin that can execute custom code "
+                "on the controller. Verify the installed module and plugin implementation."
+            )
+        changes.append(_change(address, kind, risk, explanation))
+    return changes
+
+
+def _bolt_literal_secret_changes(document: dict[str, Any], root: str) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for address, key, value in _bolt_walk(document, root):
+        if key == "token" and ".puppetdb" in address:
+            continue
+        if (not _SECRET.search(key) and key != "key-data") or key in {
+            "private-key",
+            "token-file",
+        }:
+            continue
+        if isinstance(value, (str, int, float)):
+            changes.append(
+                _change(
+                    address,
+                    "bolt_literal_credential",
+                    "dangerous",
+                    "Bolt configuration contains literal credential material. Replace it with a "
+                    "secret reference plugin or a protected credential file.",
+                )
+            )
+    return changes
+
+
+def _bolt_module_change(module: Any, index: int) -> dict[str, str]:
+    address = f"bolt_project.modules.{index}"
+    if isinstance(module, str):
+        return _change(
+            address,
+            "bolt_module_dependency",
+            "dangerous",
+            "Bolt installs a module without an exact version requirement, so future resolution "
+            "can change the code executed by tasks and plans.",
+        )
+    if not isinstance(module, dict):
+        return _change(
+            address,
+            "bolt_module_dependency",
+            "dangerous",
+            "Bolt module dependency is not a static string or mapping and cannot be verified.",
+        )
+    source = module.get("git")
+    requirement = module.get("version_requirement")
+    ref = module.get("ref")
+    if isinstance(source, str):
+        source_risk, reasons = _source_risks(source)
+        immutable = isinstance(ref, str) and bool(_COMMIT.fullmatch(ref))
+        risk = "review" if immutable and source_risk == "review" else "dangerous"
+        explanation = "Bolt installs a module from Git. " + " ".join(reasons)
+        explanation += (
+            " The ref is an immutable commit."
+            if immutable
+            else " The ref is absent or mutable; pin a full commit digest."
+        )
+        return _change(address, "bolt_module_dependency", risk, explanation)
+    exact = isinstance(requirement, str) and bool(_EXACT_VERSION.fullmatch(requirement.strip()))
+    return _change(
+        address,
+        "bolt_module_dependency",
+        "review" if exact else "dangerous",
+        "Bolt installs a Forge module with an exact version requirement."
+        if exact
+        else "Bolt installs a Forge module without an exact version requirement.",
+    )
+
+
+def _bolt_project_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes = [
+        _bolt_module_change(module, index)
+        for index, module in enumerate(document.get("modules", []))
+    ]
+    changes.extend(_bolt_plugin_changes(document, inventory=False))
+    changes.extend(_bolt_literal_secret_changes(document, "bolt_project"))
+
+    plugins = document.get("plugins", {})
+    for index, _name in enumerate(plugins):
+        changes.append(
+            _change(
+                f"bolt_project.plugins.{index}",
+                "bolt_configured_plugin",
+                "dangerous",
+                "Bolt configures a plugin supplied by installed executable module content. "
+                "Verify the module provenance, plugin hooks, and configuration schema.",
+            )
+        )
+
+    modulepath = document.get("modulepath", [])
+    paths = [modulepath] if isinstance(modulepath, str) else modulepath
+    for index, path in enumerate(paths):
+        if isinstance(path, str):
+            changes.append(
+                _change(
+                    f"bolt_project.modulepath.{index}",
+                    "bolt_module_path",
+                    "dangerous" if _path_escapes(path) else "review",
+                    "Bolt loads executable task, plan, and plugin content from a module path "
+                    + ("outside the project." if _path_escapes(path) else "inside the project."),
+                )
+            )
+    module_install = document.get("module-install", {})
+    forge = module_install.get("forge", {}) if isinstance(module_install, dict) else {}
+    if isinstance(forge, dict):
+        endpoint = forge.get("baseurl")
+        if isinstance(endpoint, str):
+            changes.append(
+                _change(
+                    "bolt_project.module-install.forge.baseurl",
+                    "bolt_module_endpoint",
+                    "dangerous" if endpoint.casefold().startswith("http://") else "review",
+                    "Bolt downloads modules from a plaintext Forge endpoint."
+                    if endpoint.casefold().startswith("http://")
+                    else "Bolt downloads modules from a configured Forge endpoint.",
+                )
+            )
+    for address, key, value in _bolt_walk(document, "bolt_project"):
+        if key in {"proxy", "server_urls", "service-url"}:
+            urls = value if isinstance(value, list) else [value]
+            if any(isinstance(url, str) and url.casefold().startswith("http://") for url in urls):
+                changes.append(
+                    _change(
+                        address,
+                        "bolt_plaintext_endpoint",
+                        "dangerous",
+                        "Bolt connects to a plaintext HTTP endpoint, exposing metadata or "
+                        "credentials to interception.",
+                    )
+                )
+            if any(isinstance(url, str) and _embedded_credential(url) for url in urls):
+                changes.append(
+                    _change(
+                        address,
+                        "bolt_embedded_credential",
+                        "dangerous",
+                        "Bolt endpoint or proxy URL embeds credentials that can leak through "
+                        "configuration, logs, and process metadata.",
+                    )
+                )
+        if key in {"cacert", "cert", "key", "token"} and ".puppetdb" in address:
+            changes.append(
+                _change(
+                    address,
+                    "bolt_credential_file_boundary",
+                    "review",
+                    "Bolt depends on an external PuppetDB trust or credential file.",
+                )
+            )
+        if key == "trusted-external-command" and isinstance(value, str):
+            changes.append(
+                _change(
+                    address,
+                    "bolt_external_command",
+                    "dangerous",
+                    "Bolt executes an external controller command to produce trusted facts.",
+                )
+            )
+        if key in {"evaltrace", "show_diff", "trace"} and value is True:
+            changes.append(
+                _change(
+                    address,
+                    "bolt_sensitive_output",
+                    "dangerous",
+                    "Bolt enables verbose apply output that can disclose sensitive resource "
+                    "values or execution context.",
+                )
+            )
+        if key == "log_level" and str(value).casefold() == "debug":
+            changes.append(
+                _change(
+                    address,
+                    "bolt_debug_logging",
+                    "dangerous",
+                    "Bolt enables debug apply logs that can persist sensitive execution details.",
+                )
+            )
+        if key == "plugin" and ".plugin-hooks." in address and isinstance(value, str):
+            run_as = document.get("plugin-hooks", {})
+            changes.append(
+                _change(
+                    address,
+                    "bolt_plugin_hook",
+                    "dangerous" if "root" in str(run_as).casefold() else "review",
+                    "Bolt configures a plugin hook that installs or prepares executable Puppet "
+                    "content on targets.",
+                )
+            )
+    return changes
+
+
+def _bolt_inventory_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes = _bolt_plugin_changes(document, inventory=True)
+    changes.extend(_bolt_literal_secret_changes(document, "bolt_inventory"))
+    target_count = 0
+    for address, key, value in _bolt_walk(document, "bolt_inventory"):
+        if key == "targets" and isinstance(value, list):
+            target_count += len(value)
+            for index, target in enumerate(value):
+                if not isinstance(target, str):
+                    continue
+                target_address = f"{address}.{index}"
+                if target.casefold().startswith("http://"):
+                    changes.append(
+                        _change(
+                            target_address,
+                            "bolt_plaintext_transport",
+                            "dangerous",
+                            "Bolt connects to a target over plaintext HTTP.",
+                        )
+                    )
+                if target.casefold().startswith("local://"):
+                    changes.append(
+                        _change(
+                            target_address,
+                            "bolt_transport",
+                            "dangerous",
+                            "Bolt target URI selects local controller execution.",
+                        )
+                    )
+                if _embedded_credential(target):
+                    changes.append(
+                        _change(
+                            target_address,
+                            "bolt_embedded_credential",
+                            "dangerous",
+                            "Bolt target URI embeds credentials that can leak through "
+                            "configuration, logs, and process metadata.",
+                        )
+                    )
+        if (
+            key in {"uri", "service-url"}
+            and isinstance(value, str)
+            and value.casefold().startswith("http://")
+        ):
+            changes.append(
+                _change(
+                    address,
+                    "bolt_plaintext_transport",
+                    "dangerous",
+                    "Bolt connects to a target or service over plaintext HTTP.",
+                )
+            )
+        if key in {"uri", "service-url"} and isinstance(value, str) and _embedded_credential(value):
+            changes.append(
+                _change(
+                    address,
+                    "bolt_embedded_credential",
+                    "dangerous",
+                    "Bolt target or service URL embeds credentials that can leak through "
+                    "configuration, logs, and process metadata.",
+                )
+            )
+        if key in {"host-key-check", "ssl-verify"} and value is False:
+            changes.append(
+                _change(
+                    address,
+                    "bolt_transport_verification",
+                    "dangerous",
+                    "Bolt disables SSH host-key or TLS certificate verification, allowing "
+                    "endpoint impersonation.",
+                )
+            )
+        if key == "ssl" and value is False:
+            changes.append(
+                _change(
+                    address,
+                    "bolt_plaintext_transport",
+                    "dangerous",
+                    "Bolt disables HTTPS for WinRM transport.",
+                )
+            )
+        if key == "cleanup" and value is False:
+            changes.append(
+                _change(
+                    address,
+                    "bolt_remote_cleanup",
+                    "review",
+                    "Bolt leaves temporary executable files on targets after commands finish.",
+                )
+            )
+        if (
+            key in {"user", "run-as"}
+            and isinstance(value, str)
+            and value.casefold() in _BOLT_PRIVILEGED_USERS
+        ):
+            changes.append(
+                _change(
+                    address,
+                    "bolt_privileged_identity",
+                    "dangerous",
+                    "Bolt logs in or executes commands with a highly privileged identity.",
+                )
+            )
+        if key in {"run-as-command", "shell-command", "sudo-executable", "interpreters"}:
+            changes.append(
+                _change(
+                    address,
+                    "bolt_command_execution",
+                    "dangerous",
+                    "Bolt overrides a command, interpreter, or privilege-escalation executable "
+                    "used on targets.",
+                )
+            )
+        if key == "transport" and isinstance(value, str):
+            risk = "dangerous" if value.casefold() == "local" else "review"
+            changes.append(
+                _change(
+                    address,
+                    "bolt_transport",
+                    risk,
+                    "Bolt selects local controller execution."
+                    if risk == "dangerous"
+                    else "Bolt selects a target transport; verify the effective inherited "
+                    "connection policy.",
+                )
+            )
+        if key in {"proxyjump", "private-key", "token-file", "cacert", "cert", "key"}:
+            changes.append(
+                _change(
+                    address,
+                    "bolt_credential_or_proxy_boundary",
+                    "review",
+                    "Bolt depends on an external credential, trust file, private key, or proxy "
+                    "boundary.",
+                )
+            )
+        if key in {
+            "encryption-algorithms",
+            "host-key-algorithms",
+            "kex-algorithms",
+            "mac-algorithms",
+        }:
+            encoded = " ".join(map(str, value if isinstance(value, list) else [value])).casefold()
+            if any(marker in encoded for marker in ("cbc", "dss", "group1", "md5", "sha1")):
+                changes.append(
+                    _change(
+                        address,
+                        "bolt_legacy_ssh_algorithm",
+                        "dangerous",
+                        "Bolt enables legacy SSH algorithms that weaken transport security.",
+                    )
+                )
+    if target_count:
+        changes.append(
+            _change(
+                "bolt_inventory.targets",
+                "bolt_target_scope",
+                "review",
+                f"Bolt inventory statically selects {target_count} target declaration(s); "
+                "verify group inheritance and command targeting.",
+            )
+        )
+    return changes
+
+
 class PuppetProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -1347,7 +1924,8 @@ class PuppetProjectAdapter(BaseAdapter):
         project = input_data.get("puppet_project")
         return (
             isinstance(project, dict)
-            and project.get("artifact_type") in {"puppetfile", "metadata", "hiera", "config"}
+            and project.get("artifact_type")
+            in {"puppetfile", "metadata", "hiera", "config", "bolt_project", "bolt_inventory"}
             and isinstance(project.get("document"), dict)
         )
 
@@ -1359,18 +1937,26 @@ class PuppetProjectAdapter(BaseAdapter):
             "metadata": _metadata_changes,
             "hiera": _hiera_changes,
             "config": _puppet_config_changes,
+            "bolt_project": _bolt_project_changes,
+            "bolt_inventory": _bolt_inventory_changes,
         }[artifact_type](project["document"])
-        changes.append(
-            _change(
-                "puppet.effective_project",
-                "project_boundary",
-                "review",
+        if artifact_type.startswith("bolt_"):
+            boundary = (
+                "Effective Bolt behavior also depends on configuration precedence, command-line "
+                "options, installed modules and plugins, resolved inventory data, target facts "
+                "and variables, credential files, environment values, and the tasks, plans, "
+                "commands, scripts, and Puppet code selected at runtime."
+            )
+            address = "bolt.effective_project"
+        else:
+            boundary = (
                 "Effective Puppet behavior also depends on deployed module contents, transitive "
                 "dependencies, environment/modulepath precedence, Code Manager or r10k settings, "
                 "Hiera data files, eyaml keys, Puppet Server configuration, PuppetDB, facts, and "
-                "compiler-side extensions.",
+                "compiler-side extensions."
             )
-        )
+            address = "puppet.effective_project"
+        changes.append(_change(address, "project_boundary", "review", boundary))
         return changes
 
     def normalize_change(self, raw: dict[str, Any]) -> ResourceChange:

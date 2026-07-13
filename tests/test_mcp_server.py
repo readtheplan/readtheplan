@@ -635,6 +635,20 @@ def test_agent_gate_configuration_management_supports_puppet_runtime_config() ->
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_bolt_inventory() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "bolt_inventory" / "inventory.yaml"),
+        "puppet-project",
+        "soc2",
+    )
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "bolt_inventory"
+    assert result["decision"] == "block"
+    assert "fixture-ssh-password-do-not-leak" not in json.dumps(result)
+    assert "fixture-private-key-do-not-leak" not in json.dumps(result)
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_jenkins_plugin_catalog() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "jenkins_plugins_risky.txt"),
