@@ -761,6 +761,26 @@ def test_agent_gate_configuration_management_supports_jenkins_job_builder() -> N
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_jenkins_shared_library() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "jenkins_shared_library_risky" / "vars" / "deploy.groovy"),
+        "jenkins-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "jenkins-project"
+    assert result["artifact_type"] == "shared_library_var"
+    assert result["source_kind"] == "global_variable"
+    assert result["source_line_count"] == 20
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 14
+    assert "fixture-shared-library-secret-do-not-leak" not in encoded
+    assert "fixture-jenkins-credential-do-not-leak" not in encoded
+    assert "shared-library.example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_chef_runtime_config() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "chef_runtime" / "client.rb"),

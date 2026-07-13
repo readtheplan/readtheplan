@@ -294,3 +294,146 @@ def test_gate_and_cli_support_text_and_yaml_catalogs(
     assert payload["artifact_type"] == artifact_type
     assert payload["plugin_count"] == total_changes - 1
     assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+
+
+def test_shared_library_var_surfaces_trust_execution_and_data_boundaries() -> None:
+    fixture = FIXTURES / "jenkins_shared_library_risky" / "vars" / "deploy.groovy"
+    data = parse_jenkins_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
+    changes = JenkinsProjectAdapter().analyze(data, tool_name="Jenkins project")
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert data["jenkins_project"]["artifact_type"] == "shared_library_var"
+    assert len(changes) == 14
+    assert sum(change.risk == "dangerous" for change in changes) == 11
+    assert "jenkins_project_dependency_loader" in kinds
+    assert "jenkins_project_mutable_global_state" in kinds
+    assert "jenkins_project_credential_access" in kinds
+    assert "jenkins_project_agent_command" in kinds
+    assert "jenkins_project_library_resource" in kinds
+    assert "jenkins_project_controller_api" in kinds
+    assert "jenkins_project_raw_build_api" in kinds
+    assert "jenkins_project_network_access" in kinds
+    assert "jenkins_project_literal_secret" in kinds
+    assert "jenkins_project_resolution_boundary" in kinds
+    for sensitive in (
+        "fixture-controller-helper",
+        "apiToken",
+        "fixture-shared-library-secret-do-not-leak",
+        "fixture-jenkins-credential-do-not-leak",
+        "fixture-job-name-do-not-leak",
+        "shared-library.example.invalid",
+        "resourcePath",
+    ):
+        assert sensitive not in encoded
+
+
+def test_shared_library_class_surfaces_controller_cps_and_process_boundaries() -> None:
+    fixture = (
+        FIXTURES
+        / "jenkins_shared_library_risky"
+        / "src"
+        / "org"
+        / "example"
+        / "Helper.groovy"
+    )
+    data = parse_jenkins_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
+    changes = JenkinsProjectAdapter().analyze(data)
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert data["jenkins_project"]["artifact_type"] == "shared_library_class"
+    assert len(changes) == 9
+    assert sum(change.risk == "dangerous" for change in changes) == 5
+    assert "jenkins_project_non_cps" in kinds
+    assert "jenkins_project_dynamic_code" in kinds
+    assert "jenkins_project_process_execution" in kinds
+    assert "jenkins_project_filesystem_access" in kinds
+    assert "jenkins_project_cps_serialization" in kinds
+    for sensitive in (
+        "org.example",
+        "Helper",
+        "evaluatePayload",
+        "fixture-controller-path-do-not-leak",
+        "fixture.dynamic.Type",
+    ):
+        assert sensitive not in encoded
+
+
+@pytest.mark.parametrize(
+    ("filename", "error"),
+    [
+        ("app/App.groovy", "vars/ or src/ path"),
+        ("vars/nested/deploy.groovy", "cannot be nested"),
+        ("src/example/vars/deploy.groovy", "exactly one"),
+    ],
+)
+def test_shared_library_parser_requires_unambiguous_documented_layout(
+    filename: str,
+    error: str,
+) -> None:
+    with pytest.raises(JenkinsProjectInputError, match=error):
+        parse_jenkins_project("def call() {}\n", filename=filename)
+
+
+def test_shared_library_lexer_ignores_comments_and_string_contents_linearly() -> None:
+    source = (
+        "def call() {\n"
+        "  // @Grab('ignored') Jenkins.instance sh('ignored')\n"
+        "  def text = \"@Grab Jenkins.instance sh(\"\n"
+        "  def apiToken = config.token\n"
+        "  def resource = libraryResource('static.txt')\n"
+        "}\n"
+        + "a" * 200_000
+    )
+    data = parse_jenkins_project(source, filename="vars/example.groovy")
+    changes = JenkinsProjectAdapter().analyze(data)
+
+    assert len(changes) == 3
+    assert {change.risk for change in changes} == {"review"}
+    assert any(change.resource_type.endswith("library_resource") for change in changes)
+
+
+@pytest.mark.parametrize(
+    ("source", "error"),
+    [
+        ("def value = 'unterminated\n", "unterminated Groovy string"),
+        ("def call() { /* unterminated\n", "unterminated Groovy block comment"),
+        ("x" * (2 * 1024 * 1024 + 1), "size limit"),
+    ],
+    ids=("unterminated-string", "unterminated-comment", "oversized"),
+)
+def test_shared_library_parser_rejects_malformed_or_oversized_source(
+    source: str,
+    error: str,
+) -> None:
+    with pytest.raises(JenkinsProjectInputError, match=error):
+        parse_jenkins_project(source, filename="vars/example.groovy")
+
+
+def test_shared_library_gate_and_cli_report_redacted_source_metadata(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = FIXTURES / "jenkins_shared_library_risky" / "vars" / "deploy.groovy"
+    data = parse_jenkins_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
+    gate = analyze_jenkins_project(data)
+
+    assert gate["adapter"] == "jenkins-project"
+    assert gate["artifact_type"] == "shared_library_var"
+    assert gate["source_kind"] == "global_variable"
+    assert gate["source_line_count"] == 20
+    assert gate["total_changes"] == 14
+    assert gate["decision"] == "block"
+    assert "plugin_count" not in gate
+    assert "definition_count" not in gate
+
+    assert main(["jenkins-project", "--framework", "soc2", str(fixture)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["artifact_type"] == "shared_library_var"
+    assert payload["source_kind"] == "global_variable"
+    assert "fixture-shared-library-secret-do-not-leak" not in json.dumps(payload)
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
