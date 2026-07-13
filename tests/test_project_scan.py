@@ -158,6 +158,81 @@ def test_content_detection_for_kubernetes_ansible_and_terraform(tmp_path: Path) 
     assert identify_project_input(terraform, terraform.name) == "terraform"
 
 
+@pytest.mark.parametrize(
+    ("fixture", "tool"),
+    [
+        ("ytt_risky.yaml", "ytt"),
+        ("vendir_risky.yml", "vendir"),
+        ("vendir_risky.lock.yml", "vendir"),
+        ("kbld_risky.yml", "kbld"),
+        ("imgpkg_risky_locks.yml", "imgpkg"),
+        ("kapp_risky.yml", "kapp"),
+        ("crossplane_risky.yml", "crossplane"),
+        ("sam_template_risky.yml", "sam"),
+        ("serverless_framework_risky.yml", "serverless"),
+        ("jenkins_jcasc_risky.yml", "jenkins-jcasc"),
+        ("pulumi_preview_mixed.json", "pulumi"),
+        ("azure_whatif_mixed.json", "azure"),
+    ],
+)
+def test_content_detection_prefers_specialized_infrastructure_adapter(
+    fixture: str,
+    tool: str,
+) -> None:
+    source = (FIXTURES / fixture).read_bytes()
+    generated = Path(f"generated{Path(fixture).suffix}")
+
+    assert (
+        identify_project_input(generated, generated.name, content=source) == tool
+    )
+
+
+def test_project_scan_routes_specialized_kubernetes_shaped_inputs(tmp_path: Path) -> None:
+    expected = {
+        "crossplane-generated.yaml": ("crossplane_risky.yml", "crossplane"),
+        "imgpkg-generated.yaml": ("imgpkg_risky_locks.yml", "imgpkg"),
+        "kbld-generated.yaml": ("kbld_risky.yml", "kbld"),
+        "kapp-generated.yaml": ("kapp_risky.yml", "kapp"),
+        "jenkins-generated.yaml": ("jenkins_jcasc_risky.yml", "jenkins-jcasc"),
+        "pulumi-generated.json": ("pulumi_preview_mixed.json", "pulumi"),
+        "sam-generated.yaml": ("sam_template_risky.yml", "sam"),
+        "serverless-generated.yaml": ("serverless_framework_risky.yml", "serverless"),
+        "vendir-generated.yaml": ("vendir_risky.yml", "vendir"),
+        "ytt-generated.yaml": ("ytt_risky.yaml", "ytt"),
+        "what-if-generated.json": ("azure_whatif_mixed.json", "azure"),
+    }
+    for target_name, (fixture, _tool) in expected.items():
+        (tmp_path / target_name).write_bytes((FIXTURES / fixture).read_bytes())
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == len(expected)
+    assert payload["scanned_file_count"] == len(expected)
+    assert payload["error_count"] == 0
+    assert {item["path"]: item["tool"] for item in payload["files"]} == {
+        path: tool for path, (_fixture, tool) in expected.items()
+    }
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        '[{"resourcePreEvent":{"metadata":{"op":"create","urn":"urn:pulumi:test"}}}]',
+        '{"resourcePreEvent":{"metadata":{"op":"create","urn":"urn:pulumi:test"}}}\n'
+        '{"summaryEvent":{"maybeCorrupt":false}}\n',
+    ],
+)
+def test_content_detection_recognizes_pulumi_event_exports(source: str) -> None:
+    assert (
+        identify_project_input(
+            Path("preview.json"),
+            "preview.json",
+            content=source.encode(),
+        )
+        == "pulumi"
+    )
+
+
 def test_generic_auth_and_webserver_names_require_puppet_context() -> None:
     assert identify_project_input(Path("auth.conf"), "auth.conf", inspect_content=False) is None
     assert (

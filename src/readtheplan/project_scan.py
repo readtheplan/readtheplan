@@ -81,6 +81,31 @@ _CONFIG_BASENAME_SOURCE_SUFFIXES = frozenset(
     }
 )
 _KUBERNETES_HINT = re.compile(r"(?ms)^\s*apiVersion\s*:\s*[^\s#]+.*?^\s*kind\s*:\s*[^\s#]+")
+_CROSSPLANE_CONTROL_PLANE_HINT = re.compile(
+    r"(?m)^\s*apiVersion\s*:\s*(?:apiextensions|meta[.]pkg|pkg|protection|secrets)"
+    r"[.]crossplane[.]io/"
+)
+_CROSSPLANE_MANAGED_RESOURCE_HINT = re.compile(
+    r"(?m)^\s+(?:forProvider|managementPolicies|providerConfigRef|"
+    r"publishConnectionDetailsTo|writeConnectionSecretToRef)\s*:"
+)
+_CARVEL_API_HINT = re.compile(
+    r"(?m)^\s*apiVersion\s*:\s*"
+    r"(?P<family>vendir[.]k14s[.]io|kbld[.]k14s[.]io|imgpkg[.]carvel[.]dev|"
+    r"kapp[.]k14s[.]io)/"
+)
+_YTT_HINT = re.compile(
+    r"(?m)^\s*#@\s*(?:load\s*\(|data/|overlay/|def\b|if\b|for\b)"
+)
+_SAM_TRANSFORM_HINT = re.compile(r"(?m)^\s*Transform\s*:")
+_SERVERLESS_SERVICE_HINT = re.compile(r"(?m)^\s*service\s*:")
+_SERVERLESS_PROVIDER_HINT = re.compile(r"(?m)^\s*provider\s*:")
+_SERVERLESS_FUNCTIONS_HINT = re.compile(r"(?m)^\s*functions\s*:")
+_JENKINS_JCASC_ROOT_HINT = re.compile(r"(?m)^jenkins\s*:")
+_JENKINS_JCASC_SETTING_HINT = re.compile(
+    r"(?m)^\s+(?:authorizationStrategy|clouds|nodes|numExecutors|securityRealm)\s*:"
+)
+_PULUMI_EVENT_HINT = re.compile(r'"resourcePreEvent"\s*:')
 _ANSIBLE_HINT = re.compile(r"(?ms)^\s*-?\s*hosts\s*:.*?^\s*(?:tasks|roles)\s*:")
 _ANSIBLE_RULEBOOK_HINT = re.compile(
     r"(?ms)^\s*-\s+name\s*:.*?^\s+hosts\s*:.*?^\s+sources\s*:.*?^\s+rules\s*:"
@@ -850,7 +875,31 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
     if suffix == ".ini":
         return "sops" if _SOPS_INI_HINT.search(text) else None
     if suffix in _YAML_SUFFIXES:
+        if _SAM_TRANSFORM_HINT.search(text) and "AWS::Serverless-2016-10-31" in text:
+            return "sam"
+        if (
+            _SERVERLESS_SERVICE_HINT.search(text)
+            and _SERVERLESS_PROVIDER_HINT.search(text)
+            and _SERVERLESS_FUNCTIONS_HINT.search(text)
+        ):
+            return "serverless"
+        if _JENKINS_JCASC_ROOT_HINT.search(text) and _JENKINS_JCASC_SETTING_HINT.search(text):
+            return "jenkins-jcasc"
+        if _YTT_HINT.search(text):
+            return "ytt"
+        carvel = _CARVEL_API_HINT.search(text)
+        if carvel is not None:
+            return {
+                "vendir.k14s.io": "vendir",
+                "kbld.k14s.io": "kbld",
+                "imgpkg.carvel.dev": "imgpkg",
+                "kapp.k14s.io": "kapp",
+            }[carvel.group("family")]
         if _KUBERNETES_HINT.search(text):
+            if _CROSSPLANE_CONTROL_PLANE_HINT.search(
+                text
+            ) or _CROSSPLANE_MANAGED_RESOURCE_HINT.search(text):
+                return "crossplane"
             return "kubernetes"
         if _ANSIBLE_RULEBOOK_HINT.search(text):
             return "ansible-project"
@@ -864,8 +913,14 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
     try:
         document = json.loads(text)
     except (json.JSONDecodeError, RecursionError):
+        if _PULUMI_EVENT_HINT.search(text):
+            return "pulumi"
         if _looks_like_terraform_plan_prefix(text):
             return "terraform"
+        return None
+    if isinstance(document, list):
+        if any(isinstance(event, dict) and "resourcePreEvent" in event for event in document):
+            return "pulumi"
         return None
     if not isinstance(document, dict):
         return None
@@ -892,6 +947,17 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
         return "terraform"
     if isinstance(document.get("Changes"), list):
         return "cloudformation"
+    pulumi_steps = document.get("steps")
+    if isinstance(pulumi_steps, list) and any(
+        isinstance(step, dict) and {"op", "urn"} <= set(step) for step in pulumi_steps
+    ):
+        return "pulumi"
+    azure_changes = document.get("changes")
+    if isinstance(azure_changes, list) and any(
+        isinstance(change, dict) and {"changeType", "resourceId"} <= set(change)
+        for change in azure_changes
+    ):
+        return "azure"
     pipeline = document.get("pipeline")
     if isinstance(pipeline, dict) and isinstance(pipeline.get("stages"), list):
         return "codepipeline"
