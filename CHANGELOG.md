@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Changed
+- Project auto-discovery now routes content-identified Crossplane, AWS SAM, Serverless Framework,
+  Jenkins JCasC, Pulumi preview, Azure What-If, and Carvel ytt/vendir/kbld/imgpkg/kapp inputs to
+  their specialized analyzers instead of dropping them, requiring canonical filenames, or
+  treating Kubernetes-shaped formats as generic manifests.
 - Terraform-provider GitHub Action dogfood now runs as a bounded parallel matrix,
   preserving every provider-specific output assertion while shortening the CI critical path.
 - Self-improving evolution analysis now stays local and deterministic;
