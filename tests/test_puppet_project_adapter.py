@@ -791,6 +791,26 @@ def test_extensionless_bolt_task_uses_shebang_and_never_executes(tmp_path: Path)
     assert not marker.exists()
 
 
+@pytest.mark.parametrize(
+    ("shebang", "language"),
+    [
+        ("#!/bin/bash", "shell"),
+        ("#!/usr/bin/env pwsh", "powershell"),
+        ("#!/usr/bin/python3.13", "python"),
+        ("#!/usr/bin/env ruby", "ruby"),
+    ],
+)
+def test_extensionless_bolt_task_recognizes_supported_shebangs(
+    shebang: str, language: str
+) -> None:
+    data = parse_puppet_project(
+        f"{shebang}\n# implementation\n", filename="modules/demo/tasks/configure"
+    )
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_task_implementation"
+    assert data["puppet_project"]["document"]["language"] == language
+
+
 def test_bolt_task_implementation_rejects_unsupported_or_unsafe_text() -> None:
     with pytest.raises(PuppetProjectInputError, match="supported text formats"):
         parse_puppet_project("console.log('task')\n", filename="modules/demo/tasks/configure.js")

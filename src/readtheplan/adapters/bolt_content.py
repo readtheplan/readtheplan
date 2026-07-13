@@ -131,10 +131,10 @@ _TASK_IMPLEMENTATION_SUFFIXES = {
     ".zsh": "shell",
 }
 _TASK_IMPLEMENTATION_SHEBANGS = (
-    (re.compile(r"^#![^\n]*(?:^|[/ ])(?:bash|dash|ksh|sh|zsh)(?:\s|$)"), "shell"),
-    (re.compile(r"^#![^\n]*(?:^|[/ ])(?:powershell|pwsh)(?:\.exe)?(?:\s|$)", re.I), "powershell"),
-    (re.compile(r"^#![^\n]*(?:^|[/ ])python(?:\d+(?:\.\d+)?)?(?:\s|$)", re.I), "python"),
-    (re.compile(r"^#![^\n]*(?:^|[/ ])ruby(?:\d+(?:\.\d+)?)?(?:\s|$)", re.I), "ruby"),
+    (re.compile(r"^#![^\n]*[/ ](?:bash|dash|ksh|sh|zsh)(?:\s|$)"), "shell"),
+    (re.compile(r"^#![^\n]*[/ ](?:powershell|pwsh)(?:\.exe)?(?:\s|$)", re.I), "powershell"),
+    (re.compile(r"^#![^\n]*[/ ]python(?:\d+(?:\.\d+)?)?(?:\s|$)", re.I), "python"),
+    (re.compile(r"^#![^\n]*[/ ]ruby(?:\d+(?:\.\d+)?)?(?:\s|$)", re.I), "ruby"),
 )
 _SCRIPT_PARAMETER_INPUTS = {
     "powershell": re.compile(r"(?i)(?:\bparam\s*\(|\$env:PT_[A-Za-z_][A-Za-z0-9_]*|\$_noop\b)"),
