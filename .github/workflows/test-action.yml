@@ -1976,6 +1976,40 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet Ruby custom fact
+        id: puppet_ruby_custom_fact
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/puppet_ruby_extensions_risky/modules/site/lib/facter/cloud_inventory.rb
+          framework: soc2
+
+      - name: Assert Puppet Ruby custom fact outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_ruby_custom_fact.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_ruby_custom_fact.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_ruby_custom_fact.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "10"
+          test "$RISK_COUNTS" = '{"dangerous":3,"irreversible":0,"review":7,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "ruby_extension"
+          assert payload["extension_type"] == "custom_fact"
+          assert payload["language"] == "ruby"
+          assert payload["source_kind"] == "agent_fact"
+          assert payload["decision"] == "block"
+          assert "RTP_FIXTURE_PUPPET_FACT_SECRET_DO_NOT_LEAK" not in serialized
+          assert "facts.example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

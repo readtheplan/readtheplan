@@ -14,6 +14,7 @@ from typing import Any
 
 from readtheplan.adapters.ansible_code import ansible_code_metadata
 from readtheplan.adapters.bolt_content import bolt_task_implementation_language
+from readtheplan.adapters.puppet_ruby import puppet_ruby_metadata
 from readtheplan.rules import RISK_ORDER
 
 PROJECT_SCAN_SCHEMA = "rtp-agent-gate-v1"
@@ -263,6 +264,9 @@ def identify_project_input(
                 implementation_source = ""
         if bolt_task_implementation_language(relative_path, implementation_source):
             return "puppet-project"
+
+    if puppet_ruby_metadata(relative_path) is not None:
+        return "puppet-project"
 
     ansible_code = ansible_code_metadata(relative_path)
     if ansible_code is not None and _ansible_code_context(path, parts):
@@ -990,6 +994,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         result["dynamic_erb"] = payload["dynamic_erb"]
     for field in (
         "component_name",
+        "extension_type",
         "language",
         "hook_name",
         "plugin_type",
