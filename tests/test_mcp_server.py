@@ -896,6 +896,35 @@ def test_agent_gate_configuration_management_supports_puppet_ruby_extension() ->
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_puppet_external_fact() -> None:
+    result = agent_gate_configuration_management(
+        str(
+            FIXTURES
+            / "puppet_external_facts_risky"
+            / "modules"
+            / "site"
+            / "facts.d"
+            / "cloud_inventory.py"
+        ),
+        "puppet-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "external_fact"
+    assert result["external_fact_type"] == "executable"
+    assert result["language"] == "python"
+    assert result["source_kind"] == "agent_external_fact"
+    assert result["fact_count"] == 0
+    assert result["total_changes"] == 8
+    assert result["risk_counts"]["dangerous"] == 5
+    assert result["risk_counts"]["review"] == 3
+    assert result["decision"] == "block"
+    assert "RTP_FIXTURE_EXTERNAL_FACT_PYTHON_SECRET_DO_NOT_LEAK" not in encoded
+    assert "python-facts.example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_r10k_configuration() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_r10k_risky" / "r10k.yaml"),
@@ -2806,6 +2835,50 @@ def test_stdio_server_tools_list() -> None:
             puppet_ruby_content[0]["text"]
         )
         assert "facts.example.invalid" not in puppet_ruby_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Puppet external fact) ---
+        puppet_external_fact_req = {
+            "jsonrpc": "2.0",
+            "id": 76,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "puppet_external_facts_risky"
+                            / "modules"
+                            / "site"
+                            / "facts.d"
+                            / "cloud_inventory.py"
+                        ).resolve()
+                    ),
+                    "ecosystem": "puppet-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        puppet_external_fact_resp = _send_jsonrpc(proc, puppet_external_fact_req)
+        assert "result" in puppet_external_fact_resp, (
+            f"Puppet external fact tools/call failed: {puppet_external_fact_resp}"
+        )
+        puppet_external_fact_content = puppet_external_fact_resp["result"]["content"]
+        assert len(puppet_external_fact_content) == 1
+        puppet_external_fact_summary = json.loads(puppet_external_fact_content[0]["text"])
+        assert puppet_external_fact_summary["adapter"] == "puppet-project"
+        assert puppet_external_fact_summary["artifact_type"] == "external_fact"
+        assert puppet_external_fact_summary["external_fact_type"] == "executable"
+        assert puppet_external_fact_summary["language"] == "python"
+        assert puppet_external_fact_summary["source_kind"] == "agent_external_fact"
+        assert puppet_external_fact_summary["fact_count"] == 0
+        assert puppet_external_fact_summary["total_changes"] == 8
+        assert puppet_external_fact_summary["risk_counts"]["dangerous"] == 5
+        assert puppet_external_fact_summary["risk_counts"]["review"] == 3
+        assert "RTP_FIXTURE_EXTERNAL_FACT_PYTHON_SECRET_DO_NOT_LEAK" not in (
+            puppet_external_fact_content[0]["text"]
+        )
+        assert "python-facts.example.invalid" not in puppet_external_fact_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Jenkins plugins) ---
         jenkins_project_req = {

@@ -2010,6 +2010,41 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet executable external fact
+        id: puppet_executable_external_fact
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/puppet_external_facts_risky/modules/site/facts.d/cloud_inventory.py
+          framework: soc2
+
+      - name: Assert Puppet executable external fact outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_executable_external_fact.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_executable_external_fact.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_executable_external_fact.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "8"
+          test "$RISK_COUNTS" = '{"dangerous":5,"irreversible":0,"review":3,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "external_fact"
+          assert payload["external_fact_type"] == "executable"
+          assert payload["language"] == "python"
+          assert payload["source_kind"] == "agent_external_fact"
+          assert payload["fact_count"] == 0
+          assert payload["decision"] == "block"
+          assert "RTP_FIXTURE_EXTERNAL_FACT_PYTHON_SECRET_DO_NOT_LEAK" not in serialized
+          assert "python-facts.example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

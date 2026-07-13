@@ -872,6 +872,57 @@ def test_project_scan_analyzes_puppet_ruby_module_extensions(tmp_path: Path) -> 
     assert "reports.example.invalid" not in encoded
 
 
+def test_project_scan_analyzes_puppet_external_facts(tmp_path: Path) -> None:
+    source = FIXTURES / "puppet_external_facts_risky"
+    shutil.copytree(source, tmp_path, dirs_exist_ok=True)
+
+    payload = scan_project(tmp_path, display_root=".")
+    facts = [item for item in payload["files"] if item.get("artifact_type") == "external_fact"]
+
+    assert len(facts) == 9
+    assert {item["external_fact_type"] for item in facts} == {
+        "executable",
+        "structured_data",
+    }
+    assert {item.get("language") for item in facts if item.get("language")} == {
+        "batch",
+        "perl",
+        "powershell",
+        "python",
+        "ruby",
+        "shell",
+    }
+    assert {item.get("format") for item in facts if item.get("format")} == {
+        "json",
+        "text",
+        "yaml",
+    }
+    assert {item["source_kind"] for item in facts} == {"agent_external_fact"}
+    assert all(item["source_line_count"] > 0 for item in facts)
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "DO_NOT_LEAK" not in encoded
+    assert "facts.example.invalid" not in encoded
+
+
+def test_project_scan_discovers_extensionless_puppet_external_fact(tmp_path: Path) -> None:
+    module = tmp_path / "modules" / "site"
+    module.mkdir(parents=True)
+    (module / "metadata.json").write_text('{"name":"fixture-site"}\n', encoding="utf-8")
+    fact = module / "facts.d" / "site_inventory"
+    fact.parent.mkdir()
+    fact.write_text("#!/bin/sh\nprintf 'site=fixture\\n'\n", encoding="utf-8")
+
+    assert identify_project_input(fact, "modules/site/facts.d/site_inventory") == "puppet-project"
+    payload = scan_project(tmp_path, display_root=".")
+    external = [
+        item for item in payload["files"] if item.get("artifact_type") == "external_fact"
+    ]
+    assert len(external) == 1
+    assert external[0]["language"] == "shell"
+    assert external[0]["source_kind"] == "agent_external_fact"
+
+
 def test_project_scan_ignores_unclassified_puppet_library_ruby(tmp_path: Path) -> None:
     helper = tmp_path / "modules" / "site" / "lib" / "puppet" / "util" / "helper.rb"
     helper.parent.mkdir(parents=True)
