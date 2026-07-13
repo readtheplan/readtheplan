@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import yaml
@@ -169,6 +170,49 @@ _KNATIVE_KIND_MAP: dict[tuple[str, str], str] = {
     ("flows.knative.dev", "Parallel"): "kubernetes_knative_parallel",
 }
 
+_CLUSTER_API_KIND_MAP: dict[tuple[str, str], str] = {
+    ("cluster.x-k8s.io", "Cluster"): "kubernetes_capi_cluster",
+    ("cluster.x-k8s.io", "ClusterClass"): "kubernetes_capi_cluster_class",
+    ("cluster.x-k8s.io", "Machine"): "kubernetes_capi_machine",
+    ("cluster.x-k8s.io", "MachineSet"): "kubernetes_capi_machine_set",
+    ("cluster.x-k8s.io", "MachineDeployment"): "kubernetes_capi_machine_deployment",
+    ("cluster.x-k8s.io", "MachinePool"): "kubernetes_capi_machine_pool",
+    ("cluster.x-k8s.io", "MachineHealthCheck"): "kubernetes_capi_machine_health_check",
+    ("cluster.x-k8s.io", "MachineDrainRule"): "kubernetes_capi_machine_drain_rule",
+    (
+        "controlplane.cluster.x-k8s.io",
+        "KubeadmControlPlane",
+    ): "kubernetes_capi_kubeadm_control_plane",
+    (
+        "controlplane.cluster.x-k8s.io",
+        "KubeadmControlPlaneTemplate",
+    ): "kubernetes_capi_kubeadm_control_plane_template",
+    ("bootstrap.cluster.x-k8s.io", "KubeadmConfig"): "kubernetes_capi_kubeadm_config",
+    (
+        "bootstrap.cluster.x-k8s.io",
+        "KubeadmConfigTemplate",
+    ): "kubernetes_capi_kubeadm_config_template",
+    ("runtime.cluster.x-k8s.io", "ExtensionConfig"): "kubernetes_capi_extension_config",
+    (
+        "addons.cluster.x-k8s.io",
+        "ClusterResourceSet",
+    ): "kubernetes_capi_cluster_resource_set",
+    (
+        "addons.cluster.x-k8s.io",
+        "ClusterResourceSetBinding",
+    ): "kubernetes_capi_cluster_resource_set_binding",
+    ("ipam.cluster.x-k8s.io", "IPAddress"): "kubernetes_capi_ip_address",
+    ("ipam.cluster.x-k8s.io", "IPAddressClaim"): "kubernetes_capi_ip_address_claim",
+}
+
+_KARPENTER_KIND_MAP: dict[tuple[str, str], str] = {
+    ("karpenter.sh", "NodePool"): "kubernetes_karpenter_node_pool",
+    ("karpenter.sh", "NodeClaim"): "kubernetes_karpenter_node_claim",
+    ("karpenter.sh", "Provisioner"): "kubernetes_karpenter_legacy_provisioner",
+    ("karpenter.k8s.aws", "EC2NodeClass"): "kubernetes_karpenter_node_class",
+    ("karpenter.k8s.aws", "AWSNodeTemplate"): "kubernetes_karpenter_legacy_node_template",
+}
+
 _FLUX_KIND_MAP: dict[tuple[str, str], str] = {
     ("source.toolkit.fluxcd.io", "GitRepository"): "kubernetes_flux_git_repository",
     ("source.toolkit.fluxcd.io", "OCIRepository"): "kubernetes_flux_oci_repository",
@@ -315,6 +359,9 @@ def _name_from_resource(r: dict[str, Any]) -> str:
 
 def _namespace_from_resource(r: dict[str, Any]) -> str | None:
     kind = _kind_from_resource(r)
+    api_group = _api_version_from_resource(r).partition("/")[0]
+    if api_group == "karpenter.sh" or api_group.startswith("karpenter."):
+        return None
     if kind in _CLUSTER_SCOPED_KINDS:
         return None
     return r.get("metadata", {}).get("namespace", None)
@@ -608,6 +655,20 @@ class KubernetesAdapter(BaseAdapter):
             return knative_type
         if separator and api_group == "sources.knative.dev":
             return "kubernetes_knative_event_source"
+        cluster_api_type = (
+            _CLUSTER_API_KIND_MAP.get((api_group, kind)) if separator else None
+        )
+        if cluster_api_type:
+            return cluster_api_type
+        if separator and api_group == "infrastructure.cluster.x-k8s.io":
+            normalized_kind = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", kind)
+            normalized_kind = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", normalized_kind).lower()
+            return f"kubernetes_capi_infrastructure_{normalized_kind}"
+        karpenter_type = _KARPENTER_KIND_MAP.get((api_group, kind)) if separator else None
+        if karpenter_type:
+            return karpenter_type
+        if separator and api_group.startswith("karpenter.") and kind.endswith("NodeClass"):
+            return "kubernetes_karpenter_node_class"
         mapped = _K8S_KIND_MAP.get(kind)
         if mapped:
             return mapped

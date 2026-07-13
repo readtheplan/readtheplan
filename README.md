@@ -94,7 +94,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | AWS SAM | `readtheplan sam template.yaml` | Transforms/macros, Globals, functions/code, policies, event ingress, APIs, state machines, nested apps, Connectors, builds, and lifecycle policies |
 | Azure Bicep source | `readtheplan bicep main.bicep` | Static resources/modules, target scopes, RBAC/policy/locks, Deployment Scripts, public access, secure parameters/outputs, external files, and compiler boundaries |
 | Azure Bicep / ARM What-If | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
-| Kubernetes / Argo / Flux / Tekton / Gateway API / cert-manager / External Secrets / Istio / Kyverno / Gatekeeper / KEDA / Knative | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, workloads, GitOps, workflows/events, routing/mesh, admission policy, certificates/trust, secret sync, event-driven scaling, and serverless rules |
+| Kubernetes / Argo / Flux / Tekton / Gateway API / cert-manager / External Secrets / Istio / Kyverno / Gatekeeper / KEDA / Knative / Cluster API / Karpenter | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, workloads, GitOps, workflows/events, routing/mesh, admission policy, certificates/trust, secret sync, scaling/serverless, and cluster/machine/node lifecycle rules |
 | Helm source | `readtheplan helm Chart.yaml` | Chart metadata, values, and Go-template source with dependencies, hooks, dynamic evaluation, exposure, privilege, and secret rules |
 | Helmfile | `readtheplan helmfile helmfile.yaml.gotmpl` | State and lock analysis for repositories, releases, chart versions, environments, kube contexts, values/secrets, Go-template execution, hooks, kubectlApply, post-renderers, nested states, lifecycle safety, dependency integrity, and non-execution boundaries |
 | Kustomize source | `readtheplan kustomize kustomization.yaml` | Resources/bases, remote pinning, patches, generators, image overrides, Helm inflation, plugins, and transforms |
@@ -216,8 +216,8 @@ download artifacts, execute plugins/builders/macros, package code, or synthesize
 CloudFormation; each remains an explicit review or blocking trust boundary.
 Kubernetes controller analysis understands Argo Workflows/Events, Gateway API,
 cert-manager/trust-manager, External Secrets, Istio, Kyverno, Gatekeeper, KEDA,
-and Knative API groups without contacting controllers, resolving runtime status,
-or reading referenced Secrets.
+Knative, Cluster API, and Karpenter API groups without contacting controllers,
+resolving runtime status, provisioning infrastructure, or reading referenced Secrets.
 
 ## How it looks
 

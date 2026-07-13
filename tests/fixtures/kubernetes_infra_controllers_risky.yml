@@ -1,0 +1,308 @@
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: production
+  namespace: platform
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks: [10.244.0.0/16]
+    services:
+      cidrBlocks: [10.96.0.0/12]
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: AWSCluster
+    name: production
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KubeadmControlPlane
+    name: production-control-plane
+  topology:
+    classRef:
+      name: production
+    version: v1.34.1
+    workers:
+      machineDeployments:
+        - class: general
+          name: general
+          replicas: 6
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: ClusterClass
+metadata:
+  name: production
+  namespace: platform
+spec:
+  infrastructure:
+    templateRef:
+      apiGroup: infrastructure.cluster.x-k8s.io
+      kind: AWSClusterTemplate
+      name: production
+  controlPlane:
+    templateRef:
+      apiGroup: controlplane.cluster.x-k8s.io
+      kind: KubeadmControlPlaneTemplate
+      name: production
+    machineInfrastructure:
+      templateRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: AWSMachineTemplate
+        name: production-control-plane
+    machineHealthCheck:
+      maxUnhealthy: 40%
+  workers:
+    machineDeployments:
+      - class: general
+        template:
+          infrastructure:
+            templateRef:
+              apiGroup: infrastructure.cluster.x-k8s.io
+              kind: AWSMachineTemplate
+              name: production-workers
+  variables:
+    - name: instanceType
+      required: true
+      schema:
+        openAPIV3Schema:
+          type: string
+  patches:
+    - name: instance-type
+      definitions:
+        - selector:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+            kind: AWSMachineTemplate
+          jsonPatches:
+            - op: add
+              path: /spec/template/spec/instanceType
+              valueFrom:
+                variable: instanceType
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: production-workers
+  namespace: platform
+spec:
+  clusterName: production
+  replicas: 0
+  rolloutAfter: "2026-08-01T00:00:00Z"
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 50%
+  template:
+    spec:
+      clusterName: production
+      version: v1.34.1
+      nodeDrainTimeout: 2m
+      nodeVolumeDetachTimeout: 2m
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: KubeadmConfigTemplate
+          name: production-workers
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: AWSMachineTemplate
+        name: production-workers
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineHealthCheck
+metadata:
+  name: production-workers
+  namespace: platform
+spec:
+  clusterName: production
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/deployment-name: production-workers
+  maxUnhealthy: 50%
+  nodeStartupTimeout: 5m
+  unhealthyConditions:
+    - type: Ready
+      status: Unknown
+      timeout: 2m
+  remediationTemplate:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    kind: AWSMachineRemediationTemplate
+    name: replace-instance
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: production-control-plane
+  namespace: platform
+spec:
+  replicas: 2
+  version: v1.34.1
+  rolloutBefore:
+    certificatesExpiryDays: 30
+  rolloutStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+  machineTemplate:
+    infrastructureRef:
+      apiGroup: infrastructure.cluster.x-k8s.io
+      kind: AWSMachineTemplate
+      name: production-control-plane
+  kubeadmConfigSpec:
+    files:
+      - path: /etc/kubernetes/private.conf
+        content: fixture-private-control-plane-value
+    users:
+      - name: emergency-admin
+        sudo: ALL=(ALL) NOPASSWD:ALL
+    preKubeadmCommands:
+      - curl https://bootstrap.example.test/root.sh | sh
+    postKubeadmCommands:
+      - systemctl restart kubelet
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          audit-log-maxage: "1"
+      etcd:
+        local:
+          extraArgs:
+            quota-backend-bytes: "8589934592"
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfig
+metadata:
+  name: production-worker-bootstrap
+  namespace: platform
+spec:
+  files:
+    - path: /etc/bootstrap-token
+      content: fixture-bootstrap-secret-value
+  users:
+    - name: emergency-admin
+      sshAuthorizedKeys:
+        - fixture-ssh-public-key
+  preKubeadmCommands:
+    - curl https://bootstrap.example.test/worker.sh | sh
+  postKubeadmCommands:
+    - shred -u /etc/bootstrap-token
+  joinConfiguration:
+    discovery:
+      bootstrapToken:
+        unsafeSkipCAVerification: true
+---
+apiVersion: runtime.cluster.x-k8s.io/v1alpha1
+kind: ExtensionConfig
+metadata:
+  name: external-topology-hooks
+spec:
+  clientConfig:
+    url: https://hooks.example.test/capi
+  failurePolicy: Ignore
+  timeoutSeconds: 2
+---
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: cluster-credentials
+  namespace: platform
+spec:
+  clusterSelector: {}
+  strategy: Reconcile
+  resources:
+    - kind: Secret
+      name: workload-cluster-bootstrap
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDrainRule
+metadata:
+  name: skip-databases
+  namespace: platform
+spec:
+  drain:
+    behavior: Skip
+    order: 0
+  pods:
+    selector:
+      matchLabels:
+        stateful: database
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: AWSCluster
+metadata:
+  name: production
+  namespace: platform
+spec:
+  identityRef:
+    kind: AWSClusterControllerIdentity
+    name: production-account
+  networkSpec:
+    subnets:
+      - id: subnet-public
+    apiServerLoadBalancer:
+      scheme: internet-facing
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 0s
+  template:
+    spec:
+      expireAfter: 168h
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: [spot]
+      taints:
+        - key: workload
+          value: batch
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+---
+apiVersion: karpenter.sh/v1
+kind: NodeClaim
+metadata:
+  name: default-abcd
+spec:
+  expireAfter: 168h
+  terminationGracePeriod: 2m
+  requirements:
+    - key: karpenter.sh/capacity-type
+      operator: In
+      values: [spot]
+  nodeClassRef:
+    group: karpenter.k8s.aws
+    kind: EC2NodeClass
+    name: default
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  role: production-karpenter-nodes
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "*"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "*"
+  amiSelectorTerms:
+    - alias: al2023@latest
+  associatePublicIPAddress: true
+  metadataOptions:
+    httpTokens: optional
+    httpPutResponseHopLimit: 2
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        encrypted: false
+        volumeSize: 100Gi
+  userData: |
+    #!/bin/bash
+    export FIXTURE_NODE_BOOTSTRAP_SECRET=do-not-leak-this-value
+    /etc/eks/bootstrap.sh production
