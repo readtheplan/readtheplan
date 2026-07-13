@@ -676,6 +676,24 @@ def test_agent_gate_configuration_management_supports_puppet_runtime_config() ->
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_puppet_server_policy() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "puppet_server_policy_risky" / "auth.conf"),
+        "puppet-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "server_auth"
+    assert result["rule_count"] == 3
+    assert result["total_changes"] == 10
+    assert result["decision"] == "block"
+    assert "fixture-admin-rule-do-not-leak" not in encoded
+    assert "PUPPET_STATUS_CLIENT" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_bolt_inventory() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "bolt_inventory" / "inventory.yaml"),
@@ -2483,6 +2501,39 @@ def test_stdio_server_tools_list() -> None:
         assert ansible_lint_summary["artifact_type"] == "ansible_lint"
         assert ansible_lint_summary["total_changes"] == 12
         assert "fixture-lint-password-do-not-leak" not in ansible_lint_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Puppet Server auth) ---
+        puppet_server_req = {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "puppet_server_policy_risky"
+                            / "auth.conf"
+                        ).resolve()
+                    ),
+                    "ecosystem": "puppet-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        puppet_server_resp = _send_jsonrpc(proc, puppet_server_req)
+        assert "result" in puppet_server_resp, (
+            f"Puppet Server tools/call failed: {puppet_server_resp}"
+        )
+        puppet_server_content = puppet_server_resp["result"]["content"]
+        assert len(puppet_server_content) == 1
+        puppet_server_summary = json.loads(puppet_server_content[0]["text"])
+        assert puppet_server_summary["adapter"] == "puppet-project"
+        assert puppet_server_summary["artifact_type"] == "server_auth"
+        assert puppet_server_summary["rule_count"] == 3
+        assert puppet_server_summary["total_changes"] == 10
+        assert "fixture-admin-rule-do-not-leak" not in puppet_server_content[0]["text"]
 
     finally:
         proc.stdin.close()  # type: ignore[union-attr]
