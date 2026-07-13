@@ -113,6 +113,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | SOPS | `readtheplan sops .sops.yaml` | Creation rules, path scopes, KMS/Vault/age/PGP identities, key groups and Shamir thresholds, encryption selectors, MAC coverage, destination rules, and encrypted YAML/JSON/dotenv/INI documents without decryption or key-service access |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
 | Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |
+| Jenkins plugin catalog | `readtheplan jenkins-project plugins.txt` | Plugin Installation Manager text/YAML catalogs, mutable/experimental/incremental versions, direct URLs, transport and credential risks, privileged plugin capabilities, and external resolution boundaries |
 | TeamCity | `readtheplan teamcity .teamcity/settings.kts` | Kotlin DSL commands, credentials, VCS roots, triggers, dependencies, agents, integrations, cleanup, images, artifacts, and settings-generation code |
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
 | Chef project | `readtheplan chef-project Policyfile.rb` | Policyfiles, resolved locks, cookbook metadata, run lists, source provenance, immutable revisions, attributes, gems, compatibility, privacy, and Ruby boundaries |
@@ -496,6 +497,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 ## What's not in scope
 
 - Full language interpretation for dynamic Jenkins, Chef, or Puppet code (unknown constructs require review)
+- Jenkins plugin catalogs are analyzed offline; update-center metadata, transitive dependencies, advisories, checksums, core compatibility, installed plugins, and installer flags remain external review inputs
 - SaaS dashboard (local-first by design)
 - Hosted analyzer service until ADR 0013 security gates are implemented and enforced
 - Policy-as-code engine (OPA/Sentinel exist for that)

@@ -1,0 +1,11 @@
+plugins:
+  - artifactId: git
+    source:
+      version: 5.2.1
+  - artifactId: credentials
+    source:
+      version: 1408.va_622a_b_f5b_1b_8
+  - artifactId: workflow-step-api
+    groupId: org.jenkins-ci.plugins.workflow
+    source:
+      version: 678.v3ee58b_469476

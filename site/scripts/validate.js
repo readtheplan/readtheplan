@@ -407,6 +407,7 @@ for (const token of [
   "agent_gate_terraform_lock",
   "agent_gate_terraform_state",
   "jenkins-jcasc",
+  "jenkins-project",
   "TeamCity Kotlin DSL",
   "Concourse",
   "Bamboo Specs",

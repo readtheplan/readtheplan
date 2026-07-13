@@ -22,7 +22,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "tool:" in action
     assert (
         "scan|terraform-config|terraform-lock|terraform-state|terraform-stack|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|"
-        "ansible|ansible-project|jenkins|jenkins-jcasc|teamcity|chef|chef-project|"
+        "ansible|ansible-project|jenkins|jenkins-jcasc|jenkins-project|teamcity|chef|chef-project|"
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "travis-ci|drone-ci|woodpecker-ci|concourse|bamboo|"
@@ -223,6 +223,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/Jenkinsfile.config-management-risky" in workflow
     assert "tool: jenkins-jcasc" in workflow
     assert "input-file: tests/fixtures/jenkins_jcasc_risky.yml" in workflow
+    assert "tool: jenkins-project" in workflow
+    assert "input-file: tests/fixtures/jenkins_plugins_risky.txt" in workflow
     assert "input-file: tests/fixtures/chef_config_management_risky.rb" in workflow
     assert "tool: chef-project" in workflow
     assert "input-file: tests/fixtures/chef_policyfile_risky.rb" in workflow

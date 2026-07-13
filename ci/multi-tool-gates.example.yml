@@ -43,6 +43,8 @@ jobs:
             input: Jenkinsfile
           - tool: jenkins-jcasc
             input: jenkins.yaml
+          - tool: jenkins-project
+            input: jenkins/plugins.txt
           - tool: chef
             input: chef/recipes/default.rb
           - tool: chef-project

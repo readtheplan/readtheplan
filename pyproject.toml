@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "travis-ci", "drone-ci", "woodpecker-ci", "concourse", "bamboo", "teamcity", "codebuild", "cloud-build", "codepipeline", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "sops", "secrets", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "docker-bake", "buildx", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "travis-ci", "drone-ci", "woodpecker-ci", "concourse", "bamboo", "teamcity", "codebuild", "cloud-build", "codepipeline", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "sops", "secrets", "jenkins", "jenkins-jcasc", "jenkins-project", "jenkins-plugin-manager", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "docker-bake", "buildx", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -92,6 +92,7 @@ gitlab-ci = "readtheplan.adapters.pipelines:GitLabCIAdapter"
 haproxy = "readtheplan.adapters.proxy_configs:HAProxyAdapter"
 jenkins = "readtheplan.adapters.jenkins:JenkinsAdapter"
 jenkins-jcasc = "readtheplan.adapters.jenkins_jcasc:JenkinsJCasCAdapter"
+jenkins-project = "readtheplan.adapters.jenkins_project:JenkinsProjectAdapter"
 helm = "readtheplan.adapters.helm:HelmAdapter"
 kubernetes = "readtheplan.adapters.kubernetes:KubernetesAdapter"
 kustomize = "readtheplan.adapters.kustomize:KustomizeAdapter"

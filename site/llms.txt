@@ -10,7 +10,7 @@ and can map findings to six built-in compliance catalogs.
 CI/CD analysis includes GitHub Actions, GitLab CI, CircleCI, Azure Pipelines,
 Bitbucket Pipelines, Buildkite, Travis CI, Drone CI, and Woodpecker CI.
 Self-hosted CI coverage also includes Concourse pipelines, Bamboo YAML Specs,
-Jenkins/JCasC, and TeamCity Kotlin DSL.
+Jenkins/JCasC, Jenkins Plugin Installation Manager text/YAML catalogs, and TeamCity Kotlin DSL.
 Cloud-native delivery coverage includes AWS CodeBuild buildspecs, Google Cloud
 Build configurations, and AWS CodePipeline definitions.
 Secrets supply-chain coverage includes SOPS creation policy and encrypted
@@ -28,6 +28,9 @@ executing plugins, resolving Vault values, contacting APIs, or connecting to hos
 Puppet coverage includes manifests, Puppetfile/module metadata, Hiera configuration,
 and duplicate-safe puppet.conf analysis for agent, server, CA, trust, execution,
 cached-catalog, plugin, reporting, identity, endpoint, and credential settings.
+Jenkins plugin-catalog coverage includes strict text/YAML parsing, version mutability,
+experimental and incremental sources, direct URLs, privileged capabilities, and an
+explicit offline boundary for update-center metadata and dependency resolution.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.

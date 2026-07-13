@@ -2478,6 +2478,12 @@ def agent_gate_configuration_management(
         analyze_jenkins_jcasc,
         parse_jenkins_jcasc,
     )
+    from readtheplan.adapters.jenkins_project import (
+        JenkinsProjectAdapter,
+        JenkinsProjectInputError,
+        analyze_jenkins_project,
+        parse_jenkins_project,
+    )
     from readtheplan.adapters.puppet import PuppetAdapter, analyze_puppet
     from readtheplan.adapters.puppet_project import (
         PuppetProjectAdapter,
@@ -2498,6 +2504,7 @@ def agent_gate_configuration_management(
         "ansible-project",
         "jenkins",
         "jenkins-jcasc",
+        "jenkins-project",
         "chef",
         "chef-project",
         "puppet",
@@ -2614,6 +2621,16 @@ def agent_gate_configuration_management(
             ) from exc
         adapter = JenkinsJCasCAdapter()
         analyze = analyze_jenkins_jcasc
+    elif ecosystem == "jenkins-project":
+        try:
+            data = parse_jenkins_project(source, filename=input_path)
+        except JenkinsProjectInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Jenkins plugin catalog {input_path}: {exc}",
+            ) from exc
+        adapter = JenkinsProjectAdapter()
+        analyze = analyze_jenkins_project
     else:
         key, adapter, analyze = {
             "jenkins": ("jenkinsfile", JenkinsAdapter(), analyze_jenkins),
@@ -3426,8 +3443,8 @@ def create_server() -> Any:
         """Return a gate for supported configuration-management source.
 
         Args:
-            input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
-            ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, teamcity,
+            input_path: Local path to a playbook, Jenkinsfile, plugin catalog, recipe, or manifest.
+            ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, jenkins-project, teamcity,
                 chef, chef-project, puppet, puppet-project, salt-project, dsc, or cfengine.
             framework: Optional compliance framework for control checks.
         """

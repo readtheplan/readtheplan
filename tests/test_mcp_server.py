@@ -635,6 +635,24 @@ def test_agent_gate_configuration_management_supports_puppet_runtime_config() ->
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_jenkins_plugin_catalog() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "jenkins_plugins_risky.txt"),
+        "jenkins-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "jenkins-project"
+    assert result["artifact_type"] == "plugins_txt"
+    assert result["plugin_count"] == 7
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 8
+    assert "fixture-user" not in encoded
+    assert "fixture-password" not in encoded
+    assert "plugins.example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_dsc() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "powershell_dsc_risky.ps1"),
@@ -2214,6 +2232,37 @@ def test_stdio_server_tools_list() -> None:
         assert puppet_summary["total_changes"] == 34
         assert "fixture-puppet-proxy-password-do-not-leak" not in puppet_content[0]["text"]
         assert "fixture-puppet-header-token-do-not-leak" not in puppet_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Jenkins plugins) ---
+        jenkins_project_req = {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (FIXTURES / "jenkins_plugins_risky.txt").resolve()
+                    ),
+                    "ecosystem": "jenkins-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        jenkins_project_resp = _send_jsonrpc(proc, jenkins_project_req)
+        assert "result" in jenkins_project_resp, (
+            f"Jenkins plugin tools/call failed: {jenkins_project_resp}"
+        )
+        jenkins_project_content = jenkins_project_resp["result"]["content"]
+        assert len(jenkins_project_content) == 1
+        jenkins_project_summary = json.loads(jenkins_project_content[0]["text"])
+        assert jenkins_project_summary["adapter"] == "jenkins-project"
+        assert jenkins_project_summary["artifact_type"] == "plugins_txt"
+        assert jenkins_project_summary["plugin_count"] == 7
+        assert jenkins_project_summary["total_changes"] == 8
+        assert "fixture-user" not in jenkins_project_content[0]["text"]
+        assert "fixture-password" not in jenkins_project_content[0]["text"]
+        assert "plugins.example.invalid" not in jenkins_project_content[0]["text"]
 
     finally:
         proc.stdin.close()  # type: ignore[union-attr]
