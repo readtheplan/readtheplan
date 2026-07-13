@@ -999,6 +999,32 @@ def test_agent_gate_configuration_management_supports_jenkins_plugin_catalog() -
     assert "fixture-password" not in encoded
 
 
+def test_agent_gate_configuration_management_reports_jenkins_secret_interpolation() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "Jenkinsfile.config-management-risky"),
+        "jenkins",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "jenkins"
+    assert result["credential_binding_count"] == 1
+    assert result["secret_interpolation_count"] == 1
+    assert result["credential_exposure_capabilities"] == ["command"]
+    assert result["total_changes"] == 18
+    assert result["risk_counts"] == {
+        "safe": 2,
+        "review": 5,
+        "dangerous": 11,
+        "irreversible": 0,
+    }
+    assert result["decision"] == "block"
+    assert "production-deploy-token" not in encoded
+    assert "DEPLOY_TOKEN" not in encoded
+    assert "registry.example.com/platform/deployer:latest" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_jenkins_library_trust() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "jenkins_jcasc_risky.yml"),

@@ -22,6 +22,7 @@ pipeline {
         withCredentials([]) {
           sh './deploy.sh'
         }
+        sh "curl -H 'Authorization: Bearer ${DEPLOY_TOKEN}' https://control.example.com/deploy"
         httpRequest url: 'https://control.example.com/deploy'
         input message: 'Promote production?', submitter: 'release-managers'
         build job: 'smoke-tests'

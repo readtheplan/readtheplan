@@ -36,7 +36,7 @@ def test_jenkins_fixture_surfaces_supply_chain_agents_and_dynamic_groovy() -> No
     by_type = {change.resource_type: change for change in changes}
 
     assert Counter(change.risk for change in changes) == {
-        "dangerous": 9,
+        "dangerous": 11,
         "review": 5,
         "safe": 2,
     }
@@ -46,6 +46,7 @@ def test_jenkins_fixture_surfaces_supply_chain_agents_and_dynamic_groovy() -> No
     assert by_type["jenkins_script_block"].risk == "dangerous"
     assert by_type["jenkins_checkout"].risk == "review"
     assert by_type["jenkins_clean_workspace"].risk == "dangerous"
+    assert by_type["jenkins_credential_interpolation"].risk == "dangerous"
 
 
 def test_chef_fixture_surfaces_remote_content_notifications_guards_and_identity() -> None:
