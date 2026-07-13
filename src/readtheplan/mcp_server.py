@@ -736,6 +736,45 @@ def agent_gate_devspace(
     return analyze_devspace(data, catalog=catalog)
 
 
+def agent_gate_tilt(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local Tiltfile source."""
+    from readtheplan.adapters.tiltfile import (
+        TiltfileAdapter,
+        TiltfileInputError,
+        analyze_tiltfile,
+        parse_tiltfile,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Tiltfile input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_tiltfile(source)
+    except TiltfileInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Tiltfile input in {input_path}: {exc}",
+        ) from exc
+    if not TiltfileAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Tiltfile configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_tiltfile(data, catalog=catalog)
+
+
 def agent_gate_salt(
     input_path: str,
     framework: str | None = None,
@@ -2068,6 +2107,7 @@ def create_server() -> Any:
     agent_gate_packer_handler = agent_gate_packer
     agent_gate_skaffold_handler = agent_gate_skaffold
     agent_gate_devspace_handler = agent_gate_devspace
+    agent_gate_tilt_handler = agent_gate_tilt
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_nix_handler = agent_gate_nix
     agent_gate_dsc_handler = agent_gate_dsc
@@ -2290,6 +2330,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_devspace_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_tilt")
+    def _agent_gate_tilt_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Tiltfile source.
+
+        Args:
+            input_path: Local path to a Tiltfile.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_tilt_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_salt")
     def _agent_gate_salt_tool(

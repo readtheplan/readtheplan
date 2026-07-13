@@ -54,6 +54,7 @@ from readtheplan.mcp_server import (
     agent_gate_terraform_lock,
     agent_gate_terraform_state,
     agent_gate_terragrunt,
+    agent_gate_tilt,
     agent_gate_traefik,
     agent_gate_vagrant,
     agent_gate_vault,
@@ -435,6 +436,14 @@ def test_agent_gate_devspace_supports_framework_checks() -> None:
     result = agent_gate_devspace(str(FIXTURES / "devspace_risky.yaml"), "soc2")
     assert result["adapter"] == "devspace"
     assert result["project_name"] == "platform"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_tilt_supports_framework_checks() -> None:
+    result = agent_gate_tilt(str(FIXTURES / "Tiltfile.risky"), "soc2")
+    assert result["adapter"] == "tilt"
+    assert result["syntax_mode"] == "ast"
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -1064,6 +1073,19 @@ def test_agent_gate_devspace_rejects_path_outside_root(monkeypatch, tmp_path) ->
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_tilt_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "Tiltfile"
+    outside.write_text("docker_build('api', '.')\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_tilt(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1411,6 +1433,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_packer" in tool_names
         assert "agent_gate_skaffold" in tool_names
         assert "agent_gate_devspace" in tool_names
+        assert "agent_gate_tilt" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
@@ -1462,6 +1485,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(skaffold_schema["properties"])
         devspace_schema = tools_by_name["agent_gate_devspace"]["inputSchema"]
         assert {"input_path", "framework"} <= set(devspace_schema["properties"])
+        tilt_schema = tools_by_name["agent_gate_tilt"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(tilt_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]

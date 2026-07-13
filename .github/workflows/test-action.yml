@@ -1402,6 +1402,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Tiltfile
+        id: tilt
+        uses: ./
+        with:
+          tool: tilt
+          input-file: tests/fixtures/Tiltfile.risky
+          framework: soc2
+
+      - name: Assert Tiltfile outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.tilt.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.tilt.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.tilt.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "46"
+          test "$RISK_COUNTS" = '{"dangerous":33,"irreversible":0,"review":13,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "tilt"
+          assert payload["syntax_mode"] == "ast"
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Salt states
         id: salt
         uses: ./
