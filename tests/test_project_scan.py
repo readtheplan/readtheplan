@@ -23,6 +23,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
     ("relative", "tool"),
     [
         (".terraform.lock.hcl", "terraform-lock"),
+        ("terraform.tfstate", "terraform-state"),
+        ("terraform.tfstate.backup", "terraform-state"),
+        ("snapshots/production.tfstate.json", "terraform-state"),
         ("live/prod/terragrunt.hcl", "terragrunt"),
         (".spacelift/config.yml", "spacelift"),
         ("cdk.out/manifest.json", "cdk"),
@@ -231,6 +234,56 @@ def test_content_detection_recognizes_pulumi_event_exports(source: str) -> None:
         )
         == "pulumi"
     )
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    ["terraform_state_show_risky.json", "terraform_state_raw_risky.json"],
+)
+def test_content_detection_recognizes_terraform_state_exports(fixture: str) -> None:
+    source = (FIXTURES / fixture).read_bytes()
+
+    assert (
+        identify_project_input(
+            Path("generated-state.json"),
+            "generated-state.json",
+            content=source,
+        )
+        == "terraform-state"
+    )
+
+
+def test_project_scan_routes_and_redacts_terraform_state(tmp_path: Path) -> None:
+    fixtures = {
+        "generated-state.json": "terraform_state_show_risky.json",
+        "terraform.tfstate": "terraform_state_raw_risky.json",
+    }
+    for target, fixture in fixtures.items():
+        (tmp_path / target).write_bytes((FIXTURES / fixture).read_bytes())
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 2
+    assert payload["scanned_file_count"] == 2
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"terraform-state"}
+    assert {item["artifact"] for item in payload["files"]} == {
+        "raw-v4",
+        "show-json",
+    }
+    assert {item.get("serial") for item in payload["files"]} == {None, 42}
+    encoded = json.dumps(payload)
+    for secret in (
+        "output-secret-value",
+        "marked-output-secret",
+        "marked-resource-secret",
+        "unmarked-resource-secret",
+        "raw-output-secret",
+        "raw-marked-resource-secret",
+        "raw-unmarked-resource-secret",
+        "provider-private-blob",
+    ):
+        assert secret not in encoded
 
 
 def test_generic_auth_and_webserver_names_require_puppet_context() -> None:
