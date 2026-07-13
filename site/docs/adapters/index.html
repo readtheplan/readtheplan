@@ -107,7 +107,8 @@ readtheplan gitlab-ci .gitlab-ci.yml
 readtheplan circleci .circleci/config.yml
 readtheplan docker-compose compose.yml
 readtheplan nomad job.nomad.hcl
-readtheplan packer image.pkr.hcl</code></pre>
+readtheplan packer image.pkr.hcl
+readtheplan skaffold skaffold.yaml</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -127,6 +128,8 @@ readtheplan packer image.pkr.hcl</code></pre>
             Jenkins JCasC YAML is parsed structurally for controller identity, credentials, agents, libraries, and script authority:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
+            Skaffold Config YAML is parsed without resolving imports, building images, rendering
+            manifests, executing hooks/actions, or contacting Kubernetes clusters.
           </p>
 
           <h3 style="margin-top:28px;color:var(--accent)">Why write one?</h3>
@@ -135,6 +138,16 @@ readtheplan packer image.pkr.hcl</code></pre>
             <li style="margin-bottom:6px">You have a custom IaC tool and want compliance gates and audit evidence.</li>
             <li style="margin-bottom:6px">You want to extend the type-map for CloudFormation or Kubernetes resources not yet covered.</li>
           </ul>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="skaffold-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="skaffold-title">Skaffold pipelines</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review build, render, deploy, verify, and custom-action boundaries statically:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan skaffold --framework soc2 skaffold.yaml</code></pre>
         </div>
       </section>
 

@@ -1,0 +1,138 @@
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: platform
+
+requires:
+  - git:
+      repo: https://deploy:literal-example@github.com/example/shared-skaffold.git
+      ref: main
+      path: modules/platform
+  - path: ../local-shared
+
+build:
+  cluster:
+    namespace: builders
+  insecureRegistries:
+    - registry.internal:5000
+  tagPolicy:
+    envTemplate:
+      template: "{{.IMAGE}}:{{.TAG}}"
+  hooks:
+    before:
+      - command: [sh, -c, ./prepare-host.sh]
+  artifacts:
+    - image: registry.example.test/platform:latest
+      context: ../platform
+      custom:
+        buildCommand: ./custom-build.sh
+        dependencies:
+          paths: ["**"]
+      hooks:
+        after:
+          - command: [sh, -c, ./publish-metadata.sh]
+      sync:
+        hooks:
+          before:
+            - host:
+                command: [sh, -c, ./sync-host.sh]
+      docker:
+        dockerfile: Dockerfile
+        noCache: true
+        pullParent: false
+        buildArgs:
+          API_TOKEN: literal-example
+
+manifests:
+  rawYaml:
+    - ../deploy/base.yaml
+  remoteManifests:
+    - https://example.test/manifests/latest.yaml
+  kustomize:
+    paths: [overlays/prod]
+    buildArgs: [--enable-alpha-plugins]
+  helm:
+    releases:
+      - name: platform
+        remoteChart: example/platform
+        setValueTemplates:
+          apiToken: literal-example
+  hooks:
+    before:
+      - host:
+          command: [sh, -c, ./pre-render.sh]
+
+deploy:
+  kubectl:
+    flags:
+      apply: [--validate=false, --force]
+    hooks:
+      after:
+        - container:
+            command: [sh, -c, ./post-deploy.sh]
+            podName: platform-0
+            containerName: platform
+  helm:
+    releases:
+      - name: direct-release
+        remoteChart: example/direct
+
+verify:
+  - name: smoke
+    image: registry.example.test/smoke:latest
+    command: [sh, -c, ./smoke.sh]
+    executionMode:
+      kubernetesCluster:
+        overrides: '{"spec":{"hostNetwork":true}}'
+
+customActions:
+  - name: migrate
+    failFast: false
+    executionMode:
+      kubernetesCluster: {}
+    containers:
+      - name: migration
+        image: registry.example.test/migrate:latest
+        command: [sh, -c]
+        args: [./migrate.sh]
+        env:
+          DATABASE_PASSWORD: literal-example
+
+portForward:
+  - resourceType: service
+    resourceName: platform
+    port: 8080
+    localPort: 8080
+    address: 0.0.0.0
+
+profiles:
+  - name: production
+    activation:
+      - command: deploy
+        kubeContext: prod-cluster
+    patches:
+      - op: replace
+        path: /deploy
+        value:
+          kubectl:
+            flags:
+              apply: [--force]
+    build:
+      googleCloudBuild:
+        projectId: production-project
+    deploy:
+      kpt:
+        dir: ../prod-package
+        force: true
+---
+apiVersion: skaffold/v4beta13
+kind: Config
+metadata:
+  name: supporting
+build:
+  local:
+    push: false
+  artifacts:
+    - image: supporting@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      docker:
+        dockerfile: Dockerfile

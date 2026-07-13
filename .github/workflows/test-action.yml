@@ -1342,6 +1342,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Skaffold configuration
+        id: skaffold
+        uses: ./
+        with:
+          tool: skaffold
+          input-file: tests/fixtures/skaffold_risky.yaml
+          framework: soc2
+
+      - name: Assert Skaffold outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.skaffold.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.skaffold.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.skaffold.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "47"
+          test "$RISK_COUNTS" = '{"dangerous":36,"irreversible":0,"review":11,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "skaffold"
+          assert payload["config_count"] == 2
+          assert payload["decision"] == "block"
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Salt states
         id: salt
         uses: ./

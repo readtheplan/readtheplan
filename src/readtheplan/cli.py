@@ -327,9 +327,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "jenkins-jcasc",
         help="Emit the agent-gate decision for Jenkins Configuration as Code YAML.",
     )
-    jenkins_jcasc.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    jenkins_jcasc.add_argument("--framework", help="Include checks from a compliance framework.")
     jenkins_jcasc.add_argument("input_file", help="Path to a JCasC YAML file.")
     jenkins_jcasc.set_defaults(func=_jenkins_jcasc_gate)
 
@@ -345,9 +343,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "chef-project",
         help="Emit the agent-gate decision for Chef policy or cookbook project files.",
     )
-    chef_project.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    chef_project.add_argument("--framework", help="Include checks from a compliance framework.")
     chef_project.add_argument(
         "input_file",
         help="Path to Policyfile.rb, Policyfile.lock.json, or cookbook metadata.rb.",
@@ -366,9 +362,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "puppet-project",
         help="Emit the agent-gate decision for Puppet project dependency or Hiera files.",
     )
-    puppet_project.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    puppet_project.add_argument("--framework", help="Include checks from a compliance framework.")
     puppet_project.add_argument(
         "input_file", help="Path to Puppetfile, module metadata.json, or hiera.yaml."
     )
@@ -402,9 +396,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "azure-pipelines",
         help="Emit the agent-gate decision for an Azure Pipelines YAML configuration.",
     )
-    azure_pipelines.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    azure_pipelines.add_argument("--framework", help="Include checks from a compliance framework.")
     azure_pipelines.add_argument("input_file", help="Path to azure-pipelines.yml.")
     azure_pipelines.set_defaults(func=_pipeline_gate)
 
@@ -461,6 +453,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     packer.set_defaults(func=_packer_gate)
 
+    skaffold = subparsers.add_parser(
+        "skaffold",
+        help="Emit the agent-gate decision for Skaffold pipeline configuration.",
+    )
+    skaffold.add_argument("--framework", help="Include checks from a compliance framework.")
+    skaffold.add_argument("input_file", help="Path to skaffold.yaml or another Skaffold Config.")
+    skaffold.set_defaults(func=_skaffold_gate)
+
     salt = subparsers.add_parser(
         "salt",
         help="Emit the agent-gate decision for a Salt SLS state file.",
@@ -473,9 +473,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "salt-project",
         help="Emit the agent-gate decision for Salt project configuration.",
     )
-    salt_project.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    salt_project.add_argument("--framework", help="Include checks from a compliance framework.")
     salt_project.add_argument(
         "input_file",
         help="Path to Salt master/minion config, a top file, or a salt-ssh roster.",
@@ -505,9 +503,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "cfengine",
         help="Emit the agent-gate decision for CFEngine policy or Augments data.",
     )
-    cfengine.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    cfengine.add_argument("--framework", help="Include checks from a compliance framework.")
     cfengine.add_argument(
         "input_file",
         help="Path to a CFEngine .cf policy or Augments JSON file.",
@@ -589,9 +585,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Emit the agent-gate decision for Grafana INI or provisioning config.",
     )
     grafana.add_argument("--framework", help="Include checks from a compliance framework.")
-    grafana.add_argument(
-        "input_file", help="Path to grafana.ini or provisioning YAML/JSON."
-    )
+    grafana.add_argument("input_file", help="Path to grafana.ini or provisioning YAML/JSON.")
     grafana.set_defaults(func=_grafana_gate)
 
     vault = subparsers.add_parser(
@@ -630,9 +624,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "terraform-config",
         help="Emit the agent-gate decision for Terraform configuration HCL/JSON.",
     )
-    terraform_config.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    terraform_config.add_argument("--framework", help="Include checks from a compliance framework.")
     terraform_config.add_argument("input_file", help="Path to a .tf or .tf.json file.")
     terraform_config.set_defaults(func=_terraform_config_gate)
 
@@ -640,9 +632,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "terraform-lock",
         help="Emit the agent-gate decision for a Terraform/OpenTofu dependency lock.",
     )
-    terraform_lock.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    terraform_lock.add_argument("--framework", help="Include checks from a compliance framework.")
     terraform_lock.add_argument(
         "input_file",
         help="Path to .terraform.lock.hcl.",
@@ -734,9 +724,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "otel-collector",
         help="Emit the agent-gate decision for OpenTelemetry Collector YAML.",
     )
-    otel_collector.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    otel_collector.add_argument("--framework", help="Include checks from a compliance framework.")
     otel_collector.add_argument("input_file", help="Path to Collector configuration YAML.")
     otel_collector.set_defaults(func=_otel_collector_gate)
 
@@ -744,9 +732,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "cloud-init",
         help="Emit the agent-gate decision for cloud-init user-data.",
     )
-    cloud_init.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    cloud_init.add_argument("--framework", help="Include checks from a compliance framework.")
     cloud_init.add_argument("input_file", help="Path to cloud-init user-data.")
     cloud_init.set_defaults(func=_cloud_init_gate)
 
@@ -754,9 +740,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "dockerfile",
         help="Emit the agent-gate decision for a Dockerfile or Containerfile.",
     )
-    dockerfile.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    dockerfile.add_argument("--framework", help="Include checks from a compliance framework.")
     dockerfile.add_argument("input_file", help="Path to a Dockerfile or Containerfile.")
     dockerfile.set_defaults(func=_dockerfile_gate)
 
@@ -1672,6 +1656,31 @@ def _packer_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_packer(data, catalog=catalog))
+
+
+def _skaffold_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Skaffold configuration."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.skaffold import SkaffoldInputError, analyze_skaffold, parse_skaffold
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_skaffold(source)
+    except SkaffoldInputError as exc:
+        print(f"Error: invalid Skaffold input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "skaffold":
+        print("Error: input not recognized as Skaffold configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_skaffold(data, catalog=catalog))
 
 
 def _salt_gate(args: argparse.Namespace) -> int:

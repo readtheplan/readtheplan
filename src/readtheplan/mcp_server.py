@@ -658,6 +658,45 @@ def agent_gate_packer(
     return analyze_packer(data, catalog=catalog)
 
 
+def agent_gate_skaffold(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local Skaffold configuration."""
+    from readtheplan.adapters.skaffold import (
+        SkaffoldAdapter,
+        SkaffoldInputError,
+        analyze_skaffold,
+        parse_skaffold,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Skaffold input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_skaffold(source)
+    except SkaffoldInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Skaffold input in {input_path}: {exc}",
+        ) from exc
+    if not SkaffoldAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Skaffold configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_skaffold(data, catalog=catalog)
+
+
 def agent_gate_salt(
     input_path: str,
     framework: str | None = None,
@@ -1988,6 +2027,7 @@ def create_server() -> Any:
     agent_gate_atlantis_handler = agent_gate_atlantis
     agent_gate_workload_handler = agent_gate_workload
     agent_gate_packer_handler = agent_gate_packer
+    agent_gate_skaffold_handler = agent_gate_skaffold
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_nix_handler = agent_gate_nix
     agent_gate_dsc_handler = agent_gate_dsc
@@ -2184,6 +2224,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_packer_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_skaffold")
+    def _agent_gate_skaffold_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Skaffold pipeline configuration.
+
+        Args:
+            input_path: Local path to skaffold.yaml or another Skaffold Config.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_skaffold_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_salt")
     def _agent_gate_salt_tool(
