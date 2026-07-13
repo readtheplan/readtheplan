@@ -658,6 +658,23 @@ def test_agent_gate_configuration_management_supports_bolt_inventory() -> None:
     assert result["artifact_type"] == "bolt_inventory"
     assert result["decision"] == "block"
     assert "fixture-ssh-password-do-not-leak" not in json.dumps(result)
+
+
+def test_agent_gate_configuration_management_supports_r10k_configuration() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "puppet_r10k_risky" / "r10k.yaml"),
+        "puppet-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "r10k"
+    assert result["source_count"] == 2
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 40
+    assert "fixture-proxy-password" not in encoded
+    assert "fixture-forge-token-do-not-leak" not in encoded
     assert "fixture-private-key-do-not-leak" not in json.dumps(result)
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 

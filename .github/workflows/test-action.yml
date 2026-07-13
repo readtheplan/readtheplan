@@ -1403,6 +1403,38 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet r10k deployment configuration
+        id: puppet_r10k
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/puppet_r10k_risky/r10k.yaml
+          framework: soc2
+
+      - name: Assert Puppet r10k deployment outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_r10k.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_r10k.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_r10k.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "40"
+          test "$RISK_COUNTS" = '{"dangerous":22,"irreversible":0,"review":18,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "r10k"
+          assert payload["source_count"] == 2
+          assert payload["decision"] == "block"
+          assert "fixture-proxy-password" not in serialized
+          assert "fixture-forge-token-do-not-leak" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Puppet Bolt inventory
         id: puppet_bolt_inventory
         uses: ./

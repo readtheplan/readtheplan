@@ -299,6 +299,102 @@ def test_bolt_puppetdb_token_path_is_an_external_boundary_not_literal_secret() -
     )
 
 
+def test_r10k_surfaces_sources_deletion_execution_credentials_and_collisions() -> None:
+    fixture = FIXTURES / "puppet_r10k_risky" / "r10k.yaml"
+    data = parse_puppet_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert data["puppet_project"]["artifact_type"] == "r10k"
+    assert len(changes) == 40
+    assert sum(change.risk == "dangerous" for change in changes) == 22
+    assert sum(change.risk == "review" for change in changes) == 18
+    assert any("executable Puppet environments" in change.explanation for change in changes)
+    assert any("same basedir" in change.explanation for change in changes)
+    assert any(
+        "shell command for every candidate branch" in change.explanation for change in changes
+    )
+    assert any("literal Forge authorization token" in change.explanation for change in changes)
+    assert any("Environment-level purge" in change.explanation for change in changes)
+    assert any(
+        "cache and managed environment directory overlap" in change.explanation
+        for change in changes
+    )
+    for secret in (
+        "fixture-proxy-user",
+        "fixture-proxy-password",
+        "fixture-postrun-token",
+        "fixture-git-user",
+        "fixture-git-password",
+        "fixture-repo-proxy-password",
+        "fixture-forge-token-do-not-leak",
+        "fixture-mail-password-do-not-leak",
+        "git.example.invalid",
+        "proxy.example.invalid",
+    ):
+        assert secret not in encoded
+
+
+def test_r10k_supports_legacy_source_and_settings_aliases() -> None:
+    source = (
+        "remote: ssh://git@code.example.invalid/control.git\n"
+        "r10k_basedir: /etc/puppetlabs/code/environments\n"
+        "git_settings:\n"
+        f"  default_ref: {'a' * 40}\n"
+        "forge_settings:\n"
+        "  baseurl: https://forgeapi.puppet.com\n"
+        "deploy_settings:\n"
+        "  write_lock: maintenance\n"
+    )
+    data = parse_puppet_project(source, filename="r10k.yaml")
+    changes = PuppetProjectAdapter().analyze(data)
+    gate = analyze_puppet_project(data)
+
+    assert gate["source_count"] == 1
+    assert any("legacy global" in change.explanation for change in changes)
+    assert any("immutable commit" in change.explanation for change in changes)
+    assert any("write lock" in change.explanation for change in changes)
+
+
+@pytest.mark.parametrize(
+    ("source", "error"),
+    [
+        ("{}\n", "does not contain settings"),
+        ("- source\n", "one YAML mapping"),
+        ("sources: []\n", "sources must be a mapping"),
+        ("sources:\n  one: value\n", "source 1 must be a mapping"),
+        (
+            "sources:\n  one:\n    basedir: /environments\n",
+            "Git source 1 requires a string remote",
+        ),
+        (
+            "sources:\n  one:\n    remote: https://example.invalid/repo.git\n",
+            "requires a string basedir",
+        ),
+        (
+            "sources:\n  one:\n    remote: https://example.invalid/repo.git\n"
+            "    basedir: /environments\nremote: https://example.invalid/legacy.git\n",
+            "cannot be combined",
+        ),
+        ("git:\n  repositories: {}\n", "repositories must be a list"),
+        ("git:\n  repositories:\n    - proxy: https://proxy.invalid\n", "string remote"),
+        ("forge: true\n", "forge must be a mapping"),
+        ("deploy:\n  purge_levels: deployment\n", "purge_levels must be a string list"),
+        ("postrun: /bin/true\n", "postrun must be a non-empty string list"),
+        ("pool_size: 0\n", "pool_size must be a positive integer"),
+        ("unknown: true\n", "unsupported top-level r10k"),
+        ("cachedir: one\ncachedir: two\n", "duplicate YAML key"),
+    ],
+)
+def test_r10k_parser_rejects_duplicate_unrelated_or_malformed_input(
+    source: str, error: str
+) -> None:
+    with pytest.raises(PuppetProjectInputError, match=error):
+        parse_puppet_project(source, filename="r10k.yaml")
+
+
 @pytest.mark.parametrize(
     ("fixture", "artifact_type"),
     [
@@ -308,6 +404,7 @@ def test_bolt_puppetdb_token_path_is_an_external_boundary_not_literal_secret() -
         ("puppet_conf_risky.conf", "config"),
         ("bolt_project/bolt-project.yaml", "bolt_project"),
         ("bolt_inventory/inventory.yaml", "bolt_inventory"),
+        ("puppet_r10k_risky/r10k.yaml", "r10k"),
     ],
 )
 def test_gate_and_cli_support_every_puppet_project_format(
