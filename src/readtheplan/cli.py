@@ -841,6 +841,18 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     terraform_config.add_argument("input_file", help="Path to a .tf or .tf.json file.")
     terraform_config.set_defaults(func=_terraform_config_gate)
 
+    terraform_stack = subparsers.add_parser(
+        "terraform-stack",
+        help="Emit the agent-gate decision for Terraform Stack component or deployment HCL.",
+    )
+    terraform_stack.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    terraform_stack.add_argument(
+        "input_file", help="Path to a .tfcomponent.hcl or .tfdeploy.hcl file."
+    )
+    terraform_stack.set_defaults(func=_terraform_stack_gate)
+
     terraform_lock = subparsers.add_parser(
         "terraform-lock",
         help="Emit the agent-gate decision for a Terraform/OpenTofu dependency lock.",
@@ -3012,6 +3024,35 @@ def _docker_bake_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_docker_bake(data, catalog=catalog))
+
+
+def _terraform_stack_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Terraform Stacks."""
+    from readtheplan.adapters.terraform_stack import (
+        TerraformStackAdapter,
+        TerraformStackInputError,
+        analyze_terraform_stack,
+        parse_terraform_stack,
+    )
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_terraform_stack(source, path.name)
+    except TerraformStackInputError as exc:
+        print(f"Error: invalid Terraform Stack input: {exc}", file=sys.stderr)
+        return 1
+    if not TerraformStackAdapter().can_handle(data):
+        print("Error: input not recognized as Terraform Stacks", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_terraform_stack(data, catalog=catalog))
 
 
 def _dockerfile_gate(args: argparse.Namespace) -> int:

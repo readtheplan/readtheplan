@@ -198,6 +198,8 @@ def identify_project_input(
 
     if name == ".terraform.lock.hcl":
         return "terraform-lock"
+    if name.endswith((".tfcomponent.hcl", ".tfdeploy.hcl")):
+        return "terraform-stack"
     if name == "terragrunt.hcl" or name.endswith(".terragrunt.hcl"):
         return "terragrunt"
     if name.endswith((".tm.hcl", ".tm.json", ".tmgen")) or name == "terramate.tm.hcl":

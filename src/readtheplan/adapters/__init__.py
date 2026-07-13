@@ -73,6 +73,7 @@ from readtheplan.adapters.systemd import SystemdUnitAdapter
 from readtheplan.adapters.teamcity import TeamCityAdapter
 from readtheplan.adapters.terraform_config import TerraformConfigAdapter, TerragruntAdapter
 from readtheplan.adapters.terraform_lock import TerraformLockAdapter
+from readtheplan.adapters.terraform_stack import TerraformStackAdapter
 from readtheplan.adapters.terraform_state import TerraformStateAdapter
 from readtheplan.adapters.terramate import TerramateAdapter
 from readtheplan.adapters.tiltfile import TiltfileAdapter
@@ -203,6 +204,7 @@ register_adapter(SystemdUnitAdapter())
 register_adapter(TerraformConfigAdapter())
 register_adapter(TerraformLockAdapter())
 register_adapter(TerraformStateAdapter())
+register_adapter(TerraformStackAdapter())
 register_adapter(TerramateAdapter())
 register_adapter(TiltfileAdapter())
 register_adapter(TerragruntAdapter())
@@ -282,6 +284,7 @@ __all__ = [
     "TerraformConfigAdapter",
     "TerraformLockAdapter",
     "TerraformStateAdapter",
+    "TerraformStackAdapter",
     "TerramateAdapter",
     "TiltfileAdapter",
     "TeamCityAdapter",

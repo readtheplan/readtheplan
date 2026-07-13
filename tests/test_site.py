@@ -224,6 +224,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "agent_gate_cfengine",
         "agent_gate_terraform_lock",
         "agent_gate_terraform_state",
+        "agent_gate_terraform_stack",
         "agent_gate_spacelift",
         "jenkins-jcasc",
         "TeamCity Kotlin DSL",

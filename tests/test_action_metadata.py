@@ -21,7 +21,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert "input-file" in action
     assert "tool:" in action
     assert (
-        "scan|terraform-config|terraform-lock|terraform-state|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|"
+        "scan|terraform-config|terraform-lock|terraform-state|terraform-stack|terragrunt|terramate|spacelift|cloudformation|cdk|azure|bicep|kubernetes|helm|helmfile|kustomize|skaffold|devspace|tilt|cue|jsonnet|tanka|ytt|vendir|kbld|imgpkg|kapp|crossplane|serverless|sam|pulumi|pulumi-project|"
         "ansible|ansible-project|jenkins|jenkins-jcasc|teamcity|chef|chef-project|"
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
@@ -101,6 +101,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/docker_compose_risky.yml" in workflow
     assert "tool: docker-bake" in workflow
     assert "input-file: tests/fixtures/docker-bake.risky.hcl" in workflow
+    assert "tool: terraform-stack" in workflow
+    assert "input-file: tests/fixtures/terraform_stack_risky.tfdeploy.hcl" in workflow
     assert "tool: nomad" in workflow
     assert "input-file: tests/fixtures/nomad_plan_risky.json" in workflow
     assert "input-file: tests/fixtures/flux_gitops_risky.yml" in workflow

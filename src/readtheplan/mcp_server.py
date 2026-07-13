@@ -2361,6 +2361,44 @@ def agent_gate_docker_bake(
     return analyze_docker_bake(data, catalog=catalog)
 
 
+def agent_gate_terraform_stack(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for a confined Terraform Stack HCL file."""
+    from readtheplan.adapters.terraform_stack import (
+        TerraformStackAdapter,
+        TerraformStackInputError,
+        analyze_terraform_stack,
+        parse_terraform_stack,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="input_path must be a non-empty string"
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read Terraform Stack input {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_terraform_stack(source, Path(input_path).name)
+    except TerraformStackInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Terraform Stack input in {input_path}: {exc}",
+        ) from exc
+    if not TerraformStackAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT", message="Input is not recognized as Terraform Stacks"
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_terraform_stack(data, catalog=catalog)
+
+
 def agent_gate_dockerfile(
     input_path: str,
     framework: str | None = None,
@@ -2711,6 +2749,7 @@ def create_server() -> Any:
     agent_gate_sam_handler = agent_gate_sam
     agent_gate_proxy_config_handler = agent_gate_proxy_config
     agent_gate_docker_bake_handler = agent_gate_docker_bake
+    agent_gate_terraform_stack_handler = agent_gate_terraform_stack
     agent_gate_dockerfile_handler = agent_gate_dockerfile
     agent_gate_configuration_management_handler = agent_gate_configuration_management
 
@@ -3351,6 +3390,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_docker_bake_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_terraform_stack")
+    def _agent_gate_terraform_stack_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Terraform Stack component or deployment HCL.
+
+        Args:
+            input_path: Local path to .tfcomponent.hcl or .tfdeploy.hcl.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_terraform_stack_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_dockerfile")
     def _agent_gate_dockerfile_tool(
