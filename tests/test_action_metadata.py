@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -261,6 +262,25 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow
     assert "steps.fail_on_threshold.outcome != 'failure'" in workflow
+
+
+def test_support_matrix_documents_every_action_analyzer() -> None:
+    action = (ROOT / "action.yml").read_text(encoding="utf-8")
+    support_matrix = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8")
+    case = re.search(
+        r"(?m)^\s+(terraform\|scan\|[a-z0-9|-]+)\) ;;\s*$",
+        action,
+    )
+
+    assert case is not None
+    action_tools = set(case.group(1).split("|"))
+    documented_commands = set(
+        re.findall(r"`readtheplan ([a-z][a-z0-9-]*)\b", support_matrix)
+    )
+
+    assert action_tools - {"terraform"} <= documented_commands
+    assert "analyze" in documented_commands
+    assert documented_commands - {"analyze"} <= action_tools
 
 
 def test_repository_collaboration_templates_exist() -> None:
