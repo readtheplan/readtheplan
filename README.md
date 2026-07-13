@@ -92,6 +92,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Azure Bicep / ARM What-If | `readtheplan azure whatif.json` | Structured deployment What-If with FullResourcePayloads old/new state |
 | Kubernetes / Argo / Flux / Tekton / Gateway API / cert-manager / External Secrets / Istio / Kyverno / Gatekeeper / KEDA / Knative | `readtheplan kubernetes rendered.yaml` | Rendered JSON/YAML, multi-doc, RBAC, workloads, GitOps, workflows/events, routing/mesh, admission policy, certificates/trust, secret sync, event-driven scaling, and serverless rules |
 | Helm source | `readtheplan helm Chart.yaml` | Chart metadata, values, and Go-template source with dependencies, hooks, dynamic evaluation, exposure, privilege, and secret rules |
+| Helmfile | `readtheplan helmfile helmfile.yaml.gotmpl` | State and lock analysis for repositories, releases, chart versions, environments, kube contexts, values/secrets, Go-template execution, hooks, kubectlApply, post-renderers, nested states, lifecycle safety, dependency integrity, and non-execution boundaries |
 | Kustomize source | `readtheplan kustomize kustomization.yaml` | Resources/bases, remote pinning, patches, generators, image overrides, Helm inflation, plugins, and transforms |
 | Crossplane | `readtheplan crossplane resources.yaml` | Packages/functions, image policy, runtime configuration, XRDs, Compositions, provider credentials, managed-resource lifecycle, and composite selection |
 | Pulumi | `readtheplan pulumi preview.json` | Structured preview digest or streaming events + resource-aware rules |

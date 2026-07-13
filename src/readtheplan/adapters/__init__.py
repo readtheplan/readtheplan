@@ -25,6 +25,7 @@ from readtheplan.adapters.envoy import EnvoyAdapter
 from readtheplan.adapters.grafana import GrafanaAdapter
 from readtheplan.adapters.hashicorp import ConsulAdapter, VaultAdapter
 from readtheplan.adapters.helm import HelmAdapter
+from readtheplan.adapters.helmfile import HelmfileAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.jenkins_jcasc import JenkinsJCasCAdapter
 from readtheplan.adapters.jsonnet import JsonnetAdapter
@@ -130,6 +131,7 @@ register_adapter(VaultAdapter())
 register_adapter(ConsulAdapter())
 register_adapter(KubernetesAdapter())
 register_adapter(HelmAdapter())
+register_adapter(HelmfileAdapter())
 register_adapter(KustomizeAdapter())
 register_adapter(LokiAdapter())
 register_adapter(PrometheusAdapter())
@@ -206,6 +208,7 @@ __all__ = [
     "EnvoyAdapter",
     "GrafanaAdapter",
     "HelmAdapter",
+    "HelmfileAdapter",
     "VaultAdapter",
     "ConsulAdapter",
     "JenkinsAdapter",
