@@ -638,6 +638,27 @@ def test_agent_gate_configuration_management_supports_ansible_inventory() -> Non
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_ansible_lookups() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "ansible_lookup_risky.yml"),
+        "ansible",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "ansible"
+    assert result["artifact_type"] == "playbook"
+    assert result["lookup_count"] == 9
+    assert "command" in result["lookup_capabilities"]
+    assert "secret" in result["lookup_capabilities"]
+    assert result["total_changes"] == 9
+    assert result["risk_counts"]["dangerous"] == 7
+    assert result["decision"] == "block"
+    assert "fixture-pipe-command-do-not-run" not in encoded
+    assert "fixture-vault-secret-do-not-leak" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_ansible_custom_modules() -> None:
     path = FIXTURES / "ansible_collection_code_risky" / "plugins" / "modules" / "deploy.py"
     result = agent_gate_configuration_management(
@@ -3271,6 +3292,35 @@ def test_stdio_server_tools_list() -> None:
             assert role_summary["handler_count"] == handler_count
             assert "fixture-task-token-do-not-leak" not in role_content[0]["text"]
             assert "fixture-handler-name-do-not-leak" not in role_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Ansible lookups) ---
+        lookup_req = {
+            "jsonrpc": "2.0",
+            "id": 93,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str((FIXTURES / "ansible_lookup_risky.yml").resolve()),
+                    "ecosystem": "ansible",
+                    "framework": "soc2",
+                },
+            },
+        }
+        lookup_resp = _send_jsonrpc(proc, lookup_req)
+        assert "result" in lookup_resp, f"Ansible lookup tools/call failed: {lookup_resp}"
+        lookup_content = lookup_resp["result"]["content"]
+        assert len(lookup_content) == 1
+        lookup_summary = json.loads(lookup_content[0]["text"])
+        assert lookup_summary["adapter"] == "ansible"
+        assert lookup_summary["artifact_type"] == "playbook"
+        assert lookup_summary["lookup_count"] == 9
+        assert "command" in lookup_summary["lookup_capabilities"]
+        assert "secret" in lookup_summary["lookup_capabilities"]
+        assert lookup_summary["total_changes"] == 9
+        assert lookup_summary["risk_counts"]["dangerous"] == 7
+        assert "fixture-pipe-command-do-not-run" not in lookup_content[0]["text"]
+        assert "fixture-vault-secret-do-not-leak" not in lookup_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Puppet Server auth) ---
         puppet_server_req = {
