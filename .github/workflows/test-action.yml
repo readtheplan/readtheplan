@@ -1419,6 +1419,34 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Kubernetes infrastructure controllers
+        id: kubernetes_infra_controllers
+        uses: ./
+        with:
+          tool: kubernetes
+          input-file: tests/fixtures/kubernetes_infra_controllers_risky.yml
+          framework: soc2
+
+      - name: Assert Kubernetes infrastructure controller outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.kubernetes_infra_controllers.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.kubernetes_infra_controllers.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.kubernetes_infra_controllers.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "13"
+          test "$RISK_COUNTS" = '{"dangerous":13,"irreversible":0,"review":0,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "kubernetes"
+          assert payload["decision"] == "block"
+          assert "Cluster API Cluster" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on service mesh, policy, autoscaling, and serverless manifests
         id: kubernetes_mesh_policy_serverless
         uses: ./

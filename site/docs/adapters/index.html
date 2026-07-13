@@ -359,7 +359,7 @@ readtheplan azure whatif.json</code></pre>
 
       <section class="g" aria-labelledby="rendered-k8s-title">
         <div class="gc utility-panel-wide">
-          <h2 id="rendered-k8s-title">Helm, Kustomize, Crossplane, Argo CD, Flux, and Tekton</h2>
+          <h2 id="rendered-k8s-title">Rendered Kubernetes and infrastructure controllers</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
             Review the rendered artifact that Kubernetes will receive. readtheplan accepts one
             manifest, <code>kind: List</code>, multi-document YAML, JSON resources, or an explicit
@@ -385,7 +385,11 @@ readtheplan kubernetes rendered.yaml</code></pre>
             webhook Receivers also receive native rules for source trust, immutability,
             pruning, remediation, Git writes, and event ingress. Tekton Tasks, Pipelines,
             Runs, remote resolvers, workspaces, and Triggers receive native execution,
-            identity, storage, and webhook rules.
+            identity, storage, and webhook rules. Cluster API Clusters, ClusterClasses,
+            Machines, control planes, bootstrap configurations, health checks, runtime hooks,
+            add-ons, and infrastructure-provider objects receive cluster and machine lifecycle
+            rules. Karpenter NodePools, NodeClaims, and NodeClasses receive provisioning,
+            disruption, drain, IAM, image, networking, storage, and bootstrap rules.
           </p>
         </div>
       </section>

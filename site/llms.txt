@@ -19,6 +19,9 @@ Container build supply-chain coverage includes Docker Buildx Bake HCL/JSON and
 Compose-backed build graphs without invoking Buildx or contacting registries.
 Terraform Stacks coverage includes `.tfcomponent.hcl` and `.tfdeploy.hcl`
 provenance, lifecycle, approval, identity, store, and cross-Stack data boundaries.
+Kubernetes infrastructure-controller coverage includes Cluster API cluster,
+machine, control-plane, bootstrap, remediation, and provider lifecycles plus
+Karpenter node provisioning, disruption, cloud identity, image, and networking.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.

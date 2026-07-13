@@ -4,6 +4,7 @@ from typing import Any
 
 from readtheplan.rules._shared import (
     RuleResult,
+    register_cross_cutting,
     register_rule,
 )
 
@@ -2708,3 +2709,564 @@ def _knative_event_policy_candidates(
             )
         ]
     return []
+
+
+@register_rule("kubernetes_capi_cluster")
+def _capi_cluster_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "Deleting this Cluster API Cluster can cascade through its control plane, "
+                "Machines, provider infrastructure, and workload-cluster credentials. Confirm "
+                "backup, move/pivot state, provider deletion behavior, and recovery.",
+            )
+        ]
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    metadata = _desired_metadata(change)
+    annotations = _controller_mapping(metadata.get("annotations"))
+    findings = ["provision or reconfigure an entire workload cluster"]
+    if spec.get("infrastructureRef"):
+        findings.append("delegate cloud infrastructure lifecycle to an InfraCluster provider")
+    if spec.get("controlPlaneRef"):
+        findings.append("delegate control-plane lifecycle and kubeconfig ownership")
+    topology = _controller_mapping(spec.get("topology"))
+    if topology:
+        findings.append("continuously reconcile a ClusterClass topology")
+        if topology.get("version"):
+            findings.append("select or upgrade the Kubernetes version")
+        workers = _controller_mapping(topology.get("workers"))
+        if workers.get("machineDeployments") or workers.get("machinePools"):
+            findings.append("create or resize topology-managed worker fleets")
+    if spec.get("clusterNetwork"):
+        findings.append("set cluster-wide pod, service, DNS, and API networking")
+    if str(annotations.get("cluster.x-k8s.io/paused", "")).lower() == "true":
+        findings.append("pause reconciliation and drift correction")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Cluster API Cluster can {'; '.join(findings)}. Review provider and "
+            "ClusterClass trust, references, endpoint exposure, network ranges, version skew, "
+            "failure domains, credentials, lifecycle hooks, and deletion recovery.",
+        )
+    ]
+
+
+@register_rule("kubernetes_capi_cluster_class")
+def _capi_cluster_class_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Cluster API ClusterClass", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["define reusable infrastructure and control-plane templates for many clusters"]
+    if spec.get("patches"):
+        findings.append("patch generated provider and machine objects")
+    if spec.get("variables"):
+        findings.append("accept topology variables and defaults that alter generated resources")
+    if _controller_has_key(spec, "external", "generatePatchesExtension", "validateTopology"):
+        findings.append("delegate topology validation or mutation to runtime extensions")
+    if _controller_has_key(spec, "machineHealthCheck", "machineHealthChecks"):
+        findings.append("install automated machine remediation policies")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This ClusterClass can {'; '.join(findings)}. Review every referenced template, "
+            "patch selector and JSON path, variable schema/default, worker class, health check, "
+            "naming strategy, compatibility contract, and all consuming Clusters.",
+        )
+    ]
+
+
+@register_rule(
+    "kubernetes_capi_machine",
+    "kubernetes_capi_machine_set",
+    "kubernetes_capi_machine_deployment",
+    "kubernetes_capi_machine_pool",
+)
+def _capi_machine_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_capi_").replace("_", " ").title()
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                f"Deleting this Cluster API {label} can drain Nodes and delete provider "
+                "instances, bootstrap data, and attached controller-owned infrastructure.",
+            )
+        ]
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    template = _controller_mapping(spec.get("template"))
+    machine_spec = _controller_mapping(template.get("spec")) or spec
+    findings = ["create, replace, resize, or reconfigure workload-cluster Machines"]
+    if _integer_or_default(spec.get("replicas"), -1) == 0:
+        findings.append("scale the managed fleet to zero")
+    if _controller_has_key(spec, "rolloutAfter", "rolloutBefore"):
+        findings.append("force time- or certificate-driven machine replacement")
+    if _controller_has_key(spec, "maxUnavailable", "maxSurge", "deletePolicy"):
+        findings.append("change rollout availability or deletion ordering")
+    if machine_spec.get("version"):
+        findings.append("select or upgrade the kubelet Kubernetes version")
+    if machine_spec.get("infrastructureRef"):
+        findings.append("provision or replace provider compute infrastructure")
+    if _controller_has_key(machine_spec, "bootstrap", "configRef", "dataSecretName"):
+        findings.append("consume bootstrap configuration or secret data")
+    if _controller_has_key(
+        spec,
+        "nodeDrainTimeout",
+        "nodeVolumeDetachTimeout",
+        "nodeDeletionTimeout",
+        "deletion",
+        "remediation",
+    ):
+        findings.append("change drain, detach, deletion, or remediation behavior")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Cluster API {label} can {'; '.join(findings)}. Review replica delta, "
+            "rollout and disruption budgets, version skew, provider/bootstrap templates, "
+            "failure domains, health checks, drain timeouts, PDBs, storage detach, and rollback.",
+        )
+    ]
+
+
+@register_rule("kubernetes_capi_machine_health_check")
+def _capi_machine_health_check_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Cluster API MachineHealthCheck", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["automatically remediate unhealthy Machines, commonly by replacement"]
+        if spec.get("remediationTemplate"):
+            findings.append("invoke an external remediation controller")
+        if spec.get("unhealthyConditions"):
+            findings.append("classify Nodes unhealthy from configured conditions and timeouts")
+        if spec.get("maxUnhealthy") or spec.get("unhealthyRange"):
+            findings.append("set the fleet-wide remediation safety threshold")
+        if spec.get("nodeStartupTimeout"):
+            findings.append("remediate Machines that miss a startup deadline")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This MachineHealthCheck can {'; '.join(findings)}. Review selector scope, "
+                "minimum healthy capacity, unhealthy thresholds, startup timing, remediation "
+                "strategy, drain behavior, provider rate limits, and failure-domain blast radius.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_capi_kubeadm_control_plane",
+    "kubernetes_capi_kubeadm_control_plane_template",
+)
+def _capi_control_plane_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Cluster API KubeadmControlPlane", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    template = _controller_mapping(spec.get("template"))
+    if template:
+        spec = _controller_mapping(template.get("spec")) or spec
+    findings = ["create, upgrade, replace, or resize Kubernetes control-plane Machines"]
+    replicas = _integer_or_default(spec.get("replicas"), -1)
+    if replicas > 0 and replicas % 2 == 0:
+        findings.append("use an even control-plane replica count that weakens etcd quorum safety")
+    if spec.get("version"):
+        findings.append("select or roll out a control-plane Kubernetes version")
+    if _controller_has_key(spec, "rolloutAfter", "rolloutBefore", "rolloutStrategy"):
+        findings.append("trigger or tune control-plane replacement")
+    kubeadm = _controller_mapping(spec.get("kubeadmConfigSpec"))
+    if _controller_has_key(kubeadm, "files", "users", "preKubeadmCommands", "postKubeadmCommands"):
+        findings.append("write host files/users or execute bootstrap commands as root")
+    if _controller_has_key(kubeadm, "extraArgs", "extraVolumes", "etcd"):
+        findings.append("alter API server, controller, scheduler, or etcd configuration")
+    if _controller_has_key(spec, "remediationStrategy", "machineHealthCheck"):
+        findings.append("automatically replace unhealthy control-plane Machines")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This KubeadmControlPlane can {'; '.join(findings)}. Review quorum, version skew, "
+            "certificate rotation, rollout surge, provider template, host bootstrap code, "
+            "etcd/API configuration, health remediation, PDBs, backups, and rollback.",
+        )
+    ]
+
+
+@register_rule(
+    "kubernetes_capi_kubeadm_config",
+    "kubernetes_capi_kubeadm_config_template",
+)
+def _capi_kubeadm_config_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Cluster API Kubeadm bootstrap configuration", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        template = _controller_mapping(spec.get("template"))
+        if template:
+            spec = _controller_mapping(template.get("spec")) or spec
+        findings = ["generate privileged bootstrap data for new cluster hosts"]
+        if _controller_has_key(spec, "files", "users"):
+            findings.append("write host files, users, SSH keys, or credentials")
+        if _controller_has_key(spec, "preKubeadmCommands", "postKubeadmCommands", "bootCommands"):
+            findings.append("execute arbitrary host commands before or after kubeadm")
+        if _controller_has_key(spec, "unsafeSkipCAVerification"):
+            findings.append("permit discovery without CA verification")
+        if _controller_secret_refs(spec) or _controller_has_key(spec, "dataSecretName"):
+            findings.append("consume or generate secret bootstrap material")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Kubeadm configuration can {'; '.join(findings)}. Review every command "
+                "and file destination without logging secret values, user privilege and SSH "
+                "access, package sources, discovery trust, kubelet arguments, certificates, "
+                "host hardening, and bootstrap-data retention.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_capi_extension_config")
+def _capi_extension_config_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Cluster API runtime ExtensionConfig", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["call extension hooks during topology and cluster lifecycle operations"]
+        client = _controller_mapping(spec.get("clientConfig"))
+        if client.get("url"):
+            findings.append("send lifecycle requests to an external endpoint")
+        if client.get("caBundle") in (None, "", []):
+            findings.append("rely on runtime trust material not visible in this manifest")
+        if str(spec.get("failurePolicy", "")).lower() == "ignore":
+            findings.append("fail open when an extension call fails")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Cluster API ExtensionConfig can {'; '.join(findings)}. Review service "
+                "or URL ownership, TLS CA and authentication, namespace/network policy, hook "
+                "catalog, timeout and failure policy, mutation scope, availability, and audit "
+                "logs.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_capi_cluster_resource_set")
+def _capi_cluster_resource_set_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Cluster API ClusterResourceSet", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        selector = _controller_mapping(spec.get("clusterSelector"))
+        broad = not selector or not (
+            selector.get("matchLabels") or selector.get("matchExpressions")
+        )
+        resources = _controller_items(spec.get("resources"))
+        secret_backed = any(
+            isinstance(item, dict) and str(item.get("kind", "")).lower() == "secret"
+            for item in resources
+        )
+        findings = ["apply referenced ConfigMaps or Secrets into selected workload clusters"]
+        if broad:
+            findings.append("target every matching Cluster because the selector is broad")
+        if secret_backed:
+            findings.append("distribute Secret-backed manifest content across clusters")
+        if str(spec.get("strategy", "")).lower() == "reconcile":
+            findings.append("continuously reconcile and overwrite managed resources")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This ClusterResourceSet can {'; '.join(findings)}. Review selector blast "
+                "radius, source immutability and secret handling, RBAC and namespace targets, "
+                "apply strategy, ordering, drift behavior, and rollback in every workload cluster.",
+            )
+        ]
+    return []
+
+
+@register_rule("kubernetes_capi_machine_drain_rule")
+def _capi_machine_drain_rule_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    deleted = _controller_delete("Cluster API MachineDrainRule", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "dangerous",
+                "This MachineDrainRule changes which Pods are skipped, waited for, or drained "
+                "first during Machine deletion. Review cluster and pod selectors, behavior, "
+                "order, PDB interaction, stateful workloads, shutdown hooks, and data safety.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_capi_ip_address",
+    "kubernetes_capi_ip_address_claim",
+    "kubernetes_capi_cluster_resource_set_binding",
+)
+def _capi_supporting_resource_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = resource_type.removeprefix("kubernetes_capi_").replace("_", " ").title()
+    deleted = _controller_delete(f"Cluster API {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if {"create", "update"} & action_set:
+        return [
+            RuleResult(
+                "review",
+                f"This Cluster API {label} participates in workload-cluster addressing or "
+                "resource distribution. Review owner references, allocation uniqueness, "
+                "controller ownership, consumers, release behavior, and stale-state recovery.",
+            )
+        ]
+    return []
+
+
+@register_cross_cutting
+def _capi_infrastructure_provider_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if not resource_type.startswith("kubernetes_capi_infrastructure_"):
+        return []
+    label = resource_type.removeprefix("kubernetes_capi_infrastructure_").replace("_", " ")
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                f"Deleting this Cluster API provider {label} can remove cloud infrastructure "
+                "owned by a workload cluster or Machine.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["provision or mutate provider-specific cluster or machine infrastructure"]
+        if _controller_secret_refs(spec) or _controller_has_key(spec, "identityRef"):
+            findings.append("use referenced cloud credentials or identity")
+        if _controller_has_key(spec, "public", "publicIP", "internetFacing"):
+            findings.append("change public endpoint or address exposure")
+        if _controller_has_key(spec, "network", "subnet", "securityGroup", "firewall"):
+            findings.append("select or create network and firewall resources")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Cluster API provider object can {'; '.join(findings)}. Review provider "
+                "controller trust/version, account and region, identity privilege, image and "
+                "instance provenance, networking/exposure, ownership/finalizers, quotas, cost, "
+                "deletion policy, and recovery.",
+            )
+        ]
+    return []
+
+
+def _karpenter_node_template(spec: dict[str, Any]) -> dict[str, Any]:
+    template = _controller_mapping(spec.get("template"))
+    return _controller_mapping(template.get("spec")) or spec
+
+
+@register_rule(
+    "kubernetes_karpenter_node_pool",
+    "kubernetes_karpenter_legacy_provisioner",
+)
+def _karpenter_node_pool_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    legacy = resource_type.endswith("legacy_provisioner")
+    label = "legacy Provisioner" if legacy else "NodePool"
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                f"Deleting this Karpenter {label} can cascade through its NodeClaims, drain "
+                "workloads, and terminate the underlying cloud instances.",
+            )
+        ]
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    node_spec = _karpenter_node_template(spec)
+    findings = ["launch, drift, consolidate, drain, and terminate cluster nodes"]
+    if not spec.get("limits"):
+        findings.append("provision without a NodePool resource ceiling")
+    requirements = _controller_items(node_spec.get("requirements"))
+    requirement_keys = {
+        str(item.get("key")) for item in requirements if isinstance(item, dict)
+    }
+    if not requirement_keys & {
+        "node.kubernetes.io/instance-type",
+        "kubernetes.io/arch",
+        "topology.kubernetes.io/zone",
+    }:
+        findings.append("select compute from broad instance, architecture, or zone constraints")
+    if _contains_value(requirements, "spot"):
+        findings.append("run interruptible Spot capacity")
+    disruption = _controller_mapping(spec.get("disruption"))
+    if not disruption.get("budgets"):
+        findings.append("use the default voluntary-disruption budget")
+    if str(disruption.get("consolidationPolicy", "")) == "WhenEmptyOrUnderutilized":
+        findings.append("replace underutilized nodes for consolidation")
+    if str(disruption.get("consolidateAfter", "")).lower() in {"0", "0s", "0m"}:
+        findings.append("make empty or underutilized nodes immediately eligible for disruption")
+    expire_after = str(node_spec.get("expireAfter", "")).lower()
+    if expire_after and expire_after != "never":
+        findings.append("expire and replace nodes on a maximum lifetime")
+        if not node_spec.get("terminationGracePeriod"):
+            findings.append("omit an explicit maximum graceful-drain period")
+    if node_spec.get("taints") or node_spec.get("startupTaints"):
+        findings.append("constrain scheduling with persistent or startup taints")
+    if not node_spec.get("nodeClassRef") and not legacy:
+        findings.append("omit a statically visible cloud NodeClass reference")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Karpenter {label} can {'; '.join(findings)}. Review cloud NodeClass and "
+            "identity, selector overlap and weight, capacity types, instance/zone/architecture "
+            "constraints, limits and quotas, taints, disruption budgets, consolidation, drift, "
+            "expiry, drain grace, PDBs, do-not-disrupt workloads, cost, and rollback.",
+        )
+    ]
+
+
+@register_rule("kubernetes_karpenter_node_claim")
+def _karpenter_node_claim_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    if "delete" in action_set:
+        return [
+            RuleResult(
+                "irreversible",
+                "Deleting this Karpenter NodeClaim drains or force-removes workloads and "
+                "terminates its underlying cloud instance through the Karpenter finalizer.",
+            )
+        ]
+    if {"create", "update"} & action_set:
+        spec = _desired_spec(change)
+        findings = ["request or mutate one concrete cloud node and its scheduling constraints"]
+        if _contains_value(spec.get("requirements"), "spot"):
+            findings.append("use interruptible Spot capacity")
+        if spec.get("expireAfter"):
+            findings.append("expire and terminate the node after a configured lifetime")
+        if spec.get("terminationGracePeriod"):
+            findings.append("force remaining Pods off after a node-level grace period")
+        return [
+            RuleResult(
+                "dangerous",
+                f"This Karpenter NodeClaim can {'; '.join(findings)}. Review owner NodePool, "
+                "NodeClass identity, requested resources and requirements, image, capacity type, "
+                "taints, expiry, drain/PDB behavior, storage detach, instance cost, and "
+                "finalizers.",
+            )
+        ]
+    return []
+
+
+@register_rule(
+    "kubernetes_karpenter_node_class",
+    "kubernetes_karpenter_legacy_node_template",
+)
+def _karpenter_node_class_candidates(
+    resource_type: str,
+    action_set: set[str],
+    change: dict[str, Any],
+) -> list[RuleResult]:
+    label = (
+        "legacy node template"
+        if resource_type.endswith("legacy_node_template")
+        else "NodeClass"
+    )
+    deleted = _controller_delete(f"Karpenter {label}", action_set)
+    if deleted is not None:
+        return deleted
+    if not ({"create", "update"} & action_set):
+        return []
+    spec = _desired_spec(change)
+    findings = ["define cloud identity, image, networking, storage, and bootstrap for new nodes"]
+    if spec.get("role") or spec.get("instanceProfile"):
+        findings.append("assign a selected cloud IAM identity to every launched node")
+    if _contains_value(spec.get("subnetSelectorTerms"), "*"):
+        findings.append("discover subnets through wildcard selectors")
+    if _contains_value(spec.get("securityGroupSelectorTerms"), "*"):
+        findings.append("attach security groups through wildcard selectors")
+    ami_terms = _controller_items(spec.get("amiSelectorTerms"))
+    if ami_terms and not all(isinstance(item, dict) and item.get("id") for item in ami_terms):
+        findings.append("select mutable AMIs that can drift when matching images change")
+    if spec.get("associatePublicIPAddress") is True:
+        findings.append("assign public IP addresses to launched nodes")
+    metadata = _controller_mapping(spec.get("metadataOptions"))
+    if str(metadata.get("httpTokens", "required")).lower() != "required":
+        findings.append("permit EC2 metadata access without required IMDSv2 tokens")
+    if _integer_or_default(metadata.get("httpPutResponseHopLimit"), 1) > 1:
+        findings.append("allow instance-metadata responses across additional network hops")
+    if any(
+        item.get("encrypted") is False
+        for item in _controller_dicts(spec.get("blockDeviceMappings"))
+    ):
+        findings.append("create unencrypted node block devices")
+    if spec.get("userData"):
+        findings.append("execute custom privileged user-data on every launched host")
+    return [
+        RuleResult(
+            "dangerous",
+            f"This Karpenter {label} can {'; '.join(findings)}. Review controller/provider "
+            "version, IAM least privilege, subnet and security-group selector blast radius, AMI "
+            "pinning and drift, metadata-service hardening, public addressing, encrypted storage "
+            "and KMS, kubelet settings, user-data secrecy, tags, and all referencing NodePools.",
+        )
+    ]
