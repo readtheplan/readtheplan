@@ -208,16 +208,19 @@ def parse_docker_bake(source: str, filename: str | None = None) -> dict[str, Any
         raise DockerBakeInputError("input is empty")
     name = (filename or "").lower()
     stripped = source.lstrip()
-    representation: str
+    representation = (
+        "compose"
+        if name.endswith((".yaml", ".yml"))
+        else "json"
+        if stripped.startswith("{")
+        else "hcl"
+    )
     try:
-        if name.endswith((".yaml", ".yml")):
-            representation = "compose"
+        if representation == "compose":
             document = yaml.load(source, Loader=_UniqueSafeLoader)
-        elif stripped.startswith("{"):
-            representation = "json"
+        elif representation == "json":
             document = json.loads(source, object_pairs_hook=_unique_object)
         else:
-            representation = "hcl"
             document = hcl2.loads(
                 source,
                 serialization_options=SerializationOptions(
