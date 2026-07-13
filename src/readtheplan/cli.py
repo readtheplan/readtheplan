@@ -460,6 +460,32 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     buildkite.add_argument("input_file", help="Path to a Buildkite pipeline YAML file.")
     buildkite.set_defaults(func=_pipeline_gate)
 
+    travis_ci = subparsers.add_parser(
+        "travis-ci",
+        help="Emit the agent-gate decision for a Travis CI configuration.",
+    )
+    travis_ci.add_argument("--framework", help="Include checks from a compliance framework.")
+    travis_ci.add_argument("input_file", help="Path to .travis.yml.")
+    travis_ci.set_defaults(func=_pipeline_gate)
+
+    drone_ci = subparsers.add_parser(
+        "drone-ci",
+        help="Emit the agent-gate decision for a Drone CI pipeline.",
+    )
+    drone_ci.add_argument("--framework", help="Include checks from a compliance framework.")
+    drone_ci.add_argument("input_file", help="Path to .drone.yml.")
+    drone_ci.set_defaults(func=_pipeline_gate)
+
+    woodpecker_ci = subparsers.add_parser(
+        "woodpecker-ci",
+        help="Emit the agent-gate decision for a Woodpecker CI workflow.",
+    )
+    woodpecker_ci.add_argument(
+        "--framework", help="Include checks from a compliance framework."
+    )
+    woodpecker_ci.add_argument("input_file", help="Path to a Woodpecker workflow YAML file.")
+    woodpecker_ci.set_defaults(func=_pipeline_gate)
+
     atlantis = subparsers.add_parser(
         "atlantis",
         help="Emit the agent-gate decision for Atlantis repo or server configuration.",
@@ -1677,9 +1703,12 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
         BitbucketPipelinesAdapter,
         BuildkiteAdapter,
         CircleCIAdapter,
+        DroneCIAdapter,
         GitHubActionsAdapter,
         GitLabCIAdapter,
         PipelineInputError,
+        TravisCIAdapter,
+        WoodpeckerCIAdapter,
         analyze_pipeline,
         parse_pipeline_yaml,
     )
@@ -1691,6 +1720,9 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
         "azure-pipelines": AzurePipelinesAdapter,
         "bitbucket-pipelines": BitbucketPipelinesAdapter,
         "buildkite": BuildkiteAdapter,
+        "travis-ci": TravisCIAdapter,
+        "drone-ci": DroneCIAdapter,
+        "woodpecker-ci": WoodpeckerCIAdapter,
     }
     try:
         source = Path(args.input_file).read_text(encoding="utf-8")

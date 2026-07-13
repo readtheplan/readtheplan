@@ -1,0 +1,29 @@
+when:
+  - event: push
+    branch: main
+labels:
+  environment: production
+skip_clone: true
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+steps:
+  - name: deploy
+    image: docker:latest
+    privileged: true
+    environment:
+      API_TOKEN:
+        from_secret: deploy_token
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    commands:
+      - docker build -t example/app .
+  - name: publish
+    image: woodpeckerci/plugin-s3:latest
+    settings:
+      access_key: literal-example-access-key
+      secret_key:
+        from_secret: s3_secret_key
+services:
+  - name: docker
+    image: docker:dind
+    privileged: true

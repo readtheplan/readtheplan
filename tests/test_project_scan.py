@@ -37,6 +37,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("compose.yaml", "docker-compose"),
         (".github/workflows/deploy.yml", "github-actions"),
         (".gitlab-ci.yml", "gitlab-ci"),
+        (".travis.yml", "travis-ci"),
+        (".drone.yml", "drone-ci"),
+        (".woodpecker.yml", "woodpecker-ci"),
+        (".woodpecker/deploy.yaml", "woodpecker-ci"),
         ("Chart.yaml", "helm"),
         ("kustomization.yaml", "kustomize"),
         ("helmfile.yaml.gotmpl", "helmfile"),
@@ -175,6 +179,33 @@ def test_project_scan_aggregates_mixed_tools_and_redacts_source_values(capsys) -
     assert "project-scan-secret" not in encoded
     assert "deploy-production.sh" not in encoded
     assert "kubectl apply" not in encoded
+
+
+def test_project_scan_analyzes_travis_drone_and_woodpecker(tmp_path: Path) -> None:
+    fixture_names = {
+        ".travis.yml": "travis_ci_risky.yml",
+        ".drone.yml": "drone_ci_risky.yml",
+        ".woodpecker.yml": "woodpecker_ci_risky.yml",
+    }
+    for destination, fixture in fixture_names.items():
+        (tmp_path / destination).write_text(
+            (FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 3
+    assert payload["scanned_file_count"] == 3
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {
+        "travis-ci",
+        "drone-ci",
+        "woodpecker-ci",
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "literal-example-token" not in encoded
+    assert "literal-job-token" not in encoded
 
 
 def test_malformed_discovered_input_becomes_redacted_validation_error(tmp_path: Path) -> None:

@@ -335,6 +335,27 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Travis CI
+        uses: ./
+        with:
+          tool: travis-ci
+          input-file: tests/fixtures/travis_ci_risky.yml
+          framework: soc2
+
+      - name: Run action on Drone CI
+        uses: ./
+        with:
+          tool: drone-ci
+          input-file: tests/fixtures/drone_ci_risky.yml
+          framework: soc2
+
+      - name: Run action on Woodpecker CI
+        uses: ./
+        with:
+          tool: woodpecker-ci
+          input-file: tests/fixtures/woodpecker_ci_risky.yml
+          framework: soc2
+
       - name: Run action on Atlantis configuration
         id: atlantis
         uses: ./

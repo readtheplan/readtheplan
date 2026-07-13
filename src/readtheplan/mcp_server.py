@@ -726,12 +726,16 @@ def agent_gate_pipeline(
         "azure-pipelines",
         "bitbucket-pipelines",
         "buildkite",
+        "travis-ci",
+        "drone-ci",
+        "woodpecker-ci",
     }:
         raise MCPToolInputError(
             code="INVALID_INPUT",
             message=(
                 "ecosystem must be github-actions, gitlab-ci, circleci, "
-                "azure-pipelines, bitbucket-pipelines, or buildkite"
+                "azure-pipelines, bitbucket-pipelines, buildkite, travis-ci, drone-ci, "
+                "or woodpecker-ci"
             ),
         )
     if not isinstance(input_path, str) or not input_path.strip():
@@ -2741,12 +2745,12 @@ def create_server() -> Any:
         ecosystem: str,
         framework: str | None = None,
     ) -> dict[str, object]:
-        """Return a gate for supported GitHub, GitLab, CircleCI, Azure, or Bitbucket YAML.
+        """Return a gate for supported CI pipeline YAML.
 
         Args:
             input_path: Local path to the pipeline YAML file.
             ecosystem: github-actions, gitlab-ci, circleci, azure-pipelines,
-                bitbucket-pipelines, or buildkite.
+                bitbucket-pipelines, buildkite, travis-ci, drone-ci, or woodpecker-ci.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_pipeline_handler(

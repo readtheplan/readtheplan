@@ -121,6 +121,9 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Azure Pipelines | `readtheplan azure-pipelines azure-pipelines.yml` | Repositories, templates, variable groups, pools, containers, environments, service connections, tasks, and scripts |
 | Bitbucket Pipelines | `readtheplan bitbucket-pipelines bitbucket-pipelines.yml` | Images, runners, OIDC, deployments, services, caches, scripts, pipes, artifacts, imports, and secured-variable references |
 | Buildkite | `readtheplan buildkite pipeline.yml` | Commands, dynamic uploads, plugins, agents/queues, secrets, artifacts, triggers, approvals, retries, concurrency, and effective agent policy |
+| Travis CI | `readtheplan travis-ci .travis.yml` | Imports, elevated workers, services, command phases, deployments, secrets, caches, conditions, and matrix failure policy |
+| Drone CI | `readtheplan drone-ci .drone.yml` | Multi-document pipelines, runner selection, images, commands, host volumes, privileged containers, secrets, services, and failure policy |
+| Woodpecker CI | `readtheplan woodpecker-ci .woodpecker.yml` | Workflows, runner selection, images/plugins, commands, host volumes, privileges, secrets, services, and dependencies |
 | Atlantis | `readtheplan atlantis atlantis.yaml` | Repo/server configuration, mutation requirements, custom workflows, hooks, override permissions, locks, autoplan, policy checks, and execution ordering |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |
