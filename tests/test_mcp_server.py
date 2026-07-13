@@ -817,6 +817,36 @@ def test_agent_gate_configuration_management_supports_bolt_task_metadata() -> No
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_bolt_task_implementation() -> None:
+    result = agent_gate_configuration_management(
+        str(
+            FIXTURES
+            / "bolt_task_implementation_risky"
+            / "modules"
+            / "fixture"
+            / "tasks"
+            / "deploy.sh"
+        ),
+        "puppet-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "bolt_task_implementation"
+    assert result["language"] == "shell"
+    assert result["source_kind"] == "target_task_implementation"
+    assert result["source_line_count"] == 12
+    assert result["task_name"] == "deploy"
+    assert result["total_changes"] == 13
+    assert result["risk_counts"]["dangerous"] == 8
+    assert result["risk_counts"]["review"] == 5
+    assert result["decision"] == "block"
+    assert "fixture-bolt-implementation-secret-do-not-leak" not in encoded
+    assert "downloads.example.invalid" not in encoded
+    assert "deploy@example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_r10k_configuration() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_r10k_risky" / "r10k.yaml"),
@@ -2639,6 +2669,50 @@ def test_stdio_server_tools_list() -> None:
         assert puppet_summary["total_changes"] == 34
         assert "fixture-puppet-proxy-password-do-not-leak" not in puppet_content[0]["text"]
         assert "fixture-puppet-header-token-do-not-leak" not in puppet_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Bolt task implementation) ---
+        bolt_implementation_req = {
+            "jsonrpc": "2.0",
+            "id": 74,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "bolt_task_implementation_risky"
+                            / "modules"
+                            / "fixture"
+                            / "tasks"
+                            / "deploy.sh"
+                        ).resolve()
+                    ),
+                    "ecosystem": "puppet-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        bolt_implementation_resp = _send_jsonrpc(proc, bolt_implementation_req)
+        assert "result" in bolt_implementation_resp, (
+            f"Bolt task implementation tools/call failed: {bolt_implementation_resp}"
+        )
+        bolt_implementation_content = bolt_implementation_resp["result"]["content"]
+        assert len(bolt_implementation_content) == 1
+        bolt_implementation_summary = json.loads(bolt_implementation_content[0]["text"])
+        assert bolt_implementation_summary["adapter"] == "puppet-project"
+        assert bolt_implementation_summary["artifact_type"] == "bolt_task_implementation"
+        assert bolt_implementation_summary["language"] == "shell"
+        assert bolt_implementation_summary["source_kind"] == "target_task_implementation"
+        assert bolt_implementation_summary["source_line_count"] == 12
+        assert bolt_implementation_summary["task_name"] == "deploy"
+        assert bolt_implementation_summary["total_changes"] == 13
+        assert bolt_implementation_summary["risk_counts"]["dangerous"] == 8
+        assert bolt_implementation_summary["risk_counts"]["review"] == 5
+        assert "fixture-bolt-implementation-secret-do-not-leak" not in (
+            bolt_implementation_content[0]["text"]
+        )
+        assert "downloads.example.invalid" not in bolt_implementation_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Jenkins plugins) ---
         jenkins_project_req = {
