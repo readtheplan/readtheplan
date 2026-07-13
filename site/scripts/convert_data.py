@@ -10,6 +10,22 @@ SRC = Path("src/readtheplan/data/controls")
 OUT = Path("site/data")
 OUT.mkdir(parents=True, exist_ok=True)
 
+
+def project_version() -> str:
+    """Read the package version without requiring tomllib on Python 3.10."""
+
+    in_project = False
+    for raw_line in Path("pyproject.toml").read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line == "[project]":
+            in_project = True
+            continue
+        if in_project and line.startswith("["):
+            break
+        if in_project and line.startswith("version") and "=" in line:
+            return line.split("=", 1)[1].strip().strip('"')
+    raise RuntimeError("Unable to read [project].version from pyproject.toml")
+
 # Convert each framework.
 frameworks = {}
 for yf in sorted(SRC.glob("*.yaml")):
@@ -28,7 +44,7 @@ for yf in sorted(SRC.glob("*.yaml")):
 
 # Write framework index.
 index = {
-    "version": "0.3.0",
+    "version": project_version(),
     "frameworks": frameworks,
     "endpoints": {
         "list": "/api/v1/controls",

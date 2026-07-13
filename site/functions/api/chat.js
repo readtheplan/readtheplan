@@ -29,7 +29,7 @@ readtheplan reads Terraform plan JSON and classifies every change into four risk
 - **dangerous** — may cause downtime (e.g., modifying security groups, replacing databases)
 - **irreversible** — permanent data loss (e.g., deleting S3 buckets, destroying KMS keys)
 
-It also maps changes to compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, HITRUST — 308 total control mappings).
+It also maps changes to compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, HITRUST — more than 300 control mappings).
 Its broad built-in adapter catalog also analyzes cloud deployment outputs, Kubernetes and GitOps manifests, CI/CD pipelines, policy/configuration systems, and observability tooling without executing user configuration.
 
 ### Free surfaces
@@ -98,6 +98,8 @@ const RATE_LIMIT = 15;            // max requests per window
 const RATE_WINDOW_MS = 60_000;    // 1 minute
 const MAX_MAP_SIZE = 10_000;      // prevent unbounded growth
 const MAX_BODY_SIZE = 65_536;     // 64 KB
+const CANONICAL_ORIGIN = 'https://readtheplan.dev';
+const ALLOWED_ORIGINS = new Set([CANONICAL_ORIGIN, 'https://www.readtheplan.dev']);
 
 function securityHeaders(extra = {}) {
   return {
@@ -108,15 +110,40 @@ function securityHeaders(extra = {}) {
   };
 }
 
+function corsHeaders(request) {
+  const origin = request.headers.get('Origin');
+  if (origin && !ALLOWED_ORIGINS.has(origin)) return {};
+  return {
+    ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
+    'Vary': 'Origin',
+  };
+}
+
+function jsonResponse(request, data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: securityHeaders({
+      'Content-Type': 'application/json',
+      ...corsHeaders(request),
+      ...extraHeaders,
+    }),
+  });
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
+  const origin = request.headers.get('Origin');
+
+  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    return jsonResponse(request, { error: 'Origin not allowed' }, 403);
+  }
 
   // CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: securityHeaders({
-        'Access-Control-Allow-Origin': '*',
+        ...corsHeaders(request),
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Max-Age': '86400',
@@ -125,22 +152,16 @@ export async function onRequest(context) {
   }
 
   if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-    });
+    return jsonResponse(request, { error: 'Method not allowed' }, 405, { Allow: 'POST, OPTIONS' });
   }
 
   // ── Body size limit (reject payloads > 64 KB) ─────────────────
   const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10);
   if (contentLength > MAX_BODY_SIZE) {
-    return new Response(JSON.stringify({ error: 'Payload too large' }), {
-      status: 413,
-      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-    });
+    return jsonResponse(request, { error: 'Payload too large' }, 413);
   }
 
-  // ── Rate limiting (20 req/min per IP) ─────────────────────────
+  // ── Rate limiting (15 req/min per IP) ─────────────────────────
   const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
   const now = Date.now();
   let entry = rateLimitMap.get(clientIP);
@@ -152,13 +173,8 @@ export async function onRequest(context) {
   }
   if (entry.count > RATE_LIMIT) {
     const retryAfter = Math.ceil((entry.windowStart + RATE_WINDOW_MS - now) / 1000);
-    return new Response(JSON.stringify({ error: 'Too many requests' }), {
-      status: 429,
-      headers: securityHeaders({
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Retry-After': String(retryAfter),
-      })
+    return jsonResponse(request, { error: 'Too many requests' }, 429, {
+      'Retry-After': String(retryAfter),
     });
   }
 
@@ -172,22 +188,16 @@ export async function onRequest(context) {
   // ── Content-Type validation ──────────────────────────────────
   const contentType = request.headers.get('Content-Type') || '';
   if (!contentType.includes('application/json')) {
-    return new Response(JSON.stringify({ error: 'Unsupported Media Type' }), {
-      status: 415,
-      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-    });
+    return jsonResponse(request, { error: 'Unsupported Media Type' }, 415);
   }
 
   try {
     const body = await request.json();
-    const rawMessages = body.messages || [];
+    const rawMessages = Array.isArray(body.messages) ? body.messages : [];
 
     // Missing messages is a client error
     if (rawMessages.length === 0) {
-      return new Response(JSON.stringify({ error: 'Missing messages' }), {
-        status: 400,
-        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-      });
+      return jsonResponse(request, { error: 'Missing messages' }, 400);
     }
     
     // ── Input validation & sanitization ─────────────────────────
@@ -207,31 +217,26 @@ export async function onRequest(context) {
       });
     }
 
+    if (messages.length === 0) {
+      return jsonResponse(request, { error: 'No valid messages' }, 400);
+    }
+
     // ── Harden assistant role ─────────────────────────────────
     // Block fake-history poisoning: first message cannot be assistant
     if (messages.length > 0 && messages[0].role === 'assistant') {
-      return new Response(JSON.stringify({ error: 'First message cannot be from assistant' }), {
-        status: 400,
-        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-      });
+      return jsonResponse(request, { error: 'First message cannot be from assistant' }, 400);
     }
     // Block consecutive assistant messages
     for (let i = 1; i < messages.length; i++) {
       if (messages[i].role === 'assistant' && messages[i - 1].role === 'assistant') {
-        return new Response(JSON.stringify({ error: 'Consecutive assistant messages not allowed' }), {
-          status: 400,
-          headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-        });
+        return jsonResponse(request, { error: 'Consecutive assistant messages not allowed' }, 400);
       }
     }
 
     // Get API key from environment (set in Cloudflare Pages dashboard)
     const apiKey = env.DEEPSEEK_API_KEY;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'API key not configured' }), {
-        status: 500,
-        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-      });
+      return jsonResponse(request, { error: 'API key not configured' }, 500);
     }
 
     const apiMessages = [
@@ -254,15 +259,11 @@ export async function onRequest(context) {
     });
 
     if (!resp.ok) {
-      const errText = await resp.text();
-      console.error('DeepSeek API error:', resp.status, errText);
-      return new Response(JSON.stringify({ 
+      console.error('DeepSeek API error:', resp.status);
+      return jsonResponse(request, {
         error: 'AI service temporarily unavailable',
         reply: "I'm having trouble connecting right now. Please try again in a moment, or email info@readtheplan.dev for help."
-      }), {
-        status: 502,
-        headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-      });
+      }, 502);
     }
 
     const data = await resp.json();
@@ -276,29 +277,19 @@ export async function onRequest(context) {
     reply = reply.replace(/javascript:/gi, '');
     reply = reply.replace(/on\w+\s*=/gi, '');
 
-    return new Response(JSON.stringify({
+    return jsonResponse(request, {
       reply,
       // Disclose that messages are sent to a third-party AI API
       privacy_notice: 'Messages are processed by a third-party AI (DeepSeek). Do not share sensitive data.',
-    }), {
-      status: 200,
-      headers: securityHeaders({
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'no-store',
-      })
-    });
+    }, 200, { 'Cache-Control': 'no-store' });
 
   } catch (err) {
     console.error('Chat error:', err.message);
     // Malformed JSON → 400, everything else → 500
     const status = err instanceof SyntaxError ? 400 : 500;
-    return new Response(JSON.stringify({ 
+    return jsonResponse(request, {
       error: status === 400 ? 'Invalid JSON' : 'Internal error',
       reply: "Something went wrong on my end. Please try again or email info@readtheplan.dev."
-    }), {
-      status,
-      headers: securityHeaders({ 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-    });
+    }, status);
   }
 }
