@@ -9,6 +9,8 @@ and can map findings to six built-in compliance catalogs.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.
+Local MCP clients can call `agent_gate_project` for the same repository gate;
+set `MCP_ROOT` so candidate files are confined and analyzed from an isolated snapshot.
 
 Every product feature is free. There is no paid tier, enterprise tier, trial,
 product account, or hosted raw-plan upload workflow.

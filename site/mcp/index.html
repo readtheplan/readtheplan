@@ -51,7 +51,8 @@
           <h1 id="mcp-title">Local MCP infrastructure reviewer.</h1>
           <p class="intro-copy">
             Give your AI coding agent deterministic Terraform, CloudFormation, Azure, Kubernetes,
-            and Pulumi review that runs locally and never uploads raw inputs. The preview
+            Pulumi, Ansible, Jenkins, Chef, Puppet, and repository-wide infrastructure review
+            that runs locally and never uploads raw inputs. The preview
             exposes readtheplan analysis to MCP clients over stdio, so change artifacts
             stay on your workstation or inside CI.
           </p>
@@ -88,13 +89,14 @@
             repository or workspace where your MCP client should resolve local plan paths.
           </p>
           <pre class="code-output" tabindex="0">pip install "readtheplan[mcp]"
-readtheplan mcp</pre>
+MCP_ROOT=/absolute/path/to/repository readtheplan mcp</pre>
         </div>
         <div class="gc utility-panel">
           <p class="eyebrow">Tool surface today</p>
           <h2>Analyze and gate.</h2>
           <p class="utility-copy">
-            The preview exposes Terraform <code>analyze_plan</code> and
+            The preview exposes <code>agent_gate_project</code> for automatic mixed-repository
+            discovery, Terraform <code>analyze_plan</code> and
             <code>agent_gate</code>, plus <code>agent_gate_cloudformation</code>,
             <code>agent_gate_azure</code>, <code>agent_gate_bicep</code>,
             <code>agent_gate_cdk</code>, <code>agent_gate_kubernetes</code>,
@@ -108,6 +110,13 @@ readtheplan mcp</pre>
             <code>readtheplan analyze --format json plan.json</code>, while
             <code>agent_gate</code> returns the <code>rtp-agent-gate-v1</code> contract
             from <code>readtheplan agent-gate plan.json</code>.
+          </p>
+          <p class="utility-copy">
+            <code>agent_gate_project</code> opens candidates through the descriptor-verified
+            <code>MCP_ROOT</code> boundary, rejects traversal and symlink-swap races, and copies
+            accepted bytes into an isolated temporary snapshot before invoking analyzers. It
+            supports exclusion globs, compliance frameworks, supported-file limits, per-file
+            byte limits, and a hard candidate cap. No analyzer reopens an untrusted repository path.
           </p>
           <p class="utility-copy">
             The <code>agent_gate</code> contract includes <code>decision</code>
@@ -140,23 +149,23 @@ readtheplan mcp</pre>
             </div>
             <div class="control-map-row" role="row">
               <span>Claude Desktop</span>
-              <span><code>{"mcpServers":{"readtheplan":{"command":"readtheplan","args":["mcp"]}}}</code></span>
-              <span>Add under the client's MCP server configuration file.</span>
+              <span><code>{"mcpServers":{"readtheplan":{"command":"readtheplan","args":["mcp"],"env":{"MCP_ROOT":"/absolute/repo"}}}}</code></span>
+              <span>Add under the client's MCP server configuration file and use an absolute root.</span>
             </div>
             <div class="control-map-row" role="row">
               <span>Cursor</span>
-              <span><code>{"readtheplan":{"command":"readtheplan","args":["mcp"]}}</code></span>
+              <span><code>{"readtheplan":{"command":"readtheplan","args":["mcp"],"env":{"MCP_ROOT":"/absolute/repo"}}}</code></span>
               <span>Use the client's stdio MCP server settings.</span>
             </div>
             <div class="control-map-row" role="row">
               <span>Windsurf</span>
-              <span><code>{"readtheplan":{"command":"readtheplan","args":["mcp"]}}</code></span>
+              <span><code>{"readtheplan":{"command":"readtheplan","args":["mcp"],"env":{"MCP_ROOT":"/absolute/repo"}}}</code></span>
               <span>Adapt to the current local MCP configuration shape.</span>
             </div>
             <div class="control-map-row" role="row">
               <span>Generic MCP client</span>
-              <span><code>command: readtheplan; args: ["mcp"]</code></span>
-              <span>Start a stdio server process in the workspace with the plan file.</span>
+              <span><code>command: readtheplan; args: ["mcp"]; env: {MCP_ROOT: /absolute/repo}</code></span>
+              <span>Start a confined stdio server process for the repository.</span>
             </div>
           </div>
         </div>
@@ -165,11 +174,11 @@ readtheplan mcp</pre>
       <section class="g" aria-labelledby="workflow-title">
         <div class="gc utility-panel">
           <p class="eyebrow">Demo workflow</p>
-          <h2 id="workflow-title">Review a Terraform PR without moving the plan.</h2>
+          <h2 id="workflow-title">Review a mixed infrastructure PR without moving its inputs.</h2>
           <ol class="utility-copy">
-            <li>Generate plan JSON locally: <code>terraform plan -out=tfplan</code>, then <code>terraform show -json tfplan &gt; plan.json</code>.</li>
-            <li>Start your MCP client with <code>readtheplan mcp</code> configured as a local stdio server.</li>
-            <li>Ask the agent to call <code>agent_gate</code> for <code>plan.json</code>.</li>
+            <li>Set <code>MCP_ROOT</code> to the absolute repository path in the MCP client configuration.</li>
+            <li>Start <code>readtheplan mcp</code> as the local stdio server.</li>
+            <li>Ask the agent to call <code>agent_gate_project</code> for that repository, optionally with <code>framework: soc2</code> and exclusion globs.</li>
             <li>Use proceed, warn, or block before approving, requesting changes, merging, or applying.</li>
           </ol>
         </div>
@@ -194,6 +203,11 @@ readtheplan mcp</pre>
               <span role="columnheader">Prompt</span>
               <span role="columnheader">Use</span>
               <span role="columnheader">Copy</span>
+            </div>
+            <div class="control-map-row" role="row">
+              <span>Mixed repository reviewer</span>
+              <span>Repository-wide infrastructure review</span>
+              <span>Call <code>agent_gate_project</code> on the repository root with <code>framework: soc2</code>. Summarize every file gate and follow the aggregate allowed and prohibited actions.</span>
             </div>
             <div class="control-map-row" role="row">
               <span>PR reviewer</span>
@@ -229,6 +243,7 @@ readtheplan mcp</pre>
             Free community setup help can connect an infra or compliance team to a local MCP client
             to one Terraform repository, tune review prompts, and decide which workflows
             belong in CLI evidence rather than the preview MCP tool.
+            <code>agent_gate_project</code> can discover and snapshot the repository automatically.
             Current MCP gates normalize Terraform/OpenTofu plans, configuration, and provider locks,
             Terragrunt, Terramate, CloudFormation, AWS CDK Cloud Assemblies/assets, Bicep source, Azure What-If,
             Kubernetes (including Tekton), Pulumi, GitHub Actions, GitLab CI, CircleCI,

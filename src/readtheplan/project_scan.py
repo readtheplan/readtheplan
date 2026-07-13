@@ -174,7 +174,13 @@ def _excluded(relative: str, patterns: Sequence[str], *, directory: bool = False
     )
 
 
-def identify_project_input(path: Path, relative_path: str) -> str | None:
+def identify_project_input(
+    path: Path,
+    relative_path: str,
+    *,
+    content: bytes | None = None,
+    inspect_content: bool = True,
+) -> str | None:
     """Return the adapter command for one high-confidence path/content pair."""
     relative = PurePosixPath(relative_path)
     lowered = relative_path.casefold()
@@ -339,7 +345,11 @@ def identify_project_input(path: Path, relative_path: str) -> str | None:
     if suffix == ".tf" or name.endswith(".tf.json"):
         return "terraform-config"
 
-    return _identify_from_content(path, suffix)
+    if content is not None:
+        return _identify_from_content_bytes(content, suffix)
+    if inspect_content:
+        return _identify_from_content(path, suffix)
+    return None
 
 
 def _named_config_variant(name: str, suffix: str, *basenames: str) -> bool:
@@ -359,8 +369,15 @@ def _identify_from_content(path: Path, suffix: str) -> str | None:
         return None
     try:
         raw = path.read_bytes()[: 256 * 1024]
+    except OSError:
+        return None
+    return _identify_from_content_bytes(raw, suffix)
+
+
+def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
+    try:
         text = raw.decode("utf-8")
-    except (OSError, UnicodeDecodeError):
+    except UnicodeDecodeError:
         return None
     if suffix in _YAML_SUFFIXES:
         if _KUBERNETES_HINT.search(text):
@@ -371,6 +388,8 @@ def _identify_from_content(path: Path, suffix: str) -> str | None:
     try:
         document = json.loads(text)
     except (json.JSONDecodeError, RecursionError):
+        if _looks_like_terraform_plan_prefix(text):
+            return "terraform"
         return None
     if not isinstance(document, dict):
         return None
@@ -383,6 +402,16 @@ def _identify_from_content(path: Path, suffix: str) -> str | None:
     if "properties" in document and "changeType" in document:
         return "azure"
     return None
+
+
+def _looks_like_terraform_plan_prefix(text: str) -> bool:
+    head = text[:4096]
+    has_format = re.search(r'^\s*\{.{0,4000}"format_version"\s*:', head, re.DOTALL)
+    has_plan_shape = any(
+        f'"{key}"' in text
+        for key in ("terraform_version", "planned_values", "resource_changes")
+    )
+    return has_format is not None and has_plan_shape
 
 
 def scan_project(
@@ -398,6 +427,24 @@ def scan_project(
     if max_file_bytes < 1:
         raise ProjectScanError("max_file_bytes must be at least 1")
     discovered = discover_project_inputs(root, excludes=excludes, max_files=max_files)
+    return scan_discovered_inputs(
+        discovered,
+        display_root=display_root,
+        framework=framework,
+        max_file_bytes=max_file_bytes,
+    )
+
+
+def scan_discovered_inputs(
+    discovered: Sequence[DiscoveredInput],
+    *,
+    display_root: str,
+    framework: str | None = None,
+    max_file_bytes: int = 10 * 1024 * 1024,
+) -> dict[str, Any]:
+    """Analyze an already discovered, trusted set of infrastructure inputs."""
+    if max_file_bytes < 1:
+        raise ProjectScanError("max_file_bytes must be at least 1")
     results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for item in discovered:
@@ -433,7 +480,7 @@ def _analyze_input(item: DiscoveredInput, *, framework: str | None) -> dict[str,
     stderr = io.StringIO()
     try:
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            status = main(arguments)
+            status = main(arguments, include_git_version=False)
     except (SystemExit, OSError, UnicodeError, ValueError):
         return None
     if status not in {0, 1, 2}:
@@ -633,7 +680,7 @@ def _project_pr_comment(
         lines.extend(("", "- File gates:"))
         for result in results[:10]:
             lines.append(
-                f"  - `{result['path']}` ({result['tool']}): "
+                f"  - {_markdown_code(result['path'])} ({result['tool']}): "
                 f"`{result['decision']}` / `{result['risk']}`"
             )
         if len(results) > 10:
@@ -641,7 +688,17 @@ def _project_pr_comment(
     if errors:
         lines.extend(("", "- Inputs requiring validation:"))
         for error in errors[:10]:
-            lines.append(f"  - `{error['path']}` ({error['tool']}): `{error['code']}`")
+            lines.append(
+                f"  - {_markdown_code(error['path'])} ({error['tool']}): `{error['code']}`"
+            )
         if len(errors) > 10:
             lines.append(f"  - ...and {len(errors) - 10} more")
     return "\n".join(lines)
+
+
+def _markdown_code(value: object) -> str:
+    cleaned = "".join(
+        character if character >= " " and character != "\x7f" else " "
+        for character in str(value)
+    ).replace("`", "\N{MODIFIER LETTER GRAVE ACCENT}")
+    return f"`{cleaned}`"

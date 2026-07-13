@@ -343,6 +343,20 @@ threshold.
 readtheplan analyze --framework soc2 plan.json
 ```
 
+### 6) Let a local MCP agent scan the whole infrastructure repository
+
+```bash
+pip install "readtheplan[mcp]"
+MCP_ROOT=/absolute/path/to/repository readtheplan mcp
+```
+
+Ask the MCP client to call `agent_gate_project` with the repository path. It
+auto-discovers the same inputs as `readtheplan scan .`, opens every candidate
+through the descriptor-verified `MCP_ROOT` boundary, and analyzes an isolated
+temporary snapshot. Optional `framework`, `excludes`, `max_files`, and
+`max_file_bytes` arguments keep agent scans scoped and deterministic. Source
+contents and analyzer error text are not included in the aggregate result.
+
 ### Docker
 
 Build the bundled `Dockerfile` and run locally — your plan JSON stays on the mounted workspace and never leaves the container:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -45,6 +46,7 @@ from readtheplan.mcp_server import (
     agent_gate_otel_collector,
     agent_gate_packer,
     agent_gate_pipeline,
+    agent_gate_project,
     agent_gate_proxy_config,
     agent_gate_pulumi,
     agent_gate_pulumi_project,
@@ -889,6 +891,302 @@ def test_agent_gate_cloudformation_rejects_path_outside_root(monkeypatch, tmp_pa
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_project_scans_mixed_infrastructure_snapshot(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    shutil.copytree(FIXTURES / "project_scan", project)
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    result = agent_gate_project(str(project), framework="soc2")
+
+    assert result["adapter"] == "project-scan"
+    assert result["decision"] == "block"
+    assert result["discovered_file_count"] == 4
+    assert result["scanned_file_count"] == 4
+    assert result["total_changes"] == 17
+    assert {item["tool"] for item in result["files"]} == {
+        "docker-compose",
+        "jenkins",
+        "spacelift",
+        "terraform-config",
+    }
+    assert "project-scan-secret" not in json.dumps(result)
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_project_analyzes_only_isolated_snapshot_paths(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    original = project / "Dockerfile"
+    original.write_text("FROM scratch\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+    analyzed_paths: list[Path] = []
+
+    def fake_analyze(item, *, framework):
+        analyzed_paths.append(item.path)
+        return {
+            "adapter": "dockerfile",
+            "decision": "proceed",
+            "risk": "safe",
+            "risk_counts": {"safe": 1, "review": 0, "dangerous": 0, "irreversible": 0},
+            "total_changes": 1,
+            "required_checks": [],
+            "reason": "Snapshot analyzed.",
+        }
+
+    monkeypatch.setattr("readtheplan.project_scan._analyze_input", fake_analyze)
+
+    result = agent_gate_project(str(project))
+
+    assert result["decision"] == "proceed"
+    assert len(analyzed_paths) == 1
+    assert analyzed_paths[0] != original
+    assert not analyzed_paths[0].is_relative_to(root)
+    assert not analyzed_paths[0].exists()
+
+
+def test_agent_gate_project_honors_excludes_and_default_dependency_skips(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    (project / "infra").mkdir(parents=True)
+    (project / "infra" / "main.tf").write_text("resource {}\n", encoding="utf-8")
+    (project / "generated").mkdir()
+    (project / "generated" / "skip.tf").write_text("resource {}\n", encoding="utf-8")
+    (project / "node_modules").mkdir()
+    (project / "node_modules" / "skip.tf").write_text("resource {}\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    result = agent_gate_project(str(project), excludes=["generated/**"])
+
+    assert result["discovered_file_count"] == 1
+    assert result["files"][0]["path"] == "infra/main.tf"
+
+
+def test_agent_gate_project_detects_content_sniffed_manifest(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    manifest = project / "deployment.yaml"
+    manifest.write_text(
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    result = agent_gate_project(str(project))
+
+    assert result["discovered_file_count"] == 1
+    assert result["files"][0]["tool"] == "kubernetes"
+
+
+def test_agent_gate_project_reports_oversized_supported_input_without_reading_it(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    (project / "Dockerfile").write_text(
+        "FROM scratch\n# project-scan-large-secret\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    result = agent_gate_project(str(project), max_file_bytes=16)
+
+    assert result["discovered_file_count"] == 1
+    assert result["scanned_file_count"] == 0
+    assert result["errors"] == [
+        {"path": "Dockerfile", "tool": "dockerfile", "code": "file-too-large"}
+    ]
+    assert "project-scan-large-secret" not in json.dumps(result)
+
+
+def test_agent_gate_project_rejects_path_outside_root(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_project(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_project_skips_static_symlink_outside_root(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    outside = tmp_path / "outside.tf"
+    outside.write_text("resource {}\n", encoding="utf-8")
+    linked = project / "linked.tf"
+    try:
+        linked.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"file symlinks unavailable: {exc}")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    result = agent_gate_project(str(project))
+
+    assert result["discovered_file_count"] == 0
+
+
+def test_agent_gate_project_rejects_validate_open_swap(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    inside = project / "Dockerfile"
+    inside.write_text("FROM scratch\n", encoding="utf-8")
+    outside = tmp_path / "outside.Dockerfile"
+    outside.write_text("FROM evil.example/image\n", encoding="utf-8")
+    inside_path = str(inside.resolve())
+    monkeypatch.setenv("MCP_ROOT", str(root))
+    real_open = os.open
+    swapped = False
+
+    def swapping_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and os.fspath(path) == inside_path:
+            inside.unlink()
+            try:
+                inside.symlink_to(outside)
+            except OSError as exc:
+                pytest.skip(f"file symlinks unavailable: {exc}")
+            swapped = True
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr("readtheplan.mcp_server.os.open", swapping_open)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_project(str(project))
+
+    assert swapped is True
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_project_rejects_swap_to_different_target_inside_root(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    inside = project / "Dockerfile"
+    inside.write_text("FROM scratch\n", encoding="utf-8")
+    sibling = project / "other.txt"
+    sibling.write_text("FROM evil.example/image\n", encoding="utf-8")
+    inside_path = str(inside.resolve())
+    monkeypatch.setenv("MCP_ROOT", str(root))
+    real_open = os.open
+    swapped = False
+
+    def swapping_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and os.fspath(path) == inside_path:
+            inside.unlink()
+            try:
+                inside.symlink_to(sibling)
+            except OSError as exc:
+                pytest.skip(f"file symlinks unavailable: {exc}")
+            swapped = True
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr("readtheplan.mcp_server.os.open", swapping_open)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_project(str(project))
+
+    assert swapped is True
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_project_revalidates_every_walked_directory(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    def escaped_walk(*args, **kwargs):
+        yield str(outside), [], ["Dockerfile"]
+
+    monkeypatch.setattr("readtheplan.mcp_server.os.walk", escaped_walk)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_project(str(project))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
+def test_agent_gate_project_fails_closed_on_supported_file_limit(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    (project / "a.tf").write_text("resource {}\n", encoding="utf-8")
+    (project / "b.tf").write_text("resource {}\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_project(str(project), max_files=1)
+
+    assert exc_info.value.code == "LIMIT_EXCEEDED"
+
+
+def test_agent_gate_project_fails_closed_on_candidate_limit(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    (project / "a.txt").write_text("a\n", encoding="utf-8")
+    (project / "b.txt").write_text("b\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+    monkeypatch.setattr("readtheplan.mcp_server._MCP_PROJECT_SCAN_MAX_CANDIDATES", 1)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_project(str(project))
+
+    assert exc_info.value.code == "LIMIT_EXCEEDED"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"project_path": ""},
+        {"project_path": ".", "excludes": [""]},
+        {"project_path": ".", "max_files": 0},
+        {"project_path": ".", "max_files": 5001},
+        {"project_path": ".", "max_file_bytes": 0},
+        {"project_path": ".", "max_file_bytes": 100 * 1024 * 1024 + 1},
+    ],
+)
+def test_agent_gate_project_rejects_invalid_limits_and_patterns(kwargs) -> None:
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_project(**kwargs)
+
+    assert exc_info.value.code == "INVALID_INPUT"
+
+
 @pytest.mark.parametrize(
     ("handler", "fixture_name", "result_key", "expected_value"),
     [
@@ -1536,7 +1834,11 @@ def test_stdio_server_tools_list() -> None:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=False,
-        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        env={
+            **os.environ,
+            "PYTHONUNBUFFERED": "1",
+            "MCP_ROOT": str(FIXTURES.resolve()),
+        },
     )
 
     try:
@@ -1550,6 +1852,7 @@ def test_stdio_server_tools_list() -> None:
         tools_by_name = {tool["name"]: tool for tool in tools_resp["result"]["tools"]}
         tool_names = set(tools_by_name)
         assert "analyze_plan" in tool_names
+        assert "agent_gate_project" in tool_names
         assert "agent_gate" in tool_names
         assert "agent_gate_cloudformation" in tool_names
         assert "agent_gate_cdk" in tool_names
@@ -1611,6 +1914,14 @@ def test_stdio_server_tools_list() -> None:
             "agent_gate_pulumi_project",
         ):
             assert "framework" in tools_by_name[tool_name]["inputSchema"]["properties"]
+        project_schema = tools_by_name["agent_gate_project"]["inputSchema"]
+        assert {
+            "project_path",
+            "framework",
+            "excludes",
+            "max_files",
+            "max_file_bytes",
+        } <= set(project_schema["properties"])
         pipeline_schema = tools_by_name["agent_gate_pipeline"]["inputSchema"]
         assert {"input_path", "ecosystem", "framework"} <= set(pipeline_schema["properties"])
         workload_schema = tools_by_name["agent_gate_workload"]["inputSchema"]
@@ -1737,6 +2048,29 @@ def test_stdio_server_tools_list() -> None:
         cli_summary = json.loads(cli_out)
 
         assert mcp_summary == cli_summary
+
+        # --- tools/call: agent_gate_project ---
+        project_req = {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_project",
+                "arguments": {
+                    "project_path": str((FIXTURES / "project_scan").resolve()),
+                    "framework": "soc2",
+                },
+            },
+        }
+        project_resp = _send_jsonrpc(proc, project_req)
+        assert "result" in project_resp, f"project tools/call failed: {project_resp}"
+        project_content = project_resp["result"]["content"]
+        assert len(project_content) == 1
+        project_summary = json.loads(project_content[0]["text"])
+        assert project_summary["adapter"] == "project-scan"
+        assert project_summary["discovered_file_count"] == 4
+        assert project_summary["scanned_file_count"] == 4
+        assert "project-scan-secret" not in project_content[0]["text"]
 
     finally:
         proc.stdin.close()  # type: ignore[union-attr]

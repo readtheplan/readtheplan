@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from readtheplan.cli import main
+from readtheplan.cli import _package_version, main
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -32,6 +32,15 @@ def test_version_flag_prints_package_version(capsys) -> None:
     assert exc_info.value.code == 0
     assert captured.out.strip().startswith("readtheplan ")
     assert captured.err == ""
+
+
+def test_package_version_can_skip_git_enrichment(monkeypatch) -> None:
+    def unexpected_git(*args, **kwargs):
+        raise AssertionError("git enrichment must be skipped")
+
+    monkeypatch.setattr("readtheplan.cli.subprocess.run", unexpected_git)
+
+    assert _package_version(include_git=False)
 
 
 def test_analyze_valid_plan_prints_summary(capsys) -> None:

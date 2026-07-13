@@ -8,6 +8,7 @@ import pytest
 from readtheplan.cli import main
 from readtheplan.project_scan import (
     ProjectScanError,
+    _project_pr_comment,
     discover_project_inputs,
     identify_project_input,
     scan_project,
@@ -73,6 +74,40 @@ def test_content_detection_for_kubernetes_ansible_and_terraform(tmp_path: Path) 
     assert identify_project_input(kubernetes, kubernetes.name) == "kubernetes"
     assert identify_project_input(ansible, ansible.name) == "ansible"
     assert identify_project_input(terraform, terraform.name) == "terraform"
+
+
+def test_large_terraform_plan_is_detected_from_a_bounded_prefix(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.json"
+    plan.write_text(
+        '{"format_version":"1.2","terraform_version":"1.9.0","padding":"'
+        + "x" * (300 * 1024)
+        + '","resource_changes":[]}',
+        encoding="utf-8",
+    )
+
+    assert identify_project_input(plan, plan.name) == "terraform"
+
+
+def test_pr_comment_sanitizes_untrusted_path_markdown() -> None:
+    comment = _project_pr_comment(
+        decision="warn",
+        risk="review",
+        reason="Review the project.",
+        results=[
+            {
+                "path": "infra/evil`\n**spoofed**.tf",
+                "tool": "terraform-config",
+                "decision": "warn",
+                "risk": "review",
+            }
+        ],
+        errors=[],
+        required_checks=[],
+    )
+
+    assert "\n**spoofed**" not in comment
+    assert "evil`" not in comment
+    assert "infra/evilˋ **spoofed**.tf" in comment
 
 
 @pytest.mark.parametrize(
