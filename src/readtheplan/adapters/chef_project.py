@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import yaml
+
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.plan import PlanSummary, ResourceChange
@@ -110,6 +112,57 @@ _PATH_SETTINGS = {
     "trusted_certs_dir",
 }
 _MAX_CONFIG_STATEMENT = 1_000_000
+_MAX_KITCHEN_BYTES = 2 * 1024 * 1024
+_MAX_KITCHEN_NODES = 100_000
+_MAX_KITCHEN_DEPTH = 100
+_KITCHEN_FILENAMES = {
+    ".kitchen.yaml",
+    ".kitchen.yml",
+    "kitchen.local.yaml",
+    "kitchen.local.yml",
+    "kitchen.yaml",
+    "kitchen.yml",
+}
+_KITCHEN_TOP_LEVEL_KEYS = {
+    "driver",
+    "lifecycle",
+    "platforms",
+    "provisioner",
+    "suites",
+    "transport",
+    "verifier",
+}
+
+
+class _KitchenUniqueKeyLoader(yaml.SafeLoader):
+    pass
+
+
+def _construct_kitchen_mapping(
+    loader: _KitchenUniqueKeyLoader,
+    node: yaml.MappingNode,
+    deep: bool = False,
+) -> dict[Any, Any]:
+    explicit_keys: set[Any] = set()
+    for key_node, _ in node.value:
+        if key_node.tag == "tag:yaml.org,2002:merge":
+            continue
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in explicit_keys
+        except TypeError as exc:
+            raise ChefProjectInputError("Test Kitchen YAML mapping keys must be scalar") from exc
+        if duplicate:
+            raise ChefProjectInputError(f"duplicate Test Kitchen YAML key: {key}")
+        explicit_keys.add(key)
+    loader.flatten_mapping(node)
+    return yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+
+
+_KitchenUniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_kitchen_mapping,
+)
 
 
 def _change(address: str, kind: str, risk: str, explanation: str) -> dict[str, str]:
@@ -701,6 +754,137 @@ def _parse_runtime_config(source: str, artifact_type: str) -> dict[str, Any]:
     }
 
 
+def _mask_kitchen_erb(source: str) -> tuple[str, int]:
+    """Mask ERB without evaluating Ruby while preserving YAML layout and line numbers."""
+    masked = list(source)
+    count = 0
+    cursor = 0
+    while True:
+        start = source.find("<%", cursor)
+        if start < 0:
+            break
+        end = source.find("%>", start + 2)
+        if end < 0:
+            raise ChefProjectInputError("Test Kitchen configuration contains unterminated ERB")
+        count += 1
+        for index in range(start, end + 2):
+            if masked[index] not in {"\r", "\n"}:
+                masked[index] = " "
+        cursor = end + 2
+    return "".join(masked), count
+
+
+def _validate_kitchen_tree(
+    value: Any,
+    *,
+    depth: int = 0,
+    active: set[int] | None = None,
+    seen: set[int] | None = None,
+    counter: list[int] | None = None,
+) -> None:
+    if counter is None:
+        counter = [0]
+    counter[0] += 1
+    if counter[0] > _MAX_KITCHEN_NODES:
+        raise ChefProjectInputError("Test Kitchen configuration exceeds the YAML node limit")
+    if depth > _MAX_KITCHEN_DEPTH:
+        raise ChefProjectInputError("Test Kitchen configuration exceeds the nesting depth limit")
+    if not isinstance(value, (dict, list)):
+        return
+    if active is None:
+        active = set()
+    if seen is None:
+        seen = set()
+    object_id = id(value)
+    if object_id in active:
+        raise ChefProjectInputError("Test Kitchen configuration contains a recursive YAML alias")
+    if object_id in seen:
+        return
+    seen.add(object_id)
+    active.add(object_id)
+    if isinstance(value, dict):
+        if not all(isinstance(key, str) for key in value):
+            raise ChefProjectInputError("Test Kitchen YAML mapping keys must be strings")
+        children = value.values()
+    else:
+        children = value
+    for child in children:
+        _validate_kitchen_tree(
+            child,
+            depth=depth + 1,
+            active=active,
+            seen=seen,
+            counter=counter,
+        )
+    active.remove(object_id)
+
+
+def _validate_kitchen_named_entries(document: dict[str, Any], key: str) -> None:
+    entries = document.get(key)
+    if entries is None:
+        return
+    if not isinstance(entries, list):
+        raise ChefProjectInputError(f"Test Kitchen {key} must be a list")
+    names: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ChefProjectInputError(f"each Test Kitchen {key} entry must be a mapping")
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ChefProjectInputError(f"each Test Kitchen {key} entry must have a string name")
+        canonical = name.casefold()
+        if canonical in names:
+            raise ChefProjectInputError(f"duplicate Test Kitchen {key} name")
+        names.add(canonical)
+
+
+def _parse_test_kitchen(source: str) -> dict[str, Any]:
+    if len(source.encode("utf-8")) > _MAX_KITCHEN_BYTES:
+        raise ChefProjectInputError("Test Kitchen configuration exceeds the 2 MiB input limit")
+    masked, erb_count = _mask_kitchen_erb(source)
+    try:
+        documents = list(yaml.load_all(masked, Loader=_KitchenUniqueKeyLoader))  # noqa: S506
+    except ChefProjectInputError:
+        raise
+    except RecursionError as exc:
+        raise ChefProjectInputError(
+            "Test Kitchen configuration exceeds the nesting depth limit"
+        ) from exc
+    except yaml.YAMLError as exc:
+        if "recursive node" in str(exc):
+            raise ChefProjectInputError(
+                "Test Kitchen configuration contains a recursive YAML alias"
+            ) from exc
+        raise ChefProjectInputError(f"invalid Test Kitchen YAML: {exc}") from exc
+    if len(documents) != 1:
+        raise ChefProjectInputError("Test Kitchen input must contain exactly one YAML document")
+    document = documents[0]
+    if not isinstance(document, dict) or not document:
+        raise ChefProjectInputError("Test Kitchen configuration must be a non-empty YAML mapping")
+    if not (_KITCHEN_TOP_LEVEL_KEYS & set(document)):
+        raise ChefProjectInputError("input is not a recognized Test Kitchen configuration")
+    _validate_kitchen_tree(document)
+    _validate_kitchen_named_entries(document, "platforms")
+    _validate_kitchen_named_entries(document, "suites")
+    for key in ("driver", "lifecycle", "provisioner", "transport", "verifier"):
+        if key in document and not isinstance(document[key], dict):
+            raise ChefProjectInputError(f"Test Kitchen {key} must be a mapping")
+    for collection in ("platforms", "suites"):
+        for entry in document.get(collection, []):
+            for key in ("driver", "lifecycle", "provisioner", "transport", "verifier"):
+                if key in entry and not isinstance(entry[key], dict):
+                    raise ChefProjectInputError(
+                        f"Test Kitchen {collection} {key} override must be a mapping"
+                    )
+    return {
+        "artifact_type": "test_kitchen",
+        "document": {
+            "configuration": document,
+            "erb_count": erb_count,
+        },
+    }
+
+
 def parse_chef_project(source: str, *, filename: str = "") -> dict[str, Any]:
     """Parse static Chef project/runtime files without executing Ruby."""
     if not source.strip():
@@ -710,6 +894,8 @@ def parse_chef_project(source: str, *, filename: str = "") -> dict[str, Any]:
         return {"chef_project": _parse_berksfile(source)}
     if basename == "berksfile.lock":
         return {"chef_project": _parse_berks_lock(source)}
+    if basename in _KITCHEN_FILENAMES:
+        return {"chef_project": _parse_test_kitchen(source)}
     artifact_type = _config_artifact_type(filename)
     parsed = (
         _parse_runtime_config(source, artifact_type)
@@ -1600,6 +1786,377 @@ def _runtime_config_changes(
     return changes
 
 
+def _kitchen_enabled(value: Any) -> bool:
+    return value is True or str(value).strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _kitchen_disabled(value: Any) -> bool:
+    return value is False or str(value).strip().casefold() in {"0", "false", "no", "off"}
+
+
+def _kitchen_nonempty(value: Any) -> bool:
+    return value is not None and value is not False and value != "" and value != [] and value != {}
+
+
+def _walk_kitchen_scalars(value: Any, path: tuple[str, ...] = ()):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from _walk_kitchen_scalars(child, (*path, key.casefold()))
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_kitchen_scalars(child, path)
+    else:
+        yield path, value
+
+
+def _kitchen_has_literal_secret(value: Any) -> bool:
+    path_suffixes = ("_file", "_id", "_name", "_path", "_ref")
+    for path, scalar in _walk_kitchen_scalars(value):
+        if not path or scalar in {None, ""}:
+            continue
+        key = path[-1]
+        if key.endswith(path_suffixes) and not key.endswith(("password", "private_key")):
+            continue
+        if _SECRET.search(key) or key.endswith(("_pass", "_passwd")):
+            return True
+        if isinstance(scalar, str) and _embedded_credential(scalar):
+            return True
+    return False
+
+
+def _kitchen_has_plaintext_endpoint(value: Any) -> bool:
+    for _, scalar in _walk_kitchen_scalars(value):
+        if isinstance(scalar, str) and scalar.strip().casefold().startswith(
+            ("http://", "ftp://", "git://")
+        ):
+            return True
+    return False
+
+
+def _kitchen_has_command(value: Any) -> bool:
+    command_keys = {
+        "command",
+        "create_command",
+        "destroy_command",
+        "post_create_command",
+        "pre_create_command",
+        "provision_command",
+        "run_command",
+    }
+    return any(
+        path and path[-1] in command_keys and _kitchen_nonempty(scalar)
+        for path, scalar in _walk_kitchen_scalars(value)
+    )
+
+
+def _kitchen_has_host_access(value: Any) -> bool:
+    sensitive_keys = {
+        "devices",
+        "host_network",
+        "mounts",
+        "network_mode",
+        "privileged",
+        "socket",
+        "sockets",
+        "synced_folders",
+        "volumes",
+    }
+    for path, scalar in _walk_kitchen_scalars(value):
+        if path and path[-1] in sensitive_keys and _kitchen_nonempty(scalar):
+            return True
+    return False
+
+
+def _kitchen_component_changes(
+    scope: str,
+    component: str,
+    config: dict[str, Any],
+) -> list[dict[str, str]]:
+    address = f"chef.test_kitchen.{scope}.{component}"
+    changes: list[dict[str, str]] = []
+    name = str(config.get("name", "")).strip().casefold()
+    if component == "driver":
+        cloud_drivers = {
+            "azurerm",
+            "cloudstack",
+            "digitalocean",
+            "ec2",
+            "google",
+            "openstack",
+            "rackspace",
+        }
+        detail = (
+            "The selected cloud driver can create and destroy provider resources."
+            if name in cloud_drivers
+            else "The selected driver plugin can create and destroy test infrastructure."
+        )
+        changes.append(_change(address, "test_kitchen_driver", "dangerous", detail))
+        if _kitchen_has_host_access(config):
+            changes.append(
+                _change(
+                    f"{address}.host_access",
+                    "test_kitchen_host_access",
+                    "dangerous",
+                    "Driver configuration grants privileged, device, socket, host-network, mount, "
+                    "or synchronized-folder access across the test-instance boundary.",
+                )
+            )
+        if any(
+            path
+            and path[-1]
+            in {"network", "networks", "port", "ports", "forwarded_port", "forwarded_ports"}
+            and _kitchen_nonempty(scalar)
+            for path, scalar in _walk_kitchen_scalars(config)
+        ):
+            changes.append(
+                _change(
+                    f"{address}.network",
+                    "test_kitchen_network",
+                    "review",
+                    "Driver networking or port forwarding changes test-instance reachability.",
+                )
+            )
+    elif component == "provisioner":
+        changes.append(
+            _change(
+                address,
+                "test_kitchen_provisioner",
+                "dangerous",
+                "The provisioner installs or executes infrastructure-management code on each "
+                "selected test instance.",
+            )
+        )
+        version = config.get("product_version", config.get("require_chef_omnibus"))
+        if version is True or str(version or "").strip().casefold() in {"", "latest", "true"}:
+            changes.append(
+                _change(
+                    f"{address}.product_version",
+                    "test_kitchen_mutable_toolchain",
+                    "dangerous",
+                    "The Chef toolchain is not pinned to an exact product version, so later runs "
+                    "can install different executable content.",
+                )
+            )
+        if any(key in config for key in ("client_rb", "solo_rb", "json_attributes")):
+            changes.append(
+                _change(
+                    f"{address}.runtime_configuration",
+                    "test_kitchen_runtime_override",
+                    "dangerous",
+                    "Provisioner data overrides Chef runtime settings or node attributes for the "
+                    "converge operation.",
+                )
+            )
+        if any(
+            key in config
+            for key in (
+                "data_path",
+                "data_bags_path",
+                "encrypted_data_bag_secret_key_path",
+                "uploads",
+            )
+        ):
+            changes.append(
+                _change(
+                    f"{address}.staged_inputs",
+                    "test_kitchen_staged_input",
+                    "review",
+                    "The provisioner stages additional local data, uploads, or decryption material "
+                    "onto test instances.",
+                )
+            )
+    elif component == "transport":
+        changes.append(
+            _change(
+                address,
+                "test_kitchen_transport",
+                "review",
+                "The transport plugin controls remote authentication, command execution, and file "
+                "movement for test instances.",
+            )
+        )
+        if _kitchen_disabled(config.get("verify_host_key")) or _kitchen_disabled(
+            config.get("verify_host")
+        ):
+            changes.append(
+                _change(
+                    f"{address}.host_verification",
+                    "test_kitchen_transport_trust",
+                    "dangerous",
+                    "Remote host identity verification is explicitly disabled.",
+                )
+            )
+        if _kitchen_enabled(config.get("elevated")) or _kitchen_enabled(config.get("sudo")):
+            changes.append(
+                _change(
+                    f"{address}.elevation",
+                    "test_kitchen_transport_elevation",
+                    "dangerous",
+                    "Transport commands run with elevated operating-system privileges.",
+                )
+            )
+        if any(key in config for key in ("ssh_key", "private_key", "client_cert", "client_key")):
+            changes.append(
+                _change(
+                    f"{address}.credential_material",
+                    "test_kitchen_credential_material",
+                    "review",
+                    "Transport authentication depends on configured key or certificate material.",
+                )
+            )
+    elif component == "verifier":
+        changes.append(
+            _change(
+                address,
+                "test_kitchen_verifier",
+                "dangerous",
+                "The verifier plugin executes local or remote test code and may download external "
+                "profiles or artifacts.",
+            )
+        )
+        if any(key in config for key in ("inspec_tests", "controls", "downloads", "uploads")):
+            changes.append(
+                _change(
+                    f"{address}.test_inputs",
+                    "test_kitchen_verifier_input",
+                    "review",
+                    "Verifier behavior depends on selected controls, profiles, staged files, or "
+                    "downloaded results.",
+                )
+            )
+    if _kitchen_has_command(config):
+        changes.append(
+            _change(
+                f"{address}.command",
+                "test_kitchen_command",
+                "dangerous",
+                "Component-specific command configuration executes arbitrary local or remote code.",
+            )
+        )
+    if _kitchen_has_literal_secret(config):
+        changes.append(
+            _change(
+                f"{address}.literal_secret",
+                "test_kitchen_literal_secret",
+                "dangerous",
+                "Configuration contains literal secret-like authentication material or an "
+                "endpoint with embedded credentials.",
+            )
+        )
+    if _kitchen_has_plaintext_endpoint(config):
+        changes.append(
+            _change(
+                f"{address}.plaintext_endpoint",
+                "test_kitchen_plaintext_transport",
+                "dangerous",
+                "Component configuration uses an unauthenticated plaintext endpoint for code, "
+                "packages, proxies, or remote access.",
+            )
+        )
+    return changes
+
+
+def _kitchen_lifecycle_changes(scope: str, lifecycle: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for index, (_, hooks) in enumerate(lifecycle.items()):
+        if not _kitchen_nonempty(hooks):
+            continue
+        changes.append(
+            _change(
+                f"chef.test_kitchen.{scope}.lifecycle[{index}]",
+                "test_kitchen_lifecycle_hook",
+                "dangerous",
+                "A lifecycle hook executes a local workstation command or a remote instance "
+                "command before, after, or following failure of a Kitchen phase.",
+            )
+        )
+    return changes
+
+
+def _test_kitchen_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    configuration = document["configuration"]
+    changes: list[dict[str, str]] = []
+    if document["erb_count"]:
+        changes.append(
+            _change(
+                "chef.test_kitchen.dynamic_erb",
+                "test_kitchen_erb",
+                "dangerous",
+                "Test Kitchen evaluates embedded Ruby before parsing YAML, so environment, file, "
+                "process, and arbitrary Ruby behavior remain dynamic.",
+            )
+        )
+    layers: list[tuple[str, dict[str, Any]]] = [("defaults", configuration)]
+    layers.extend(
+        (f"platforms[{index}]", entry)
+        for index, entry in enumerate(configuration.get("platforms", []))
+    )
+    layers.extend(
+        (f"suites[{index}]", entry)
+        for index, entry in enumerate(configuration.get("suites", []))
+    )
+    for scope, layer in layers:
+        for component in ("driver", "provisioner", "transport", "verifier"):
+            config = layer.get(component)
+            if isinstance(config, dict):
+                changes.extend(_kitchen_component_changes(scope, component, config))
+        lifecycle = layer.get("lifecycle")
+        if isinstance(lifecycle, dict):
+            changes.extend(_kitchen_lifecycle_changes(scope, lifecycle))
+        if scope.startswith("suites[") and layer.get("run_list"):
+            changes.append(
+                _change(
+                    f"chef.test_kitchen.{scope}.run_list",
+                    "test_kitchen_run_list",
+                    "dangerous",
+                    "The suite run list selects executable recipes or roles applied during "
+                    "convergence.",
+                )
+            )
+        if any(key in layer for key in ("attributes", "inputs")):
+            attributes = layer.get("attributes", layer.get("inputs"))
+            changes.append(
+                _change(
+                    f"chef.test_kitchen.{scope}.attributes",
+                    "test_kitchen_attributes",
+                    "review",
+                    "Layered attributes or verifier inputs alter converged infrastructure or test "
+                    "behavior.",
+                )
+            )
+            if _kitchen_has_literal_secret(attributes):
+                changes.append(
+                    _change(
+                        f"chef.test_kitchen.{scope}.attributes.literal_secret",
+                        "test_kitchen_literal_secret",
+                        "dangerous",
+                        "Layered attributes or verifier inputs contain a literal secret-like "
+                        "value.",
+                    )
+                )
+        if any(key in layer for key in ("includes", "excludes")):
+            changes.append(
+                _change(
+                    f"chef.test_kitchen.{scope}.targeting",
+                    "test_kitchen_targeting",
+                    "review",
+                    "Include or exclude filters change which platform and suite combinations run.",
+                )
+            )
+    changes.append(
+        _change(
+            "chef.test_kitchen.effective_configuration",
+            "test_kitchen_boundary",
+            "review",
+            "Effective Test Kitchen behavior also depends on project, local, and global YAML merge "
+            "precedence; KITCHEN_* path overrides; ERB and environment values; installed Ruby "
+            "plugins; driver state; credentials; cookbook and verifier content; and live cloud, "
+            "hypervisor, container, SSH, or WinRM systems.",
+        )
+    )
+    return changes
+
+
 class ChefProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -1620,6 +2177,7 @@ class ChefProjectAdapter(BaseAdapter):
                 "workstation_config",
                 "solo_config",
                 "server_config",
+                "test_kitchen",
             }
             and isinstance(project.get("document"), dict)
         )
@@ -1628,6 +2186,8 @@ class ChefProjectAdapter(BaseAdapter):
         project = input_data["chef_project"]
         artifact_type = project["artifact_type"]
         document = project["document"]
+        if artifact_type == "test_kitchen":
+            return _test_kitchen_changes(document)
         if artifact_type.endswith("_config"):
             return _runtime_config_changes(document, artifact_type)
         if artifact_type == "berksfile":
@@ -1676,5 +2236,10 @@ def analyze_chef_project(data: dict[str, Any], *, catalog=None) -> dict[str, Any
         gate["setting_count"] = len(project["document"]["settings"])
     if project["artifact_type"] == "berks_lock":
         gate["dependency_count"] = len(project["document"]["graph"])
+    if project["artifact_type"] == "test_kitchen":
+        configuration = project["document"]["configuration"]
+        gate["platform_count"] = len(configuration.get("platforms", []))
+        gate["suite_count"] = len(configuration.get("suites", []))
+        gate["dynamic_erb"] = bool(project["document"]["erb_count"])
     gate["total_changes"] = len(changes)
     return gate

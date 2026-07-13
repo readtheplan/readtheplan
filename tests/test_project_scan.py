@@ -51,6 +51,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("cookbooks/base/Berksfile", "chef-project"),
         ("cookbooks/base/Berksfile.lock", "chef-project"),
         ("chef/client.d/security.rb", "chef-project"),
+        ("cookbooks/base/.kitchen.yml", "chef-project"),
+        ("cookbooks/base/kitchen.local.yaml", "chef-project"),
         ("profiles/linux/inspec.yml", "inspec"),
         ("profiles/linux/inspec.lock", "inspec"),
         ("profiles/linux/waivers.yml", "inspec"),
@@ -757,6 +759,30 @@ def test_project_scan_analyzes_chef_runtime_configuration(tmp_path: Path) -> Non
     assert payload["decision"] == "block"
     encoded = json.dumps(payload)
     assert "fixture-chef" not in encoded
+    assert "example.invalid" not in encoded
+
+
+def test_project_scan_analyzes_test_kitchen_configuration(tmp_path: Path) -> None:
+    fixture = FIXTURES / "chef_test_kitchen_risky" / ".kitchen.yml"
+    target = tmp_path / "cookbooks" / "base" / ".kitchen.yml"
+    target.parent.mkdir(parents=True)
+    target.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "chef-project"
+    assert payload["files"][0]["artifact_type"] == "test_kitchen"
+    assert payload["files"][0]["platform_count"] == 1
+    assert payload["files"][0]["suite_count"] == 1
+    assert payload["files"][0]["dynamic_erb"] is True
+    assert payload["total_changes"] == 31
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-cloud-secret-do-not-leak" not in encoded
+    assert "fixture-local-command-do-not-run" not in encoded
     assert "example.invalid" not in encoded
 
 

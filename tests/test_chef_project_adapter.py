@@ -421,3 +421,115 @@ def test_gate_and_cli_support_chef_runtime_configuration(
     assert "fixture-chef" not in encoded
     assert "example.invalid" not in encoded
     assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+
+
+def test_test_kitchen_surfaces_execution_trust_privilege_and_layering_without_values() -> None:
+    changes = _changes("chef_test_kitchen_risky/.kitchen.yml")
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert len(changes) == 31
+    assert sum(change.risk == "dangerous" for change in changes) == 22
+    assert sum(change.risk == "review" for change in changes) == 9
+    assert "chef_project_test_kitchen_erb" in kinds
+    assert "chef_project_test_kitchen_driver" in kinds
+    assert "chef_project_test_kitchen_host_access" in kinds
+    assert "chef_project_test_kitchen_provisioner" in kinds
+    assert "chef_project_test_kitchen_transport_trust" in kinds
+    assert "chef_project_test_kitchen_verifier" in kinds
+    assert "chef_project_test_kitchen_lifecycle_hook" in kinds
+    assert "chef_project_test_kitchen_boundary" in kinds
+    for secret in (
+        "fixture-api-token-do-not-leak",
+        "fixture-cloud-secret-do-not-leak",
+        "fixture-hook-secret-do-not-leak",
+        "fixture-transport-password-do-not-leak",
+        "fixture-user",
+        "fixture-password",
+        "example.invalid",
+        "fixture-local-command-do-not-run",
+        "fixture-remote-command-do-not-run",
+    ):
+        assert secret not in encoded
+
+
+def test_test_kitchen_gate_and_cli_expose_only_structural_metadata(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = FIXTURES / "chef_test_kitchen_risky" / ".kitchen.yml"
+    data = parse_chef_project(path.read_text(encoding="utf-8"), filename=str(path))
+    gate = analyze_chef_project(data)
+
+    assert gate["adapter"] == "chef-project"
+    assert gate["artifact_type"] == "test_kitchen"
+    assert gate["platform_count"] == 1
+    assert gate["suite_count"] == 1
+    assert gate["dynamic_erb"] is True
+    assert gate["total_changes"] == 31
+    assert gate["decision"] == "block"
+
+    assert main(["chef-project", "--framework", "soc2", str(path)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    encoded = json.dumps(payload)
+    assert payload["artifact_type"] == "test_kitchen"
+    assert payload["risk_counts"]["dangerous"] == 22
+    assert "fixture-cloud-secret-do-not-leak" not in encoded
+    assert "fixture-local-command-do-not-run" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+
+
+@pytest.mark.parametrize(
+    ("source", "error"),
+    [
+        ("ordinary: yaml\n", "not a recognized Test Kitchen"),
+        ("driver:\n  name: one\n  name: two\n", "duplicate Test Kitchen YAML key"),
+        ("driver: vagrant\n", "driver must be a mapping"),
+        ("platforms: {}\n", "platforms must be a list"),
+        ("platforms:\n  - name: one\n    driver: vagrant\n", "driver override"),
+        ("driver: {}\n---\nsuites: []\n", "exactly one YAML document"),
+        ("driver:\n  name: <%= ENV['DRIVER']\n", "unterminated ERB"),
+        ("driver: &driver\n  name: vagrant\n  loop: *driver\n", "recursive YAML alias"),
+    ],
+)
+def test_test_kitchen_parser_rejects_ambiguous_or_unsafe_structure(
+    source: str, error: str
+) -> None:
+    with pytest.raises(ChefProjectInputError, match=error):
+        parse_chef_project(source, filename=".kitchen.yml")
+
+
+def test_test_kitchen_parser_supports_nonrecursive_anchors_and_merge_keys() -> None:
+    data = parse_chef_project(
+        "driver: &driver\n  name: vagrant\nplatforms:\n  - name: one\n"
+        "    driver:\n      <<: *driver\nsuites:\n  - name: default\n",
+        filename="kitchen.yml",
+    )
+    document = data["chef_project"]["document"]["configuration"]
+
+    assert data["chef_project"]["artifact_type"] == "test_kitchen"
+    assert document["platforms"][0]["driver"]["name"] == "vagrant"
+
+
+def test_test_kitchen_erb_is_masked_and_never_executed(tmp_path: Path) -> None:
+    marker = tmp_path / "erb-was-executed"
+    source = f"driver:\n  name: <%= File.write('{marker}', 'bad') %>\n"
+    data = parse_chef_project(source, filename=".kitchen.yml")
+
+    assert data["chef_project"]["document"]["erb_count"] == 1
+    assert not marker.exists()
+
+
+def test_test_kitchen_parser_enforces_size_and_depth_limits() -> None:
+    with pytest.raises(ChefProjectInputError, match="2 MiB"):
+        parse_chef_project(
+            "driver:\n  name: vagrant\n  note: " + "x" * (2 * 1024 * 1024),
+            filename=".kitchen.yml",
+        )
+    deeply_nested = "driver:\n  name: vagrant\n  nested:\n" + "".join(
+        " " * (4 + depth * 2) + "value:\n" for depth in range(102)
+    )
+    with pytest.raises(ChefProjectInputError, match="nesting depth"):
+        parse_chef_project(deeply_nested, filename=".kitchen.yml")

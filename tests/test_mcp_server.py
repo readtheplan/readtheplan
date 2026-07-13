@@ -823,6 +823,26 @@ def test_agent_gate_configuration_management_supports_chef_runtime_config() -> N
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_test_kitchen() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "chef_test_kitchen_risky" / ".kitchen.yml"),
+        "chef-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "chef-project"
+    assert result["artifact_type"] == "test_kitchen"
+    assert result["platform_count"] == 1
+    assert result["suite_count"] == 1
+    assert result["dynamic_erb"] is True
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 31
+    assert "fixture-cloud-secret-do-not-leak" not in encoded
+    assert "fixture-local-command-do-not-run" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_berksfile_lock() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "chef_berkshelf_risky" / "Berksfile.lock"),
