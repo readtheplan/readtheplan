@@ -729,13 +729,15 @@ def agent_gate_pipeline(
         "travis-ci",
         "drone-ci",
         "woodpecker-ci",
+        "concourse",
+        "bamboo",
     }:
         raise MCPToolInputError(
             code="INVALID_INPUT",
             message=(
                 "ecosystem must be github-actions, gitlab-ci, circleci, "
                 "azure-pipelines, bitbucket-pipelines, buildkite, travis-ci, drone-ci, "
-                "or woodpecker-ci"
+                "woodpecker-ci, concourse, or bamboo"
             ),
         )
     if not isinstance(input_path, str) or not input_path.strip():
@@ -2357,6 +2359,7 @@ def agent_gate_configuration_management(
         analyze_salt_project,
         parse_salt_project,
     )
+    from readtheplan.adapters.teamcity import TeamCityAdapter, analyze_teamcity
 
     supported = {
         "ansible",
@@ -2370,6 +2373,7 @@ def agent_gate_configuration_management(
         "salt-project",
         "dsc",
         "cfengine",
+        "teamcity",
     }
     if ecosystem not in supported:
         raise MCPToolInputError(
@@ -2481,6 +2485,7 @@ def agent_gate_configuration_management(
     else:
         key, adapter, analyze = {
             "jenkins": ("jenkinsfile", JenkinsAdapter(), analyze_jenkins),
+            "teamcity": ("teamcity", TeamCityAdapter(), analyze_teamcity),
             "chef": ("chef_recipe", ChefAdapter(), analyze_chef),
             "puppet": ("puppet_manifest", PuppetAdapter(), analyze_puppet),
         }[ecosystem]
@@ -2750,7 +2755,8 @@ def create_server() -> Any:
         Args:
             input_path: Local path to the pipeline YAML file.
             ecosystem: github-actions, gitlab-ci, circleci, azure-pipelines,
-                bitbucket-pipelines, buildkite, travis-ci, drone-ci, or woodpecker-ci.
+                bitbucket-pipelines, buildkite, travis-ci, drone-ci, woodpecker-ci,
+                concourse, or bamboo.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_pipeline_handler(
@@ -3247,8 +3253,8 @@ def create_server() -> Any:
 
         Args:
             input_path: Local path to a playbook, Jenkinsfile, recipe, or manifest.
-            ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, chef,
-                chef-project, puppet, puppet-project, salt-project, dsc, or cfengine.
+            ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, teamcity,
+                chef, chef-project, puppet, puppet-project, salt-project, dsc, or cfengine.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(

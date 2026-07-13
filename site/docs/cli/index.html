@@ -178,6 +178,7 @@ readtheplan azure-pipelines azure-pipelines.yml
 readtheplan bitbucket-pipelines bitbucket-pipelines.yml
 readtheplan jenkins Jenkinsfile
 readtheplan jenkins-jcasc jenkins.yaml
+readtheplan teamcity .teamcity/settings.kts
 readtheplan chef default.rb
 readtheplan chef-project Policyfile.rb
 readtheplan puppet site.pp
@@ -188,6 +189,8 @@ readtheplan circleci .circleci/config.yml
 readtheplan travis-ci .travis.yml
 readtheplan drone-ci .drone.yml
 readtheplan woodpecker-ci .woodpecker.yml
+readtheplan concourse pipeline.yml
+readtheplan bamboo bamboo-specs/bamboo.yml
 readtheplan docker-compose compose.yml
 readtheplan nomad job.nomad.hcl
 readtheplan packer image.pkr.hcl
@@ -206,7 +209,7 @@ readtheplan kbld kbld.yml
 readtheplan imgpkg .imgpkg/images.yml
 readtheplan kapp kapp-config.yml</code></pre>
           <p style="color:var(--muted);margin-top:16px"><code>pulumi</code> consumes saved preview output; <code>pulumi-project</code> scans <code>Pulumi.yaml</code>, stack settings, and policy-pack metadata without executing runtimes, compilers, package installers, plugins, or policy code.</p>
-          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, Crossplane, Argo CD, Flux, and Tekton artifacts work directly. Argo CD, Flux, and Tekton receive native controller and pipeline rules. <code>bicep</code> scans source before compilation; <code>azure</code> accepts Bicep/ARM deployment What-If JSON with FullResourcePayloads for operation-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events. Ansible, Jenkins JCasC, static Salt SLS, rendered Salt project configuration/top/roster files, and cloud-init cloud-config input are parsed as structured YAML; templated inputs receive conservative scanning. Jenkinsfiles, Chef, Puppet, Vagrant, and Dockerfiles use conservative syntax-aware scanners. GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines, and Docker Compose parse YAML structurally; external templates, protected-resource settings, secured variables, Compose files, and build contexts are not resolved. Nomad accepts HCL/JSON jobspec source or the structured job-plan HTTP API response. Packer accepts saved human or machine-readable inspect output. None of the adapters execute user configuration or contact infrastructure services.</p>
+          <p style="color:var(--muted);margin-top:16px">Kubernetes accepts JSON/YAML manifests, <code>kind: List</code>, multi-document YAML, and structured diff wrappers, so rendered Helm, Kustomize, Crossplane, Argo CD, Flux, and Tekton artifacts work directly. Argo CD, Flux, and Tekton receive native controller and pipeline rules. <code>bicep</code> scans source before compilation; <code>azure</code> accepts Bicep/ARM deployment What-If JSON with FullResourcePayloads for operation-level analysis. Pulumi accepts structured preview digest JSON and streaming JSON events. Ansible, Jenkins JCasC, Bamboo Specs, Concourse, static Salt SLS, rendered Salt project configuration/top/roster files, and cloud-init cloud-config input are parsed as structured YAML; templated inputs receive conservative scanning. Jenkinsfiles, TeamCity Kotlin DSL, Chef, Puppet, Vagrant, and Dockerfiles use conservative syntax-aware scanners. GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines, and Docker Compose parse YAML structurally; external templates, protected-resource settings, secured variables, Compose files, and build contexts are not resolved. Nomad accepts HCL/JSON jobspec source or the structured job-plan HTTP API response. Packer accepts saved human or machine-readable inspect output. None of the adapters execute user configuration or contact infrastructure services.</p>
           <p style="color:var(--muted);margin-top:12px">Adapter exit codes are <code>0</code> for proceed, <code>1</code> for warn, and <code>2</code> for block. Add any built-in framework — <code>soc2</code>, <code>iso27001</code>, <code>hipaa</code>, <code>pci_dss</code>, <code>fedramp_moderate</code>, or <code>hitrust</code> — to include required control checks.</p>
         </div>
       </section>

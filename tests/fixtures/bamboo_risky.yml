@@ -1,0 +1,56 @@
+---
+version: 2
+plan:
+  project-key: PLATFORM
+  key: DEPLOY
+  name: Deploy platform
+variables:
+  deploy-token: literal-bamboo-token
+repositories:
+  - platform:
+      url: https://example.test/platform.git
+      password: literal-bamboo-password
+triggers:
+  - polling-period: 60
+stages:
+  - Build:
+      - Build job
+Build job:
+  clean-working-dir: true
+  docker:
+    image: docker:latest
+    volumes:
+      /var/run/docker.sock: /var/run/docker.sock
+  requirements:
+    - system.docker.executable
+  artifacts:
+    - name: package
+      pattern: dist/**
+  tasks:
+    - script:
+        - terraform apply -auto-approve
+    - test-parser:
+        type: junit
+        test-results: results/*.xml
+---
+version: 2
+deployment:
+  name: Production
+  source-plan: PLATFORM-DEPLOY
+environments:
+  - Production
+Production:
+  tasks:
+    - ssh:
+        host: production.example.test
+        username: deploy
+        password: literal-deploy-password
+---
+version: 2
+plan-permissions:
+  - users:
+      - everyone
+    permissions:
+      - view
+      - edit
+      - build

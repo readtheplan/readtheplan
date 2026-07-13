@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "spacelift", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "travis-ci", "drone-ci", "woodpecker-ci", "concourse", "bamboo", "teamcity", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "carvel", "ytt", "vendir", "kbld", "imgpkg", "kapp", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -50,6 +50,7 @@ alertmanager = "readtheplan.adapters.monitoring:AlertmanagerAdapter"
 atlantis = "readtheplan.adapters.atlantis:AtlantisAdapter"
 azure = "readtheplan.adapters.azure:AzureWhatIfAdapter"
 azure-pipelines = "readtheplan.adapters.pipelines:AzurePipelinesAdapter"
+bamboo = "readtheplan.adapters.pipelines:BambooAdapter"
 bitbucket-pipelines = "readtheplan.adapters.pipelines:BitbucketPipelinesAdapter"
 bicep = "readtheplan.adapters.bicep:BicepAdapter"
 buildkite = "readtheplan.adapters.pipelines:BuildkiteAdapter"
@@ -57,6 +58,7 @@ caddy = "readtheplan.adapters.caddy:CaddyAdapter"
 chef = "readtheplan.adapters.chef:ChefAdapter"
 chef-project = "readtheplan.adapters.chef_project:ChefProjectAdapter"
 circleci = "readtheplan.adapters.pipelines:CircleCIAdapter"
+concourse = "readtheplan.adapters.pipelines:ConcourseAdapter"
 cloudformation = "readtheplan.adapters.cloudformation:CloudFormationAdapter"
 cdk = "readtheplan.adapters.cdk:CdkAdapter"
 cloud-init = "readtheplan.adapters.cloud_init:CloudInitAdapter"
@@ -66,6 +68,7 @@ crossplane = "readtheplan.adapters.crossplane:CrossplaneAdapter"
 docker-compose = "readtheplan.adapters.workloads:DockerComposeAdapter"
 dockerfile = "readtheplan.adapters.dockerfile:DockerfileAdapter"
 dsc = "readtheplan.adapters.dsc:DscAdapter"
+drone-ci = "readtheplan.adapters.pipelines:DroneCIAdapter"
 devspace = "readtheplan.adapters.devspace:DevSpaceAdapter"
 cue = "readtheplan.adapters.cue:CueAdapter"
 jsonnet = "readtheplan.adapters.jsonnet:JsonnetAdapter"
@@ -107,14 +110,17 @@ skaffold = "readtheplan.adapters.skaffold:SkaffoldAdapter"
 sam = "readtheplan.adapters.serverless:SamTemplateAdapter"
 serverless = "readtheplan.adapters.serverless:ServerlessFrameworkAdapter"
 systemd = "readtheplan.adapters.systemd:SystemdUnitAdapter"
+teamcity = "readtheplan.adapters.teamcity:TeamCityAdapter"
 terraform-config = "readtheplan.adapters.terraform_config:TerraformConfigAdapter"
 terraform-lock = "readtheplan.adapters.terraform_lock:TerraformLockAdapter"
 terraform-state = "readtheplan.adapters.terraform_state:TerraformStateAdapter"
 tilt = "readtheplan.adapters.tiltfile:TiltfileAdapter"
 terragrunt = "readtheplan.adapters.terraform_config:TerragruntAdapter"
 traefik = "readtheplan.adapters.traefik:TraefikAdapter"
+travis-ci = "readtheplan.adapters.pipelines:TravisCIAdapter"
 vagrant = "readtheplan.adapters.vagrant:VagrantAdapter"
 vault = "readtheplan.adapters.hashicorp:VaultAdapter"
+woodpecker-ci = "readtheplan.adapters.pipelines:WoodpeckerCIAdapter"
 
 [project.entry-points."readtheplan.rules"]
 aws = "readtheplan.rules.aws"

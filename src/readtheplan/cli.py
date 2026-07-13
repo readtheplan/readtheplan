@@ -365,6 +365,14 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     jenkins.add_argument("input_file", help="Path to a Jenkinsfile.")
     jenkins.set_defaults(func=_jenkins_gate)
 
+    teamcity = subparsers.add_parser(
+        "teamcity",
+        help="Emit the agent-gate decision for TeamCity Kotlin DSL settings.",
+    )
+    teamcity.add_argument("--framework", help="Include checks from a compliance framework.")
+    teamcity.add_argument("input_file", help="Path to a TeamCity .kts or .kt settings file.")
+    teamcity.set_defaults(func=_teamcity_gate)
+
     jenkins_jcasc = subparsers.add_parser(
         "jenkins-jcasc",
         help="Emit the agent-gate decision for Jenkins Configuration as Code YAML.",
@@ -485,6 +493,22 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     )
     woodpecker_ci.add_argument("input_file", help="Path to a Woodpecker workflow YAML file.")
     woodpecker_ci.set_defaults(func=_pipeline_gate)
+
+    concourse = subparsers.add_parser(
+        "concourse",
+        help="Emit the agent-gate decision for a Concourse pipeline YAML file.",
+    )
+    concourse.add_argument("--framework", help="Include checks from a compliance framework.")
+    concourse.add_argument("input_file", help="Path to a Concourse pipeline YAML file.")
+    concourse.set_defaults(func=_pipeline_gate)
+
+    bamboo = subparsers.add_parser(
+        "bamboo",
+        help="Emit the agent-gate decision for Bamboo YAML Specs.",
+    )
+    bamboo.add_argument("--framework", help="Include checks from a compliance framework.")
+    bamboo.add_argument("input_file", help="Path to bamboo-specs/bamboo.yml.")
+    bamboo.set_defaults(func=_pipeline_gate)
 
     atlantis = subparsers.add_parser(
         "atlantis",
@@ -1567,6 +1591,29 @@ def _jenkins_gate(args: argparse.Namespace) -> int:
     return _write_adapter_gate(analyze_jenkins(data, catalog=catalog))
 
 
+def _teamcity_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for TeamCity Kotlin DSL."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.teamcity import analyze_teamcity
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+
+    data = {"teamcity": source}
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "teamcity":
+        print("Error: input not recognized as TeamCity Kotlin DSL", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_teamcity(data, catalog=catalog))
+
+
 def _jenkins_jcasc_gate(args: argparse.Namespace) -> int:
     """Emit the agent-gate contract for Jenkins Configuration as Code YAML."""
     from readtheplan.adapters.jenkins_jcasc import (
@@ -1700,9 +1747,11 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
     from readtheplan.adapters import detect_adapter
     from readtheplan.adapters.pipelines import (
         AzurePipelinesAdapter,
+        BambooAdapter,
         BitbucketPipelinesAdapter,
         BuildkiteAdapter,
         CircleCIAdapter,
+        ConcourseAdapter,
         DroneCIAdapter,
         GitHubActionsAdapter,
         GitLabCIAdapter,
@@ -1723,6 +1772,8 @@ def _pipeline_gate(args: argparse.Namespace) -> int:
         "travis-ci": TravisCIAdapter,
         "drone-ci": DroneCIAdapter,
         "woodpecker-ci": WoodpeckerCIAdapter,
+        "concourse": ConcourseAdapter,
+        "bamboo": BambooAdapter,
     }
     try:
         source = Path(args.input_file).read_text(encoding="utf-8")
