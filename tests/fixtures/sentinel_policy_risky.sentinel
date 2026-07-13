@@ -1,0 +1,16 @@
+import "http"
+import "runtime"
+import "tfplan/v1"
+import "custom_approval"
+
+param deploy_token
+
+response = http.post(
+  http.request("http://policy.example.test/check")
+    .with_header("Authorization", "Bearer " + deploy_token)
+)
+
+fallback = response.status_code else 200
+credential_hint = "deploy_token=literal-example"
+
+main = rule { true }

@@ -48,6 +48,7 @@ from readtheplan.adapters.puppet import PuppetAdapter
 from readtheplan.adapters.puppet_project import PuppetProjectAdapter
 from readtheplan.adapters.salt import SaltAdapter
 from readtheplan.adapters.salt_project import SaltProjectAdapter
+from readtheplan.adapters.sentinel import SentinelAdapter
 from readtheplan.adapters.serverless import SamTemplateAdapter, ServerlessFrameworkAdapter
 from readtheplan.adapters.systemd import SystemdUnitAdapter
 from readtheplan.adapters.terraform_config import TerraformConfigAdapter, TerragruntAdapter
@@ -157,6 +158,7 @@ register_adapter(SaltAdapter())
 register_adapter(SaltProjectAdapter())
 register_adapter(ServerlessFrameworkAdapter())
 register_adapter(SamTemplateAdapter())
+register_adapter(SentinelAdapter())
 register_adapter(SystemdUnitAdapter())
 register_adapter(TerraformConfigAdapter())
 register_adapter(TerraformLockAdapter())
@@ -218,6 +220,7 @@ __all__ = [
     "SaltProjectAdapter",
     "SamTemplateAdapter",
     "ServerlessFrameworkAdapter",
+    "SentinelAdapter",
     "SystemdUnitAdapter",
     "TerraformConfigAdapter",
     "TerraformLockAdapter",

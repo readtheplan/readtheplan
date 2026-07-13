@@ -45,6 +45,7 @@ from readtheplan.mcp_server import (
     agent_gate_pulumi_project,
     agent_gate_salt,
     agent_gate_sam,
+    agent_gate_sentinel,
     agent_gate_serverless,
     agent_gate_systemd,
     agent_gate_terraform_config,
@@ -78,6 +79,13 @@ def test_agent_gate_opa_supports_framework_checks() -> None:
     result = agent_gate_opa(str(FIXTURES / "opa_policy_risky.rego"), "soc2")
     assert result["adapter"] == "opa"
     assert result["artifact_type"] == "rego"
+    assert result["decision"] == "block"
+
+
+def test_agent_gate_sentinel_supports_framework_checks() -> None:
+    result = agent_gate_sentinel(str(FIXTURES / "sentinel_policy_risky.sentinel"), "soc2")
+    assert result["adapter"] == "sentinel"
+    assert result["artifact_type"] == "policy"
     assert result["decision"] == "block"
 
 
@@ -1068,6 +1076,19 @@ def test_agent_gate_opa_rejects_path_outside_root(monkeypatch, tmp_path) -> None
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_sentinel_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "policy.sentinel"
+    outside.write_text("main = rule { false }\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_sentinel(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_terraform_lock_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1340,6 +1361,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_dsc" in tool_names
         assert "agent_gate_cfengine" in tool_names
         assert "agent_gate_opa" in tool_names
+        assert "agent_gate_sentinel" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
@@ -1391,6 +1413,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(cfengine_schema["properties"])
         opa_schema = tools_by_name["agent_gate_opa"]["inputSchema"]
         assert {"input_path", "framework"} <= set(opa_schema["properties"])
+        sentinel_schema = tools_by_name["agent_gate_sentinel"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(sentinel_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]

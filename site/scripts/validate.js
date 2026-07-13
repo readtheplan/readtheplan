@@ -365,6 +365,7 @@ for (const token of [
   "agent_gate_dsc",
   "agent_gate_cfengine",
   "agent_gate_opa",
+  "agent_gate_sentinel",
   "agent_gate_terraform_lock",
   "agent_gate_terraform_state",
   "jenkins-jcasc",

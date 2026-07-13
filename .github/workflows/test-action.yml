@@ -1464,6 +1464,37 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Sentinel policy
+        id: sentinel
+        uses: ./
+        with:
+          tool: sentinel
+          input-file: tests/fixtures/sentinel_policy_risky.sentinel
+          framework: soc2
+
+      - name: Assert Sentinel outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.sentinel.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.sentinel.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.sentinel.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "11"
+          test "$RISK_COUNTS" = '{"dangerous":6,"irreversible":0,"review":5,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "sentinel"
+          assert payload["artifact_type"] == "policy"
+          assert payload["decision"] == "block"
+          assert "imports http" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Vagrantfile
         id: vagrant
         uses: ./
