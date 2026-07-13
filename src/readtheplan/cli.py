@@ -521,6 +521,17 @@ def _build_parser() -> argparse.ArgumentParser:
     terramate.add_argument("input_file", help="Path to a .tm.hcl, .tm, .tm.json, or .tmgen file.")
     terramate.set_defaults(func=_terramate_gate)
 
+    spacelift = subparsers.add_parser(
+        "spacelift",
+        help="Emit the agent-gate decision for Spacelift runtime configuration.",
+    )
+    spacelift.add_argument("--framework", help="Include checks from a compliance framework.")
+    spacelift.add_argument(
+        "input_file",
+        help="Path to .spacelift/config.yml or a single-stack runtime configuration.",
+    )
+    spacelift.set_defaults(func=_spacelift_gate)
+
     for command, help_text in (
         ("ytt", "ytt templates and data-value/overlay source"),
         ("vendir", "vendir desired or locked directory content"),
@@ -1952,6 +1963,35 @@ def _carvel_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_carvel(data, catalog=catalog))
+
+
+def _spacelift_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for Spacelift runtime configuration."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.spacelift import (
+        SpaceliftInputError,
+        analyze_spacelift,
+        parse_spacelift,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_spacelift(source)
+    except SpaceliftInputError as exc:
+        print(f"Error: invalid Spacelift input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "spacelift":
+        print("Error: input not recognized as Spacelift runtime configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_spacelift(data, catalog=catalog))
 
 
 def _salt_gate(args: argparse.Namespace) -> int:

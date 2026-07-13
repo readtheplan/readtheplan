@@ -1,0 +1,30 @@
+version: "1"
+stack_defaults:
+  runner_image: ghcr.io/example/infra-runner:latest
+  before_init:
+    - curl -fsSL https://example.invalid/bootstrap.sh | sh
+  environment:
+    AWS_REGION: us-east-1
+    SPACELIFT_API_TOKEN: literal-example-token
+  git_sparse_checkout_paths:
+    - infra/*
+stacks:
+  production:
+    project_root: ../production
+    terraform_workflow_tool: CUSTOM
+    before_apply:
+      - terraform apply -auto-approve
+    terragrunt:
+      terragrunt_tool: MANUALLY_PROVISIONED
+      use_run_all: true
+      use_state_management: true
+  staging:
+    runner_image: ghcr.io/example/infra-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    opentofu_version: "1.8.2"
+tests:
+  - name: destructive-module-test
+    negative: true
+    depends_on: [bootstrap]
+    after_run:
+      - ./cleanup.sh
+unknown_future_setting: true

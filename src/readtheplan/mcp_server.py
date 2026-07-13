@@ -965,6 +965,46 @@ def agent_gate_carvel(
     return analyze_carvel(data, catalog=catalog)
 
 
+def agent_gate_spacelift(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local Spacelift runtime configuration."""
+    from readtheplan.adapters.spacelift import (
+        SpaceliftAdapter,
+        SpaceliftInputError,
+        analyze_spacelift,
+        parse_spacelift,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read Spacelift input {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_spacelift(source)
+    except SpaceliftInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Spacelift input in {input_path}: {exc}",
+        ) from exc
+    if not SpaceliftAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Spacelift runtime configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_spacelift(data, catalog=catalog)
+
+
 def agent_gate_salt(
     input_path: str,
     framework: str | None = None,
@@ -2303,6 +2343,7 @@ def create_server() -> Any:
     agent_gate_helmfile_handler = agent_gate_helmfile
     agent_gate_terramate_handler = agent_gate_terramate
     agent_gate_carvel_handler = agent_gate_carvel
+    agent_gate_spacelift_handler = agent_gate_spacelift
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_nix_handler = agent_gate_nix
     agent_gate_dsc_handler = agent_gate_dsc
@@ -2603,6 +2644,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_carvel_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_spacelift")
+    def _agent_gate_spacelift_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Spacelift repository or single-stack runtime configuration.
+
+        Args:
+            input_path: Local path to .spacelift/config.yml or runtime YAML.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_spacelift_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_salt")
     def _agent_gate_salt_tool(

@@ -116,6 +116,7 @@ readtheplan jsonnet main.jsonnet
 readtheplan tanka environments/production/spec.json
 readtheplan helmfile helmfile.yaml.gotmpl
 readtheplan terramate terramate.tm.hcl
+readtheplan spacelift .spacelift/config.yml
 readtheplan ytt config.yml
 readtheplan vendir vendir.yml
 readtheplan kbld kbld.yml
@@ -232,6 +233,18 @@ readtheplan helmfile helmfile.lock</code></pre>
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan terramate --framework soc2 terramate.tm.hcl
 readtheplan terramate backend.tf.tmgen</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="spacelift-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="spacelift-title">Spacelift runtime orchestration</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review repository and single-stack runtime overrides, workflow hooks, runner images,
+            environment inputs, tool versions, Terragrunt behavior, and module tests without
+            contacting Spacelift, pulling images, or executing infrastructure tools:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan spacelift --framework soc2 .spacelift/config.yml</code></pre>
         </div>
       </section>
 

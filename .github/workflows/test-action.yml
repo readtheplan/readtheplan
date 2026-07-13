@@ -1582,6 +1582,38 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Spacelift runtime configuration
+        id: spacelift
+        uses: ./
+        with:
+          tool: spacelift
+          input-file: tests/fixtures/spacelift_runtime_risky.yml
+          framework: soc2
+
+      - name: Assert Spacelift outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.spacelift.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.spacelift.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.spacelift.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "21"
+          test "$RISK_COUNTS" = '{"dangerous":12,"irreversible":0,"review":9,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "spacelift"
+          assert payload["configuration_scope"] == "repository"
+          assert payload["stack_count"] == 2
+          assert payload["decision"] == "block"
+          assert "literal-example-token" not in os.environ["SUMMARY_JSON"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Salt states
         id: salt
         uses: ./
