@@ -680,6 +680,27 @@ def test_agent_gate_configuration_management_supports_controller_exports() -> No
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_ansible_rulebooks() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "ansible_rulebook_risky.yml"),
+        "ansible-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "ansible-project"
+    assert result["artifact_type"] == "rulebook"
+    assert result["ruleset_count"] == 2
+    assert result["source_count"] == 3
+    assert result["rule_count"] == 7
+    assert result["action_count"] == 8
+    assert result["total_changes"] == 44
+    assert result["decision"] == "block"
+    assert "fixture-rulebook-webhook-token-do-not-leak" not in encoded
+    assert "fixture-edge-automation" not in encoded
+    assert "events.example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_puppet_runtime_config() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_conf_risky.conf"),

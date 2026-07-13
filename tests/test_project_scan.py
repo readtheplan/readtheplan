@@ -35,6 +35,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("ansible-navigator.yml", "ansible-project"),
         ("controller-export.json", "ansible-project"),
         ("awx/resources.yml", "ansible-project"),
+        ("extensions/eda/rulebooks/remediate.yml", "ansible-project"),
+        ("rulebook-events.yml", "ansible-project"),
         (".ansible-navigator.json", "ansible-project"),
         ("molecule/default/molecule.yml", "ansible-project"),
         (".config/molecule/config.yml", "ansible-project"),
@@ -809,6 +811,32 @@ def test_project_scan_analyzes_automation_controller_export(tmp_path: Path) -> N
     assert "fixture-controller-password-do-not-leak" not in encoded
     assert "fixture-deploy" not in encoded
     assert "example.invalid" not in encoded
+
+
+def test_project_scan_analyzes_event_driven_ansible_rulebook(tmp_path: Path) -> None:
+    fixture = FIXTURES / "ansible_rulebook_risky.yml"
+    target = tmp_path / "extensions" / "eda" / "rulebooks" / "remediate.yml"
+    target.parent.mkdir(parents=True)
+    target.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    result = payload["files"][0]
+    assert result["tool"] == "ansible-project"
+    assert result["artifact_type"] == "rulebook"
+    assert result["ruleset_count"] == 2
+    assert result["source_count"] == 3
+    assert result["rule_count"] == 7
+    assert result["action_count"] == 8
+    assert payload["total_changes"] == 44
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-rulebook-webhook-token-do-not-leak" not in encoded
+    assert "fixture-edge-automation" not in encoded
+    assert "events.example.invalid" not in encoded
 
 
 def test_project_scan_analyzes_inspec_profile_artifacts(tmp_path: Path) -> None:

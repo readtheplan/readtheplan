@@ -1,0 +1,95 @@
+---
+- name: fixture-edge-automation
+  hosts: all
+  gather_facts: true
+  execution_strategy: parallel
+  match_multiple_rules: true
+  default_events_ttl: 7 days
+  sources:
+    - name: fixture-public-webhook
+      eda.builtin.webhook:
+        host: 0.0.0.0
+        port: 5000
+        token: fixture-rulebook-webhook-token-do-not-leak
+        endpoint_url: http://events.example.invalid/ingest
+        validate_certs: false
+        topic: "{{ EVENT_TOPIC }}"
+      filters:
+        - fixture.events.transform:
+            api_key: fixture-rulebook-filter-key-do-not-leak
+    - fixture.events.message_bus:
+        broker_url: http://broker.example.invalid/events
+        password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          663030626172
+        verify_ssl: false
+  rules:
+    - name: fixture-unconditional-remediation
+      condition: true
+      actions:
+        - run_playbook:
+            name: playbooks/remediate.yml
+            retry: true
+            extra_vars:
+              root_password: fixture-rulebook-root-password-do-not-leak
+              target: "{{ event.payload.host }}"
+        - run_job_template:
+            name: "{{ event.payload.template }}"
+            organization: fixture-organization
+            include_events: true
+            retries: 2
+            job_args:
+              limit: "{{ event.payload.limit }}"
+    - name: fixture-direct-module
+      condition: event.payload.command is defined
+      action:
+        run_module:
+          name: ansible.builtin.shell
+          module_args:
+            cmd: "{{ event.payload.command }}"
+    - name: fixture-log-event
+      condition: event.payload.debug == true
+      action:
+        debug:
+    - name: fixture-feedback
+      condition: event.payload.followup == true
+      action:
+        post_event:
+          ruleset: fixture-followup
+          event:
+            source: "{{ event.payload.source }}"
+
+- name: fixture-followup
+  hosts: localhost
+  sources:
+    - eda.builtin.pg_listener:
+        dsn: host=db.example.invalid dbname=events user=eda
+        password: fixture-rulebook-database-password-do-not-leak
+        channels:
+          - infrastructure
+      filters:
+        - eda.builtin.normalize_keys:
+  rules:
+    - name: fixture-controller-workflow
+      condition: event.severity == "critical"
+      action:
+        run_workflow_template:
+          name: fixture-workflow
+          organization: fixture-organization
+          include_events: true
+          job_args:
+            extra_vars:
+              api_token: !vault |
+                $ANSIBLE_VAULT;1.1;AES256
+                663030626172
+    - name: fixture-immediate-stop
+      condition: event.stop == true
+      action:
+        shutdown:
+          kind: now
+          delay: 0
+    - name: fixture-disabled-placeholder
+      condition: event.test == true
+      enabled: false
+      action:
+        none:
