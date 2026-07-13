@@ -120,6 +120,7 @@ readtheplan bamboo bamboo-specs/bamboo.yml
 readtheplan codebuild buildspec.yml
 readtheplan cloud-build cloudbuild.yaml
 readtheplan codepipeline codepipeline.json
+readtheplan sops .sops.yaml
 readtheplan docker-compose compose.yml
 readtheplan nomad job.nomad.hcl
 readtheplan packer image.pkr.hcl
@@ -147,7 +148,7 @@ readtheplan kapp kapp-config.yml</code></pre>
             output or read-only raw v4 snapshots and never emits values or modifies state; Nix lock graphs use strict JSON while flake and
             NixOS module source uses a conservative syntax-aware scanner; DSC v3 documents use strict
             JSON/YAML and PowerShell DSC source is scanned without execution; CFEngine policy source
-            is scanned without evaluation and Augments use strict JSON; <code>ansible.cfg</code> is parsed as INI,
+            is scanned without evaluation and Augments use strict JSON; SOPS policy and encrypted YAML/JSON/dotenv/INI metadata are inspected without decryption or key-service access; <code>ansible.cfg</code> is parsed as INI,
             while templated Salt SLS input falls back to a
             conservative scanner. Docker Compose is parsed structurally without resolving external
             files, while Nomad accepts HCL/JSON jobspec source or the scheduler's structured job-plan API response and

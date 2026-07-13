@@ -232,6 +232,8 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "AWS CodeBuild",
         "Google Cloud Build",
         "AWS CodePipeline",
+        "agent_gate_sops",
+        "SOPS policy and encrypted documents",
         "ansible-project",
         "chef-project",
         "puppet-project",

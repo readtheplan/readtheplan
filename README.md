@@ -109,6 +109,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | CFEngine | `readtheplan cfengine promises.cf` | Policy bundles and promise types, inputs/bundlesequence, commands/files/packages/services/users/storage/access, server trust, executor schedules, dynamic functions, secrets/dependencies, strict Augments JSON, autorun extensions, and MPF boundaries |
 | OPA / Rego / Conftest | `readtheplan opa policy.rego` | Rego network/runtime/debug capabilities, fail-open decisions, exceptions, data dependencies and tests; bundle roots, revisions, Wasm and signature metadata; Conftest paths and invocation boundaries, without policy execution |
 | HashiCorp Sentinel | `readtheplan sentinel policy.sentinel` | Policy imports, HTTP/runtime/Terraform data, fail-open main rules, parameters and secrets; CLI policy/module sources, enforcement levels, executable plugins, mocks, test assertions, and runtime boundaries without execution |
+| SOPS | `readtheplan sops .sops.yaml` | Creation rules, path scopes, KMS/Vault/age/PGP identities, key groups and Shamir thresholds, encryption selectors, MAC coverage, destination rules, and encrypted YAML/JSON/dotenv/INI documents without decryption or key-service access |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
 | Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |
 | TeamCity | `readtheplan teamcity .teamcity/settings.kts` | Kotlin DSL commands, credentials, VCS roots, triggers, dependencies, agents, integrations, cleanup, images, artifacts, and settings-generation code |
@@ -159,6 +160,8 @@ deterministic agent-gate schema; native plan analysis can also produce
 
 The scripted configuration adapters deliberately classify unexpanded includes and unknown
 constructs as `review`; they do not execute playbooks, pipelines, recipes, or manifests.
+SOPS analysis never decrypts data or contacts KMS, Vault, age, PGP, or remote key services;
+it inspects policy, recipient metadata, integrity coverage, and plaintext leakage locally.
 The CI workflow adapters preserve GitHub's YAML `on` key correctly and require
 immutable references for reusable third-party code.
 Buildkite analysis distinguishes exact plugin versions from floating refs and

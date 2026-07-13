@@ -1,0 +1,23 @@
+creation_rules:
+  - path_regex: ^production/.*\.ya?ml$
+    key_groups:
+      - kms:
+          - arn: arn:aws:kms:us-east-1:123456789012:key/example
+            role: arn:aws:iam::123456789012:role/sops-production
+            context:
+              Environment: production
+      - age:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleRecipient
+    shamir_threshold: 3
+    encrypted_regex: ^(data|stringData)$
+    mac_only_encrypted: true
+    aws_profile: production
+  - path_regex: "[invalid"
+    unencrypted_suffix: _unencrypted
+    encrypted_suffix: _encrypted
+destination_rules:
+  - s3_bucket: production-secrets
+    path_regex: .*\.yaml$
+stores:
+  yaml:
+    indent: 2

@@ -734,6 +734,17 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     )
     sentinel.set_defaults(func=_sentinel_gate)
 
+    sops = subparsers.add_parser(
+        "sops",
+        help="Emit the agent-gate decision for SOPS policy or encrypted data.",
+    )
+    sops.add_argument("--framework", help="Include checks from a compliance framework.")
+    sops.add_argument(
+        "input_file",
+        help="Path to .sops.yaml or an encrypted SOPS YAML, JSON, dotenv, or INI file.",
+    )
+    sops.set_defaults(func=_sops_gate)
+
     vagrant = subparsers.add_parser(
         "vagrant",
         help="Emit the agent-gate decision for a Vagrantfile.",
@@ -2394,6 +2405,30 @@ def _sentinel_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_sentinel(data, catalog=catalog))
+
+
+def _sops_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for SOPS policy or encrypted data."""
+    from readtheplan.adapters.sops import SOPSAdapter, SOPSInputError, analyze_sops, parse_sops
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_sops(source, path.name)
+    except SOPSInputError as exc:
+        print(f"Error: invalid SOPS input: {exc}", file=sys.stderr)
+        return 1
+    if not SOPSAdapter().can_handle(data):
+        print("Error: input not recognized as SOPS policy or encrypted data", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_sops(data, catalog=catalog))
 
 
 def _vagrant_gate(args: argparse.Namespace) -> int:

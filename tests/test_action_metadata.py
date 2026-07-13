@@ -29,7 +29,7 @@ def test_action_uses_json_cli_contract() -> None:
         "codebuild|cloud-build|codepipeline|"
         "atlantis|"
         "docker-compose|"
-        "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|vagrant|"
+        "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|sops|vagrant|"
         "cloud-init|systemd|nginx|haproxy|envoy|traefik|caddy|grafana|loki|vault|consul|"
         "prometheus|alertmanager|"
         "otel-collector"
@@ -171,6 +171,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/google_cloud_build_risky.yml" in workflow
     assert "tool: codepipeline" in workflow
     assert "input-file: tests/fixtures/codepipeline_risky.json" in workflow
+    assert "tool: sops" in workflow
+    assert "input-file: tests/fixtures/secret.sops.yaml" in workflow
     assert "tool: atlantis" in workflow
     assert "input-file: tests/fixtures/atlantis_risky.yaml" in workflow
     assert "tool: envoy" in workflow

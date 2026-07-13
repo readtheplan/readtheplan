@@ -102,7 +102,7 @@ MCP_ROOT=/absolute/path/to/repository readtheplan mcp</pre>
             <code>agent_gate_cdk</code>, <code>agent_gate_kubernetes</code>,
             <code>agent_gate_helm</code>, <code>agent_gate_helmfile</code>, <code>agent_gate_terramate</code>, <code>agent_gate_spacelift</code>, <code>agent_gate_carvel</code>, <code>agent_gate_kustomize</code>,
             <code>agent_gate_crossplane</code>, <code>agent_gate_serverless</code>,
-              <code>agent_gate_sam</code>, <code>agent_gate_skaffold</code>, <code>agent_gate_devspace</code>, <code>agent_gate_tilt</code>, <code>agent_gate_cue</code>, <code>agent_gate_jsonnet</code>, <code>agent_gate_nix</code>, <code>agent_gate_dsc</code>, <code>agent_gate_cfengine</code>, <code>agent_gate_opa</code>, <code>agent_gate_sentinel</code>, <code>agent_gate_terraform_lock</code>, <code>agent_gate_terraform_state</code>,
+              <code>agent_gate_sam</code>, <code>agent_gate_skaffold</code>, <code>agent_gate_devspace</code>, <code>agent_gate_tilt</code>, <code>agent_gate_cue</code>, <code>agent_gate_jsonnet</code>, <code>agent_gate_nix</code>, <code>agent_gate_dsc</code>, <code>agent_gate_cfengine</code>, <code>agent_gate_opa</code>, <code>agent_gate_sentinel</code>, <code>agent_gate_sops</code>, <code>agent_gate_terraform_lock</code>, <code>agent_gate_terraform_state</code>,
             <code>agent_gate_configuration_management</code>, and
             <code>agent_gate_pulumi</code> and <code>agent_gate_pulumi_project</code>.
             Every tool accepts a local input path.
@@ -251,7 +251,7 @@ MCP_ROOT=/absolute/path/to/repository readtheplan mcp</pre>
             AWS CodeBuild, Google Cloud Build, AWS CodePipeline,
             Ansible playbooks/project configuration (<code>ansible-project</code>), Jenkins pipelines/JCasC (<code>jenkins-jcasc</code>), Chef recipes/projects (<code>chef-project</code>), Puppet manifests/projects (<code>puppet-project</code>), Salt states/project configuration (<code>salt-project</code>),
             Nix flakes/locks and NixOS modules, DSC v3/PowerShell DSC configuration, CFEngine policy/Augments, Docker Compose, Nomad jobspecs/plans, Packer, Vagrant, cloud-init, systemd,
-            NGINX, HAProxy, Envoy, Traefik, Caddy, Grafana, Loki, Vault, Consul,
+            SOPS policy and encrypted documents, NGINX, HAProxy, Envoy, Traefik, Caddy, Grafana, Loki, Vault, Consul,
             Prometheus, Alertmanager,
             OpenTelemetry Collector,
             Buildkite, Atlantis,

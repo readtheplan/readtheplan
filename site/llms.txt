@@ -13,6 +13,8 @@ Self-hosted CI coverage also includes Concourse pipelines, Bamboo YAML Specs,
 Jenkins/JCasC, and TeamCity Kotlin DSL.
 Cloud-native delivery coverage includes AWS CodeBuild buildspecs, Google Cloud
 Build configurations, and AWS CodePipeline definitions.
+Secrets supply-chain coverage includes SOPS creation policy and encrypted
+YAML, JSON, dotenv, and INI metadata without decrypting secret values.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.

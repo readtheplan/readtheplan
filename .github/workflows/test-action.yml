@@ -398,6 +398,13 @@ jobs:
           input-file: tests/fixtures/codepipeline_risky.json
           framework: soc2
 
+      - name: Run action on SOPS encrypted data
+        uses: ./
+        with:
+          tool: sops
+          input-file: tests/fixtures/secret.sops.yaml
+          framework: soc2
+
       - name: Run action on Atlantis configuration
         id: atlantis
         uses: ./
