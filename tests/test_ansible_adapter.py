@@ -105,6 +105,8 @@ def test_parses_and_analyzes_role_task_files_with_redacted_output() -> None:
         "task_count": 11,
         "handler_count": 0,
         "dynamic_count": 2,
+        "lookup_count": 0,
+        "lookup_capabilities": [],
     }
     gate = analyze_ansible(data)
     encoded = json.dumps(gate)
@@ -223,8 +225,8 @@ def test_task_level_args_and_runtime_controls_are_analyzed() -> None:
 
     assert gate["risk_counts"] == {
         "safe": 0,
-        "review": 3,
-        "dangerous": 2,
+        "review": 2,
+        "dangerous": 3,
         "irreversible": 0,
     }
     assert "TLS certificate validation is disabled" in encoded
@@ -232,6 +234,145 @@ def test_task_level_args_and_runtime_controls_are_analyzed() -> None:
     assert "lookup plugin" in encoded
     assert "handler timing" in encoded
     assert "fixture-vars-token-do-not-leak" not in encoded
+
+
+def test_lookup_plugins_surface_controller_execution_state_and_secret_boundaries() -> None:
+    path = FIXTURES / "ansible_lookup_risky.yml"
+    data = parse_ansible(path.read_text(encoding="utf-8"), filename=str(path))
+    gate = analyze_ansible(data)
+    explanations = " ".join(
+        change.explanation for change in AnsibleAdapter().analyze(data)
+    )
+    encoded = json.dumps(gate)
+
+    assert gate["artifact_type"] == "playbook"
+    assert gate["task_count"] == 8
+    assert gate["dynamic_count"] == 8
+    assert gate["lookup_count"] == 9
+    assert gate["lookup_capabilities"] == [
+        "command",
+        "custom",
+        "dynamic",
+        "environment",
+        "filesystem",
+        "network",
+        "secret",
+        "stateful",
+        "unsafe",
+        "weak_errors",
+    ]
+    assert gate["total_changes"] == 9
+    assert gate["risk_counts"] == {
+        "safe": 0,
+        "review": 2,
+        "dangerous": 7,
+        "irreversible": 0,
+    }
+    assert "lookup command on the controller" in explanations
+    assert "even in check mode" in explanations
+    assert "secret material on the controller" in explanations
+    assert "remote service on the controller" in explanations
+    assert "allow_unsafe" in explanations
+    assert "controller filesystem" in explanations
+    assert "controller environment" in explanations
+    assert "selects a lookup plugin dynamically" in explanations
+    assert "custom or collection lookup plugin" in explanations
+    assert "strict default" in explanations
+    for secret in (
+        "fixture-pipe-command-do-not-run",
+        "fixture-lookup.example.invalid",
+        "fixture-password-cache-do-not-create",
+        "fixture-vault-secret-do-not-leak",
+        "fixture/controller-file-do-not-read",
+        "fixture-dynamic-argument-do-not-leak",
+        "fixture-custom-argument-do-not-leak",
+        "fixture-lines-command-do-not-run",
+        "FIXTURE_REGION_DO_NOT_READ",
+    ):
+        assert secret not in encoded
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "literal q('pipe') text",
+        "literal lookup('pipe', 'fixture-command-do-not-run') text",
+        "{# lookup('pipe', 'fixture-comment-command-do-not-run') #}",
+    ],
+)
+def test_lookup_calls_require_an_executable_jinja_context(literal: str) -> None:
+    data = parse_ansible(
+        f"- ansible.builtin.debug:\n    msg: {json.dumps(literal)}\n",
+        filename="roles/example/tasks/main.yml",
+    )
+    gate = analyze_ansible(data)
+    explanations = " ".join(
+        change.explanation for change in AnsibleAdapter().analyze(data)
+    )
+
+    assert gate["lookup_count"] == 0
+    assert gate["lookup_capabilities"] == []
+    assert gate["risk_counts"]["dangerous"] == 0
+    assert "lookup command on the controller" not in explanations
+
+
+def test_lookup_calls_in_implicit_task_expressions_are_analyzed() -> None:
+    data = parse_ansible(
+        """
+- ansible.builtin.debug:
+    msg: ok
+  when: lookup('ansible.builtin.pipe', 'fixture-implicit-command-do-not-run') == 'yes'
+""",
+        filename="roles/example/tasks/main.yml",
+    )
+    gate = analyze_ansible(data)
+    encoded = json.dumps(gate)
+
+    assert gate["lookup_count"] == 1
+    assert gate["lookup_capabilities"] == ["command"]
+    assert gate["risk_counts"]["dangerous"] == 1
+    assert "lookup command on the controller" in encoded
+    assert "fixture-implicit-command-do-not-run" not in encoded
+
+
+def test_role_parameters_receive_lookup_boundary_analysis() -> None:
+    data = parse_ansible(
+        """
+- hosts: application
+  roles:
+    - role: baseline
+      region: "{{ lookup('ansible.builtin.env', 'FIXTURE_ROLE_REGION_DO_NOT_READ') }}"
+""",
+        filename="playbook.yml",
+    )
+    gate = analyze_ansible(data)
+    encoded = json.dumps(gate)
+
+    assert gate["lookup_count"] == 1
+    assert gate["lookup_capabilities"] == ["environment"]
+    assert gate["total_changes"] == 1
+    assert gate["risk_counts"]["review"] == 1
+    assert "controller environment" in encoded
+    assert "FIXTURE_ROLE_REGION_DO_NOT_READ" not in encoded
+
+
+def test_analyze_ansible_recomputes_lookup_metadata_instead_of_reflecting_input() -> None:
+    data = _playbook({"ansible.builtin.debug": {"msg": "ok"}})
+    data["ansible_metadata"] = {
+        "artifact_type": "fixture-secret-artifact-do-not-leak",
+        "task_count": 999,
+        "lookup_count": 999,
+        "lookup_capabilities": ["fixture-secret-capability-do-not-leak"],
+    }
+
+    gate = analyze_ansible(data)
+    encoded = json.dumps(gate)
+
+    assert gate["artifact_type"] == "playbook"
+    assert gate["task_count"] == 1
+    assert gate["lookup_count"] == 0
+    assert gate["lookup_capabilities"] == []
+    assert "fixture-secret" not in encoded
 
 
 def test_role_tasks_classify_sensitive_filesystem_and_remote_api_mutations() -> None:

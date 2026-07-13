@@ -1,0 +1,41 @@
+- hosts: application
+  vars:
+    controller_region: "{{ lookup('ansible.builtin.env', 'FIXTURE_REGION_DO_NOT_READ') }}"
+  tasks:
+    - name: Controller command lookup
+      ansible.builtin.debug:
+        msg: "{{ lookup('ansible.builtin.pipe', 'printf fixture-pipe-command-do-not-run') }}"
+
+    - name: Unsafe remote lookup
+      ansible.builtin.debug:
+        msg: "{{ query('ansible.builtin.url', 'https://fixture-lookup.example.invalid/data', allow_unsafe=True) }}"
+
+    - name: Stateful password lookup
+      ansible.builtin.set_fact:
+        generated_value: "{{ lookup('ansible.builtin.password', '/tmp/fixture-password-cache-do-not-create') }}"
+      no_log: true
+
+    - name: Secret store lookup without output suppression
+      ansible.builtin.debug:
+        msg: "{{ lookup('community.hashi_vault.hashi_vault', 'secret=fixture-vault-secret-do-not-leak') }}"
+
+    - name: Controller file lookup
+      ansible.builtin.debug:
+        msg: "{{ lookup('ansible.builtin.file', '/fixture/controller-file-do-not-read') }}"
+      no_log: true
+
+    - name: Dynamic lookup selection
+      ansible.builtin.debug:
+        msg: "{{ lookup(lookup_plugin_name, 'fixture-dynamic-argument-do-not-leak') }}"
+      no_log: true
+
+    - name: Custom lookup with weakened errors
+      ansible.builtin.debug:
+        msg: "{{ q('acme.operations.inventory', 'fixture-custom-argument-do-not-leak', errors='ignore') }}"
+      no_log: true
+
+    - name: Legacy command-producing loop
+      ansible.builtin.debug:
+        msg: "{{ item }}"
+      with_lines:
+        - printf fixture-lines-command-do-not-run

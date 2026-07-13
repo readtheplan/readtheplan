@@ -9,6 +9,13 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Native Ansible lookup analysis across the CLI, GitHub Action, project scan, and MCP. Static
+  playbook, task, handler, play-variable, and role-parameter inspection now distinguishes
+  controller-side command and state-changing lookups from filesystem, environment/configuration,
+  network and secret-store access plus dangerous custom/collection and dynamically selected
+  controller plug-ins; it also surfaces
+  `allow_unsafe`, weakened lookup error handling, secret output without `no_log`, and lookup counts
+  without executing plugins or exposing lookup arguments.
 - Native Terraform/OpenTofu plan-integrity findings across the CLI, GitHub Action, project scan,
   evidence, and MCP. Stable JSON analysis now validates supported plan format versions and
   surfaces errored, not-applyable, and incomplete plans, deferred changes, out-of-band drift,

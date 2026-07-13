@@ -580,6 +580,38 @@ def test_project_scan_analyzes_ansible_role_tasks_and_handlers(tmp_path: Path) -
         assert secret not in encoded
 
 
+def test_project_scan_analyzes_ansible_lookup_boundaries(tmp_path: Path) -> None:
+    target = tmp_path / "lookup-playbook.yml"
+    target.write_text(
+        (FIXTURES / "ansible_lookup_risky.yml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".", framework="soc2")
+    encoded = json.dumps(payload)
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["decision"] == "block"
+    assert payload["total_changes"] == 9
+    assert payload["risk_counts"] == {
+        "safe": 0,
+        "review": 2,
+        "dangerous": 7,
+        "irreversible": 0,
+    }
+    result = payload["files"][0]
+    assert result["tool"] == "ansible"
+    assert result["adapter"] == "ansible"
+    assert result["lookup_count"] == 9
+    assert "command" in result["lookup_capabilities"]
+    assert "secret" in result["lookup_capabilities"]
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+    assert "fixture-pipe-command-do-not-run" not in encoded
+    assert "fixture-vault-secret-do-not-leak" not in encoded
+
+
 def test_project_scan_analyzes_molecule_scenarios(tmp_path: Path) -> None:
     target = tmp_path / "molecule" / "default" / "molecule.yml"
     target.parent.mkdir(parents=True)

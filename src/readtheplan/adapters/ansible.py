@@ -120,6 +120,65 @@ _LOCAL_CONTENT_MODULES = {"assemble", "blockinfile", "copy", "lineinfile", "repl
 _FILE_MUTATION_MODULES = _LOCAL_CONTENT_MODULES | {"file", "win_copy", "win_file", "win_template"}
 _SENSITIVE_TOKENS = ("password", "passwd", "secret", "token", "private_key", "api_key")
 _DYNAMIC_MARKERS = ("{{", "{%", "{#", "lookup(", "query(")
+_LOOKUP_CALL_RE = re.compile(
+    r"\b(?:lookup|query)\s*\(\s*(?:(?P<quote>['\"])(?P<plugin>[A-Za-z0-9_.-]+)(?P=quote))?",
+    re.IGNORECASE,
+)
+_Q_LOOKUP_CALL_RE = re.compile(
+    r"\bq\s*\(\s*(?:(?P<quote>['\"])(?P<plugin>[A-Za-z0-9_.-]+)(?P=quote))?",
+    re.IGNORECASE,
+)
+_LOOKUP_ALLOW_UNSAFE_RE = re.compile(
+    r"\ballow_unsafe\s*=\s*(?:true|yes|on|1)\b",
+    re.IGNORECASE,
+)
+_LOOKUP_WEAK_ERRORS_RE = re.compile(
+    r"\berrors\s*=\s*['\"](?:ignore|warn)['\"]",
+    re.IGNORECASE,
+)
+_JINJA_LOOKUP_BLOCK_RE = re.compile(r"{{(.*?)}}|{%(.*?)%}", re.DOTALL)
+_LOOKUP_COMMAND_PLUGINS = {"lines", "pipe"}
+_LOOKUP_STATEFUL_PLUGINS = {"password", "vault_login", "vault_write"}
+_LOOKUP_FILESYSTEM_PLUGINS = {
+    "csvfile",
+    "file",
+    "fileglob",
+    "first_found",
+    "ini",
+    "template",
+}
+_LOOKUP_ENVIRONMENT_PLUGINS = {"config", "env"}
+_LOOKUP_NETWORK_PLUGINS = {"url"}
+_LOOKUP_SECRET_PLUGINS = {"unvault"}
+_LOOKUP_DATA_PLUGINS = {
+    "dict",
+    "indexed_items",
+    "inventory_hostnames",
+    "items",
+    "list",
+    "nested",
+    "random_choice",
+    "sequence",
+    "subelements",
+    "together",
+    "varnames",
+    "vars",
+}
+_LOOKUP_CAPABILITIES = frozenset(
+    {
+        "command",
+        "custom",
+        "data",
+        "dynamic",
+        "environment",
+        "filesystem",
+        "network",
+        "secret",
+        "stateful",
+        "unsafe",
+        "weak_errors",
+    }
+)
 _ROLE_CONTENT_RE = re.compile(r"(?:^|/)roles/[^/]+/(tasks|handlers)/.+[.]ya?ml$")
 _SENSITIVE_PATH_PREFIXES = (
     "/boot",
@@ -380,15 +439,137 @@ def _task_is_dynamic(task: dict[str, Any], memo: dict[int, bool]) -> bool:
     )
 
 
-def _task_metadata(artifact_type: str, items: list[Any]) -> dict[str, int | str]:
+def _lookup_plugin_characteristic(plugin: str) -> str:
+    normalized = plugin.casefold()
+    short_name = normalized.rsplit(".", 1)[-1]
+    if short_name in _LOOKUP_COMMAND_PLUGINS:
+        return "command"
+    if short_name in _LOOKUP_STATEFUL_PLUGINS:
+        return "stateful"
+    if short_name in _LOOKUP_SECRET_PLUGINS or any(
+        marker in normalized
+        for marker in ("hashi_vault", "keyvault", "passwordstore", "secret", "vault_read")
+    ):
+        return "secret"
+    if short_name in _LOOKUP_NETWORK_PLUGINS:
+        return "network"
+    if short_name in _LOOKUP_FILESYSTEM_PLUGINS:
+        return "filesystem"
+    if short_name in _LOOKUP_ENVIRONMENT_PLUGINS:
+        return "environment"
+    if short_name in _LOOKUP_DATA_PLUGINS:
+        return "data"
+    return "custom"
+
+
+def _lookup_characteristics(
+    value: Any,
+    *,
+    implicit_expression: bool = False,
+    memo: dict[int, frozenset[str]] | None = None,
+) -> frozenset[str]:
+    memo = {} if memo is None else memo
+    if isinstance(value, str):
+        characteristics: set[str] = set()
+        expressions = [
+            next(group for group in match.groups() if group is not None)
+            for match in _JINJA_LOOKUP_BLOCK_RE.finditer(value)
+        ]
+        if implicit_expression:
+            expressions.append(value)
+        for expression in expressions:
+            matches = list(_LOOKUP_CALL_RE.finditer(expression))
+            matches.extend(_Q_LOOKUP_CALL_RE.finditer(expression))
+            for match in matches:
+                plugin = match.group("plugin")
+                characteristics.add(
+                    _lookup_plugin_characteristic(plugin) if plugin else "dynamic"
+                )
+            if matches and _LOOKUP_ALLOW_UNSAFE_RE.search(expression):
+                characteristics.add("unsafe")
+            if matches and _LOOKUP_WEAK_ERRORS_RE.search(expression):
+                characteristics.add("weak_errors")
+        return frozenset(characteristics)
+    if not isinstance(value, (dict, list)):
+        return frozenset()
+    marker = id(value)
+    if marker in memo:
+        return memo[marker]
+    memo[marker] = frozenset()
+    characteristics = set()
+    children = value.items() if isinstance(value, dict) else enumerate(value)
+    for key, child in children:
+        characteristics.update(
+            _lookup_characteristics(
+                key,
+                implicit_expression=implicit_expression,
+                memo=memo,
+            )
+        )
+        characteristics.update(
+            _lookup_characteristics(
+                child,
+                implicit_expression=implicit_expression,
+                memo=memo,
+            )
+        )
+    result = frozenset(characteristics)
+    memo[marker] = result
+    return result
+
+
+def _task_lookup_characteristics(task: dict[str, Any]) -> frozenset[str]:
+    surface = {
+        key: value for key, value in task.items() if key not in {"block", "rescue", "always"}
+    }
+    characteristics = set(_lookup_characteristics(surface))
+    for key in ("changed_when", "failed_when", "loop", "until", "when"):
+        if key in surface:
+            characteristics.update(
+                _lookup_characteristics(
+                    surface[key],
+                    implicit_expression=True,
+                )
+            )
+    for key in surface:
+        if key.startswith("with_") and len(key) > len("with_"):
+            characteristics.add(_lookup_plugin_characteristic(key[len("with_") :]))
+    return frozenset(characteristics)
+
+
+def _play_lookup_surface(play: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: play[key]
+        for key in ("environment", "module_defaults", "vars", "vars_files", "vars_prompt")
+        if key in play
+    }
+
+
+def _task_metadata(artifact_type: str, items: list[Any]) -> dict[str, Any]:
     dynamic_memo: dict[int, bool] = {}
     if artifact_type == "playbook":
         task_count = 0
         handler_count = 0
         dynamic_count = 0
+        lookup_count = 0
+        lookup_capabilities: set[str] = set()
         for play in items:
             if not isinstance(play, dict):
                 continue
+            play_lookup = _lookup_characteristics(_play_lookup_surface(play))
+            if play_lookup:
+                lookup_count += 1
+                lookup_capabilities.update(play_lookup)
+            for role in play.get("roles", []) or []:
+                role_lookup = _lookup_characteristics(role)
+                if role_lookup:
+                    lookup_count += 1
+                    lookup_capabilities.update(role_lookup)
+            if "import_playbook" in play:
+                import_lookup = _lookup_characteristics(play.get("import_playbook"))
+                if import_lookup:
+                    lookup_count += 1
+                    lookup_capabilities.update(import_lookup)
             for section in ("pre_tasks", "tasks", "post_tasks"):
                 task_count += _count_tasks(play.get(section))
             handler_count += _count_tasks(play.get("handlers"))
@@ -398,13 +579,28 @@ def _task_metadata(artifact_type: str, items: list[Any]) -> dict[str, int | str]
                 for task in _iter_tasks(play.get(section))
                 if _task_is_dynamic(task, dynamic_memo)
             )
+            for section in ("pre_tasks", "tasks", "post_tasks", "handlers"):
+                for task in _iter_tasks(play.get(section)):
+                    task_lookup = _task_lookup_characteristics(task)
+                    if task_lookup:
+                        lookup_count += 1
+                        lookup_capabilities.update(task_lookup)
         return {
             "artifact_type": artifact_type,
             "task_count": task_count,
             "handler_count": handler_count,
             "dynamic_count": dynamic_count,
+            "lookup_count": lookup_count,
+            "lookup_capabilities": sorted(lookup_capabilities),
         }
     count = _count_tasks(items)
+    lookup_count = 0
+    lookup_capabilities = set()
+    for task in _iter_tasks(items):
+        task_lookup = _task_lookup_characteristics(task)
+        if task_lookup:
+            lookup_count += 1
+            lookup_capabilities.update(task_lookup)
     return {
         "artifact_type": artifact_type,
         "task_count": 0 if artifact_type == "handler_file" else count,
@@ -412,6 +608,8 @@ def _task_metadata(artifact_type: str, items: list[Any]) -> dict[str, int | str]
         "dynamic_count": sum(
             1 for task in _iter_tasks(items) if _task_is_dynamic(task, dynamic_memo)
         ),
+        "lookup_count": lookup_count,
+        "lookup_capabilities": sorted(lookup_capabilities),
     }
 
 
@@ -640,6 +838,9 @@ class AnsibleAdapter(BaseAdapter):
             if not isinstance(play, dict):
                 continue
             if "import_playbook" in play:
+                lookup_characteristics = _lookup_characteristics(
+                    play.get("import_playbook")
+                )
                 changes.append(
                     {
                         "Module": "import_playbook",
@@ -647,6 +848,8 @@ class AnsibleAdapter(BaseAdapter):
                         "Name": f"import {play.get('import_playbook')}",
                         "Address": f"playbook[{play_index}]",
                         "TaskMeta": {},
+                        "HasDynamicValues": bool(lookup_characteristics),
+                        "LookupCharacteristics": tuple(sorted(lookup_characteristics)),
                     }
                 )
                 continue
@@ -665,6 +868,10 @@ class AnsibleAdapter(BaseAdapter):
                 )
                 if key in play
             }
+            play_lookup_surface = _play_lookup_surface(play)
+            play_lookup_characteristics = _lookup_characteristics(play_lookup_surface)
+            if play_lookup_characteristics:
+                play_controls.update(play_lookup_surface)
             if set(play_controls) - {"hosts"}:
                 changes.append(
                     {
@@ -673,6 +880,10 @@ class AnsibleAdapter(BaseAdapter):
                         "Name": f"play-{play_index + 1}",
                         "Address": f"playbook[{play_index}]",
                         "TaskMeta": play_controls,
+                        "HasDynamicValues": bool(play_lookup_characteristics),
+                        "LookupCharacteristics": tuple(
+                            sorted(play_lookup_characteristics)
+                        ),
                     }
                 )
             for section in ("pre_tasks", "tasks", "post_tasks", "handlers"):
@@ -685,6 +896,7 @@ class AnsibleAdapter(BaseAdapter):
                 )
             for role_index, role in enumerate(play.get("roles", []) or []):
                 role_name = role if isinstance(role, str) else "<role>"
+                lookup_characteristics = _lookup_characteristics(role)
                 changes.append(
                     {
                         "Module": "include_role",
@@ -692,6 +904,8 @@ class AnsibleAdapter(BaseAdapter):
                         "Name": f"role {role_name}",
                         "Address": f"playbook[{play_index}].roles[{role_index}]",
                         "TaskMeta": role if isinstance(role, dict) else {},
+                        "HasDynamicValues": bool(lookup_characteristics),
+                        "LookupCharacteristics": tuple(sorted(lookup_characteristics)),
                     }
                 )
         return changes
@@ -730,6 +944,9 @@ class AnsibleAdapter(BaseAdapter):
                         "IsHandler": is_handler,
                         "HasDynamicValues": _task_is_dynamic(task, dynamic_memo),
                         "HasLookupLoop": any(key.startswith("with_") for key in task),
+                        "LookupCharacteristics": tuple(
+                            sorted(_task_lookup_characteristics(task))
+                        ),
                     }
                 )
             for nested in ("block", "rescue", "always"):
@@ -937,6 +1154,65 @@ class AnsibleAdapter(BaseAdapter):
             control_findings.append("inherits module arguments that are not visible on this task")
             if risk == "safe":
                 risk = "review"
+        lookup_characteristics = {
+            item
+            for item in raw.get("LookupCharacteristics", ())
+            if isinstance(item, str) and item in _LOOKUP_CAPABILITIES
+        }
+        if "command" in lookup_characteristics:
+            control_findings.append(
+                "runs a lookup command on the controller outside task become and check-mode "
+                "controls"
+            )
+            risk = "dangerous"
+        if "stateful" in lookup_characteristics:
+            control_findings.append(
+                "uses a lookup that can write controller or external-service state even in "
+                "check mode"
+            )
+            risk = "dangerous"
+        if "secret" in lookup_characteristics:
+            control_findings.append("retrieves or decrypts secret material on the controller")
+            if metadata.get("no_log") is not True:
+                control_findings.append("does not suppress output for the secret lookup")
+                risk = "dangerous"
+            elif risk == "safe":
+                risk = "review"
+        if "network" in lookup_characteristics:
+            control_findings.append("fetches lookup data from a remote service on the controller")
+            if risk == "safe":
+                risk = "review"
+        if "filesystem" in lookup_characteristics:
+            control_findings.append("reads or templates files from the controller filesystem")
+            if risk == "safe":
+                risk = "review"
+        if "environment" in lookup_characteristics:
+            control_findings.append(
+                "reads the controller environment or resolved Ansible configuration"
+            )
+            if risk == "safe":
+                risk = "review"
+        if "custom" in lookup_characteristics:
+            control_findings.append(
+                "loads a custom or collection lookup plugin whose controller-side code is not "
+                "inspected here"
+            )
+            risk = "dangerous"
+        if "dynamic" in lookup_characteristics:
+            control_findings.append(
+                "selects a lookup plugin dynamically, so its controller-side implementation "
+                "cannot be determined statically"
+            )
+            risk = "dangerous"
+        if "unsafe" in lookup_characteristics:
+            control_findings.append(
+                "allows lookup return data to be evaluated as Jinja through allow_unsafe"
+            )
+            risk = "dangerous"
+        if "weak_errors" in lookup_characteristics:
+            control_findings.append("weakens lookup failure handling from the strict default")
+            if risk == "safe":
+                risk = "review"
         if raw.get("HasDynamicValues"):
             control_findings.append(
                 "depends on Jinja or lookup expressions resolved only at runtime"
@@ -1000,12 +1276,19 @@ def analyze_ansible(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="Ansible")
     gate["adapter"] = "ansible"
     gate["total_changes"] = len(changes)
-    metadata = data.get("ansible_metadata")
-    if not isinstance(metadata, dict):
-        artifact_type = str(data.get("ansible_artifact_type") or "playbook")
-        items = data.get("plays") if artifact_type == "playbook" else data.get("ansible_tasks")
-        metadata = _task_metadata(artifact_type, items if isinstance(items, list) else [])
-    for key in ("artifact_type", "task_count", "handler_count", "dynamic_count"):
+    artifact_type = str(data.get("ansible_artifact_type") or "playbook")
+    items = data.get("plays") if artifact_type == "playbook" else data.get("ansible_tasks")
+    metadata = _task_metadata(artifact_type, items if isinstance(items, list) else [])
+    for key in ("artifact_type", "task_count", "handler_count", "dynamic_count", "lookup_count"):
         if isinstance(metadata.get(key), (str, int)):
             gate[key] = metadata[key]
+    lookup_capabilities = metadata.get("lookup_capabilities")
+    if isinstance(lookup_capabilities, list):
+        gate["lookup_capabilities"] = sorted(
+            {
+                item
+                for item in lookup_capabilities
+                if isinstance(item, str) and item in _LOOKUP_CAPABILITIES
+            }
+        )
     return gate
