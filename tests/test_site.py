@@ -215,6 +215,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "agent_gate_dsc",
         "agent_gate_cfengine",
         "agent_gate_terraform_lock",
+        "agent_gate_terraform_state",
         "jenkins-jcasc",
         "ansible-project",
         "chef-project",

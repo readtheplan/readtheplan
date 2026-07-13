@@ -627,6 +627,23 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     terraform_lock.set_defaults(func=_terraform_lock_gate)
 
+    terraform_state = subparsers.add_parser(
+        "terraform-state",
+        help="Emit the agent-gate decision for Terraform/OpenTofu state JSON.",
+    )
+    terraform_state.add_argument(
+        "--framework",
+        help=(
+            "Include required check IDs from the named framework catalog. "
+            f"Currently available: {_framework_help_list()}."
+        ),
+    )
+    terraform_state.add_argument(
+        "input_file",
+        help="Path to terraform/tofu show -json output or a raw v4 state snapshot.",
+    )
+    terraform_state.set_defaults(func=_terraform_state_gate)
+
     terragrunt = subparsers.add_parser(
         "terragrunt",
         help="Emit the agent-gate decision for Terragrunt configuration HCL/JSON.",
@@ -2051,6 +2068,35 @@ def _terraform_lock_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_terraform_lock(data, catalog=catalog))
+
+
+def _terraform_state_gate(args: argparse.Namespace) -> int:
+    """Emit the gate contract for saved Terraform/OpenTofu state JSON."""
+    from readtheplan.adapters.terraform_state import (
+        TerraformStateAdapter,
+        TerraformStateInputError,
+        analyze_terraform_state,
+        parse_terraform_state,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_terraform_state(source)
+    except TerraformStateInputError as exc:
+        print(f"Error: invalid Terraform/OpenTofu state: {exc}", file=sys.stderr)
+        return 1
+    if not TerraformStateAdapter().can_handle(data):
+        print("Error: input not recognized as Terraform/OpenTofu state", file=sys.stderr)
+        return 1
+
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_terraform_state(data, catalog=catalog))
 
 
 def _helm_gate(args: argparse.Namespace) -> int:

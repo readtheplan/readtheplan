@@ -1,0 +1,23 @@
+{
+  "format_version": "1.0",
+  "terraform_version": "1.14.3",
+  "values": {
+    "outputs": {},
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_s3_bucket.private",
+          "mode": "managed",
+          "type": "aws_s3_bucket",
+          "name": "private",
+          "provider_name": "registry.terraform.io/hashicorp/aws",
+          "schema_version": 0,
+          "values": {
+            "acl": "private"
+          },
+          "sensitive_values": {}
+        }
+      ]
+    }
+  }
+}

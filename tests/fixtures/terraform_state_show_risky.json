@@ -1,0 +1,99 @@
+{
+  "format_version": "1.0",
+  "terraform_version": "1.14.3",
+  "values": {
+    "outputs": {
+      "database_password": {
+        "sensitive": false,
+        "type": "string",
+        "value": "output-secret-value"
+      },
+      "service_token": {
+        "sensitive": true,
+        "type": "string",
+        "value": "marked-output-secret"
+      }
+    },
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_s3_bucket.logs",
+          "mode": "managed",
+          "type": "aws_s3_bucket",
+          "name": "logs",
+          "provider_name": "registry.terraform.io/hashicorp/aws",
+          "schema_version": 0,
+          "values": {
+            "acl": "public-read",
+            "access_token": "marked-resource-secret"
+          },
+          "sensitive_values": {
+            "access_token": true
+          }
+        },
+        {
+          "address": "aws_db_instance.primary",
+          "mode": "managed",
+          "type": "aws_db_instance",
+          "name": "primary",
+          "provider_name": "registry.terraform.io/hashicorp/aws",
+          "schema_version": 2,
+          "values": {
+            "publicly_accessible": true,
+            "storage_encrypted": false,
+            "password": "unmarked-resource-secret"
+          },
+          "sensitive_values": {}
+        }
+      ],
+      "child_modules": [
+        {
+          "address": "module.network",
+          "resources": [
+            {
+              "address": "module.network.aws_security_group.open",
+              "mode": "managed",
+              "type": "aws_security_group",
+              "name": "open",
+              "provider_name": "registry.terraform.io/hashicorp/aws",
+              "schema_version": 1,
+              "values": {
+                "ingress": [
+                  {
+                    "cidr_blocks": ["0.0.0.0/0"],
+                    "from_port": 22,
+                    "to_port": 22,
+                    "protocol": "tcp"
+                  }
+                ]
+              },
+              "sensitive_values": {}
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "checks": [
+    {
+      "address": {
+        "kind": "resource",
+        "to_display": "aws_db_instance.primary"
+      },
+      "status": "fail",
+      "instances": [
+        {
+          "address": {
+            "to_display": "aws_db_instance.primary"
+          },
+          "status": "fail",
+          "problems": [
+            {
+              "message": "internal-check-message-secret"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

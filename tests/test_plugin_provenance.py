@@ -116,4 +116,5 @@ def test_entry_point_discovery_finds_builtins() -> None:
         "pulumi-project",
         "salt-project",
         "terraform-lock",
+        "terraform-state",
     } <= set(adapters)
