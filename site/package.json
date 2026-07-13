@@ -4,8 +4,8 @@
   "private": true,
   "description": "Static onboarding app for readtheplan.dev.",
   "scripts": {
-    "test": "node scripts/validate.js && node analysis/chat-contract.test.mjs",
-    "build": "node scripts/build.js"
+    "test": "node scripts/validate.js && node analysis/chat-contract.test.mjs && node analysis/interaction-contract.test.mjs",
+    "build": "node scripts/build.js && node analysis/build-contract.test.mjs"
   },
   "engines": {
     "node": ">=18"

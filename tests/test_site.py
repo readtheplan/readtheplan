@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,11 +107,14 @@ def test_site_has_client_onboarding_surface() -> None:
 
 
 def test_site_build_contract_for_cloudflare_pages() -> None:
-    package = (SITE / "package.json").read_text(encoding="utf-8")
+    package = json.loads((SITE / "package.json").read_text(encoding="utf-8"))
     build_script = (SITE / "scripts" / "build.js").read_text(encoding="utf-8")
     workflow = (ROOT / ".github" / "workflows" / "site.yml").read_text(encoding="utf-8")
 
-    assert '"build": "node scripts/build.js"' in package
+    assert package["scripts"]["build"] == (
+        "node scripts/build.js && node analysis/build-contract.test.mjs"
+    )
+    assert "analysis/interaction-contract.test.mjs" in package["scripts"]["test"]
     assert "site/dist" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "X-Content-Type-Options: nosniff" in build_script
     assert "Content-Security-Policy" in build_script
@@ -124,6 +128,12 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert "browsing-topics=()" in build_script
     assert "Cross-Origin-Opener-Policy" in build_script
     assert "assetDirs" in build_script
+    assert "projectVersion" in build_script
+    assert "canonicalHeader" in build_script
+    assert "canonicalFooter" in build_script
+    assert "site-header:start" in build_script
+    assert "site-footer:start" in build_script
+    assert "__READTHEPLAN_VERSION__" in build_script
     assert '"fonts"' in build_script
     assert '"img"' in build_script
     assert '"tools"' in build_script

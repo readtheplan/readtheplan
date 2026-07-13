@@ -154,6 +154,18 @@ for (const token of [
   requireIncludes(buildScript, token, "security header");
 }
 
+for (const token of [
+  "projectVersion",
+  "canonicalHeader",
+  "canonicalFooter",
+  "site-header:start",
+  "site-footer:start",
+  "__READTHEPLAN_VERSION__",
+  "pyproject.toml",
+]) {
+  requireIncludes(buildScript, token, "canonical build chrome");
+}
+
 for (const token of ["assetDirs", '"fonts"', '"img"', '"tools"', '"resources"', '"mcp"', '"brief"']) {
   requireIncludes(buildScript, token, "build script asset/route copy token");
 }
@@ -212,14 +224,22 @@ const seoRoutes = [
 ];
 const docsRoutes = [
   "docs/index.html",
+  "docs/faq.html",
+  "docs/adapters/index.html",
   "docs/quickstart/index.html",
   "docs/cli/index.html",
   "docs/github-action/index.html",
 ];
-const experientialRoutes = ["demo/index.html", "playground/index.html"];
+const experientialRoutes = ["demo/index.html", "playground/index.html", "chat/index.html"];
 const briefRoutes = ["brief/index.html", "brief/sample-001/index.html"];
+const projectRoutes = [
+  "blog/index.html",
+  "pricing/index.html",
+  "privacy/index.html",
+  "terms/index.html",
+];
 
-for (const route of [...seoRoutes, ...docsRoutes, ...experientialRoutes, ...briefRoutes, "mcp/index.html"]) {
+for (const route of [...seoRoutes, ...docsRoutes, ...experientialRoutes, ...briefRoutes, ...projectRoutes, "mcp/index.html"]) {
   if (!fs.existsSync(path.join(root, route))) {
     throw new Error(`Missing public route: ${route}`);
   }
@@ -233,6 +253,7 @@ for (const token of [
   "/docs/",
   "/demo/",
   "/playground/",
+  "/chat/",
 ]) {
   if (!html.includes(token) || !sitemap.includes(token)) {
     throw new Error(`Missing linked and sitemap-listed primary route: ${token}`);
@@ -243,6 +264,12 @@ for (const token of [
   "/docs/quickstart/",
   "/docs/cli/",
   "/docs/github-action/",
+  "/docs/adapters/",
+  "/docs/faq.html",
+  "/blog/",
+  "/pricing/",
+  "/privacy/",
+  "/terms/",
   "/brief/sample-001/",
   "/resources/terraform-s3-bucket-risk/",
   "/resources/terraform-iam-policy-risk/",

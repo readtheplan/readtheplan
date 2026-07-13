@@ -199,7 +199,7 @@ assert.match(adapterDocs, /<strong>CloudFormation and AWS CDK<\/strong>/);
 assert.match(adapterDocs, /<strong>Kubernetes<\/strong>/);
 assert.match(adapterDocs, /<strong>Ansible playbooks and project configuration<\/strong>/);
 assert.match(adapterDocs, /<strong>Jenkins pipelines\/JCasC<\/strong>/);
-assert.match(adapterDocs, /<strong>Chef recipes and projects<\/strong>/);
+assert.match(adapterDocs, /<strong>Chef recipes, projects, and runtime configuration<\/strong>/);
 assert.match(adapterDocs, /<strong>Puppet manifests and projects<\/strong>/);
 assert.match(adapterDocs, /<strong>Docker Compose and Buildx Bake<\/strong>/);
 assert.match(adapterDocs, /BaseAdapter/);
