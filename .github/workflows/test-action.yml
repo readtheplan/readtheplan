@@ -1379,6 +1379,38 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Chef InSpec controls
+        id: inspec
+        uses: ./
+        with:
+          tool: inspec
+          input-file: tests/fixtures/inspec_profile_risky/controls/main.rb
+          framework: soc2
+
+      - name: Assert Chef InSpec outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.inspec.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.inspec.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.inspec.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "12"
+          test "$RISK_COUNTS" = '{"dangerous":6,"irreversible":0,"review":6,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "inspec"
+          assert payload["artifact_type"] == "control"
+          assert payload["decision"] == "block"
+          assert "fixture-control-id" not in serialized
+          assert "fixture-token" not in serialized
+          assert "example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Puppet manifest
         id: puppet
         uses: ./
