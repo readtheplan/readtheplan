@@ -2654,7 +2654,7 @@ def agent_gate_configuration_management(
         except ChefInputError as exc:
             raise MCPToolInputError(
                 code="INVALID_INPUT",
-                message=f"Invalid Chef cookbook input {input_path}: {exc}",
+                message=f"Invalid Chef/Ohai cookbook input {input_path}: {exc}",
             ) from exc
         adapter = ChefAdapter()
         analyze = analyze_chef

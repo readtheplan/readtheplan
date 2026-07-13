@@ -87,6 +87,7 @@ _ARTIFACT_DIRECTORIES = {
     "attributes": "attribute_file",
     "definitions": "definition",
     "libraries": "library",
+    "ohai": "ohai_plugin",
     "providers": "provider",
     "recipes": "recipe",
     "resources": "custom_resource",
@@ -108,6 +109,15 @@ _BOUNDARY_EXPLANATIONS = {
     "library": (
         "Chef cookbook libraries load arbitrary Ruby into Chef Infra Client and may extend "
         "built-in classes; review trust, side effects, and every caller."
+    ),
+    "ohai_library": (
+        "Chef loads this shared Ohai Ruby library on managed nodes through a custom plugin; "
+        "review its trust, load paths, side effects, callers, and collection-time behavior."
+    ),
+    "ohai_plugin": (
+        "Chef installs and loads this custom Ohai plugin on managed nodes before convergence. "
+        "Its collection code runs with the Ohai process identity and its provided automatic "
+        "attributes can influence recipes and be saved to Chef Server unless filtered."
     ),
     "provider": (
         "Legacy Chef providers implement convergence with Ruby and node-side operations; review "
@@ -212,6 +222,161 @@ _RUBY_RISKS: tuple[tuple[str, re.Pattern[str], str, str], ...] = (
     ),
 )
 
+_OHAI_PLUGIN = re.compile(r"^\s*(?:::)?Ohai\.plugin\b", re.MULTILINE)
+_OHAI_PLUGIN_NAME = re.compile(
+    r"^\s*(?:::)?Ohai\.plugin\s*(?:\(\s*)?:(?P<name>[A-Z][A-Za-z0-9]*)\b",
+    re.MULTILINE,
+)
+_OHAI_PROVIDES = re.compile(r"\bprovides\b")
+_OHAI_DEPENDS = re.compile(r"\bdepends\b")
+_OHAI_COLLECT_DATA = re.compile(
+    r"^\s*collect_data(?:\s*\((?P<platforms>[^)]*)\))?\s+do\b"
+)
+_OHAI_HINT = re.compile(r"\bhint\?\s*\(", re.IGNORECASE)
+_OHAI_LOG = re.compile(r"\bOhai::Log\.(?:debug|info|warn|error|fatal)\b", re.IGNORECASE)
+_RUBY_QUOTED = re.compile(r"(?P<quote>['\"])(?P<value>(?:\\.|[^'\"])*?)(?P=quote)")
+_RUBY_PERCENT_WORDS = re.compile(
+    r"%w(?P<open>[\(\[\{<])(?P<body>.*?)(?P<close>[\)\]\}>])"
+)
+_RUBY_SYMBOL = re.compile(r":(?P<name>[A-Za-z][A-Za-z0-9_]*)")
+_OHAI_SENSITIVE = re.compile(
+    r"(?:api.?key|credential|password|passwd|private.?key|secret|token)", re.IGNORECASE
+)
+_OHAI_CORE_ATTRIBUTES = frozenset(
+    {
+        "cloud",
+        "domain",
+        "fqdn",
+        "hostname",
+        "ipaddress",
+        "kernel",
+        "macaddress",
+        "network",
+        "ohai_time",
+        "os",
+        "platform",
+        "platform_family",
+        "platform_version",
+        "recipes",
+        "roles",
+    }
+)
+_OHAI_BUILTIN_PLUGINS = frozenset(
+    {
+        "chef",
+        "cloud",
+        "command",
+        "cpu",
+        "dmi",
+        "docker",
+        "domain",
+        "ec2",
+        "filesystem",
+        "hostname",
+        "kernel",
+        "memory",
+        "network",
+        "ohai",
+        "ohaitime",
+        "os",
+        "packages",
+        "platform",
+        "sshhostkey",
+        "timezone",
+        "uptime",
+        "virtualization",
+    }
+)
+_OHAI_RISKS: tuple[tuple[str, re.Pattern[str], str, str], ...] = (
+    (
+        "ohai_command_execution",
+        re.compile(
+            r"(?:\b(?:exec|spawn|system)\s*(?:\(|\s)|\b(?:shell_out|shell_out!)\s*(?:\(|\s)|"
+            r"\bMixlib::ShellOut\b|\bIO\.popen\b|\bOpen3\.(?:capture|pipeline|popen)|`|%x\s*[({[])",
+            re.IGNORECASE,
+        ),
+        "dangerous",
+        "Ohai collection code executes an operating-system command on every applicable managed "
+        "node before Chef convergence; review input control, timeout, privilege, and output size.",
+    ),
+    (
+        "ohai_network_access",
+        re.compile(
+            r"\b(?:Faraday|HTTPClient|HTTParty|Net::HTTP|OpenURI|RestClient|TCPSocket|UDPSocket|"
+            r"URI\.(?:open|parse))\b",
+            re.IGNORECASE,
+        ),
+        "dangerous",
+        "Ohai collection code contacts an external network service before Chef convergence; "
+        "review endpoint trust, authentication, TLS verification, timeout, and failure behavior.",
+    ),
+    (
+        "ohai_cloud_metadata_access",
+        re.compile(
+            r"\b(?:can_metadata_connect\?|fetch_metadata|EC2_METADATA_ADDR|metadata_uri|"
+            r"metadata_host)\b",
+            re.IGNORECASE,
+        ),
+        "dangerous",
+        "Ohai collection code queries a cloud or instance metadata service; verify workload "
+        "identity protections, SSRF resistance, token use, response bounds, and persisted fields.",
+    ),
+    (
+        "ohai_runtime_data_access",
+        re.compile(
+            r"(?:\bENV\s*\[|\b(?:File|IO)\.(?:binread|foreach|read|readlines)\b|"
+            r"\bDir\.(?:children|entries|glob)\b)",
+            re.IGNORECASE,
+        ),
+        "review",
+        "Ohai collection code reads environment or filesystem data from the managed node; "
+        "review provenance, permissions, size bounds, and whether sensitive data becomes an "
+        "automatic attribute.",
+    ),
+    (
+        "ohai_system_mutation",
+        re.compile(
+            r"\b(?:File|IO)\.(?:chmod|chown|delete|rename|truncate|unlink|write|binwrite)\b",
+            re.IGNORECASE,
+        ),
+        "dangerous",
+        "Ohai collection code mutates the managed node while gathering facts; collection should "
+        "remain observational and must not create convergence side effects.",
+    ),
+    (
+        "ohai_dynamic_evaluation",
+        re.compile(r"\b(?:class_eval|eval|instance_eval|module_eval)\s*(?:\(|\s)", re.IGNORECASE),
+        "dangerous",
+        "Ohai collection code dynamically evaluates Ruby, obscuring the effective code executed "
+        "on managed nodes.",
+    ),
+    (
+        "ohai_unsafe_deserialization",
+        re.compile(r"\b(?:Marshal|Psych|YAML)\.(?:load|load_file|unsafe_load)\s*(?:\(|\s)"),
+        "dangerous",
+        "Ohai collection code uses a deserializer that may instantiate arbitrary Ruby objects; "
+        "use a safe parser with explicit classes and bounded input.",
+    ),
+    (
+        "ohai_tls_verification_disabled",
+        re.compile(
+            r"(?:OpenSSL::SSL::VERIFY_NONE|verify_(?:mode|ssl)\s*[=:>]\s*(?:false|0)|"
+            r"ssl_verify_mode\s+:(?:verify_none|none))",
+            re.IGNORECASE,
+        ),
+        "dangerous",
+        "Ohai collection code disables TLS peer verification, allowing collected node data to be "
+        "supplied by an untrusted endpoint.",
+    ),
+    (
+        "ohai_dependency_load",
+        re.compile(r"\b(?:autoload|load|require|require_relative)\s*(?:\(|\s)", re.IGNORECASE),
+        "review",
+        "Ohai loads Ruby code or a gem not expanded in this artifact; review the dependency, "
+        "version, load path, platform scope, and transitive side effects.",
+    ),
+)
+
 
 class ChefInputError(ValueError):
     """Raised when Chef source is unsafe, oversized, or not recognizable."""
@@ -235,6 +400,11 @@ def _artifact_type(filename: str | None) -> str | None:
         return None
     normalized = filename.replace("\\", "/").casefold().strip("/")
     parts = tuple(part for part in normalized.split("/") if part)
+    if parts[-1].endswith(".rb") and "ohai" in parts[:-1]:
+        ohai_index = len(parts) - 2 - tuple(reversed(parts[:-1])).index("ohai")
+        if "common" in parts[ohai_index + 1 : -1]:
+            return "ohai_library"
+        return "ohai_plugin"
     for part in reversed(parts[:-1]):
         if part in _ARTIFACT_DIRECTORIES:
             artifact = _ARTIFACT_DIRECTORIES[part]
@@ -242,6 +412,68 @@ def _artifact_type(filename: str | None) -> str | None:
                 return artifact
             return None
     return None
+
+
+def _ruby_literal_words(line: str) -> list[str]:
+    values = [match.group("value") for match in _RUBY_QUOTED.finditer(line)]
+    for match in _RUBY_PERCENT_WORDS.finditer(line):
+        values.extend(word for word in match.group("body").split() if word)
+    return values
+
+
+def _ohai_scan(source: str) -> dict[str, Any]:
+    without_comments = _strip_ruby_comments(source)
+    code = _mask_ruby_strings(without_comments)
+    source_lines = without_comments.splitlines()
+    code_lines = code.splitlines()
+    plugin_lines: list[int] = []
+    plugin_names: list[tuple[int, str]] = []
+    provided: list[tuple[int, str]] = []
+    depends: list[tuple[int, str]] = []
+    collect_data: list[tuple[int, tuple[str, ...]]] = []
+    dynamic_provides = 0
+    dynamic_depends = 0
+
+    for line_number, code_line in enumerate(code_lines, start=1):
+        source_line = source_lines[line_number - 1]
+        if _OHAI_PLUGIN.match(code_line):
+            plugin_lines.append(line_number)
+            match = _OHAI_PLUGIN_NAME.match(code_line)
+            if match:
+                plugin_names.append((line_number, match.group("name")))
+        if _OHAI_PROVIDES.search(code_line):
+            values = _ruby_literal_words(source_line)
+            literals = [value for value in values if "#{" not in value]
+            provided.extend((line_number, value) for value in literals)
+            if len(literals) != len(values) or not values:
+                dynamic_provides += 1
+        if _OHAI_DEPENDS.search(code_line):
+            values = _ruby_literal_words(source_line)
+            literals = [value for value in values if "#{" not in value]
+            depends.extend((line_number, value) for value in literals)
+            if len(literals) != len(values) or not values:
+                dynamic_depends += 1
+        collect_match = _OHAI_COLLECT_DATA.match(code_line)
+        if collect_match:
+            raw_platforms = collect_match.group("platforms") or ":default"
+            platforms = tuple(_RUBY_SYMBOL.findall(raw_platforms)) or ("dynamic",)
+            collect_data.append((line_number, platforms))
+
+    dynamic_risks = 0
+    for line in code_lines:
+        dynamic_risks += sum(bool(pattern.search(line)) for _, pattern, _, _ in _OHAI_RISKS)
+    return {
+        "without_comments": without_comments,
+        "code": code,
+        "plugin_lines": plugin_lines,
+        "plugin_names": plugin_names,
+        "provided": provided,
+        "depends": depends,
+        "collect_data": collect_data,
+        "dynamic_provides": dynamic_provides,
+        "dynamic_depends": dynamic_depends,
+        "dynamic_count": dynamic_risks + dynamic_provides + dynamic_depends,
+    }
 
 
 def _strip_ruby_comments(source: str) -> str:
@@ -304,6 +536,33 @@ def _metadata(source: str, artifact_type: str) -> dict[str, int | str]:
     property_count = len(_CUSTOM_PROPERTY.findall(code))
     resource_count = len(_RESOURCE.findall(without_comments))
     dynamic_count = 0
+    if artifact_type in {"ohai_library", "ohai_plugin"}:
+        ohai = _ohai_scan(source)
+        platforms = {
+            platform
+            for _, values in ohai["collect_data"]
+            for platform in values
+            if platform not in {"default", "dynamic"}
+        }
+        action_count = len(ohai["collect_data"])
+        property_count = len(ohai["provided"])
+        dynamic_count = int(ohai["dynamic_count"])
+        return {
+            "artifact_type": artifact_type,
+            "line_count": source.count("\n") + 1,
+            "resource_count": 0,
+            "action_count": action_count,
+            "property_count": property_count,
+            "dynamic_count": dynamic_count,
+            "plugin_count": len(ohai["plugin_lines"]),
+            "named_plugin_count": len(ohai["plugin_names"]),
+            "provides_count": len(ohai["provided"]),
+            "depends_count": len(ohai["depends"]),
+            "collect_data_count": len(ohai["collect_data"]),
+            "platform_count": len(platforms),
+            "dynamic_provides_count": int(ohai["dynamic_provides"]),
+            "dynamic_depends_count": int(ohai["dynamic_depends"]),
+        }
     if artifact_type == "template":
         tags = [match for match in _ERB_TAG.finditer(source) if match.group("kind") != "#"]
         action_count = len(tags)
@@ -326,6 +585,13 @@ def parse_chef(source: str, filename: str | None = None) -> dict[str, Any]:
     _validate_source(source)
     artifact_type = _artifact_type(filename)
     without_comments = _strip_ruby_comments(source)
+    code = _mask_ruby_strings(without_comments)
+    if _OHAI_PLUGIN.search(code):
+        artifact_type = "ohai_plugin"
+    elif artifact_type == "ohai_plugin" and "/common/" in (
+        filename or ""
+    ).replace("\\", "/").casefold():
+        artifact_type = "ohai_library"
     if artifact_type is None and (
         _RESOURCE.search(without_comments) or _INCLUDE.search(without_comments)
     ):
@@ -371,10 +637,18 @@ class ChefAdapter(BaseAdapter):
         source = input_data.get("chef_recipe")
         if not isinstance(source, str):
             return False
-        if input_data.get("chef_artifact_type") in set(_ARTIFACT_DIRECTORIES.values()):
+        if input_data.get("chef_artifact_type") in {
+            *set(_ARTIFACT_DIRECTORIES.values()),
+            "ohai_library",
+        }:
             return bool(source.strip())
         without_comments = _strip_ruby_comments(source)
-        return bool(_RESOURCE.search(without_comments) or _INCLUDE.search(without_comments))
+        code = _mask_ruby_strings(without_comments)
+        return bool(
+            _RESOURCE.search(without_comments)
+            or _INCLUDE.search(without_comments)
+            or _OHAI_PLUGIN.search(code)
+        )
 
     def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
         source = str(input_data.get("chef_recipe", ""))
@@ -441,10 +715,12 @@ class ChefAdapter(BaseAdapter):
             changes.extend(self._attribute_changes(without_comments))
         elif artifact_type == "custom_resource":
             changes.extend(self._custom_resource_changes(without_comments))
+        elif artifact_type in {"ohai_library", "ohai_plugin"}:
+            changes.extend(self._ohai_changes(source, artifact_type))
 
         if artifact_type == "template":
             changes.extend(self._template_changes(source))
-        else:
+        elif artifact_type not in {"ohai_library", "ohai_plugin"}:
             changes.extend(self._ruby_changes(without_comments, artifact_type))
 
         if len(changes) > _MAX_FINDINGS:
@@ -458,6 +734,232 @@ class ChefAdapter(BaseAdapter):
         for line_number, line in enumerate(code.splitlines(), start=1):
             for finding_type, pattern, risk, explanation in _RUBY_RISKS:
                 if pattern.search(line):
+                    changes.append(
+                        _generic_change(
+                            artifact_type,
+                            line_number,
+                            finding_type,
+                            risk,
+                            explanation,
+                        )
+                    )
+        return changes
+
+    @staticmethod
+    def _ohai_changes(source: str, artifact_type: str) -> list[dict[str, Any]]:
+        scan = _ohai_scan(source)
+        code_lines = str(scan["code"]).splitlines()
+        source_lines = str(scan["without_comments"]).splitlines()
+        changes: list[dict[str, Any]] = []
+
+        if artifact_type == "ohai_plugin":
+            plugin_lines = list(scan["plugin_lines"])
+            if not plugin_lines:
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        1,
+                        "ohai_missing_plugin_declaration",
+                        "review",
+                        "A Ruby file in the cookbook Ohai plugin directory has no static "
+                        "Ohai.plugin declaration; verify whether it is a shared helper, generated "
+                        "source, or an invalid plugin.",
+                    )
+                )
+            elif len(plugin_lines) > 1:
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        plugin_lines[1],
+                        "ohai_multiple_plugins",
+                        "review",
+                        "This file declares multiple Ohai plugins; review plugin identity, load "
+                        "order, merged definitions, and each collection boundary.",
+                    )
+                )
+
+            if len(scan["plugin_names"]) < len(plugin_lines):
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        plugin_lines[0] if plugin_lines else 1,
+                        "ohai_dynamic_or_anonymous_plugin",
+                        "review",
+                        "An Ohai plugin name is anonymous or not statically resolved; same-name "
+                        "plugin merging and effective load behavior require runtime validation.",
+                    )
+                )
+
+            for line_number, plugin_name in scan["plugin_names"]:
+                normalized_name = re.sub(r"[^a-z0-9]", "", plugin_name.casefold())
+                if normalized_name in _OHAI_BUILTIN_PLUGINS:
+                    changes.append(
+                        _generic_change(
+                            artifact_type,
+                            line_number,
+                            "ohai_builtin_plugin_collision",
+                            "dangerous",
+                            "The custom plugin name matches a built-in Ohai plugin. Ohai joins "
+                            "same-name definitions, so review the effective merged methods, "
+                            "provides declarations, platform blocks, and load order.",
+                        )
+                    )
+
+            provided = list(scan["provided"])
+            if not provided and not scan["dynamic_provides"]:
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        plugin_lines[0] if plugin_lines else 1,
+                        "ohai_missing_provides",
+                        "review",
+                        "The plugin has no static provides declaration even though Chef documents "
+                        "provided attributes as the plugin output contract; validate merged or "
+                        "generated DSL behavior.",
+                    )
+                )
+            for line_number, attribute in provided:
+                root = attribute.split("/", 1)[0].strip().casefold()
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        line_number,
+                        "ohai_automatic_attribute",
+                        "review",
+                        "The plugin provides automatic node data that can influence cookbook "
+                        "behavior and is saved to Chef Server unless automatic-attribute "
+                        "allow/block policy excludes it.",
+                    )
+                )
+                if root in _OHAI_CORE_ATTRIBUTES:
+                    changes.append(
+                        _generic_change(
+                            artifact_type,
+                            line_number,
+                            "ohai_core_attribute_override",
+                            "dangerous",
+                            "The provided root overlaps common built-in Ohai data used for node "
+                            "identity, platform selection, networking, cloud detection, or "
+                            "run-list "
+                            "behavior; validate the effective plugin owner and downstream recipes.",
+                        )
+                    )
+                if _OHAI_SENSITIVE.search(attribute):
+                    changes.append(
+                        _generic_change(
+                            artifact_type,
+                            line_number,
+                            "ohai_sensitive_attribute",
+                            "dangerous",
+                            "A provided automatic-attribute path appears credential-related. Do "
+                            "not collect secret values into node data, logs, search indexes, or "
+                            "Chef Server without an explicit data-minimization policy.",
+                        )
+                    )
+            if scan["dynamic_provides"]:
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        1,
+                        "ohai_dynamic_provides",
+                        "review",
+                        "One or more provides declarations are computed rather than literal; "
+                        "review the complete automatic-attribute namespace after Ruby evaluation.",
+                    )
+                )
+
+            for line_number, _dependency in scan["depends"]:
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        line_number,
+                        "ohai_plugin_dependency",
+                        "review",
+                        "The plugin depends on automatic data from another Ohai plugin; review "
+                        "availability, disabled/minimal plugin settings, load ordering, and trust.",
+                    )
+                )
+            if scan["dynamic_depends"]:
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        1,
+                        "ohai_dynamic_dependency",
+                        "review",
+                        "One or more Ohai dependency declarations are computed and cannot be "
+                        "resolved without executing the Ruby DSL.",
+                    )
+                )
+
+            collect_data = list(scan["collect_data"])
+            if not collect_data:
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        plugin_lines[0] if plugin_lines else 1,
+                        "ohai_missing_collection_block",
+                        "review",
+                        "The plugin has no static collect_data block; verify whether collection is "
+                        "merged from another same-name plugin or generated dynamically.",
+                    )
+                )
+            for line_number, platforms in collect_data:
+                scope = "all/default platforms" if "default" in platforms else "selected platforms"
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        line_number,
+                        "ohai_collection_code",
+                        "dangerous",
+                        f"This collect_data block executes Ruby on {scope} before Chef "
+                        "convergence; "
+                        "review privilege, latency, timeouts, failure handling, output size, and "
+                        "side effects.",
+                    )
+                )
+
+        for line_number, code_line in enumerate(code_lines, start=1):
+            raw_line = source_lines[line_number - 1] if line_number <= len(source_lines) else ""
+            if _OHAI_HINT.search(code_line):
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        line_number,
+                        "ohai_hint_data",
+                        "review",
+                        "Ohai reads a runtime hint file whose JSON content and configured hints "
+                        "path are external to this plugin; review provenance and sensitive fields.",
+                    )
+                )
+            if _OHAI_LOG.search(code_line) and _OHAI_SENSITIVE.search(raw_line):
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        line_number,
+                        "ohai_sensitive_logging",
+                        "dangerous",
+                        "An Ohai log statement references credential-like data that may be "
+                        "disclosed in client logs or centralized collection.",
+                    )
+                )
+            if re.search(
+                r"\b[A-Za-z_][A-Za-z0-9_]*(?:password|passwd|secret|token|api_key|private_key)"
+                r"[A-Za-z0-9_]*\s*=\s*['\"]",
+                raw_line,
+                re.IGNORECASE,
+            ):
+                changes.append(
+                    _generic_change(
+                        artifact_type,
+                        line_number,
+                        "ohai_literal_secret",
+                        "dangerous",
+                        "Ohai source assigns a literal to a credential-like variable; remove the "
+                        "secret from source and prevent it from entering attributes or logs.",
+                    )
+                )
+            for finding_type, pattern, risk, explanation in _OHAI_RISKS:
+                if pattern.search(code_line):
                     changes.append(
                         _generic_change(
                             artifact_type,
@@ -716,6 +1218,14 @@ def analyze_chef(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
         "action_count",
         "property_count",
         "dynamic_count",
+        "plugin_count",
+        "named_plugin_count",
+        "provides_count",
+        "depends_count",
+        "collect_data_count",
+        "platform_count",
+        "dynamic_provides_count",
+        "dynamic_depends_count",
     ):
         if isinstance(metadata.get(key), (str, int)):
             gate[key] = metadata[key]

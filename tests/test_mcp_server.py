@@ -1090,6 +1090,42 @@ def test_agent_gate_configuration_management_supports_chef_custom_resources() ->
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_chef_ohai_plugins() -> None:
+    result = agent_gate_configuration_management(
+        str(
+            FIXTURES
+            / "chef_ohai_risky"
+            / "cookbooks"
+            / "platform"
+            / "ohai"
+            / "cloud_inventory.rb"
+        ),
+        "chef",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "chef"
+    assert result["artifact_type"] == "ohai_plugin"
+    assert result["plugin_count"] == 1
+    assert result["provides_count"] == 2
+    assert result["depends_count"] == 1
+    assert result["collect_data_count"] == 1
+    assert result["platform_count"] == 1
+    assert result["total_changes"] == 18
+    assert result["risk_counts"] == {
+        "safe": 0,
+        "review": 9,
+        "dangerous": 9,
+        "irreversible": 0,
+    }
+    assert result["decision"] == "block"
+    assert "fixture-ohai-secret-do-not-leak" not in encoded
+    assert "FIXTURE_OHAI_ENDPOINT" not in encoded
+    assert "fixture-ohai-inventory" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_test_kitchen() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "chef_test_kitchen_risky" / ".kitchen.yml"),
@@ -3005,6 +3041,47 @@ def test_stdio_server_tools_list() -> None:
         assert chef_content_summary["total_changes"] == 7
         assert "fixturectl" not in chef_content[0]["text"]
         assert "api_token" not in chef_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Chef Ohai plugin) ---
+        chef_ohai_req = {
+            "jsonrpc": "2.0",
+            "id": 77,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "chef_ohai_risky"
+                            / "cookbooks"
+                            / "platform"
+                            / "ohai"
+                            / "cloud_inventory.rb"
+                        ).resolve()
+                    ),
+                    "ecosystem": "chef",
+                    "framework": "soc2",
+                },
+            },
+        }
+        chef_ohai_resp = _send_jsonrpc(proc, chef_ohai_req)
+        assert "result" in chef_ohai_resp, f"Chef Ohai tools/call failed: {chef_ohai_resp}"
+        chef_ohai_content = chef_ohai_resp["result"]["content"]
+        assert len(chef_ohai_content) == 1
+        chef_ohai_summary = json.loads(chef_ohai_content[0]["text"])
+        assert chef_ohai_summary["adapter"] == "chef"
+        assert chef_ohai_summary["artifact_type"] == "ohai_plugin"
+        assert chef_ohai_summary["plugin_count"] == 1
+        assert chef_ohai_summary["provides_count"] == 2
+        assert chef_ohai_summary["depends_count"] == 1
+        assert chef_ohai_summary["collect_data_count"] == 1
+        assert chef_ohai_summary["platform_count"] == 1
+        assert chef_ohai_summary["total_changes"] == 18
+        assert chef_ohai_summary["risk_counts"]["dangerous"] == 9
+        assert "fixture-ohai-secret-do-not-leak" not in chef_ohai_content[0]["text"]
+        assert "FIXTURE_OHAI_ENDPOINT" not in chef_ohai_content[0]["text"]
+        assert "fixture-ohai-inventory" not in chef_ohai_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Chef InSpec) ---
         inspec_req = {

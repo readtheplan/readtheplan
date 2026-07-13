@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,15 @@ from readtheplan.adapters.chef import (
 from readtheplan.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chef_cookbook_risky"
+OHAI_FIXTURE = (
+    Path(__file__).parent
+    / "fixtures"
+    / "chef_ohai_risky"
+    / "cookbooks"
+    / "platform"
+    / "ohai"
+    / "cloud_inventory.rb"
+)
 
 
 def test_chef_recipe_classification() -> None:
@@ -212,3 +223,199 @@ def test_chef_cli_emits_cookbook_metadata(capsys) -> None:
     assert payload["action_count"] == 1
     assert payload["property_count"] == 2
     assert payload["dynamic_count"] == 2
+
+
+def test_chef_ohai_plugin_metadata_and_risk_classification() -> None:
+    source = OHAI_FIXTURE.read_text(encoding="utf-8")
+    data = parse_chef(source, filename=str(OHAI_FIXTURE))
+
+    assert data["chef_artifact_type"] == "ohai_plugin"
+    assert data["chef_metadata"] == {
+        "artifact_type": "ohai_plugin",
+        "line_count": 29,
+        "resource_count": 0,
+        "action_count": 1,
+        "property_count": 2,
+        "dynamic_count": 7,
+        "plugin_count": 1,
+        "named_plugin_count": 1,
+        "provides_count": 2,
+        "depends_count": 1,
+        "collect_data_count": 1,
+        "platform_count": 1,
+        "dynamic_provides_count": 0,
+        "dynamic_depends_count": 0,
+    }
+    changes = ChefAdapter().analyze(data, use_rules=False)
+    risks = {change.resource_type: change.risk for change in changes}
+    assert risks["chef_ohai_plugin_boundary"] == "review"
+    assert risks["chef_ohai_builtin_plugin_collision"] == "dangerous"
+    assert risks["chef_ohai_core_attribute_override"] == "dangerous"
+    assert risks["chef_ohai_sensitive_attribute"] == "dangerous"
+    assert risks["chef_ohai_collection_code"] == "dangerous"
+    assert risks["chef_ohai_plugin_dependency"] == "review"
+    assert risks["chef_ohai_hint_data"] == "review"
+    assert risks["chef_ohai_command_execution"] == "dangerous"
+    assert risks["chef_ohai_network_access"] == "dangerous"
+    assert risks["chef_ohai_runtime_data_access"] == "review"
+    assert risks["chef_ohai_system_mutation"] == "dangerous"
+    assert risks["chef_ohai_literal_secret"] == "dangerous"
+    assert risks["chef_ohai_sensitive_logging"] == "dangerous"
+
+    gate = analyze_chef(data)
+    assert gate["decision"] == "block"
+    assert gate["total_changes"] == 18
+    assert gate["risk_counts"] == {
+        "safe": 0,
+        "review": 9,
+        "dangerous": 9,
+        "irreversible": 0,
+    }
+    assert gate["plugin_count"] == 1
+    assert gate["provides_count"] == 2
+    assert gate["depends_count"] == 1
+    assert gate["collect_data_count"] == 1
+    assert gate["platform_count"] == 1
+    encoded = json.dumps(gate)
+    assert "fixture-ohai-secret-do-not-leak" not in encoded
+    assert "FIXTURE_OHAI_ENDPOINT" not in encoded
+    assert "fixture-ohai-inventory" not in encoded
+
+
+def test_chef_ohai_recognizes_standalone_plugin_and_shared_common_library() -> None:
+    plugin = """
+Ohai.plugin(:Inventory) do
+  provides 'inventory'
+  collect_data do
+    inventory Mash.new
+  end
+end
+"""
+    plugin_data = parse_chef(plugin, filename="custom_plugins/inventory.rb")
+    assert plugin_data["chef_artifact_type"] == "ohai_plugin"
+    assert plugin_data["chef_metadata"]["platform_count"] == 0
+    assert plugin_data["chef_metadata"]["collect_data_count"] == 1
+
+    library = """
+module Ohai
+  module Common
+    module Inventory
+      def inventory_value
+        File.read('/etc/inventory')
+      end
+    end
+  end
+end
+"""
+    library_data = parse_chef(
+        library,
+        filename="cookbooks/platform/ohai/common/inventory.rb",
+    )
+    assert library_data["chef_artifact_type"] == "ohai_library"
+    library_risks = {
+        change.resource_type: change.risk
+        for change in ChefAdapter().analyze(library_data, use_rules=False)
+    }
+    assert library_risks["chef_ohai_library_boundary"] == "review"
+    assert library_risks["chef_ohai_runtime_data_access"] == "review"
+
+
+def test_chef_ohai_surfaces_dynamic_contracts_and_missing_collection() -> None:
+    source = """
+Ohai.plugin do
+  attrs.each { |attribute| provides attribute }
+  depends dependency_name
+end
+"""
+    data = parse_chef(source, filename="cookbooks/platform/ohai/dynamic.rb")
+    changes = ChefAdapter().analyze(data, use_rules=False)
+    kinds = {change.resource_type for change in changes}
+    assert "chef_ohai_dynamic_or_anonymous_plugin" in kinds
+    assert "chef_ohai_dynamic_provides" in kinds
+    assert "chef_ohai_dynamic_dependency" in kinds
+    assert "chef_ohai_missing_collection_block" in kinds
+    assert data["chef_metadata"]["plugin_count"] == 1
+
+
+def test_chef_ohai_comments_and_strings_do_not_create_findings() -> None:
+    source = """
+Ohai.plugin(:Inventory) do
+  provides 'inventory'
+  collect_data do
+    message = "system('hidden') Net::HTTP File.write ENV['TOKEN']"
+    # YAML.load(File.read('/tmp/hidden'))
+    # api_token = "commented-secret"
+    inventory Mash.new
+  end
+end
+"""
+    data = parse_chef(source, filename="cookbooks/platform/ohai/inventory.rb")
+    kinds = {
+        change.resource_type for change in ChefAdapter().analyze(data, use_rules=False)
+    }
+    assert "chef_ohai_command_execution" not in kinds
+    assert "chef_ohai_network_access" not in kinds
+    assert "chef_ohai_runtime_data_access" not in kinds
+    assert "chef_ohai_system_mutation" not in kinds
+    assert "chef_ohai_unsafe_deserialization" not in kinds
+    assert "chef_ohai_literal_secret" not in kinds
+
+
+def test_chef_ohai_surfaces_metadata_tls_deserialization_and_dynamic_ruby() -> None:
+    source = """
+Ohai.plugin(:Inventory) do
+  provides *%w{ inventory inventory/private_key }
+  depends 'network'
+  collect_data(:linux, :windows) do
+    can_metadata_connect?(EC2_METADATA_ADDR, 80)
+    OpenSSL::SSL::VERIFY_NONE
+    payload = YAML.load(File.read('/run/inventory'))
+    inventory eval(payload)
+  end
+end
+"""
+    data = parse_chef(source, filename="cookbooks/platform/ohai/inventory.rb")
+    kinds = {
+        change.resource_type for change in ChefAdapter().analyze(data, use_rules=False)
+    }
+    assert "chef_ohai_cloud_metadata_access" in kinds
+    assert "chef_ohai_tls_verification_disabled" in kinds
+    assert "chef_ohai_unsafe_deserialization" in kinds
+    assert "chef_ohai_dynamic_evaluation" in kinds
+    assert "chef_ohai_sensitive_attribute" in kinds
+    assert data["chef_metadata"]["provides_count"] == 2
+    assert data["chef_metadata"]["platform_count"] == 2
+
+
+def test_chef_ohai_static_analysis_never_executes_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Ohai source execution is forbidden")
+
+    monkeypatch.setattr(os, "system", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    source = """
+Ohai.plugin(:Inventory) do
+  provides 'inventory'
+  collect_data do
+    system('fixture-command-must-not-run')
+  end
+end
+"""
+    data = parse_chef(source, filename="cookbooks/platform/ohai/inventory.rb")
+    changes = ChefAdapter().analyze(data, use_rules=False)
+    assert any(change.resource_type == "chef_ohai_command_execution" for change in changes)
+
+
+def test_chef_ohai_cli_emits_redacted_plugin_metadata(capsys) -> None:
+    assert main(["chef", "--framework", "soc2", str(OHAI_FIXTURE)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["adapter"] == "chef"
+    assert payload["artifact_type"] == "ohai_plugin"
+    assert payload["plugin_count"] == 1
+    assert payload["provides_count"] == 2
+    assert payload["collect_data_count"] == 1
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+    encoded = json.dumps(payload)
+    assert "fixture-ohai-secret-do-not-leak" not in encoded

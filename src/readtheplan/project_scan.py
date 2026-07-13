@@ -89,6 +89,7 @@ _ANSIBLE_INVENTORY_PLUGIN_HINT = re.compile(
     r"(?m)^\s*plugin\s*:\s*(?:ansible\.builtin\.[A-Za-z0-9_]+|"
     r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+)\s*(?:#.*)?$"
 )
+_CHEF_OHAI_PLUGIN_HINT = re.compile(r"(?m)^\s*(?:::)?Ohai\.plugin\b")
 _CONCOURSE_HINT = re.compile(
     r"(?ms)^\s*jobs\s*:\s*\n.*?^\s*-\s*name\s*:.*?^\s*plan\s*:\s*\n"
     r".*?^\s*-\s*(?:task|get|put|set_pipeline|load_var)\s*:"
@@ -489,6 +490,20 @@ def identify_project_input(
         return "chef-project"
     if _chef_cookbook_content_context(path, parts, suffix):
         return "chef"
+    if suffix == ".rb":
+        source = ""
+        if content is not None:
+            try:
+                source = content[:4096].decode("utf-8")
+            except UnicodeDecodeError:
+                source = ""
+        elif inspect_content:
+            try:
+                source = path.read_bytes()[:4096].decode("utf-8")
+            except (OSError, UnicodeDecodeError):
+                source = ""
+        if _CHEF_OHAI_PLUGIN_HINT.search(source):
+            return "chef"
     if suffix == ".rb" and "recipes" in parts:
         return "chef"
     if name in {
@@ -795,6 +810,7 @@ def _chef_cookbook_content_context(
         "attributes",
         "definitions",
         "libraries",
+        "ohai",
         "providers",
         "recipes",
         "resources",
@@ -1035,6 +1051,13 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "task_count",
         "handler_count",
         "parameter_count",
+        "plugin_count",
+        "named_plugin_count",
+        "provides_count",
+        "depends_count",
+        "collect_data_count",
+        "dynamic_provides_count",
+        "dynamic_depends_count",
         "implementation_count",
         "file_count",
         "sensitive_parameter_count",
