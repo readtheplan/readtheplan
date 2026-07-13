@@ -1,0 +1,34 @@
+# readtheplan
+
+> Free, MIT-licensed infrastructure change-risk analysis for humans and coding agents.
+
+readtheplan analyzes Terraform/OpenTofu plan JSON and many other infrastructure,
+CI/CD, policy, and configuration artifacts without executing them or contacting
+infrastructure. It classifies changes as safe, review, dangerous, or irreversible
+and can map findings to six built-in compliance catalogs.
+
+Every product feature is free. There is no paid tier, enterprise tier, trial,
+product account, or hosted raw-plan upload workflow.
+
+## Start here
+
+- Documentation: https://readtheplan.dev/docs/
+- Quickstart: https://readtheplan.dev/docs/quickstart/
+- CLI reference: https://readtheplan.dev/docs/cli/
+- Adapter guide: https://readtheplan.dev/docs/adapters/
+- GitHub Action: https://readtheplan.dev/docs/github-action/
+- MCP integration: https://readtheplan.dev/mcp/
+- Browser-local playground: https://readtheplan.dev/playground/
+- Source and issues: https://github.com/readtheplan/readtheplan
+
+## Data boundary
+
+Local tools process infrastructure artifacts on the user's machine or CI runner.
+The optional website chat is separate, sends chat messages to DeepSeek, and must
+not be used for secrets or raw infrastructure plans.
+
+## Content use
+
+Search indexing and live AI retrieval with attribution are welcome. Permission to
+use this site's content for model training is not granted by the site's published
+Content-Signal directive.

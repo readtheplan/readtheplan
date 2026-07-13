@@ -775,8 +775,35 @@ pre {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 740px;
+  min-width: 0;
+  table-layout: fixed;
 }
+
+.plan-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+}
+
+.plan-table [role="row"] {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 0.75fr) minmax(0, 1fr);
+  min-height: 58px;
+}
+
+.demo-table [role="row"] {
+  grid-template-columns: 110px minmax(0, 0.62fr) minmax(0, 1fr) minmax(130px, 0.42fr);
+}
+
+.plan-table [role="row"] > * {
+  min-width: 0;
+  padding: 12px;
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  overflow-wrap: anywhere;
+}
+
+.risk-tag.dangerous { color: var(--danger); }
 
 th,
 td {
@@ -1112,6 +1139,31 @@ hr {
 
   .hero-grid h1 {
     font-size: 2.6rem;
+  }
+
+  .topbar,
+  .g {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gc,
+  .gc:last-child {
+    grid-column: 1 / -1;
+    border-right: 0;
+  }
+
+  .utility-panel,
+  .trust-strip {
+    grid-column: 1 / -1;
+  }
+
+  .utility-panel-wide {
+    width: 100%;
+  }
+
+  .plan-table [role="row"],
+  .demo-table [role="row"] {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .section-head h2 {

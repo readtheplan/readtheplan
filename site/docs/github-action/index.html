@@ -36,7 +36,7 @@
         <a href="/playground/">Playground</a>
         <a href="/#setup">Setup</a>
       </nav>
-      <div class="version-cell gc">v0.3.0</div>
+      <div class="version-cell gc">v0.4.0</div>
     </header>
 
     <main class="workspace">
@@ -55,7 +55,7 @@
           <p style="color:var(--muted);margin:8px 0 16px">Set <code>tool</code> and <code>input-file</code> for any supported infrastructure artifact. Terraform remains the default for backward compatibility:</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>- name: Analyze Terraform plan
   id: rtp
-  uses: readtheplan/readtheplan@v0.3.0
+  uses: readtheplan/readtheplan@v0.4.0
   with:
     tool: terraform
     input-file: plan.json
@@ -113,9 +113,9 @@ jobs:
 
       - name: Analyze plan
         id: rtp
-        uses: readtheplan/readtheplan@v0.3.0
+        uses: readtheplan/readtheplan@v0.4.0
         with:
-          plan-file: plan.json
+          input-file: plan.json
           fail-on-threshold: dangerous
 
       - name: Save summary JSON
