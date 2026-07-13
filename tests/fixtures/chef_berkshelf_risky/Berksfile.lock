@@ -1,0 +1,18 @@
+DEPENDENCIES
+  nginx (~> 10.0)
+  local-cookbook
+    path: ../cookbooks/local
+  mutable-git
+    git: http://fixture-user:fixture-password@git.example.invalid/cookbooks/mutable.git
+    branch: main
+  missing-cookbook (= 1.0.0)
+  mismatched-cookbook (= 2.0.0)
+
+GRAPH
+  nginx (10.1.2)
+    transitive-cookbook (= 1.2.2)
+    absent-cookbook (~> 1.0)
+  local-cookbook (0.1.0)
+  mutable-git (2.0.0)
+  mismatched-cookbook (2.0.1)
+  transitive-cookbook (1.2.3)

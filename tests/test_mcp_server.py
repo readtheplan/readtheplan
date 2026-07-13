@@ -697,6 +697,23 @@ def test_agent_gate_configuration_management_supports_chef_runtime_config() -> N
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_berksfile_lock() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "chef_berkshelf_risky" / "Berksfile.lock"),
+        "chef-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "chef-project"
+    assert result["artifact_type"] == "berks_lock"
+    assert result["dependency_count"] == 5
+    assert result["decision"] == "block"
+    assert "fixture-user" not in encoded
+    assert "fixture-password" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_dsc() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "powershell_dsc_risky.ps1"),

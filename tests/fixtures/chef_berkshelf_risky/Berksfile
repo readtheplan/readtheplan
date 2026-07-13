@@ -1,0 +1,17 @@
+source "http://fixture-user:fixture-password@private-supermarket.example.invalid"
+source "https://supermarket.chef.io"
+
+metadata
+solver :ruby
+
+cookbook "unbounded-cookbook"
+cookbook "exact-cookbook", "= 2.4.1"
+cookbook "mutable-git", git: "http://git.example.invalid/cookbooks/mutable.git", branch: "main"
+cookbook "fixed-git", git: "https://git.example.invalid/cookbooks/fixed.git", ref: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+cookbook "local-cookbook", "= 1.0.0", path: "../cookbooks/local"
+
+group :test, :development do
+  cookbook "test-helper", path: "test/fixtures/helper"
+end
+
+system "./prepare-cookbooks"

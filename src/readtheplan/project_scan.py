@@ -281,7 +281,7 @@ def identify_project_input(
         part in {"jenkins", "jcasc", "casc_configs"} for part in parts[:-1]
     ):
         return "jenkins-jcasc"
-    if name in {"policyfile.rb", "policyfile.lock.json"}:
+    if name in {"berksfile", "berksfile.lock", "policyfile.rb", "policyfile.lock.json"}:
         return "chef-project"
     if name in {"chef-server.rb", "knife.rb"}:
         return "chef-project"
