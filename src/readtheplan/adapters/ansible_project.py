@@ -101,6 +101,96 @@ _NAVIGATOR_FILENAMES = {
     "ansible-navigator.yml",
 }
 _MOLECULE_FILENAMES = {"molecule.yaml", "molecule.yml"}
+_GALAXY_FILENAMES = {"galaxy.yaml", "galaxy.yml"}
+_ANSIBLE_LINT_FILENAMES = {
+    ".ansible-lint",
+    ".ansible-lint.yaml",
+    ".ansible-lint.yml",
+    "ansible-lint.yaml",
+    "ansible-lint.yml",
+}
+_ROLE_META_FILENAMES = {"main.yaml", "main.yml"}
+_RUNTIME_META_FILENAMES = {"runtime.yaml", "runtime.yml"}
+_ARGUMENT_SPEC_FILENAMES = {"argument_specs.yaml", "argument_specs.yml"}
+_GALAXY_KEYS = {
+    "authors",
+    "build_ignore",
+    "dependencies",
+    "description",
+    "documentation",
+    "homepage",
+    "issues",
+    "license",
+    "license_file",
+    "manifest",
+    "name",
+    "namespace",
+    "readme",
+    "repository",
+    "tags",
+    "version",
+}
+_ROLE_META_KEYS = {
+    "additionalProperties",
+    "allow_duplicates",
+    "argument_specs",
+    "collections",
+    "dependencies",
+    "galaxy_info",
+}
+_RUNTIME_META_KEYS = {
+    "action_groups",
+    "import_redirection",
+    "plugin_routing",
+    "requires_ansible",
+}
+_ANSIBLE_LINT_KEYS = {
+    "display_relative_path",
+    "enable_list",
+    "exclude_paths",
+    "extra_vars",
+    "kinds",
+    "loop_var_prefix",
+    "max_block_depth",
+    "mock_modules",
+    "mock_roles",
+    "offline",
+    "only_builtins_allow_collections",
+    "only_builtins_allow_modules",
+    "profile",
+    "progressive",
+    "project_dir",
+    "quiet",
+    "rules",
+    "rulesdir",
+    "sarif_file",
+    "skip_action_validation",
+    "skip_list",
+    "strict",
+    "supported_ansible_also",
+    "tags",
+    "task_name_prefix",
+    "use_default_rules",
+    "var_naming_pattern",
+    "verbosity",
+    "warn_list",
+    "write_exclude_list",
+    "write_list",
+}
+_HIGH_IMPACT_LINT_RULES = {
+    "command-instead-of-module",
+    "command-instead-of-shell",
+    "internal-error",
+    "latest",
+    "load-failure",
+    "no-log-password",
+    "parser-error",
+    "risky-file-permissions",
+    "risky-octal",
+    "risky-shell-pipe",
+    "schema",
+    "syntax-check",
+}
 _MOLECULE_DRIVER_NAMES = {
     "azure",
     "containers",
@@ -507,6 +597,145 @@ def _artifact_filename(filename: str | None) -> str:
     return PurePosixPath(filename.replace("\\", "/")).name.lower()
 
 
+def _artifact_parts(filename: str | None) -> tuple[str, ...]:
+    if not filename:
+        return ()
+    return tuple(part.lower() for part in PurePosixPath(filename.replace("\\", "/")).parts)
+
+
+def _parse_mapping_artifact(
+    document: Any,
+    *,
+    label: str,
+    allowed_keys: set[str] | None = None,
+    required_keys: set[str] | None = None,
+    allow_empty: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(document, dict) or (not document and not allow_empty):
+        qualifier = "a YAML mapping" if allow_empty else "a non-empty YAML mapping"
+        raise AnsibleProjectInputError(f"{label} must be {qualifier}")
+    if not all(isinstance(key, str) for key in document):
+        raise AnsibleProjectInputError(f"{label} keys must be strings")
+    _reject_recursive_artifact_aliases(document, label=label)
+    if allowed_keys is not None:
+        unknown = set(document) - allowed_keys
+        if unknown:
+            raise AnsibleProjectInputError(f"{label} contains unsupported top-level keys")
+    missing = (required_keys or set()) - set(document)
+    if missing:
+        raise AnsibleProjectInputError(f"{label} is missing required top-level keys")
+    return document
+
+
+def _reject_recursive_artifact_aliases(
+    value: Any,
+    *,
+    label: str,
+    active: set[int] | None = None,
+) -> None:
+    if not isinstance(value, (dict, list)):
+        return
+    if active is None:
+        active = set()
+    object_id = id(value)
+    if object_id in active:
+        raise AnsibleProjectInputError(f"{label} contains a recursive YAML alias")
+    active.add(object_id)
+    items = value.values() if isinstance(value, dict) else value
+    for item in items:
+        _reject_recursive_artifact_aliases(item, label=label, active=active)
+    active.remove(object_id)
+
+
+def _parse_collection_metadata(document: Any) -> dict[str, Any]:
+    result = _parse_mapping_artifact(
+        document,
+        label="collection metadata",
+        allowed_keys=_GALAXY_KEYS,
+        required_keys={"authors", "description", "name", "namespace", "readme", "version"},
+    )
+    if not isinstance(result.get("dependencies", {}), dict):
+        raise AnsibleProjectInputError("collection metadata dependencies must be a mapping")
+    for key in ("authors", "build_ignore", "tags"):
+        if key in result and not isinstance(result[key], list):
+            raise AnsibleProjectInputError(f"collection metadata {key} must be a list")
+    if "manifest" in result and not isinstance(result["manifest"], dict):
+        raise AnsibleProjectInputError("collection metadata manifest must be a mapping")
+    return result
+
+
+def _parse_role_metadata(document: Any) -> dict[str, Any]:
+    result = _parse_mapping_artifact(
+        document, label="role metadata", allowed_keys=_ROLE_META_KEYS, allow_empty=True
+    )
+    if "dependencies" in result and not isinstance(result["dependencies"], list):
+        raise AnsibleProjectInputError("role metadata dependencies must be a list")
+    if "collections" in result and not isinstance(result["collections"], list):
+        raise AnsibleProjectInputError("role metadata collections must be a list")
+    if "galaxy_info" in result and not isinstance(result["galaxy_info"], dict):
+        raise AnsibleProjectInputError("role metadata galaxy_info must be a mapping")
+    if "argument_specs" in result and not isinstance(result["argument_specs"], dict):
+        raise AnsibleProjectInputError("role metadata argument_specs must be a mapping")
+    return result
+
+
+def _parse_runtime_metadata(document: Any) -> dict[str, Any]:
+    result = _parse_mapping_artifact(
+        document,
+        label="collection runtime metadata",
+        allowed_keys=_RUNTIME_META_KEYS,
+        allow_empty=True,
+    )
+    for key in ("action_groups", "import_redirection", "plugin_routing"):
+        if key in result and not isinstance(result[key], dict):
+            raise AnsibleProjectInputError(f"collection runtime metadata {key} must be a mapping")
+    if "requires_ansible" in result and not isinstance(result["requires_ansible"], str):
+        raise AnsibleProjectInputError("collection runtime requires_ansible must be a string")
+    return result
+
+
+def _parse_argument_specs(document: Any) -> dict[str, Any]:
+    result = _parse_mapping_artifact(document, label="role argument specifications")
+    if set(result) != {"argument_specs"} or not isinstance(result["argument_specs"], dict):
+        raise AnsibleProjectInputError(
+            "role argument specifications must contain one argument_specs mapping"
+        )
+    return result
+
+
+def _parse_ansible_lint(document: Any) -> dict[str, Any]:
+    result = _parse_mapping_artifact(
+        document,
+        label="Ansible-lint configuration",
+        allowed_keys=_ANSIBLE_LINT_KEYS,
+        allow_empty=True,
+    )
+    list_keys = {
+        "enable_list",
+        "exclude_paths",
+        "mock_modules",
+        "mock_roles",
+        "only_builtins_allow_collections",
+        "only_builtins_allow_modules",
+        "rulesdir",
+        "skip_list",
+        "supported_ansible_also",
+        "tags",
+        "warn_list",
+        "write_exclude_list",
+        "write_list",
+    }
+    for key in list_keys:
+        if key in result and not isinstance(result[key], list):
+            raise AnsibleProjectInputError(f"Ansible-lint {key} must be a list")
+    for key in ("extra_vars", "rules"):
+        if key in result and not isinstance(result[key], dict):
+            raise AnsibleProjectInputError(f"Ansible-lint {key} must be a mapping")
+    if "kinds" in result and not isinstance(result["kinds"], list):
+        raise AnsibleProjectInputError("Ansible-lint kinds must be a list")
+    return result
+
+
 def _parse_execution_environment(document: Any) -> dict[str, Any]:
     if not isinstance(document, dict) or not document:
         raise AnsibleProjectInputError("execution environment must be a non-empty YAML mapping")
@@ -758,6 +987,48 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
         PurePosixPath(filename.replace("\\", "/")).suffix.lower() if filename else ""
     )
     artifact_filename = _artifact_filename(filename)
+    artifact_parts = _artifact_parts(filename)
+    parent = artifact_parts[-2] if len(artifact_parts) > 1 else ""
+    if artifact_filename in _GALAXY_FILENAMES:
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "collection_metadata",
+                "document": _parse_collection_metadata(document),
+            }
+        }
+    if artifact_filename in _RUNTIME_META_FILENAMES and parent == "meta":
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "runtime_metadata",
+                "document": _parse_runtime_metadata(document),
+            }
+        }
+    if artifact_filename in _ARGUMENT_SPEC_FILENAMES and parent == "meta":
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "argument_specs",
+                "document": _parse_argument_specs(document),
+            }
+        }
+    if artifact_filename in _ROLE_META_FILENAMES and parent == "meta":
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "role_metadata",
+                "document": _parse_role_metadata(document),
+            }
+        }
+    if artifact_filename in _ANSIBLE_LINT_FILENAMES:
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "ansible_lint",
+                "document": _parse_ansible_lint(document),
+            }
+        }
     if _molecule_filename(filename):
         document = _load_inventory_yaml(source)
         return {
@@ -2513,6 +2784,539 @@ def _molecule_runtime_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     return changes
 
 
+def _collection_metadata_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    dependencies = document.get("dependencies", {})
+    for index, constraint in enumerate(dependencies.values(), start=1):
+        version = str(constraint).strip()
+        exact = bool(_EXACT_VERSION.fullmatch(version))
+        lower_bound = re.search(r"(?:^|,)\s*>?=\s*(\d+)\.(\d+)(?:\.(\d+))?", version)
+        mutable = not exact
+        risk = "dangerous" if mutable else "review"
+        detail = (
+            "The collection dependency accepts a version range or mutable resolution."
+            if mutable
+            else "The collection dependency selects one exact release."
+        )
+        if not lower_bound and mutable:
+            detail += " It has no explicit lower compatibility bound."
+        changes.append(
+            _change(
+                f"galaxy.dependencies.{index}",
+                "collection_metadata_dependency",
+                risk,
+                f"Installing the collection resolves executable transitive content. {detail} "
+                "Review the resolved artifact, signatures, and Galaxy server policy.",
+            )
+        )
+
+    for key in ("repository", "documentation", "homepage", "issues"):
+        value = document.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        if value.lower().startswith("http://") or _embedded_url_credential(value):
+            changes.append(
+                _change(
+                    f"galaxy.{key}",
+                    "collection_metadata_insecure_url",
+                    "dangerous",
+                    "Collection metadata declares a plaintext or credential-bearing URL; "
+                    "publishing it can expose credentials or direct reviewers to an untrusted "
+                    "endpoint.",
+                )
+            )
+
+    ignored = document.get("build_ignore", [])
+    if ignored:
+        broad = any(
+            str(item).strip() in {"*", "**", "**/*"}
+            or re.search(r"(?:^|/)(?:tests?|plugins?|roles?|docs?)(?:/|$)", str(item), re.I)
+            for item in ignored
+        )
+        changes.append(
+            _change(
+                "galaxy.build_ignore",
+                "collection_metadata_build_ignore",
+                "dangerous" if broad else "review",
+                f"Collection packaging excludes {len(ignored)} path pattern(s); "
+                + (
+                    "at least one broadly hides executable, validation, or documentation content."
+                    if broad
+                    else "review whether the published artifact still matches the reviewed source."
+                ),
+            )
+        )
+    if document.get("manifest"):
+        changes.append(
+            _change(
+                "galaxy.manifest",
+                "collection_metadata_manifest",
+                "review",
+                "Collection manifest directives customize the files shipped in the built "
+                "artifact; compare the final tarball with the reviewed source tree.",
+            )
+        )
+    version = str(document.get("version", ""))
+    if not re.fullmatch(
+        r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
+        r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?",
+        version,
+    ):
+        changes.append(
+            _change(
+                "galaxy.version",
+                "collection_metadata_version",
+                "dangerous",
+                "The collection version is not a static semantic version, so build and "
+                "dependency resolution may be ambiguous.",
+            )
+        )
+    elif "-" in version:
+        changes.append(
+            _change(
+                "galaxy.version",
+                "collection_metadata_prerelease",
+                "review",
+                "The collection is marked as a pre-release; verify compatibility and publishing "
+                "intent before distributing it.",
+            )
+        )
+    changes.append(
+        _change(
+            "galaxy.effective_artifact",
+            "collection_metadata_boundary",
+            "review",
+            "Effective collection behavior depends on the built artifact, MANIFEST.json, "
+            "installed dependencies, Galaxy server policy, signatures, and publish command.",
+        )
+    )
+    return changes
+
+
+def _role_metadata_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for index, item in enumerate(document.get("dependencies", []), start=1):
+        fields = _dependency_fields(item)
+        source = str(fields.get("src") or fields.get("role") or fields.get("name") or "")
+        version = str(fields.get("version", "")).strip()
+        immutable = bool(_EXACT_VERSION.fullmatch(version) or _COMMIT.fullmatch(version))
+        risk = "review" if immutable else "dangerous"
+        reasons = [
+            "The dependency executes recursively before the role and can change controller or "
+            "managed-host state."
+        ]
+        if not immutable:
+            reasons.append("Its content is not pinned to one immutable version or commit.")
+        if source.lower().startswith(("http://", "git://")):
+            risk = "dangerous"
+            reasons.append("It uses plaintext source transport.")
+        if _embedded_url_credential(source):
+            risk = "dangerous"
+            reasons.append("Its source embeds credentials.")
+        if any(key in fields for key in ("become", "vars", "when")):
+            risk = "dangerous"
+            reasons.append("Inline execution controls can alter privilege, inputs, or conditions.")
+        changes.append(
+            _change(
+                f"role_metadata.dependencies.{index}",
+                "role_metadata_dependency",
+                risk,
+                " ".join(reasons),
+            )
+        )
+    if document.get("allow_duplicates") is True:
+        changes.append(
+            _change(
+                "role_metadata.allow_duplicates",
+                "role_metadata_duplicate_execution",
+                "dangerous",
+                "The role permits repeated execution with identical parameters, increasing the "
+                "risk of non-idempotent or duplicated side effects.",
+            )
+        )
+    collections = document.get("collections", [])
+    if collections:
+        changes.append(
+            _change(
+                "role_metadata.collections",
+                "role_metadata_collection_resolution",
+                "review",
+                f"The role changes short-name plugin resolution with {len(collections)} collection "
+                "search entry or entries; verify the installed content and ordering.",
+            )
+        )
+    specs = document.get("argument_specs")
+    if isinstance(specs, dict):
+        changes.extend(_argument_spec_changes({"argument_specs": specs}, prefix="role_metadata"))
+    changes.append(
+        _change(
+            "role_metadata.effective_role",
+            "role_metadata_boundary",
+            "review",
+            "Effective role behavior also depends on tasks, handlers, defaults, variables, "
+            "embedded plugins, dependency installation, inventory, and variable precedence.",
+        )
+    )
+    return changes
+
+
+def _runtime_metadata_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    requirement = str(document.get("requires_ansible", "")).strip()
+    if not requirement:
+        changes.append(
+            _change(
+                "runtime.requires_ansible",
+                "runtime_ansible_compatibility",
+                "review",
+                "Collection runtime metadata omits an ansible-core compatibility constraint.",
+            )
+        )
+    elif not re.search(r">?=\s*\d+\.\d+", requirement):
+        changes.append(
+            _change(
+                "runtime.requires_ansible",
+                "runtime_ansible_compatibility",
+                "dangerous",
+                "The ansible-core compatibility constraint has no static lower bound, so an "
+                "incompatible controller may load the collection.",
+            )
+        )
+
+    plugin_routing = document.get("plugin_routing", {})
+    routing_entries = 0
+    redirects = 0
+    tombstones = 0
+    deprecations = 0
+    for plugin_type in plugin_routing.values():
+        if not isinstance(plugin_type, dict):
+            continue
+        for route in plugin_type.values():
+            routing_entries += 1
+            if not isinstance(route, dict):
+                continue
+            redirects += int(bool(route.get("redirect")))
+            tombstones += int(bool(route.get("tombstone")))
+            deprecations += int(bool(route.get("deprecation")))
+    if redirects:
+        changes.append(
+            _change(
+                "runtime.plugin_routing.redirects",
+                "runtime_plugin_redirect",
+                "dangerous",
+                f"Runtime metadata redirects {redirects} plugin name(s); callers may execute "
+                "different collection code than the referenced name implies.",
+            )
+        )
+    if tombstones or deprecations:
+        changes.append(
+            _change(
+                "runtime.plugin_routing.lifecycle",
+                "runtime_plugin_lifecycle",
+                "review",
+                f"Runtime metadata declares {tombstones} tombstone(s) and {deprecations} "
+                "deprecation(s); verify removal versions, dates, and migration paths.",
+            )
+        )
+    imports = document.get("import_redirection", {})
+    if imports:
+        changes.append(
+            _change(
+                "runtime.import_redirection",
+                "runtime_import_redirect",
+                "dangerous",
+                f"Runtime metadata redirects {len(imports)} Python import path(s), changing the "
+                "code loaded by collection consumers.",
+            )
+        )
+    groups = document.get("action_groups", {})
+    if groups:
+        extensions = sum(
+            1
+            for values in groups.values()
+            if isinstance(values, list)
+            for item in values
+            if isinstance(item, dict) and item.get("metadata", {}).get("extend_group")
+        )
+        changes.append(
+            _change(
+                "runtime.action_groups",
+                "runtime_action_groups",
+                "dangerous" if extensions else "review",
+                f"Runtime metadata defines {len(groups)} action group(s)"
+                + (
+                    f" including {extensions} inherited group extension(s); group membership can "
+                    "expand privilege or execution policy scope."
+                    if extensions
+                    else "; group membership affects which executable actions share policy."
+                ),
+            )
+        )
+    changes.append(
+        _change(
+            "runtime.effective_resolution",
+            "runtime_metadata_boundary",
+            "review",
+            f"Effective resolution depends on ansible-core, collection paths, installed versions, "
+            f"and loader precedence; {routing_entries} plugin routing entry or entries were "
+            "statically visible.",
+        )
+    )
+    return changes
+
+
+def _argument_spec_changes(
+    document: dict[str, Any], *, prefix: str = "argument_specs"
+) -> list[dict[str, str]]:
+    specs = document.get("argument_specs", {})
+    changes: list[dict[str, str]] = []
+    option_count = 0
+    secret_without_no_log = 0
+    literal_secret_defaults = 0
+    malformed = 0
+    dynamic = 0
+
+    def visit(options: Any) -> None:
+        nonlocal option_count, secret_without_no_log, literal_secret_defaults, malformed, dynamic
+        if not isinstance(options, dict):
+            malformed += 1
+            return
+        for name, config in options.items():
+            option_count += 1
+            if not isinstance(config, dict):
+                malformed += 1
+                continue
+            secret = bool(_SECRET_OPTIONS.search(str(name)))
+            if secret and config.get("no_log") is not True:
+                secret_without_no_log += 1
+            if secret and "default" in config and _literal_secret(str(name), config["default"]):
+                literal_secret_defaults += 1
+            if config.get("required") is True and "default" in config:
+                malformed += 1
+            if any(
+                isinstance(value, str) and _INVENTORY_TEMPLATE.search(value)
+                for value in config.values()
+            ):
+                dynamic += 1
+            if "options" in config:
+                visit(config["options"])
+
+    for entry in specs.values():
+        if not isinstance(entry, dict):
+            malformed += 1
+            continue
+        visit(entry.get("options", {}))
+    if secret_without_no_log:
+        changes.append(
+            _change(
+                f"{prefix}.secret_options",
+                "argument_spec_secret_logging",
+                "dangerous",
+                f"{secret_without_no_log} secret-like role option(s) do not require no_log, so "
+                "values can appear in controller output or failure details.",
+            )
+        )
+    if literal_secret_defaults:
+        changes.append(
+            _change(
+                f"{prefix}.secret_defaults",
+                "argument_spec_literal_secret",
+                "dangerous",
+                f"{literal_secret_defaults} secret-like role option(s) contain literal defaults; "
+                "move secrets to an external secret provider or encrypted variable source.",
+            )
+        )
+    if malformed:
+        changes.append(
+            _change(
+                f"{prefix}.validation",
+                "argument_spec_validation_gap",
+                "dangerous",
+                f"{malformed} argument specification entry or entries are structurally "
+                "ambiguous or combine required inputs with defaults.",
+            )
+        )
+    if dynamic:
+        changes.append(
+            _change(
+                f"{prefix}.dynamic_values",
+                "argument_spec_dynamic_value",
+                "review",
+                f"{dynamic} option definition(s) contain templated values whose resolved "
+                "validation behavior is outside this static artifact.",
+            )
+        )
+    changes.append(
+        _change(
+            f"{prefix}.effective_validation",
+            "argument_spec_boundary",
+            "review",
+            f"Role argument validation covers {len(specs)} entry point(s) and {option_count} "
+            "option(s), but does not prove task safety, semantic correctness, or secret handling "
+            "inside the role.",
+        )
+    )
+    return changes
+
+
+def _ansible_lint_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    skipped = [str(item) for item in document.get("skip_list", [])]
+    if skipped:
+        high_impact = sum(
+            1
+            for item in skipped
+            if item.split("[")[0] in _HIGH_IMPACT_LINT_RULES or item == "core"
+        )
+        changes.append(
+            _change(
+                "ansible_lint.skip_list",
+                "lint_skipped_rules",
+                "dangerous" if high_impact else "review",
+                f"Ansible-lint skips {len(skipped)} rule or tag selection(s)"
+                + (
+                    f", including {high_impact} high-impact parser, schema, secret, supply-chain, "
+                    "or shell safeguard(s)."
+                    if high_impact
+                    else "; skipped checks reduce policy coverage."
+                ),
+            )
+        )
+    warned = document.get("warn_list", [])
+    if warned:
+        changes.append(
+            _change(
+                "ansible_lint.warn_list",
+                "lint_downgraded_rules",
+                "dangerous",
+                f"Ansible-lint downgrades {len(warned)} rule or tag selection(s) to warnings, so "
+                "CI may accept known violations.",
+            )
+        )
+    excluded = [str(item) for item in document.get("exclude_paths", [])]
+    if excluded:
+        broad = any(
+            item.strip() in {"*", "**", "**/*", "."}
+            or re.search(
+                r"(?:^|/)(?:roles?|tasks?|playbooks?|inventor(?:y|ies)|prod)(?:/|$)",
+                item,
+                re.I,
+            )
+            for item in excluded
+        )
+        changes.append(
+            _change(
+                "ansible_lint.exclude_paths",
+                "lint_excluded_content",
+                "dangerous" if broad else "review",
+                f"Ansible-lint excludes {len(excluded)} path pattern(s); "
+                + (
+                    "at least one can hide deployable automation content."
+                    if broad
+                    else "verify the omitted content is checked elsewhere."
+                ),
+            )
+        )
+    if document.get("use_default_rules") is False:
+        changes.append(
+            _change(
+                "ansible_lint.use_default_rules",
+                "lint_default_rules_disabled",
+                "dangerous",
+                "Ansible-lint disables its default ruleset, leaving only explicitly loaded rules.",
+            )
+        )
+    if document.get("skip_action_validation") is True:
+        changes.append(
+            _change(
+                "ansible_lint.skip_action_validation",
+                "lint_action_validation_disabled",
+                "dangerous",
+                "Ansible-lint skips module/action argument validation, allowing invalid or "
+                "misspelled task parameters to pass this policy layer.",
+            )
+        )
+    if document.get("rulesdir"):
+        changes.append(
+            _change(
+                "ansible_lint.rulesdir",
+                "lint_custom_rule_execution",
+                "dangerous",
+                "Ansible-lint imports custom Python rule code from configured directories on the "
+                "controller; verify provenance before running lint.",
+            )
+        )
+    mocks = len(document.get("mock_modules", [])) + len(document.get("mock_roles", []))
+    if mocks:
+        changes.append(
+            _change(
+                "ansible_lint.mocks",
+                "lint_mocked_content",
+                "review",
+                f"Ansible-lint mocks {mocks} module or role reference(s), which can conceal "
+                "resolution, syntax, and compatibility failures in real installed content.",
+            )
+        )
+    if document.get("kinds") or document.get("tags"):
+        changes.append(
+            _change(
+                "ansible_lint.scope",
+                "lint_scope_selection",
+                "review",
+                "Ansible-lint customizes artifact classification or selected tags; verify the "
+                "effective file set and enabled rule set in CI.",
+            )
+        )
+    if document.get("write_list"):
+        changes.append(
+            _change(
+                "ansible_lint.write_list",
+                "lint_source_rewrite",
+                "review",
+                "Ansible-lint is configured with source transformations that can rewrite checked "
+                "files when fix/write mode is invoked.",
+            )
+        )
+    extra_vars = document.get("extra_vars", {})
+    if extra_vars:
+        literals = sum(1 for key, value in extra_vars.items() if _literal_secret(str(key), value))
+        changes.append(
+            _change(
+                "ansible_lint.extra_vars",
+                "lint_extra_vars",
+                "dangerous" if literals else "review",
+                f"Ansible-lint injects {len(extra_vars)} extra variable(s) during analysis"
+                + (
+                    f", including {literals} literal secret-like value(s)."
+                    if literals
+                    else "; these values can mask undefined-variable and branch behavior."
+                ),
+            )
+        )
+    profile = document.get("profile")
+    if profile in {"min", "basic", "moderate"}:
+        changes.append(
+            _change(
+                "ansible_lint.profile",
+                "lint_reduced_profile",
+                "review",
+                "Ansible-lint selects a profile below safety/production coverage; verify the "
+                "omitted rules are enforced elsewhere.",
+            )
+        )
+    changes.append(
+        _change(
+            "ansible_lint.effective_policy",
+            "lint_policy_boundary",
+            "review",
+            "Effective lint enforcement also depends on the installed ansible-lint and "
+            "ansible-core versions, command-line overrides, ignore files, project discovery, "
+            "custom rules, and whether CI treats warnings and exit codes as blocking.",
+        )
+    )
+    return changes
+
+
 class AnsibleProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -2525,6 +3329,9 @@ class AnsibleProjectAdapter(BaseAdapter):
             and config.get("artifact_type")
             in {
                 "config",
+                "ansible_lint",
+                "argument_specs",
+                "collection_metadata",
                 "inventory_ini",
                 "inventory_plugin",
                 "inventory_yaml",
@@ -2532,6 +3339,8 @@ class AnsibleProjectAdapter(BaseAdapter):
                 "molecule",
                 "navigator",
                 "requirements",
+                "role_metadata",
+                "runtime_metadata",
             }
             and isinstance(config.get("document"), dict)
         )
@@ -2542,6 +3351,16 @@ class AnsibleProjectAdapter(BaseAdapter):
         artifact_type = config["artifact_type"]
         if artifact_type == "config":
             changes = _config_changes(document)
+        elif artifact_type == "ansible_lint":
+            changes = _ansible_lint_changes(document)
+        elif artifact_type == "argument_specs":
+            changes = _argument_spec_changes(document)
+        elif artifact_type == "collection_metadata":
+            changes = _collection_metadata_changes(document)
+        elif artifact_type == "role_metadata":
+            changes = _role_metadata_changes(document)
+        elif artifact_type == "runtime_metadata":
+            changes = _runtime_metadata_changes(document)
         elif artifact_type == "requirements":
             changes = _requirements_changes(document)
         elif artifact_type == "execution_environment":
@@ -2563,7 +3382,16 @@ class AnsibleProjectAdapter(BaseAdapter):
             "options, inventory, variables, vault/secret files, installed collections, roles, "
             "and controller plugin code."
         )
-        if artifact_type not in {"execution_environment", "molecule", "navigator"}:
+        if artifact_type not in {
+            "ansible_lint",
+            "argument_specs",
+            "collection_metadata",
+            "execution_environment",
+            "molecule",
+            "navigator",
+            "role_metadata",
+            "runtime_metadata",
+        }:
             changes.append(
                 _change(
                     "ansible.effective_project",

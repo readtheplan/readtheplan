@@ -251,6 +251,118 @@ def test_molecule_explanations_and_metadata_do_not_expose_values() -> None:
     assert "MOLECULE_VERIFY_TOKEN" not in encoded
 
 
+def test_collection_metadata_surfaces_dependencies_packaging_and_urls() -> None:
+    changes = _changes("ansible_content_policy_risky/galaxy.yml")
+    by_type = {change.resource_type: change for change in changes}
+    dependencies = [
+        change
+        for change in changes
+        if change.resource_type == "ansible_project_collection_metadata_dependency"
+    ]
+
+    assert len(dependencies) == 2
+    assert {change.risk for change in dependencies} == {"dangerous", "review"}
+    assert by_type["ansible_project_collection_metadata_insecure_url"].risk == "dangerous"
+    assert by_type["ansible_project_collection_metadata_build_ignore"].risk == "dangerous"
+    assert by_type["ansible_project_collection_metadata_manifest"].risk == "review"
+    assert by_type["ansible_project_collection_metadata_prerelease"].risk == "review"
+    assert by_type["ansible_project_collection_metadata_boundary"].risk == "review"
+
+
+def test_role_metadata_surfaces_recursive_execution_and_embedded_specs() -> None:
+    fixture = "ansible_content_policy_risky/roles/risky_role/meta/main.yml"
+    changes = _changes(fixture)
+    by_type = {change.resource_type: change for change in changes}
+    dependencies = [
+        change
+        for change in changes
+        if change.resource_type == "ansible_project_role_metadata_dependency"
+    ]
+
+    assert len(dependencies) == 2
+    assert {change.risk for change in dependencies} == {"dangerous", "review"}
+    assert by_type["ansible_project_role_metadata_duplicate_execution"].risk == "dangerous"
+    assert by_type["ansible_project_role_metadata_collection_resolution"].risk == "review"
+    assert by_type["ansible_project_argument_spec_secret_logging"].risk == "dangerous"
+    assert by_type["ansible_project_argument_spec_literal_secret"].risk == "dangerous"
+    assert by_type["ansible_project_role_metadata_boundary"].risk == "review"
+
+
+def test_runtime_metadata_surfaces_loader_redirection_and_action_groups() -> None:
+    changes = _changes("ansible_content_policy_risky/meta/runtime.yml")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert by_type["ansible_project_runtime_ansible_compatibility"].risk == "dangerous"
+    assert by_type["ansible_project_runtime_plugin_redirect"].risk == "dangerous"
+    assert by_type["ansible_project_runtime_plugin_lifecycle"].risk == "review"
+    assert by_type["ansible_project_runtime_import_redirect"].risk == "dangerous"
+    assert by_type["ansible_project_runtime_action_groups"].risk == "dangerous"
+    assert by_type["ansible_project_runtime_metadata_boundary"].risk == "review"
+
+
+def test_argument_specs_surface_secret_logging_defaults_and_validation_gaps() -> None:
+    fixture = "ansible_content_policy_risky/roles/risky_role/meta/argument_specs.yml"
+    data = parse_ansible_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
+    gate = analyze_ansible_project(data)
+    changes = AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert data["ansible_project"]["artifact_type"] == "argument_specs"
+    assert by_type["ansible_project_argument_spec_secret_logging"].risk == "dangerous"
+    assert by_type["ansible_project_argument_spec_literal_secret"].risk == "dangerous"
+    assert by_type["ansible_project_argument_spec_validation_gap"].risk == "dangerous"
+    assert by_type["ansible_project_argument_spec_dynamic_value"].risk == "review"
+    assert "fixture-argument-token-do-not-leak" not in json.dumps(gate)
+    assert "fixture_private_key" not in json.dumps(gate)
+
+
+def test_ansible_lint_config_surfaces_policy_bypasses_and_redacts_values() -> None:
+    fixture = "ansible_content_policy_risky/.ansible-lint"
+    data = parse_ansible_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
+    gate = analyze_ansible_project(data)
+    changes = AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+    by_type = {change.resource_type: change for change in changes}
+
+    dangerous = {
+        "ansible_project_lint_skipped_rules",
+        "ansible_project_lint_downgraded_rules",
+        "ansible_project_lint_excluded_content",
+        "ansible_project_lint_default_rules_disabled",
+        "ansible_project_lint_action_validation_disabled",
+        "ansible_project_lint_custom_rule_execution",
+        "ansible_project_lint_extra_vars",
+    }
+    assert dangerous <= set(by_type)
+    assert {by_type[kind].risk for kind in dangerous} == {"dangerous"}
+    assert by_type["ansible_project_lint_mocked_content"].risk == "review"
+    assert by_type["ansible_project_lint_scope_selection"].risk == "review"
+    assert by_type["ansible_project_lint_source_rewrite"].risk == "review"
+    assert by_type["ansible_project_lint_reduced_profile"].risk == "review"
+    assert "fixture-lint-password-do-not-leak" not in json.dumps(gate)
+
+
+@pytest.mark.parametrize(
+    ("filename", "source", "error"),
+    [
+        ("galaxy.yml", "name: incomplete\n", "missing required"),
+        ("roles/demo/meta/main.yml", "dependencies: nope\n", "must be a list"),
+        ("meta/runtime.yml", "plugin_routing: []\n", "must be a mapping"),
+        ("meta/argument_specs.yml", "argument_specs: []\n", "one argument_specs"),
+        (".ansible-lint", "skip_list: schema\n", "must be a list"),
+        (".ansible-lint", "skip_list: []\nskip_list: []\n", "duplicate YAML key"),
+    ],
+)
+def test_content_policy_parsers_reject_malformed_canonical_files(
+    filename: str, source: str, error: str
+) -> None:
+    with pytest.raises(AnsibleProjectInputError, match=error):
+        parse_ansible_project(source, filename=filename)
+
+
 def test_digest_pinned_minimal_molecule_scenario_stays_review_only() -> None:
     digest = "b" * 64
     data = parse_ansible_project(

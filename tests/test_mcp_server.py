@@ -647,6 +647,20 @@ def test_agent_gate_configuration_management_supports_molecule_scenarios() -> No
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_ansible_content_policy() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "ansible_content_policy_risky" / ".ansible-lint"),
+        "ansible-project",
+        "soc2",
+    )
+    assert result["adapter"] == "ansible-project"
+    assert result["artifact_type"] == "ansible_lint"
+    assert result["total_changes"] == 12
+    assert result["decision"] == "block"
+    assert "fixture-lint-password-do-not-leak" not in json.dumps(result)
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_puppet_runtime_config() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_conf_risky.conf"),
@@ -2437,6 +2451,38 @@ def test_stdio_server_tools_list() -> None:
         assert molecule_summary["total_changes"] == 39
         assert "fixture-molecule" not in molecule_content[0]["text"]
         assert "privileged-platform" not in molecule_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Ansible-lint policy) ---
+        ansible_lint_req = {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "ansible_content_policy_risky"
+                            / ".ansible-lint"
+                        ).resolve()
+                    ),
+                    "ecosystem": "ansible-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        ansible_lint_resp = _send_jsonrpc(proc, ansible_lint_req)
+        assert "result" in ansible_lint_resp, (
+            f"Ansible-lint tools/call failed: {ansible_lint_resp}"
+        )
+        ansible_lint_content = ansible_lint_resp["result"]["content"]
+        assert len(ansible_lint_content) == 1
+        ansible_lint_summary = json.loads(ansible_lint_content[0]["text"])
+        assert ansible_lint_summary["adapter"] == "ansible-project"
+        assert ansible_lint_summary["artifact_type"] == "ansible_lint"
+        assert ansible_lint_summary["total_changes"] == 12
+        assert "fixture-lint-password-do-not-leak" not in ansible_lint_content[0]["text"]
 
     finally:
         proc.stdin.close()  # type: ignore[union-attr]

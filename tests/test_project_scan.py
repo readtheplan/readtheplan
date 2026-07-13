@@ -36,6 +36,11 @@ FIXTURES = Path(__file__).parent / "fixtures"
         (".ansible-navigator.json", "ansible-project"),
         ("molecule/default/molecule.yml", "ansible-project"),
         (".config/molecule/config.yml", "ansible-project"),
+        ("galaxy.yml", "ansible-project"),
+        ("collections/demo/meta/runtime.yml", "ansible-project"),
+        ("roles/demo/meta/main.yml", "ansible-project"),
+        ("roles/demo/meta/argument_specs.yml", "ansible-project"),
+        (".ansible-lint", "ansible-project"),
         ("Jenkinsfile.deploy", "jenkins"),
         ("plugins.txt", "jenkins-project"),
         ("jenkins/plugins.yaml", "jenkins-project"),
@@ -451,6 +456,41 @@ def test_project_scan_analyzes_molecule_scenarios(tmp_path: Path) -> None:
     encoded = json.dumps(payload)
     assert "fixture-molecule-registry-password-do-not-leak" not in encoded
     assert "privileged-platform" not in encoded
+
+
+def test_project_scan_analyzes_ansible_content_metadata_and_lint_policy(
+    tmp_path: Path,
+) -> None:
+    source_root = FIXTURES / "ansible_content_policy_risky"
+    relative_paths = (
+        "galaxy.yml",
+        ".ansible-lint",
+        "meta/runtime.yml",
+        "roles/risky_role/meta/main.yml",
+        "roles/risky_role/meta/argument_specs.yml",
+    )
+    for relative in relative_paths:
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((source_root / relative).read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 5
+    assert payload["scanned_file_count"] == 5
+    assert payload["error_count"] == 0
+    assert {item["artifact_type"] for item in payload["files"]} == {
+        "ansible_lint",
+        "argument_specs",
+        "collection_metadata",
+        "role_metadata",
+        "runtime_metadata",
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-password-do-not-leak" not in encoded
+    assert "fixture-argument-token-do-not-leak" not in encoded
+    assert "fixture-lint-password-do-not-leak" not in encoded
 
 
 def test_project_scan_analyzes_puppet_runtime_configuration(tmp_path: Path) -> None:

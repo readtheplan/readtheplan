@@ -337,7 +337,10 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     ansible_project = subparsers.add_parser(
         "ansible-project",
-        help="Analyze Ansible configuration, dependencies, inventory, or Molecule scenarios.",
+        help=(
+            "Analyze Ansible configuration, dependencies, inventory, content metadata, lint "
+            "policy, or Molecule scenarios."
+        ),
     )
     ansible_project.add_argument(
         "--framework",
@@ -350,7 +353,8 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
         "input_file",
         help=(
             "Path to ansible.cfg, Galaxy requirements, YAML/INI/plugin inventory, an execution "
-            "environment, Navigator settings, or a Molecule scenario."
+            "environment, Navigator settings, Molecule scenario, galaxy.yml, role/collection "
+            "meta file, or Ansible-lint configuration."
         ),
     )
     ansible_project.set_defaults(func=_ansible_project_gate)
