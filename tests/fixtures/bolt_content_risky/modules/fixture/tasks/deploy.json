@@ -1,0 +1,35 @@
+{
+  "description": "Risky Bolt task metadata fixture",
+  "input_method": "environment",
+  "parameters": {
+    "admin_password": {
+      "type": "String",
+      "sensitive": false,
+      "default": "fixture-bolt-task-password-do-not-leak"
+    },
+    "command": {
+      "type": "String"
+    },
+    "path": {
+      "type": "Optional[String]"
+    },
+    "mode": {
+      "type": "Enum[read,write]"
+    }
+  },
+  "implementations": [
+    {
+      "name": "deploy.sh",
+      "requirements": ["shell"],
+      "files": ["fixture/files/helper.sh"]
+    },
+    {
+      "name": "deploy.ps1"
+    }
+  ],
+  "files": ["fixture/files/config.yaml", "../secrets/"],
+  "remote": true,
+  "supports_noop": false,
+  "private": true,
+  "puppet_task_version": 1
+}

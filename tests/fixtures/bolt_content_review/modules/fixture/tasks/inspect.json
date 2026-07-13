@@ -1,0 +1,22 @@
+{
+  "description": "Review-only Bolt task metadata fixture",
+  "input_method": "stdin",
+  "parameters": {
+    "api_token": {
+      "type": "Sensitive[String]",
+      "sensitive": true
+    },
+    "mode": {
+      "type": "Enum[status,version]"
+    }
+  },
+  "implementations": [
+    {
+      "name": "inspect.sh",
+      "requirements": ["shell"]
+    }
+  ],
+  "files": ["fixture/files/parser.sh"],
+  "supports_noop": true,
+  "puppet_task_version": 1
+}

