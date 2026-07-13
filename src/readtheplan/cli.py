@@ -37,8 +37,12 @@ from readtheplan.signing import (
 from readtheplan.summary import summary_to_dict
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = _build_parser()
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    include_git_version: bool = True,
+) -> int:
+    parser = _build_parser(include_git_version=include_git_version)
     args = parser.parse_args(argv)
     func = getattr(args, "evolution_func", None) or cast(
         "Callable[[argparse.Namespace], int]", args.func
@@ -46,7 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return func(args)
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="readtheplan",
         description=(
@@ -56,7 +60,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {_package_version()}",
+        version=f"%(prog)s {_package_version(include_git=include_git_version)}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -964,11 +968,14 @@ def _default_agent_id() -> str:
     return f"readtheplan@{package_version}"
 
 
-def _package_version() -> str:
+def _package_version(*, include_git: bool = True) -> str:
     try:
         pkg_version = version("readtheplan")
     except PackageNotFoundError:
         pkg_version = "unknown"
+
+    if not include_git:
+        return pkg_version
 
     try:
         commit = subprocess.run(

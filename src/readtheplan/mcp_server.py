@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import errno
+import fnmatch
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -117,7 +119,7 @@ def _final_path_from_descriptor(descriptor: int) -> Path | None:
         return None
 
 
-def _read_confined_bytes(path: str) -> bytes:
+def _read_confined_bytes(path: str, *, max_bytes: int | None = None) -> bytes:
     """Open *path* once and verify the opened object remains inside MCP_ROOT."""
     resolved = _resolve_path(path)
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
@@ -142,6 +144,11 @@ def _read_confined_bytes(path: str) -> bytes:
                     code="PATH_TRAVERSAL",
                     message=f"cannot verify the opened path for {path!r}",
                 )
+            if opened_path != Path(resolved):
+                raise MCPToolInputError(
+                    code="PATH_TRAVERSAL",
+                    message=f"input path {path!r} changed targets during validation",
+                )
             try:
                 opened_path.relative_to(root)
             except ValueError:
@@ -151,10 +158,236 @@ def _read_confined_bytes(path: str) -> bytes:
                 ) from None
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
-            return stream.read()
+            return stream.read() if max_bytes is None else stream.read(max_bytes)
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+
+
+_MCP_PROJECT_SCAN_PREFIX_BYTES = 256 * 1024
+_MCP_PROJECT_SCAN_MAX_CANDIDATES = 50_000
+_MCP_PROJECT_SCAN_MAX_FILES = 5_000
+_MCP_PROJECT_SCAN_MAX_FILE_BYTES = 100 * 1024 * 1024
+
+
+def agent_gate_project(
+    project_path: str,
+    framework: str | None = None,
+    excludes: list[str] | None = None,
+    max_files: int = 500,
+    max_file_bytes: int = 10 * 1024 * 1024,
+) -> dict[str, object]:
+    """Safely snapshot and gate supported infrastructure across one project tree."""
+    from readtheplan.project_scan import (
+        DEFAULT_EXCLUDED_DIRECTORIES,
+        DiscoveredInput,
+        identify_project_input,
+        scan_discovered_inputs,
+    )
+
+    _check_project_scan_arguments(
+        project_path,
+        excludes=excludes,
+        max_files=max_files,
+        max_file_bytes=max_file_bytes,
+    )
+    _load_catalog_for_tool(framework)
+    resolved = _validate_path(project_path)
+    patterns = tuple(excludes or ())
+    try:
+        if resolved.is_file():
+            candidates = [resolved]
+            scan_root = resolved.parent
+        elif resolved.is_dir():
+            candidates = _confined_project_candidates(
+                resolved,
+                excludes=patterns,
+                excluded_directories=DEFAULT_EXCLUDED_DIRECTORIES,
+            )
+            scan_root = resolved
+        else:
+            raise MCPToolInputError(
+                code="INPUT_ERROR",
+                message="project_path must be an existing regular file or directory",
+            )
+    except MCPToolInputError:
+        raise
+    except OSError as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot enumerate project_path {project_path}: {exc}",
+        ) from exc
+
+    with tempfile.TemporaryDirectory(prefix="readtheplan-mcp-scan-") as temporary:
+        snapshot_root = Path(temporary)
+        discovered: list[DiscoveredInput] = []
+        for candidate in candidates:
+            if candidate.is_symlink():
+                continue
+            relative = candidate.relative_to(scan_root).as_posix()
+            tool = identify_project_input(candidate, relative, inspect_content=False)
+            if tool is None and candidate.suffix.casefold() in {".json", ".yaml", ".yml"}:
+                try:
+                    prefix = _read_confined_bytes(
+                        str(candidate),
+                        max_bytes=_MCP_PROJECT_SCAN_PREFIX_BYTES,
+                    )
+                except MCPToolInputError:
+                    raise
+                except OSError:
+                    continue
+                tool = identify_project_input(
+                    candidate,
+                    relative,
+                    content=prefix,
+                    inspect_content=False,
+                )
+            if tool is None:
+                continue
+            if len(discovered) >= max_files:
+                raise MCPToolInputError(
+                    code="LIMIT_EXCEEDED",
+                    message=(
+                        f"project scan discovered more than {max_files} supported inputs; "
+                        "narrow project_path, add excludes, or raise max_files"
+                    ),
+                )
+
+            snapshot_path = snapshot_root.joinpath(*Path(relative).parts)
+            try:
+                source = _read_confined_bytes(
+                    str(candidate),
+                    max_bytes=max_file_bytes + 1,
+                )
+            except MCPToolInputError:
+                raise
+            except OSError:
+                size = -1
+            else:
+                size = len(source)
+                if size <= max_file_bytes:
+                    try:
+                        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                        snapshot_path.write_bytes(source)
+                    except OSError:
+                        size = -1
+            discovered.append(
+                DiscoveredInput(
+                    path=snapshot_path,
+                    relative_path=relative,
+                    tool=tool,
+                    size=size,
+                )
+            )
+
+        return scan_discovered_inputs(
+            discovered,
+            display_root=project_path,
+            framework=framework,
+            max_file_bytes=max_file_bytes,
+        )
+
+
+def _check_project_scan_arguments(
+    project_path: str,
+    *,
+    excludes: list[str] | None,
+    max_files: int,
+    max_file_bytes: int,
+) -> None:
+    if not isinstance(project_path, str) or not project_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="project_path must be a non-empty string",
+        )
+    if excludes is not None and (
+        not isinstance(excludes, list)
+        or any(not isinstance(pattern, str) or not pattern for pattern in excludes)
+    ):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="excludes must be a list of non-empty repository-relative globs",
+        )
+    if isinstance(max_files, bool) or not isinstance(max_files, int) or not (
+        1 <= max_files <= _MCP_PROJECT_SCAN_MAX_FILES
+    ):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"max_files must be between 1 and {_MCP_PROJECT_SCAN_MAX_FILES}",
+        )
+    if (
+        isinstance(max_file_bytes, bool)
+        or not isinstance(max_file_bytes, int)
+        or not (1 <= max_file_bytes <= _MCP_PROJECT_SCAN_MAX_FILE_BYTES)
+    ):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=(
+                "max_file_bytes must be between 1 and "
+                f"{_MCP_PROJECT_SCAN_MAX_FILE_BYTES}"
+            ),
+        )
+
+
+def _confined_project_candidates(
+    root: Path,
+    *,
+    excludes: tuple[str, ...],
+    excluded_directories: frozenset[str],
+) -> list[Path]:
+    candidates: list[Path] = []
+    for current, directories, files in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        _validate_path(str(current_path))
+        if current_path != root and current_path.is_symlink():
+            raise MCPToolInputError(
+                code="PATH_TRAVERSAL",
+                message=f"project directory {current_path} changed to a symlink during traversal",
+            )
+        kept: list[str] = []
+        for directory in sorted(directories, key=str.casefold):
+            candidate = current_path / directory
+            relative = candidate.relative_to(root).as_posix()
+            if directory in excluded_directories:
+                continue
+            if candidate.is_symlink() or _project_scan_excluded(
+                relative,
+                excludes,
+                directory=True,
+            ):
+                continue
+            kept.append(directory)
+        directories[:] = kept
+        for filename in sorted(files, key=str.casefold):
+            candidate = current_path / filename
+            relative = candidate.relative_to(root).as_posix()
+            if _project_scan_excluded(relative, excludes):
+                continue
+            candidates.append(candidate)
+            if len(candidates) > _MCP_PROJECT_SCAN_MAX_CANDIDATES:
+                raise MCPToolInputError(
+                    code="LIMIT_EXCEEDED",
+                    message=(
+                        "project contains more than "
+                        f"{_MCP_PROJECT_SCAN_MAX_CANDIDATES} candidate files"
+                    ),
+                )
+    return candidates
+
+
+def _project_scan_excluded(
+    relative: str,
+    patterns: tuple[str, ...],
+    *,
+    directory: bool = False,
+) -> bool:
+    normalized = relative.replace("\\", "/")
+    candidates = (normalized, f"{normalized}/" if directory else normalized)
+    return any(
+        fnmatch.fnmatchcase(candidate, pattern.replace("\\", "/"))
+        for pattern in patterns
+        for candidate in candidates
+    )
 
 
 def analyze_plan(
@@ -2323,6 +2556,7 @@ def create_server() -> Any:
     mcp = FastMCP("readtheplan")
 
     analyze_plan_handler = analyze_plan
+    agent_gate_project_handler = agent_gate_project
     agent_gate_handler = agent_gate
     agent_gate_cfn_handler = agent_gate_cloudformation
     agent_gate_cdk_handler = agent_gate_cdk
@@ -2388,6 +2622,31 @@ def create_server() -> Any:
                 When set, returns per-change control annotations.
         """
         return analyze_plan_handler(plan_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_project")
+    def _agent_gate_project_tool(
+        project_path: str,
+        framework: str | None = None,
+        excludes: list[str] | None = None,
+        max_files: int = 500,
+        max_file_bytes: int = 10 * 1024 * 1024,
+    ) -> dict[str, object]:
+        """Auto-discover and gate supported infrastructure in a confined project snapshot.
+
+        Args:
+            project_path: Local project directory or supported input file inside MCP_ROOT.
+            framework: Optional compliance framework for control checks.
+            excludes: Optional repository-relative glob patterns to omit.
+            max_files: Maximum supported inputs to analyze (1-5000).
+            max_file_bytes: Maximum bytes copied from one input (up to 100 MiB).
+        """
+        return agent_gate_project_handler(
+            project_path,
+            framework=framework,
+            excludes=excludes,
+            max_files=max_files,
+            max_file_bytes=max_file_bytes,
+        )
 
     @mcp.tool(name="agent_gate")
     def _agent_gate_tool(

@@ -199,11 +199,12 @@
               Install the optional MCP extra and run:
             </p>
             <pre style="background:var(--surface);padding:12px 16px;border-radius:6px;border:1px solid var(--border);overflow-x:auto;font-size:13px;margin-top:8px"><code>pip install "readtheplan[mcp]"
-readtheplan mcp</code></pre>
+MCP_ROOT=/absolute/path/to/repository readtheplan mcp</code></pre>
             <p style="margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.6">
               The server communicates over stdio using the Model Context Protocol. Add it to your
               MCP client config (e.g. Claude Desktop, VS Code extensions) as a stdio endpoint.
-              Requires Python 3.10+.
+              Set <code>MCP_ROOT</code> in that client configuration and use <code>agent_gate_project</code>
+              to scan the repository through an isolated, descriptor-verified snapshot. Requires Python 3.10+.
             </p>
           </div>
 
