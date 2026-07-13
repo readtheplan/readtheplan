@@ -133,6 +133,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | AWS CodePipeline | `readtheplan codepipeline codepipeline.json` | Pipeline/action IAM roles, artifact stores/flows, source/build/test/deploy/invoke/approval actions, provider configuration, triggers, variables, regions, and execution modes |
 | Atlantis | `readtheplan atlantis atlantis.yaml` | Repo/server configuration, mutation requirements, custom workflows, hooks, override permissions, locks, autoplan, policy checks, and execution ordering |
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
+| Docker Buildx Bake | `readtheplan docker-bake docker-bake.hcl` | HCL/JSON and Compose-backed build graphs, contexts, inheritance/matrices, secret and SSH forwarding, entitlements, caches, outputs/publication, source policies, attestations, and evaluation boundaries |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |
 | Nomad | `readtheplan nomad job.nomad.hcl` | HCL/JSON jobspecs plus structured scheduler plans: task drivers, commands/images, artifacts/templates, identities, Vault/Consul, services/networking, storage, secrets, placement, rollout, replacement, and stops |
 | Packer | `readtheplan packer image.pkr.hcl` | Native HCL/JSON templates or inspect output: plugin/core constraints, variables/locals/data, builders/communicators/base images, provisioners, post-processors, publishing, secrets, functions, and non-execution boundaries |
@@ -203,6 +204,9 @@ OpenTelemetry Collector analysis validates component definitions against activat
 service pipelines and surfaces multi-file/provider boundaries without starting a collector.
 Dockerfile analysis understands multi-stage builds, heredocs, BuildKit secret/SSH
 mounts, and runtime metadata without invoking Docker or sending a build context.
+Docker Bake analysis never invokes Docker or Buildx, reads `.env` or secret files, fetches
+contexts or caches, contacts builders/registries, or publishes artifacts; HCL/JSON and
+Compose build definitions are inspected as a static build graph.
 Crossplane analysis parses package and resource manifests without pulling package
 images, executing Composition functions/providers, contacting external APIs, or
 resolving controller runtime state.

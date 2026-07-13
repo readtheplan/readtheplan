@@ -258,6 +258,13 @@ def identify_project_input(
 
     if _named_config_variant(name, suffix, "vagrantfile"):
         return "vagrant"
+    if name in {
+        "docker-bake.hcl",
+        "docker-bake.json",
+        "docker-bake.override.hcl",
+        "docker-bake.override.json",
+    }:
+        return "docker-bake"
     if _named_config_variant(name, suffix, "dockerfile", "containerfile"):
         return "dockerfile"
     if name in {
@@ -441,6 +448,21 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
         return None
     if isinstance(document.get("sops"), dict):
         return "sops"
+    bake_targets = document.get("target")
+    if isinstance(bake_targets, dict) and any(
+        isinstance(target, dict)
+        and {
+            "context",
+            "dockerfile",
+            "dockerfile-inline",
+            "output",
+            "attest",
+            "cache-to",
+        }
+        & set(target)
+        for target in bake_targets.values()
+    ):
+        return "docker-bake"
     if "format_version" in document and (
         "resource_changes" in document or "planned_values" in document
     ):

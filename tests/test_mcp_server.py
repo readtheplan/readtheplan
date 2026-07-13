@@ -30,6 +30,7 @@ from readtheplan.mcp_server import (
     agent_gate_crossplane,
     agent_gate_cue,
     agent_gate_devspace,
+    agent_gate_docker_bake,
     agent_gate_dockerfile,
     agent_gate_dsc,
     agent_gate_envoy,
@@ -687,6 +688,16 @@ def test_agent_gate_dockerfile_supports_framework_checks() -> None:
     assert result["decision"] == "block"
     assert result["total_changes"] == 20
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_docker_bake_supports_framework_checks_and_redacts_values() -> None:
+    result = agent_gate_docker_bake(
+        str(FIXTURES / "docker-bake.risky.hcl"), "soc2"
+    )
+    assert result["adapter"] == "docker-bake"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+    assert "literal-build-token-must-not-leak" not in json.dumps(result)
 
 
 @pytest.mark.parametrize(
@@ -1743,6 +1754,19 @@ def test_agent_gate_dockerfile_rejects_path_outside_root(monkeypatch, tmp_path) 
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_docker_bake_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "docker-bake.hcl"
+    outside.write_text('target "default" { context = "." }\n', encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_docker_bake(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_kubernetes_allows_path_inside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1937,6 +1961,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_opa" in tool_names
         assert "agent_gate_sentinel" in tool_names
         assert "agent_gate_sops" in tool_names
+        assert "agent_gate_docker_bake" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
@@ -2018,6 +2043,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(sentinel_schema["properties"])
         sops_schema = tools_by_name["agent_gate_sops"]["inputSchema"]
         assert {"input_path", "framework"} <= set(sops_schema["properties"])
+        docker_bake_schema = tools_by_name["agent_gate_docker_bake"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(docker_bake_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]

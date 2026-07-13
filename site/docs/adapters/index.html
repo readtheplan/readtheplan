@@ -66,7 +66,7 @@
             complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation and AWS CDK</strong>,
             <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible playbooks and project configuration</strong>, <strong>Salt states and project configuration</strong>, <strong>Nix flakes/locks and NixOS modules</strong>, <strong>Microsoft DSC and PowerShell DSC</strong>, <strong>CFEngine policy and Augments</strong>, <strong>Jenkins pipelines/JCasC</strong>,
             <strong>Pulumi</strong>, <strong>Chef recipes and projects</strong>, <strong>Puppet manifests and projects</strong>, <strong>GitHub Actions</strong>,
-            <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose</strong>,
+            <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose and Buildx Bake</strong>,
             <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, <strong>Dockerfiles</strong>, <strong>Azure Pipelines</strong>, and <strong>Bitbucket Pipelines</strong>. Rendered Helm,
             Kustomize, and Crossplane resources flow through the Kubernetes gate. Terragrunt
             and internal tools can use the same public adapter interface.
@@ -99,6 +99,7 @@ readtheplan opa policy.rego
 readtheplan sentinel policy.sentinel
 readtheplan vagrant Vagrantfile
 readtheplan cloud-init user-data.yml
+readtheplan docker-bake docker-bake.hcl
 readtheplan dockerfile Dockerfile
 readtheplan azure-pipelines azure-pipelines.yml
 readtheplan bitbucket-pipelines bitbucket-pipelines.yml
@@ -150,8 +151,8 @@ readtheplan kapp kapp-config.yml</code></pre>
             JSON/YAML and PowerShell DSC source is scanned without execution; CFEngine policy source
             is scanned without evaluation and Augments use strict JSON; SOPS policy and encrypted YAML/JSON/dotenv/INI metadata are inspected without decryption or key-service access; <code>ansible.cfg</code> is parsed as INI,
             while templated Salt SLS input falls back to a
-            conservative scanner. Docker Compose is parsed structurally without resolving external
-            files, while Nomad accepts HCL/JSON jobspec source or the scheduler's structured job-plan API response and
+            conservative scanner. Docker Compose and Buildx Bake definitions are parsed structurally without resolving external
+            files, build contexts, caches, or registries, while Nomad accepts HCL/JSON jobspec source or the scheduler's structured job-plan API response and
             Packer consumes saved human or machine-readable inspect output.
             Jenkinsfiles, Chef recipes/projects, Puppet manifests/projects, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning;
             Jenkins JCasC YAML is parsed structurally for controller identity, credentials, agents, libraries, and script authority:
@@ -301,18 +302,21 @@ readtheplan packer packer-inspect.txt</code></pre>
 
       <section class="g" aria-labelledby="workloads-title">
         <div class="gc utility-panel-wide">
-          <h2 id="workloads-title">Docker Compose and Nomad</h2>
+          <h2 id="workloads-title">Docker build graphs, Compose, and Nomad</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
             Gate container runtime boundaries and scheduler decisions without starting a
             container or contacting a cluster.
           </p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan docker-compose compose.yml
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan docker-bake docker-bake.hcl
+readtheplan docker-compose compose.yml
 
 # POST the job specification to /v1/job/:id/plan with Diff enabled,
 # save the JSON response, then review it locally:
 readtheplan nomad job.nomad.hcl</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            Compose checks image immutability, builds, commands, privileged execution,
+            Bake checks target graphs, contexts, inheritance, secret/SSH forwarding, privileged
+            entitlements, caches, outputs, publication, source policy, and attestations without
+            invoking Buildx. Compose checks image immutability, builds, commands, privileged execution,
             host/container namespaces, capabilities, mounts, devices, secrets, external
             file boundaries, security profiles, and published ports. Nomad checks jobspec source and placement
             failures, allocation stops and replacements, rollout operations, task drivers,
