@@ -36,6 +36,7 @@ from readtheplan.mcp_server import (
     agent_gate_loki,
     agent_gate_monitoring,
     agent_gate_nix,
+    agent_gate_opa,
     agent_gate_otel_collector,
     agent_gate_packer,
     agent_gate_pipeline,
@@ -71,6 +72,13 @@ def test_analyze_plan_matches_cli_json(capsys) -> None:
 
     assert exit_code == 0
     assert analyze_plan(str(plan)) == json.loads(captured.out)
+
+
+def test_agent_gate_opa_supports_framework_checks() -> None:
+    result = agent_gate_opa(str(FIXTURES / "opa_policy_risky.rego"), "soc2")
+    assert result["adapter"] == "opa"
+    assert result["artifact_type"] == "rego"
+    assert result["decision"] == "block"
 
 
 def test_agent_gate_matches_cli_json(capsys) -> None:
@@ -1047,13 +1055,25 @@ def test_agent_gate_cfengine_rejects_path_outside_root(monkeypatch, tmp_path) ->
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_opa_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "policy.rego"
+    outside.write_text("package example\ndefault allow := false\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_opa(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_terraform_lock_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
     outside = tmp_path / ".terraform.lock.hcl"
     outside.write_text(
-        'provider "registry.terraform.io/hashicorp/aws" {'
-        ' version="1.0.0" hashes=[] }\n',
+        'provider "registry.terraform.io/hashicorp/aws" { version="1.0.0" hashes=[] }\n',
         encoding="utf-8",
     )
     monkeypatch.setenv("MCP_ROOT", str(root))
@@ -1319,6 +1339,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
         assert "agent_gate_cfengine" in tool_names
+        assert "agent_gate_opa" in tool_names
         assert "agent_gate_vagrant" in tool_names
         assert "agent_gate_cloud_init" in tool_names
         assert "agent_gate_systemd" in tool_names
@@ -1368,6 +1389,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(dsc_schema["properties"])
         cfengine_schema = tools_by_name["agent_gate_cfengine"]["inputSchema"]
         assert {"input_path", "framework"} <= set(cfengine_schema["properties"])
+        opa_schema = tools_by_name["agent_gate_opa"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(opa_schema["properties"])
         vagrant_schema = tools_by_name["agent_gate_vagrant"]["inputSchema"]
         assert {"input_path", "framework"} <= set(vagrant_schema["properties"])
         cloud_init_schema = tools_by_name["agent_gate_cloud_init"]["inputSchema"]

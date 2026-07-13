@@ -809,6 +809,40 @@ def agent_gate_cfengine(
     return analyze_cfengine(data, catalog=catalog)
 
 
+def agent_gate_opa(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local Rego, bundle metadata, or Conftest config."""
+    from readtheplan.adapters.opa import OPAAdapter, OPAInputError, analyze_opa, parse_opa
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read OPA/Rego input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_opa(source, Path(input_path).name)
+    except OPAInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid OPA/Rego input in {input_path}: {exc}",
+        ) from exc
+    if not OPAAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as OPA/Rego configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_opa(data, catalog=catalog)
+
+
 def agent_gate_vagrant(
     input_path: str,
     framework: str | None = None,
@@ -1919,6 +1953,7 @@ def create_server() -> Any:
     agent_gate_nix_handler = agent_gate_nix
     agent_gate_dsc_handler = agent_gate_dsc
     agent_gate_cfengine_handler = agent_gate_cfengine
+    agent_gate_opa_handler = agent_gate_opa
     agent_gate_vagrant_handler = agent_gate_vagrant
     agent_gate_cloud_init_handler = agent_gate_cloud_init
     agent_gate_systemd_handler = agent_gate_systemd
@@ -2161,6 +2196,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_cfengine_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_opa")
+    def _agent_gate_opa_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Rego, bundle metadata, or Conftest config without evaluation.
+
+        Args:
+            input_path: Local path to .rego, .manifest, .signatures.json, or conftest.toml.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_opa_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_vagrant")
     def _agent_gate_vagrant_tool(

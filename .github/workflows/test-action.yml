@@ -1433,6 +1433,37 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on OPA/Rego policy
+        id: opa
+        uses: ./
+        with:
+          tool: opa
+          input-file: tests/fixtures/opa_policy_risky.rego
+          framework: soc2
+
+      - name: Assert OPA/Rego outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.opa.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.opa.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.opa.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "14"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":5,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "opa"
+          assert payload["artifact_type"] == "rego"
+          assert payload["decision"] == "block"
+          assert "http.send" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Vagrantfile
         id: vagrant
         uses: ./
