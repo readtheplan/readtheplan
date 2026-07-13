@@ -93,6 +93,21 @@ _SOPS_YAML_HINT = re.compile(r"(?m)^sops\s*:\s*$")
 _SOPS_DOTENV_HINT = re.compile(r"(?m)^sops_(?:mac|version|lastmodified)\s*=")
 _SOPS_INI_HINT = re.compile(r"(?m)^\[sops\]\s*$")
 _SOPS_ENCRYPTED_HINT = re.compile(r"ENC\[AES256_GCM,data:")
+_HABITAT_HOOK_NAMES = frozenset(
+    {
+        "file-updated",
+        "health-check",
+        "init",
+        "install",
+        "post-run",
+        "post-stop",
+        "reconfigure",
+        "reload",
+        "run",
+        "suitability",
+        "uninstall",
+    }
+)
 
 
 class ProjectScanError(ValueError):
@@ -382,6 +397,19 @@ def identify_project_input(
         "policyfile.rb",
         "policyfile.lock.json",
     }:
+        return "chef-project"
+    if name in {"plan.sh", "plan.ps1"}:
+        return "chef-project"
+    habitat_hook_name = name.removesuffix(".sh").removesuffix(".ps1").replace("_", "-")
+    if (
+        habitat_hook_name in _HABITAT_HOOK_NAMES
+        and "hooks" in parts[:-1]
+        and (
+            "habitat" in parts[:-1]
+            or (path.parent.parent / "plan.sh").is_file()
+            or (path.parent.parent / "plan.ps1").is_file()
+        )
+    ):
         return "chef-project"
     if name in {"inspec.yml", "inspec.yaml", "inspec.lock"}:
         return "inspec"
@@ -842,6 +870,22 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         result["suite_count"] = payload["suite_count"]
     if isinstance(payload.get("dynamic_erb"), bool):
         result["dynamic_erb"] = payload["dynamic_erb"]
+    for field in (
+        "language",
+        "hook_name",
+    ):
+        if isinstance(payload.get(field), str):
+            result[field] = payload[field]
+    for field in (
+        "line_count",
+        "command_count",
+        "dynamic_count",
+        "variable_count",
+        "callback_count",
+        "template_count",
+    ):
+        if isinstance(payload.get(field), int):
+            result[field] = payload[field]
     if isinstance(payload.get("asset_count"), int):
         result["asset_count"] = payload["asset_count"]
     if isinstance(payload.get("asset_type_count"), int):

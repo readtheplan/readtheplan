@@ -1,0 +1,9 @@
+#!/bin/bash
+pkg_name=review-service
+pkg_origin=review-origin
+pkg_version=1.2.3
+pkg_source=https://downloads.example.test/review-${pkg_version}.tar.gz
+pkg_shasum=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+pkg_deps=(core/glibc/2.39/20260101010101)
+pkg_build_deps=(core/gcc/14.2.0/20260101010101)
+pkg_svc_user=hab
