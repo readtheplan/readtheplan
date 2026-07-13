@@ -13,8 +13,8 @@ trust.
 
 The website still has operating costs and attracts both human readers and
 automated crawlers. Cloudflare AI Crawl Control provides crawler visibility and
-allow/block controls. Pay Per Crawl is currently a closed beta. Cloudflare also
-announced the Monetization Gateway in July 2026 for usage-based payments on web
+allow/block controls. Cloudflare announced the Monetization Gateway in July 2026
+for usage-based payments on web
 pages, APIs, datasets, and MCP tools, with access initially offered through a
 waitlist.
 
@@ -28,9 +28,7 @@ Project sustainability may use these channels, in order:
 
 1. Clearly labeled project sponsorships and donations.
 2. Clearly labeled, context-relevant sponsorship placements on editorial pages.
-3. Cloudflare Pay Per Crawl for verified crawler traffic after beta access is
-   granted.
-4. Cloudflare Monetization Gateway for unauthenticated machine calls to future
+3. Cloudflare Monetization Gateway for unauthenticated machine calls to future
    public APIs or hosted MCP resources after access is granted, only when those
    resources are additive and the local equivalent remains free.
 
@@ -52,15 +50,14 @@ Project sustainability may use these channels, in order:
 1. Keep AI Crawl Control analytics enabled and preserve search/referral crawlers.
 2. Apply for Monetization Gateway access for additive public API or hosted MCP
    resources only.
-3. Apply separately to the Pay Per Crawl closed beta as a publisher.
-4. Require owner approval before connecting a wallet or payout account,
+3. Require owner approval before connecting a wallet or payout account,
    accepting stablecoin settlement, or publishing a price.
-5. Leave human traffic, search crawlers, authenticated community integrations,
+4. Leave human traffic, search crawlers, authenticated community integrations,
    and user-initiated assistants free unless traffic data shows abuse.
-6. Review revenue, referral loss, failed payments, geographic/tax obligations,
+5. Review revenue, referral loss, failed payments, geographic/tax obligations,
    and false positives before expanding.
 
-The applications require project-owner contact and business details, and
+The application requires project-owner contact and business details, and
 activation may require wallet, payout, tax, and pricing decisions. Those steps
 must be completed or explicitly approved by an authorized project owner rather
 than silently automated.
@@ -75,5 +72,4 @@ to create a sales funnel.
 ## References
 
 - [Cloudflare AI Crawl Control](https://developers.cloudflare.com/ai-crawl-control/)
-- [Cloudflare Pay Per Crawl](https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/what-is-pay-per-crawl/)
 - [Cloudflare Monetization Gateway announcement](https://blog.cloudflare.com/monetization-gateway/)

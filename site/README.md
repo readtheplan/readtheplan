@@ -27,9 +27,9 @@ intelligence. It is a static landing page, sample brief, and editorial runbook
 only. It must not add raw plan upload, hosted analysis, product accounts, billing,
 storage, a backend, or automatic delivery.
 
-Every readtheplan feature is free and MIT licensed. The site may prepare for
-traffic-side funding such as Cloudflare Pay Per Crawl, but it must not claim that
-closed-beta monetization is active, add behavioral ads, or gate human access.
+Every readtheplan feature is free and MIT licensed. The project may accept
+sponsorships or prepare additive machine-facing services for future funding, but
+it must not add behavioral ads or gate human access or local features.
 
 ## Commands
 
