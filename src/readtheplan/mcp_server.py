@@ -731,13 +731,16 @@ def agent_gate_pipeline(
         "woodpecker-ci",
         "concourse",
         "bamboo",
+        "codebuild",
+        "cloud-build",
+        "codepipeline",
     }:
         raise MCPToolInputError(
             code="INVALID_INPUT",
             message=(
                 "ecosystem must be github-actions, gitlab-ci, circleci, "
                 "azure-pipelines, bitbucket-pipelines, buildkite, travis-ci, drone-ci, "
-                "woodpecker-ci, concourse, or bamboo"
+                "woodpecker-ci, concourse, bamboo, codebuild, cloud-build, or codepipeline"
             ),
         )
     if not isinstance(input_path, str) or not input_path.strip():
@@ -751,13 +754,29 @@ def agent_gate_pipeline(
         raise MCPToolInputError(
             code="INPUT_ERROR", message=f"Cannot read {ecosystem} input {input_path}: {exc}"
         ) from exc
-    try:
-        data = parse_pipeline_yaml(source, ecosystem)
-    except PipelineInputError as exc:
-        raise MCPToolInputError(
-            code="INVALID_INPUT",
-            message=f"Invalid {ecosystem} pipeline YAML in {input_path}: {exc}",
-        ) from exc
+    cloud_ecosystems = {"codebuild", "cloud-build", "codepipeline"}
+    if ecosystem in cloud_ecosystems:
+        from readtheplan.adapters.cloud_ci import (
+            CloudCIInputError,
+            analyze_cloud_ci,
+            parse_cloud_ci,
+        )
+
+        try:
+            data = parse_cloud_ci(source, ecosystem)
+        except CloudCIInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid {ecosystem} configuration in {input_path}: {exc}",
+            ) from exc
+    else:
+        try:
+            data = parse_pipeline_yaml(source, ecosystem)
+        except PipelineInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid {ecosystem} pipeline YAML in {input_path}: {exc}",
+            ) from exc
 
     adapter = detect_adapter(data)
     if adapter is None or adapter.adapter_name != ecosystem:
@@ -766,6 +785,8 @@ def agent_gate_pipeline(
             message=f"Input is not recognized as {ecosystem} configuration",
         )
     catalog = _load_catalog_for_tool(framework)
+    if ecosystem in cloud_ecosystems:
+        return analyze_cloud_ci(adapter, data, catalog=catalog)  # type: ignore[arg-type]
     return analyze_pipeline(adapter, data, catalog=catalog)  # type: ignore[arg-type]
 
 
@@ -2756,7 +2777,7 @@ def create_server() -> Any:
             input_path: Local path to the pipeline YAML file.
             ecosystem: github-actions, gitlab-ci, circleci, azure-pipelines,
                 bitbucket-pipelines, buildkite, travis-ci, drone-ci, woodpecker-ci,
-                concourse, or bamboo.
+                concourse, bamboo, codebuild, cloud-build, or codepipeline.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_pipeline_handler(

@@ -1,0 +1,49 @@
+version: 0.2
+run-as: root
+env:
+  shell: bash
+  variables:
+    API_TOKEN: literal-codebuild-token
+    ENVIRONMENT: production
+  parameter-store:
+    DOCKER_PASSWORD: /CodeBuild/docker-password
+  secrets-manager:
+    DEPLOY_KEY: production/deploy:key
+  exported-variables:
+    - API_TOKEN
+  git-credential-helper: yes
+phases:
+  install:
+    runtime-versions:
+      python: 3.13
+    commands:
+      - pip install -r requirements.txt
+  pre_build:
+    commands:
+      - docker login -u deploy -p "$DOCKER_PASSWORD"
+  build:
+    on-failure: CONTINUE
+    commands:
+      - terraform apply -auto-approve
+    finally:
+      - ./cleanup.sh
+  post_build:
+    commands:
+      - docker push example/app:latest
+batch:
+  fast-fail: false
+  build-list:
+    - identifier: linux
+artifacts:
+  files:
+    - dist/**
+reports:
+  tests:
+    files:
+      - results/*.xml
+cache:
+  paths:
+    - /root/.cache/**
+proxy:
+  upload-artifacts: yes
+  logs: yes

@@ -285,6 +285,12 @@ def identify_project_input(
         ".concourse" in parts and suffix in _YAML_SUFFIXES
     ):
         return "concourse"
+    if name.startswith("buildspec") and suffix in _YAML_SUFFIXES:
+        return "codebuild"
+    if name.startswith("cloudbuild") and suffix in (*_YAML_SUFFIXES, ".json"):
+        return "cloud-build"
+    if name.startswith("codepipeline") and suffix in (*_YAML_SUFFIXES, ".json"):
+        return "codepipeline"
     if name in {"atlantis.yaml", "atlantis.yml"} or (
         name in {"repos.yaml", "repos.yml"}
         and any(part in {".atlantis", "atlantis"} for part in parts[:-1])
@@ -421,6 +427,13 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
         return "terraform"
     if isinstance(document.get("Changes"), list):
         return "cloudformation"
+    pipeline = document.get("pipeline")
+    if isinstance(pipeline, dict) and isinstance(pipeline.get("stages"), list):
+        return "codepipeline"
+    if isinstance(document.get("steps"), list) and any(
+        isinstance(step, dict) and "name" in step for step in document["steps"]
+    ):
+        return "cloud-build"
     if "properties" in document and "changeType" in document:
         return "azure"
     return None

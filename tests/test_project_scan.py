@@ -44,6 +44,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("bamboo-specs/bamboo.yml", "bamboo"),
         (".concourse/pipeline.yml", "concourse"),
         (".teamcity/settings.kts", "teamcity"),
+        ("buildspec.yml", "codebuild"),
+        ("ci/buildspec-release.yaml", "codebuild"),
+        ("cloudbuild.yaml", "cloud-build"),
+        ("codepipeline.json", "codepipeline"),
         ("Chart.yaml", "helm"),
         ("kustomization.yaml", "kustomize"),
         ("helmfile.yaml.gotmpl", "helmfile"),
@@ -90,6 +94,21 @@ def test_content_detection_for_concourse_pipeline(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert identify_project_input(pipeline, pipeline.name) == "concourse"
+
+
+def test_content_detection_for_cloud_build_and_codepipeline_json(tmp_path: Path) -> None:
+    cloud_build = tmp_path / "generated-build.json"
+    cloud_build.write_text(
+        json.dumps({"steps": [{"name": "gcr.io/cloud-builders/docker", "args": ["build"]}]}),
+        encoding="utf-8",
+    )
+    codepipeline = tmp_path / "generated-pipeline.json"
+    codepipeline.write_text(
+        json.dumps({"pipeline": {"name": "deploy", "stages": []}}),
+        encoding="utf-8",
+    )
+    assert identify_project_input(cloud_build, cloud_build.name) == "cloud-build"
+    assert identify_project_input(codepipeline, codepipeline.name) == "codepipeline"
 
 
 def test_large_terraform_plan_is_detected_from_a_bounded_prefix(tmp_path: Path) -> None:
@@ -246,6 +265,34 @@ def test_project_scan_analyzes_concourse_bamboo_and_teamcity(tmp_path: Path) -> 
     assert "literal-concourse-token" not in encoded
     assert "literal-bamboo-token" not in encoded
     assert "literal-teamcity-token" not in encoded
+
+
+def test_project_scan_analyzes_cloud_native_build_and_delivery(tmp_path: Path) -> None:
+    destinations = {
+        "buildspec.yml": "codebuild_risky.yml",
+        "cloudbuild.yaml": "google_cloud_build_risky.yml",
+        "codepipeline.json": "codepipeline_risky.json",
+    }
+    for destination, fixture in destinations.items():
+        (tmp_path / destination).write_text(
+            (FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 3
+    assert payload["scanned_file_count"] == 3
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {
+        "codebuild",
+        "cloud-build",
+        "codepipeline",
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "literal-codebuild-token" not in encoded
+    assert "literal-cloud-build-token" not in encoded
+    assert "literal-codepipeline-token" not in encoded
 
 
 def test_malformed_discovered_input_becomes_redacted_validation_error(tmp_path: Path) -> None:

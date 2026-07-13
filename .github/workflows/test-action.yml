@@ -377,6 +377,27 @@ jobs:
           input-file: tests/fixtures/teamcity_risky.kts
           framework: soc2
 
+      - name: Run action on AWS CodeBuild
+        uses: ./
+        with:
+          tool: codebuild
+          input-file: tests/fixtures/codebuild_risky.yml
+          framework: soc2
+
+      - name: Run action on Google Cloud Build
+        uses: ./
+        with:
+          tool: cloud-build
+          input-file: tests/fixtures/google_cloud_build_risky.yml
+          framework: soc2
+
+      - name: Run action on AWS CodePipeline
+        uses: ./
+        with:
+          tool: codepipeline
+          input-file: tests/fixtures/codepipeline_risky.json
+          framework: soc2
+
       - name: Run action on Atlantis configuration
         id: atlantis
         uses: ./

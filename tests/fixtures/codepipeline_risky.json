@@ -1,0 +1,98 @@
+{
+  "pipeline": {
+    "name": "production",
+    "roleArn": "arn:aws:iam::123456789012:role/codepipeline-production",
+    "artifactStore": {
+      "type": "S3",
+      "location": "production-artifacts",
+      "encryptionKey": {
+        "id": "arn:aws:kms:us-east-1:123456789012:key/example",
+        "type": "KMS"
+      }
+    },
+    "pipelineType": "V2",
+    "executionMode": "PARALLEL",
+    "variables": [
+      {"name": "Environment", "defaultValue": "production"}
+    ],
+    "triggers": [
+      {"providerType": "CodeStarSourceConnection", "gitConfiguration": {}}
+    ],
+    "stages": [
+      {
+        "name": "Source",
+        "actions": [
+          {
+            "name": "Source",
+            "actionTypeId": {
+              "category": "Source",
+              "owner": "AWS",
+              "provider": "CodeStarSourceConnection",
+              "version": "1"
+            },
+            "configuration": {
+              "ConnectionArn": "arn:aws:codestar-connections:us-east-1:123456789012:connection/example",
+              "FullRepositoryId": "example/platform",
+              "BranchName": "main"
+            },
+            "outputArtifacts": [{"name": "SourceOutput"}],
+            "runOrder": 1,
+            "region": "us-east-1",
+            "namespace": "SourceVariables"
+          }
+        ]
+      },
+      {
+        "name": "Approve",
+        "actions": [
+          {
+            "name": "Approval",
+            "actionTypeId": {
+              "category": "Approval",
+              "owner": "AWS",
+              "provider": "Manual",
+              "version": "1"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Deploy",
+        "actions": [
+          {
+            "name": "DeployStack",
+            "actionTypeId": {
+              "category": "Deploy",
+              "owner": "AWS",
+              "provider": "CloudFormation",
+              "version": "1"
+            },
+            "roleArn": "arn:aws:iam::123456789012:role/cloudformation-deploy",
+            "configuration": {
+              "ActionMode": "CREATE_UPDATE",
+              "StackName": "production",
+              "Capabilities": "CAPABILITY_NAMED_IAM"
+            },
+            "inputArtifacts": [{"name": "SourceOutput"}],
+            "runOrder": 1
+          },
+          {
+            "name": "Notify",
+            "actionTypeId": {
+              "category": "Invoke",
+              "owner": "AWS",
+              "provider": "Lambda",
+              "version": "1"
+            },
+            "configuration": {
+              "FunctionName": "notify-production",
+              "UserParameters": "API_TOKEN=literal-codepipeline-token"
+            },
+            "runOrder": 2
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {"pipelineArn": "arn:aws:codepipeline:us-east-1:123456789012:production"}
+}

@@ -11,6 +11,8 @@ CI/CD analysis includes GitHub Actions, GitLab CI, CircleCI, Azure Pipelines,
 Bitbucket Pipelines, Buildkite, Travis CI, Drone CI, and Woodpecker CI.
 Self-hosted CI coverage also includes Concourse pipelines, Bamboo YAML Specs,
 Jenkins/JCasC, and TeamCity Kotlin DSL.
+Cloud-native delivery coverage includes AWS CodeBuild buildspecs, Google Cloud
+Build configurations, and AWS CodePipeline definitions.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.

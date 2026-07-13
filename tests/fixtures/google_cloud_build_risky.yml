@@ -1,0 +1,39 @@
+steps:
+  - id: deploy
+    name: gcr.io/cloud-builders/gcloud:latest
+    entrypoint: bash
+    args:
+      - -c
+      - gcloud run deploy production --image "$IMAGE"
+    env:
+      - API_TOKEN=literal-cloud-build-token
+    secretEnv:
+      - DEPLOY_PASSWORD
+    volumes:
+      - name: docker
+        path: /var/run
+    allowFailure: true
+    waitFor: ["-"]
+    timeout: 1200s
+    dir: infra
+  - id: publish
+    name: gcr.io/cloud-builders/docker:latest
+    script: docker push us-docker.pkg.dev/example/app:latest
+availableSecrets:
+  secretManager:
+    - versionName: projects/example/secrets/deploy/versions/latest
+      env: DEPLOY_PASSWORD
+serviceAccount: projects/example/serviceAccounts/deployer@example.iam.gserviceaccount.com
+substitutions:
+  _API_TOKEN: literal-substitution-token
+images:
+  - us-docker.pkg.dev/example/app:latest
+artifacts:
+  objects:
+    location: gs://example-builds/
+    paths: [dist/**]
+options:
+  machineType: E2_HIGHCPU_32
+  dynamicSubstitutions: true
+logsBucket: gs://example-logs
+timeout: 1800s
