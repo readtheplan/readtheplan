@@ -44,6 +44,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("collections/demo/meta/runtime.yml", "ansible-project"),
         ("roles/demo/meta/main.yml", "ansible-project"),
         ("roles/demo/meta/argument_specs.yml", "ansible-project"),
+        ("roles/demo/tasks/main.yml", "ansible"),
+        ("roles/demo/tasks/platform/redhat.yaml", "ansible"),
+        ("collections/acme/demo/roles/service/handlers/main.yml", "ansible"),
         (".ansible-lint", "ansible-project"),
         ("Jenkinsfile.deploy", "jenkins"),
         ("plugins.txt", "jenkins-project"),
@@ -165,6 +168,35 @@ def test_content_detection_for_ansible_static_and_plugin_inventory(tmp_path: Pat
 
     assert identify_project_input(static_inventory, static_inventory.name) == "ansible-project"
     assert identify_project_input(plugin_inventory, plugin_inventory.name) == "ansible-project"
+
+
+def test_ansible_role_content_detection_requires_role_context(tmp_path: Path) -> None:
+    generic = tmp_path / "tasks" / "main.yml"
+    generic.parent.mkdir()
+    generic.write_text("- debug: {}\n", encoding="utf-8")
+    assert identify_project_input(generic, "tasks/main.yml", inspect_content=False) is None
+
+    role_root = tmp_path / "standalone-role"
+    task_file = role_root / "tasks" / "main.yml"
+    handler_file = role_root / "handlers" / "main.yml"
+    task_file.parent.mkdir(parents=True)
+    handler_file.parent.mkdir(parents=True)
+    task_file.write_text("- debug: {}\n", encoding="utf-8")
+    handler_file.write_text("- debug: {}\n", encoding="utf-8")
+    assert identify_project_input(task_file, "standalone-role/tasks/main.yml") == "ansible"
+    assert identify_project_input(handler_file, "standalone-role/handlers/main.yml") == "ansible"
+
+    defaults = role_root / "defaults" / "main.yml"
+    defaults.parent.mkdir()
+    defaults.write_text("region: us-east-1\n", encoding="utf-8")
+    assert (
+        identify_project_input(
+            defaults,
+            "standalone-role/defaults/main.yml",
+            inspect_content=False,
+        )
+        is None
+    )
 
 
 def test_ansible_inventory_detection_handles_adversarial_whitespace_linearly() -> None:
@@ -462,6 +494,48 @@ def test_project_scan_analyzes_ansible_static_and_dynamic_inventory(tmp_path: Pa
     encoded = json.dumps(payload)
     assert "fixture-inventory-password-do-not-leak" not in encoded
     assert "fixture-aws-access-key-do-not-leak" not in encoded
+
+
+def test_project_scan_analyzes_ansible_role_tasks_and_handlers(tmp_path: Path) -> None:
+    source_root = FIXTURES / "ansible_role_content_risky" / "roles" / "application"
+    for relative in (Path("tasks/main.yml"), Path("handlers/main.yml")):
+        target = tmp_path / "roles" / "application" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((source_root / relative).read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+    encoded = json.dumps(payload)
+
+    assert payload["discovered_file_count"] == 2
+    assert payload["scanned_file_count"] == 2
+    assert payload["error_count"] == 0
+    assert payload["total_changes"] == 16
+    assert payload["risk_counts"] == {
+        "safe": 0,
+        "review": 7,
+        "dangerous": 9,
+        "irreversible": 0,
+    }
+    assert {item["artifact_type"] for item in payload["files"]} == {
+        "task_file",
+        "handler_file",
+    }
+    task_result = next(item for item in payload["files"] if item["artifact_type"] == "task_file")
+    handler_result = next(
+        item for item in payload["files"] if item["artifact_type"] == "handler_file"
+    )
+    assert task_result["task_count"] == 11
+    assert task_result["handler_count"] == 0
+    assert handler_result["task_count"] == 0
+    assert handler_result["handler_count"] == 4
+    assert payload["decision"] == "block"
+    for secret in (
+        "fixture-task-token-do-not-leak",
+        "fixture-environment-token-do-not-leak",
+        "fixture-handler-name-do-not-leak",
+        "fixture-handler-message-do-not-leak",
+    ):
+        assert secret not in encoded
 
 
 def test_project_scan_analyzes_molecule_scenarios(tmp_path: Path) -> None:
