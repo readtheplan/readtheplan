@@ -1307,6 +1307,36 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet Bolt inventory
+        id: puppet_bolt_inventory
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/bolt_inventory/inventory.yaml
+          framework: soc2
+
+      - name: Assert Puppet Bolt inventory outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_bolt_inventory.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_bolt_inventory.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_bolt_inventory.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "19"
+          test "$RISK_COUNTS" = '{"dangerous":11,"irreversible":0,"review":8,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "bolt_inventory"
+          assert payload["decision"] == "block"
+          assert "fixture-ssh-password-do-not-leak" not in os.environ["SUMMARY_JSON"]
+          assert "fixture-private-key-do-not-leak" not in os.environ["SUMMARY_JSON"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

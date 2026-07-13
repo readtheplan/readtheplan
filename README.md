@@ -118,7 +118,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
 | Chef project / runtime | `readtheplan chef-project client.rb` | Policyfiles/locks, cookbook metadata, Infra Client, Workstation/knife, Solo, and Server configuration; trust, credentials, endpoints, execution, source provenance, bootstrap, TLS/LDAP/database controls, and Ruby boundaries |
 | Puppet | `readtheplan puppet site.pp` | Built-in/custom resources, state, identities, classes, lookups/templates, virtual/exported resources, collectors, refresh relationships, and sources/permissions |
-| Puppet project / runtime | `readtheplan puppet-project puppet.conf` | Forge/Git modules, immutable revisions, module metadata, Hiera hierarchy/backends, and main agent/server/CA configuration including trust, identity, commands, cached catalogs, plugins, reports, credentials, and code paths |
+| Puppet project / runtime / Bolt | `readtheplan puppet-project bolt-project.yaml` | Forge/Git modules, module metadata, Hiera, agent/server/CA runtime settings, plus Bolt projects and inventory covering plugins, target discovery, transports, trust, credentials, privilege, and controller/target execution boundaries |
 | GitHub Actions | `readtheplan github-actions workflow.yml` | Token permissions, action pinning, secrets, environments, and run steps |
 | GitLab CI | `readtheplan gitlab-ci .gitlab-ci.yml` | Includes, tokens, downstream pipelines, environments, and scripts |
 | CircleCI | `readtheplan circleci .circleci/config.yml` | Orbs, SSH keys, executors, remote Docker, and run steps |
@@ -499,6 +499,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - Full language interpretation for dynamic Jenkins, Chef, or Puppet code (unknown constructs require review)
 - Chef runtime configuration is analyzed statically; merged fragments, command-line/environment overrides, plugins, cookbook contents, external secrets, generated service state, and Ruby conditions remain review boundaries
 - Jenkins plugin catalogs are analyzed offline; update-center metadata, transitive dependencies, advisories, checksums, core compatibility, installed plugins, and installer flags remain external review inputs
+- Bolt project and inventory analysis is static; configuration precedence, installed module/plugin code, resolved dynamic inventory, external secrets, target state, and selected tasks, plans, commands, scripts, and Puppet code remain runtime boundaries
 - SaaS dashboard (local-first by design)
 - Hosted analyzer service until ADR 0013 security gates are implemented and enforced
 - Policy-as-code engine (OPA/Sentinel exist for that)

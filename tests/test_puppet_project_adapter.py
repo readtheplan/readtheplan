@@ -117,6 +117,52 @@ def test_puppet_conf_strong_trust_and_noop_remain_review_or_safe() -> None:
     assert any(change.resource_type == "puppet_project_dry_run" for change in changes)
 
 
+def test_bolt_project_surfaces_modules_plugins_endpoints_and_execution() -> None:
+    source = FIXTURES / "bolt_project" / "bolt-project.yaml"
+    data = parse_puppet_project(source.read_text(encoding="utf-8"), filename=str(source))
+    changes = PuppetProjectAdapter().analyze(data)
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps([change.explanation for change in changes])
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_project"
+    assert sum(change.risk == "dangerous" for change in changes) >= 10
+    assert {
+        "puppet_project_bolt_module_dependency",
+        "puppet_project_bolt_module_path",
+        "puppet_project_bolt_literal_credential",
+        "puppet_project_bolt_external_command",
+        "puppet_project_bolt_configured_plugin",
+        "puppet_project_bolt_plugin_hook",
+        "puppet_project_bolt_sensitive_output",
+    } <= kinds
+    assert "fixture-bolt-token-do-not-leak" not in encoded
+    assert "fixture-plugin-password-do-not-leak" not in encoded
+
+
+def test_bolt_inventory_surfaces_dynamic_scope_transport_trust_and_secrets() -> None:
+    source = FIXTURES / "bolt_inventory" / "inventory.yaml"
+    data = parse_puppet_project(source.read_text(encoding="utf-8"), filename="inventory.yaml")
+    changes = PuppetProjectAdapter().analyze(data)
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps([change.explanation for change in changes])
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_inventory"
+    assert sum(change.risk == "dangerous" for change in changes) >= 10
+    assert {
+        "puppet_project_bolt_dynamic_inventory",
+        "puppet_project_bolt_literal_credential",
+        "puppet_project_bolt_transport_verification",
+        "puppet_project_bolt_plaintext_transport",
+        "puppet_project_bolt_privileged_identity",
+        "puppet_project_bolt_command_execution",
+        "puppet_project_bolt_legacy_ssh_algorithm",
+        "puppet_project_bolt_target_scope",
+    } <= kinds
+    assert "fixture-ssh-password-do-not-leak" not in encoded
+    assert "fixture-private-key-do-not-leak" not in encoded
+    assert "windows.internal.example" not in encoded
+
+
 def test_hiera_defaults_surface_custom_backend_secrets_and_windows_path_escape() -> None:
     data = parse_puppet_project(
         "version: 5\n"
@@ -216,12 +262,52 @@ def test_parser_rejects_unrelated_duplicate_or_malformed_input(source: str, erro
 
 
 @pytest.mark.parametrize(
+    ("source", "filename", "error"),
+    [
+        ("name: one\nname: two\n", "bolt-project.yaml", "duplicate YAML key"),
+        ("targets: nope\n", "inventory.yaml", "list or plugin mapping"),
+        ("groups:\n  - targets: []\n", "inventory.yaml", "string name"),
+        ("targets:\n  - alias: missing-identity\n", "inventory.yaml", "name or uri"),
+    ],
+)
+def test_bolt_parser_rejects_duplicate_unrelated_or_malformed_input(
+    source: str, filename: str, error: str
+) -> None:
+    with pytest.raises(PuppetProjectInputError, match=error):
+        parse_puppet_project(source, filename=filename)
+
+
+def test_minimal_bolt_project_and_inventory_are_valid() -> None:
+    project = parse_puppet_project("format: human\n", filename="bolt-project.yaml")
+    inventory = parse_puppet_project("config:\n  transport: ssh\n", filename="inventory.yaml")
+
+    assert project["puppet_project"]["artifact_type"] == "bolt_project"
+    assert inventory["puppet_project"]["artifact_type"] == "bolt_inventory"
+
+
+def test_bolt_puppetdb_token_path_is_an_external_boundary_not_literal_secret() -> None:
+    data = parse_puppet_project(
+        "puppetdb:\n  token: ~/.puppetlabs/token\n", filename="bolt-project.yaml"
+    )
+    changes = PuppetProjectAdapter().analyze(data)
+
+    assert any(
+        change.resource_type == "puppet_project_bolt_credential_file_boundary" for change in changes
+    )
+    assert not any(
+        change.resource_type == "puppet_project_bolt_literal_credential" for change in changes
+    )
+
+
+@pytest.mark.parametrize(
     ("fixture", "artifact_type"),
     [
         ("Puppetfile.project-risky", "puppetfile"),
         ("puppet_metadata_risky.json", "metadata"),
         ("hiera_project_risky.yaml", "hiera"),
         ("puppet_conf_risky.conf", "config"),
+        ("bolt_project/bolt-project.yaml", "bolt_project"),
+        ("bolt_inventory/inventory.yaml", "bolt_inventory"),
     ],
 )
 def test_gate_and_cli_support_every_puppet_project_format(
@@ -229,7 +315,7 @@ def test_gate_and_cli_support_every_puppet_project_format(
     artifact_type: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"))
+    data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture)
     gate = analyze_puppet_project(data)
     assert gate["adapter"] == "puppet-project"
     assert gate["artifact_type"] == artifact_type

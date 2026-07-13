@@ -1,0 +1,29 @@
+name: operations
+modulepath:
+  - modules
+  - ../shared-modules
+modules:
+  - puppetlabs-stdlib
+  - name: puppetlabs-apache
+    version_requirement: 11.1.0
+  - git: http://git.internal.example/ops.git
+    ref: main
+module-install:
+  forge:
+    baseurl: http://forge.internal.example
+    authorization_token: fixture-bolt-token-do-not-leak
+plugins:
+  company_plugin:
+    password: fixture-plugin-password-do-not-leak
+plugin-hooks:
+  puppet_library:
+    plugin: puppet_agent
+    version: latest
+    _run_as: root
+apply-settings:
+  log_level: debug
+  show_diff: true
+puppetdb:
+  server_urls:
+    - http://puppetdb.internal.example:8080
+trusted-external-command: /opt/company/trusted-facts
