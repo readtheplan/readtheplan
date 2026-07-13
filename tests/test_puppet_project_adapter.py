@@ -17,7 +17,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _changes(fixture: str):
-    data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"))
+    data = parse_puppet_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
     return PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
 
 
@@ -358,6 +360,242 @@ def test_r10k_supports_legacy_source_and_settings_aliases() -> None:
     assert any("write lock" in change.explanation for change in changes)
 
 
+def test_environment_conf_surfaces_code_paths_commands_and_cache_policy() -> None:
+    changes = _changes("puppet_server_policy_risky/environment.conf")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert by_type["puppet_project_environment_module_path"].risk == "dangerous"
+    assert by_type["puppet_project_environment_manifest"].risk == "dangerous"
+    assert by_type["puppet_project_environment_config_version_command"].risk == "dangerous"
+    assert by_type["puppet_project_environment_cache_refresh"].risk == "review"
+    assert by_type["puppet_project_project_boundary"].risk == "review"
+
+
+def test_puppetdb_conf_surfaces_transport_fail_open_and_partial_persistence() -> None:
+    changes = _changes("puppet_server_policy_risky/puppetdb.conf")
+    kinds = {change.resource_type for change in changes}
+
+    assert {
+        "puppet_project_puppetdb_endpoint",
+        "puppet_project_puppetdb_fail_open",
+        "puppet_project_puppetdb_command_broadcast",
+        "puppet_project_puppetdb_submission_quorum",
+        "puppet_project_puppetdb_timeout",
+    } <= kinds
+    assert sum(change.risk == "dangerous" for change in changes) == 4
+
+
+def test_server_auth_surfaces_header_identity_wildcards_and_privileged_apis() -> None:
+    data = parse_puppet_project(
+        (FIXTURES / "puppet_server_policy_risky" / "auth.conf").read_text(
+            encoding="utf-8"
+        ),
+        filename="auth.conf",
+    )
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    kinds = {change.resource_type for change in changes}
+    gate = analyze_puppet_project(data)
+
+    assert data["puppet_project"]["artifact_type"] == "server_auth"
+    assert gate["rule_count"] == 3
+    assert {
+        "puppet_project_server_hocon_include",
+        "puppet_project_server_hocon_substitution",
+        "puppet_project_server_header_identity",
+        "puppet_project_server_unauthenticated_access",
+        "puppet_project_server_wildcard_identity",
+        "puppet_project_server_broad_authorization",
+        "puppet_project_server_privileged_api",
+        "puppet_project_server_auth_precedence",
+    } <= kinds
+    assert sum(change.risk == "dangerous" for change in changes) == 8
+
+
+def test_server_ca_surfaces_impersonation_capable_signing_options() -> None:
+    changes = _changes("puppet_server_policy_risky/ca.conf")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert by_type["puppet_project_server_ca_subject_alt_names"].risk == "dangerous"
+    assert by_type["puppet_project_server_ca_authorization_extensions"].risk == "dangerous"
+    assert by_type["puppet_project_server_ca_revocation_scope"].risk == "review"
+
+
+def test_server_web_surfaces_plaintext_mtls_tls_and_audit_gaps() -> None:
+    changes = _changes("puppet_server_policy_risky/webserver.conf")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert by_type["puppet_project_server_client_authentication"].risk == "dangerous"
+    assert by_type["puppet_project_server_plaintext_listener"].risk == "dangerous"
+    assert by_type["puppet_project_server_network_exposure"].risk == "review"
+    assert by_type["puppet_project_server_legacy_tls"].risk == "dangerous"
+    assert by_type["puppet_project_server_tls_renegotiation"].risk == "dangerous"
+    assert by_type["puppet_project_server_tls_material"].risk == "dangerous"
+    assert by_type["puppet_project_server_access_logging"].risk == "review"
+
+
+def test_server_runtime_surfaces_code_paths_environment_and_jruby_lifecycle() -> None:
+    changes = _changes("puppet_server_policy_risky/puppetserver.conf")
+    kinds = {change.resource_type for change in changes}
+
+    assert {
+        "puppet_project_server_hocon_substitution",
+        "puppet_project_server_removed_setting",
+        "puppet_project_server_ruby_code_path",
+        "puppet_project_server_jruby_environment",
+        "puppet_project_server_jruby_concurrency",
+        "puppet_project_server_jruby_recycling",
+        "puppet_project_server_jruby_multithreading",
+    } <= kinds
+    assert sum(
+        change.resource_type == "puppet_project_server_ruby_code_path" for change in changes
+    ) == 3
+
+
+def test_server_routes_surface_admin_ca_status_and_metrics_mounts() -> None:
+    changes = _changes("puppet_server_policy_risky/web-routes.conf")
+
+    assert any(
+        change.resource_type == "puppet_project_server_api_routes"
+        and change.risk == "dangerous"
+        for change in changes
+    )
+
+
+def test_puppet_server_findings_do_not_expose_policy_or_secret_values() -> None:
+    encoded: list[str] = []
+    for filename in (
+        "auth.conf",
+        "puppetdb.conf",
+        "puppetserver.conf",
+        "web-routes.conf",
+        "webserver.conf",
+    ):
+        data = parse_puppet_project(
+            (FIXTURES / "puppet_server_policy_risky" / filename).read_text(encoding="utf-8"),
+            filename=filename,
+        )
+        encoded.append(json.dumps(analyze_puppet_project(data)))
+    output = "\n".join(encoded)
+
+    for secret_or_identity in (
+        "fixture-puppetdb-password-do-not-leak",
+        "fixture-unauthenticated-rule-do-not-leak",
+        "fixture-admin-rule-do-not-leak",
+        "fixture-jruby-token-do-not-leak",
+        "fixture-key-do-not-leak",
+        "puppetdb.invalid",
+        "fixture-admin",
+    ):
+        assert secret_or_identity not in output
+
+
+def test_hardened_puppet_server_policy_stays_review_only() -> None:
+    documents = (
+        (
+            "auth.conf",
+            "authorization: {\n"
+            "  version: 1\n"
+            "  rules: [{\n"
+            "    match-request: {\n"
+            "      path: \"/puppet/v3/catalog\"\n"
+            "      type: path\n"
+            "      method: post\n"
+            "    }\n"
+            "    allow: [\"primary.example.test\"]\n"
+            "    sort-order: 500\n"
+            "    name: \"catalog\"\n"
+            "  }]\n"
+            "}\n",
+        ),
+        (
+            "webserver.conf",
+            "webserver: {\n"
+            "  client-auth: need\n"
+            "  ssl-host: 127.0.0.1\n"
+            "  ssl-protocols: [TLSv1.2]\n"
+            "  access-log-config: /etc/puppetlabs/request-logging.xml\n"
+            "}\n",
+        ),
+        (
+            "ca.conf",
+            "certificate-authority: {\n"
+            "  allow-subject-alt-names: false\n"
+            "  allow-authorization-extensions: false\n"
+            "  enable-infra-crl: true\n"
+            "}\n",
+        ),
+    )
+    for filename, source in documents:
+        data = parse_puppet_project(source, filename=filename)
+        changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+        assert {change.risk for change in changes} == {"review"}
+
+
+def test_default_puppet_server_routes_stay_review_only() -> None:
+    source = """
+web-router-service: {
+  "puppetlabs.services.ca.certificate-authority-service/certificate-authority-service": "/puppet-ca"
+  "puppetlabs.services.master.master-service/master-service": "/puppet"
+  "puppetlabs.services.puppet-admin.puppet-admin-service/puppet-admin-service": "/puppet-admin-api"
+  "puppetlabs.trapperkeeper.services.status.status-service/status-service": "/status"
+  "puppetlabs.trapperkeeper.services.metrics.metrics-service/metrics-webservice": "/metrics"
+}
+"""
+    data = parse_puppet_project(source, filename="web-routes.conf")
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+    assert {change.risk for change in changes} == {"review"}
+
+
+@pytest.mark.parametrize(
+    ("source", "filename", "error"),
+    [
+        ("modulepath = one\nmodulepath = two\n", "environment.conf", "duplicate"),
+        ("[main]\nmodulepath = modules\n", "environment.conf", "must not contain"),
+        ("unknown = value\n", "environment.conf", "unsupported"),
+        (
+            "[main]\nserver_urls = https://one\n[server]\nport = 8081\n",
+            "puppetdb.conf",
+            "only a main",
+        ),
+        ("authorization: {\nversion: 1\nversion: 1\n}\n", "auth.conf", "duplicate HOCON"),
+        ("webserver: { client-auth want }\n", "webserver.conf", "missing"),
+        ("certificate-authority: { /* nope\n", "ca.conf", "unterminated block"),
+        (
+            "jruby-puppet: { environment-vars: { X: ${ } } }\n",
+            "puppetserver.conf",
+            "invalid substitution",
+        ),
+    ],
+)
+def test_server_policy_parsers_reject_ambiguous_or_malformed_input(
+    source: str, filename: str, error: str
+) -> None:
+    with pytest.raises(PuppetProjectInputError, match=error):
+        parse_puppet_project(source, filename=filename)
+
+
+def test_hocon_substitution_concatenation_is_an_unresolved_boundary() -> None:
+    data = parse_puppet_project(
+        "jruby-puppet: {\n  server-code-dir: ${?PUPPET_BASE}/code\n}\n",
+        filename="puppetserver.conf",
+    )
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+    assert any(
+        change.resource_type == "puppet_project_server_hocon_substitution"
+        for change in changes
+    )
+    assert "PUPPET_BASE" not in json.dumps(analyze_puppet_project(data))
+
+
+def test_hocon_parser_rejects_excessive_nesting() -> None:
+    source = "root: {\n" + ("child: {\n" * 101) + "value: 1\n" + ("}\n" * 102)
+
+    with pytest.raises(PuppetProjectInputError, match="nesting exceeds"):
+        parse_puppet_project(source, filename="puppetserver.conf")
+
+
 @pytest.mark.parametrize(
     ("source", "error"),
     [
@@ -405,6 +643,13 @@ def test_r10k_parser_rejects_duplicate_unrelated_or_malformed_input(
         ("bolt_project/bolt-project.yaml", "bolt_project"),
         ("bolt_inventory/inventory.yaml", "bolt_inventory"),
         ("puppet_r10k_risky/r10k.yaml", "r10k"),
+        ("puppet_server_policy_risky/environment.conf", "environment"),
+        ("puppet_server_policy_risky/puppetdb.conf", "puppetdb"),
+        ("puppet_server_policy_risky/auth.conf", "server_auth"),
+        ("puppet_server_policy_risky/ca.conf", "server_ca"),
+        ("puppet_server_policy_risky/puppetserver.conf", "server_runtime"),
+        ("puppet_server_policy_risky/web-routes.conf", "server_routes"),
+        ("puppet_server_policy_risky/webserver.conf", "server_web"),
     ],
 )
 def test_gate_and_cli_support_every_puppet_project_format(

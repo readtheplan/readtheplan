@@ -46,7 +46,7 @@ matrix makes those boundaries explicit.
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
 | Chef project / dependencies / runtime | `Policyfile.rb`, `Policyfile.lock.json`, `Berksfile`, modern/legacy `Berksfile.lock`, `metadata.rb`, runtime configs, or supported `.d` fragments | `readtheplan chef-project Berksfile.lock` | Policy/run lists, cookbook provenance, Berkshelf migration/source ordering/groups/solver, direct and transitive lock graph integrity, exact constraint consistency, attributes/dependencies, client identity/convergence, Workstation bootstrap/SSH, Solo remote content, Server TLS/LDAP/database controls, credentials, duplicate overrides, and dynamic Ruby/external-state boundaries | Built-in |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Built-in and namespaced resource/state scanner covering execution/identity/connectivity, classes, dynamic data/templates, custom types, virtual/exported resources, collectors, refresh relationships, sources, and permissions | Conservative |
-| Puppet project / runtime / deployment / Bolt | `Puppetfile`, module `metadata.json`, `hiera.yaml`, `puppet.conf`, `r10k.yaml`, `bolt-project.yaml`, or Bolt `inventory.yaml` | `readtheplan puppet-project r10k.yaml` | Forge/Git dependencies, Hiera, duplicate-safe runtime settings, r10k/Code Manager sources, branch mapping, targets, purge, hooks, Git/Forge trust and credentials, plus Bolt discovery, transports, privilege, commands, and non-execution boundaries | Built-in |
+| Puppet project / Server policy / runtime / deployment / Bolt | `Puppetfile`, module metadata, Hiera, `puppet.conf`, `environment.conf`, `puppetdb.conf`, Puppet Server `auth.conf`/`ca.conf`/`webserver.conf`/`puppetserver.conf`/`web-routes.conf`, r10k, or Bolt project/inventory | `readtheplan puppet-project auth.conf` | Forge/Git dependencies, environment code/cache/commands, PuppetDB transport/fail-open/quorum, strict HOCON authorization and API scope, mTLS/TLS, CA signing, JRuby paths/environment/lifecycle, routes, r10k deployment, and Bolt execution/trust boundaries | Built-in |
 | GitHub Actions | Workflow YAML | `readtheplan github-actions workflow.yml` | Token permissions, action/reusable-workflow pinning, secret inputs, environments, and run steps | Built-in |
 | GitLab CI | `.gitlab-ci.yml` | `readtheplan gitlab-ci .gitlab-ci.yml` | Remote/project includes, scripts, tokens, downstream triggers, and deployment environments | Built-in |
 | CircleCI | `.circleci/config.yml` | `readtheplan circleci .circleci/config.yml` | Orbs, machine executors, SSH keys, remote Docker, reusable steps, and run commands | Built-in |
@@ -122,8 +122,8 @@ the same optional `framework` parameter through its MCP tool.
   libraries remain external code boundaries. Chef policy-group/node assignment, Berkshelf source
   indexes/cache and manifest-to-lock freshness, credentials, config.rb,
   cookbook contents, server-side state, Puppet module contents and transitive dependencies,
-  Hiera data, eyaml keys, `auth.conf`,
-  autosign policy/config contents, Puppet Server HOCON, Ruby extensions,
+  Hiera data, eyaml keys, autosign policy/config contents, merged Puppet Server HOCON includes and
+  substitutions, live certificates/CRLs, reverse-proxy trust, Ruby extensions,
   custom providers/types, Bolt configuration precedence, installed Bolt module/plugin code,
   resolved dynamic inventory and external secrets, target state, selected tasks/plans/commands,
   dynamic
