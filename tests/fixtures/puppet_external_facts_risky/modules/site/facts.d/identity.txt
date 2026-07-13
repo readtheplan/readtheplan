@@ -1,0 +1,2 @@
+environment=fixture
+api_token=RTP_FIXTURE_EXTERNAL_FACT_TEXT_SECRET_DO_NOT_LEAK

@@ -24,6 +24,13 @@ from readtheplan.adapters.bolt_content import (
     parse_bolt_task_metadata,
     parse_bolt_yaml_plan,
 )
+from readtheplan.adapters.puppet_external_fact import (
+    PuppetExternalFactInputError,
+    is_puppet_external_fact_path,
+    parse_puppet_external_fact,
+    puppet_external_fact_changes,
+    puppet_external_fact_metadata,
+)
 from readtheplan.adapters.puppet_ruby import (
     PuppetRubyInputError,
     parse_puppet_ruby_extension,
@@ -917,7 +924,18 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
         raise PuppetProjectInputError("input is empty")
     basename = Path(filename).name.casefold()
     try:
-        if puppet_ruby_metadata(filename) is not None:
+        if puppet_external_fact_metadata(filename, source) is not None:
+            document = parse_puppet_external_fact(source, filename)
+            parsed = {
+                "artifact_type": "external_fact",
+                "document": document,
+            }
+        elif is_puppet_external_fact_path(filename):
+            raise PuppetExternalFactInputError(
+                "unsupported facts.d content; supported text formats are JSON, YAML, text, "
+                "shell, PowerShell, Python, Ruby, Perl, and batch"
+            )
+        elif puppet_ruby_metadata(filename) is not None:
             document = parse_puppet_ruby_extension(source, filename)
             parsed = {
                 "artifact_type": "ruby_extension",
@@ -957,7 +975,11 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
             parsed = _parse_bolt_yaml(source, "bolt_inventory")
         else:
             parsed = _parse_json(source)
-    except (BoltContentInputError, PuppetRubyInputError) as exc:
+    except (
+        BoltContentInputError,
+        PuppetExternalFactInputError,
+        PuppetRubyInputError,
+    ) as exc:
         raise PuppetProjectInputError(str(exc)) from exc
     if parsed is None:
         first = next(
@@ -3513,6 +3535,7 @@ class PuppetProjectAdapter(BaseAdapter):
                 "bolt_task_metadata",
                 "bolt_yaml_plan",
                 "environment",
+                "external_fact",
                 "puppetdb",
                 "r10k",
                 "ruby_extension",
@@ -3539,6 +3562,7 @@ class PuppetProjectAdapter(BaseAdapter):
             "bolt_task_metadata": bolt_task_metadata_changes,
             "bolt_yaml_plan": bolt_yaml_plan_changes,
             "environment": _environment_changes,
+            "external_fact": puppet_external_fact_changes,
             "puppetdb": _puppetdb_changes,
             "r10k": _r10k_changes,
             "ruby_extension": puppet_ruby_extension_changes,
@@ -3548,7 +3572,7 @@ class PuppetProjectAdapter(BaseAdapter):
             "server_runtime": _server_runtime_changes,
             "server_web": _server_web_changes,
         }[artifact_type](project["document"])
-        if artifact_type == "ruby_extension":
+        if artifact_type in {"external_fact", "ruby_extension"}:
             return changes
         if artifact_type == "bolt_task_implementation":
             boundary = (
@@ -3656,5 +3680,18 @@ def analyze_puppet_project(data: dict[str, Any], *, catalog=None) -> dict[str, A
             "source_line_count",
         ):
             gate[field] = document[field]
+    if data["puppet_project"]["artifact_type"] == "external_fact":
+        document = data["puppet_project"]["document"]
+        for field in (
+            "component_name",
+            "external_fact_type",
+            "fact_count",
+            "format",
+            "language",
+            "source_kind",
+            "source_line_count",
+        ):
+            if field in document:
+                gate[field] = document[field]
     gate["total_changes"] = len(changes)
     return gate
