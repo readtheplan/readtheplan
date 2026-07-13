@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -42,6 +44,97 @@ _PRIVILEGED_PLUGINS = {
     "workflow-cps": "Pipeline Groovy execution",
 }
 _MAX_PLUGINS = 5_000
+_MAX_DEFINITIONS = 10_000
+_JJB_DEFINITION_TYPES = {
+    "builder",
+    "defaults",
+    "folder",
+    "job",
+    "job-group",
+    "job-template",
+    "notification",
+    "parameter",
+    "project",
+    "property",
+    "publisher",
+    "reporter",
+    "scm",
+    "trigger",
+    "view",
+    "view-template",
+    "wrapper",
+}
+_JJB_STRONG_DEFINITION_TYPES = {
+    "folder",
+    "job",
+    "job-group",
+    "job-template",
+    "project",
+    "view",
+    "view-template",
+}
+_JJB_COMPONENT_SECTIONS = {
+    "builders": "builder",
+    "notifications": "notification",
+    "parameters": "parameter",
+    "properties": "property",
+    "publishers": "publisher",
+    "reporters": "reporter",
+    "scm": "scm",
+    "triggers": "trigger",
+    "wrappers": "wrapper",
+}
+_COMMAND_COMPONENTS = {
+    "ant",
+    "batch",
+    "conditional-step",
+    "gradle",
+    "groovy",
+    "maven-target",
+    "msbuild",
+    "powershell",
+    "python",
+    "ruby",
+    "shell",
+    "system-groovy",
+}
+_SECRET_COMPONENTS = {
+    "credentials-binding",
+    "file",
+    "password",
+    "secret-text",
+    "ssh-agent",
+    "username-password",
+}
+_SIDE_EFFECT_PUBLISHERS = {
+    "deploy",
+    "email",
+    "ftp",
+    "postbuildscript",
+    "scp",
+    "ssh",
+    "trigger",
+    "trigger-parameterized-builds",
+}
+_AUTOMATIC_TRIGGERS = {
+    "bitbucket",
+    "build-result",
+    "dockerhub-notification",
+    "generic-webhook-trigger",
+    "gerrit",
+    "github",
+    "github-pull-request",
+    "gitlab",
+    "pollscm",
+    "reverse-build",
+    "timed",
+}
+
+
+@dataclass(frozen=True)
+class _JJBTaggedValue:
+    tag: str
+    value: Any
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -55,6 +148,8 @@ def _construct_unique_mapping(
 ) -> dict[Any, Any]:
     keys: set[Any] = set()
     for key_node, _ in node.value:
+        if key_node.tag == "tag:yaml.org,2002:merge":
+            continue
         key = loader.construct_object(key_node, deep=deep)
         try:
             duplicate = key in keys
@@ -70,6 +165,55 @@ _UniqueKeyLoader.add_constructor(
     yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
     _construct_unique_mapping,
 )
+
+
+def _construct_jjb_tag(
+    loader: _UniqueKeyLoader,
+    tag_suffix: str,
+    node: yaml.Node,
+) -> _JJBTaggedValue:
+    if isinstance(node, yaml.ScalarNode):
+        value: Any = loader.construct_scalar(node)
+    elif isinstance(node, yaml.SequenceNode):
+        value = loader.construct_sequence(node, deep=True)
+    elif isinstance(node, yaml.MappingNode):
+        value = _construct_unique_mapping(loader, node, deep=True)
+    else:  # pragma: no cover - PyYAML currently exposes only these node types
+        raise JenkinsProjectInputError("unsupported YAML tag value")
+    return _JJBTaggedValue(tag=f"!{tag_suffix}", value=value)
+
+
+def _construct_python_tuple(
+    loader: _UniqueKeyLoader,
+    node: yaml.SequenceNode,
+) -> list[Any]:
+    """Read JJB's documented tuple syntax as inert sequence data."""
+    return loader.construct_sequence(node, deep=True)
+
+
+_UniqueKeyLoader.add_multi_constructor("!", _construct_jjb_tag)
+_UniqueKeyLoader.add_constructor(
+    "tag:yaml.org,2002:python/tuple",
+    _construct_python_tuple,
+)
+
+
+def _load_yaml(source: str) -> Any:
+    try:
+        return yaml.load(source, Loader=_UniqueKeyLoader)  # noqa: S506
+    except JenkinsProjectInputError:
+        raise
+    except yaml.YAMLError as exc:
+        raise JenkinsProjectInputError(str(exc)) from exc
+
+
+def _json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise JenkinsProjectInputError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
 
 
 def _validate_plugin_id(value: Any, *, location: str) -> str:
@@ -166,12 +310,7 @@ def _string_field(value: Any, *, field: str, entry: int) -> str:
 
 
 def _parse_yaml_catalog(source: str) -> dict[str, Any]:
-    try:
-        document = yaml.load(source, Loader=_UniqueKeyLoader)  # noqa: S506
-    except JenkinsProjectInputError:
-        raise
-    except yaml.YAMLError as exc:
-        raise JenkinsProjectInputError(str(exc)) from exc
+    document = _load_yaml(source)
     if not isinstance(document, dict) or set(document) != {"plugins"}:
         raise JenkinsProjectInputError("YAML plugin catalog must contain only a plugins list")
     raw_plugins = document["plugins"]
@@ -226,8 +365,100 @@ def _parse_yaml_catalog(source: str) -> dict[str, Any]:
     }
 
 
+def _definition_name(body: dict[str, Any], *, kind: str, entry: int) -> str:
+    value = body.get("id", body.get("name"))
+    if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+        raise JenkinsProjectInputError(
+            f"Jenkins Job Builder {kind} definition {entry} requires a scalar name or id"
+        )
+    name = str(value).strip()
+    if not name:
+        raise JenkinsProjectInputError(
+            f"Jenkins Job Builder {kind} definition {entry} has an empty name or id"
+        )
+    return name
+
+
+def _parse_job_builder_document(document: Any, *, artifact_type: str) -> dict[str, Any]:
+    if not isinstance(document, list):
+        raise JenkinsProjectInputError("Jenkins Job Builder input must be a list of definitions")
+    if not document:
+        raise JenkinsProjectInputError("Jenkins Job Builder input does not contain definitions")
+    if len(document) > _MAX_DEFINITIONS:
+        raise JenkinsProjectInputError(
+            f"Jenkins Job Builder input exceeds {_MAX_DEFINITIONS} definitions"
+        )
+
+    definitions: list[dict[str, Any]] = []
+    seen: dict[tuple[str, str], int] = {}
+    strong_definition = False
+    for entry, item in enumerate(document, start=1):
+        if not isinstance(item, dict) or len(item) != 1:
+            raise JenkinsProjectInputError(
+                f"Jenkins Job Builder definition {entry} must be a one-key mapping"
+            )
+        raw_kind, body = next(iter(item.items()))
+        if not isinstance(raw_kind, str):
+            raise JenkinsProjectInputError(
+                f"Jenkins Job Builder definition {entry} type must be a string"
+            )
+        kind = raw_kind.casefold()
+        if kind.startswith("_"):
+            continue
+        if kind not in _JJB_DEFINITION_TYPES:
+            raise JenkinsProjectInputError(
+                f"unsupported Jenkins Job Builder definition type on entry {entry}: {raw_kind}"
+            )
+        if not isinstance(body, dict):
+            raise JenkinsProjectInputError(
+                f"Jenkins Job Builder {kind} definition {entry} must be a mapping"
+            )
+        name = _definition_name(body, kind=kind, entry=entry)
+        identity = (kind, name.casefold())
+        if identity in seen:
+            raise JenkinsProjectInputError(
+                f"duplicate Jenkins Job Builder {kind} name on entries "
+                f"{seen[identity]} and {entry}"
+            )
+        seen[identity] = entry
+        definitions.append(
+            {
+                "kind": kind,
+                "body": body,
+                "location": f"definition.{entry}",
+            }
+        )
+        strong_definition = strong_definition or kind in _JJB_STRONG_DEFINITION_TYPES
+
+    if not definitions or not strong_definition:
+        raise JenkinsProjectInputError(
+            "input does not contain a Jenkins Job Builder job, project, folder, or view definition"
+        )
+    return {
+        "artifact_type": artifact_type,
+        "document": {"definitions": definitions},
+    }
+
+
+def _parse_job_builder_yaml(source: str) -> dict[str, Any]:
+    return _parse_job_builder_document(
+        _load_yaml(source),
+        artifact_type="job_builder_yaml",
+    )
+
+
+def _parse_job_builder_json(source: str) -> dict[str, Any]:
+    try:
+        document = json.loads(source, object_pairs_hook=_json_object)
+    except JenkinsProjectInputError:
+        raise
+    except json.JSONDecodeError as exc:
+        raise JenkinsProjectInputError(str(exc)) from exc
+    return _parse_job_builder_document(document, artifact_type="job_builder_json")
+
+
 def parse_jenkins_project(source: str, *, filename: str = "") -> dict[str, Any]:
-    """Parse Plugin Installation Manager text or YAML without resolving plugins."""
+    """Parse Jenkins plugin catalogs or Job Builder definitions without execution."""
     if not source.strip():
         raise JenkinsProjectInputError("input is empty")
     suffix = Path(filename).suffix.casefold()
@@ -239,11 +470,16 @@ def parse_jenkins_project(source: str, *, filename: str = "") -> dict[str, Any]:
         ),
         "",
     )
-    parsed = (
-        _parse_yaml_catalog(source)
-        if suffix in {".yaml", ".yml"} or first == "plugins:"
-        else _parse_text_catalog(source)
-    )
+    if suffix == ".json":
+        parsed = _parse_job_builder_json(source)
+    elif suffix in {".yaml", ".yml"} or first == "plugins:" or first.startswith("-"):
+        document = _load_yaml(source)
+        if isinstance(document, dict) and set(document) == {"plugins"}:
+            parsed = _parse_yaml_catalog(source)
+        else:
+            parsed = _parse_job_builder_document(document, artifact_type="job_builder_yaml")
+    else:
+        parsed = _parse_text_catalog(source)
     return {"jenkins_project": parsed}
 
 
@@ -313,10 +549,261 @@ def _plugin_change(plugin: dict[str, Any]) -> dict[str, str]:
     return {
         "Address": f"jenkins_plugins.{plugin['location']}.{artifact_id}",
         "Kind": "plugin",
+        "Action": "install",
         "Risk": risk,
         "Explanation": f"Jenkins installs executable controller plugin {artifact_id!r}. "
         + " ".join(reasons),
     }
+
+
+def _iter_fields(value: Any):
+    if isinstance(value, _JJBTaggedValue):
+        yield "__tag__", value.tag
+        yield from _iter_fields(value.value)
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            yield str(key).casefold(), child
+            yield from _iter_fields(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _iter_fields(child)
+
+
+def _scalar_strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [item for child in value for item in _scalar_strings(child)]
+    return []
+
+
+def _component_type(value: Any) -> str:
+    if isinstance(value, dict) and value:
+        return str(next(iter(value))).casefold()
+    if isinstance(value, str):
+        return "macro"
+    if isinstance(value, _JJBTaggedValue):
+        return "tagged"
+    return "unknown"
+
+
+def _has_truthy_field(value: Any, names: set[str]) -> bool:
+    for key, child in _iter_fields(value):
+        if key in names and child is True:
+            return True
+    return False
+
+
+def _definition_change(definition: dict[str, Any]) -> dict[str, str]:
+    kind = str(definition["kind"])
+    body = definition["body"]
+    risk = "review"
+    reasons = ["The definition creates or updates Jenkins controller-managed job configuration."]
+
+    if kind in {"job-template", "project", "job-group", "view-template"}:
+        reasons.append("Template expansion and inherited defaults determine the effective objects.")
+    if kind == "project":
+        combinations = 1
+        dimensions = 0
+        for key, value in body.items():
+            if key in {"exclude", "jobs", "name", "templates"} or not isinstance(value, list):
+                continue
+            dimensions += 1
+            combinations *= max(len(value), 1)
+            if combinations > 64:
+                risk = "dangerous"
+                reasons.append(
+                    "Project list variables can expand to more than 64 job combinations before "
+                    "exclusions are applied."
+                )
+                break
+        if dimensions:
+            reasons.append("Project list variables expand as a Cartesian product.")
+    if kind in {"job-template", "view-template"}:
+        name = body.get("name", "")
+        if isinstance(name, str) and "{" not in name:
+            reasons.append("The template name has no visible substitution variable.")
+    for key, value in _iter_fields(body):
+        if key in {"auth-token", "authentication-token"}:
+            risk = "dangerous"
+            reasons.append("The definition configures a remotely usable authentication token.")
+            break
+        if key in {"custom-workspace", "workspace"} and value:
+            risk = "dangerous"
+            reasons.append("The job selects a custom workspace path on its build agent.")
+            break
+    for key, value in body.items():
+        if key.casefold() in {"node", "assigned-node"} and isinstance(value, str):
+            if value.strip().casefold() in {"built-in", "master"}:
+                risk = "dangerous"
+                reasons.append("The job explicitly targets the Jenkins controller for execution.")
+        if key.casefold() == "concurrent" and value is True:
+            reasons.append("Concurrent builds can race over shared external or workspace state.")
+    project_type = str(body.get("project-type", "")).casefold()
+    if project_type in {"pipeline", "workflow"} and "dsl" in body:
+        risk = "dangerous"
+        reasons.append("The job contains inline Pipeline Groovy that executes as build logic.")
+        if body.get("sandbox") is False:
+            reasons.append("The inline Pipeline explicitly disables the Groovy sandbox.")
+
+    return {
+        "Address": f"jenkins_job_builder.{definition['location']}.{kind}",
+        "Kind": "definition",
+        "Action": "configure",
+        "Risk": risk,
+        "Explanation": " ".join(reasons),
+    }
+
+
+def _scm_component_risk(value: Any) -> tuple[str, list[str]]:
+    risk = "review"
+    reasons = ["The SCM component selects external source code used by a Jenkins job."]
+    for key, child in _iter_fields(value):
+        if key in {"url", "repository", "repo", "remote"}:
+            for candidate in _scalar_strings(child):
+                if _DYNAMIC_VALUE.search(candidate):
+                    risk = "dangerous"
+                    reasons.append("The repository location is dynamically interpolated.")
+                try:
+                    parsed = urlsplit(candidate)
+                except ValueError:
+                    continue
+                if parsed.scheme.casefold() in {"file", "http"}:
+                    risk = "dangerous"
+                    reasons.append("A repository uses local or plaintext transport.")
+                if parsed.username or parsed.password:
+                    risk = "dangerous"
+                    reasons.append("A repository URL embeds credentials.")
+        if key in {"branch", "branches", "ref", "refspec", "revision"}:
+            for candidate in _scalar_strings(child):
+                normalized = candidate.strip()
+                if not re.fullmatch(r"[0-9a-fA-F]{40,64}", normalized):
+                    risk = "dangerous"
+                    reasons.append("The selected SCM revision is mutable or dynamically resolved.")
+                    break
+        if key in {"credentials-id", "credential-id"} and child:
+            reasons.append("The checkout exposes a managed Jenkins credential to SCM operations.")
+    return risk, list(dict.fromkeys(reasons))
+
+
+def _component_change(
+    definition: dict[str, Any],
+    section: str,
+    index: int,
+    value: Any,
+) -> dict[str, str]:
+    kind = _JJB_COMPONENT_SECTIONS[section]
+    component_type = _component_type(value)
+    risk = "review"
+    reasons = [f"The Jenkins Job Builder {kind} component changes job behavior."]
+
+    if kind == "builder":
+        risk = "dangerous"
+        reasons.append("Build steps can execute code on a Jenkins agent.")
+        if component_type not in _COMMAND_COMPONENTS and component_type != "raw":
+            reasons.append("Plugin-provided builder behavior remains an external code boundary.")
+    elif kind == "trigger":
+        if component_type in _AUTOMATIC_TRIGGERS or component_type in {"macro", "unknown"}:
+            risk = "dangerous"
+            reasons.append(
+                "The trigger can start builds automatically from time or external events."
+            )
+    elif kind == "publisher":
+        if component_type in _SIDE_EFFECT_PUBLISHERS:
+            risk = "dangerous"
+            reasons.append("The publisher can send data or trigger changes outside the build.")
+    elif kind == "wrapper":
+        if component_type in _SECRET_COMPONENTS:
+            risk = "dangerous"
+            reasons.append("The wrapper exposes managed credentials or secret material to a build.")
+        if _has_truthy_field(value, {"privileged"}):
+            risk = "dangerous"
+            reasons.append("The wrapper enables privileged execution.")
+    elif kind == "parameter":
+        if component_type in _SECRET_COMPONENTS or "credential" in component_type:
+            risk = "dangerous"
+            reasons.append("The parameter crosses a Jenkins credential or secret boundary.")
+    elif kind == "property":
+        if component_type in {"authorization", "auth-token", "ownership"}:
+            risk = "dangerous"
+            reasons.append("The property changes job authorization or remote invocation controls.")
+    elif kind == "scm":
+        risk, reasons = _scm_component_risk(value)
+
+    if component_type == "raw":
+        risk = "dangerous"
+        reasons.append("Raw XML bypasses JJB's typed module validation and plugin abstractions.")
+
+    return {
+        "Address": (
+            f"jenkins_job_builder.{definition['location']}.{section}.{index}"
+        ),
+        "Kind": kind,
+        "Action": "configure",
+        "Risk": risk,
+        "Explanation": " ".join(dict.fromkeys(reasons)),
+    }
+
+
+def _tag_changes(definition: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for key, value in _iter_fields(definition["body"]):
+        if key != "__tag__" or not isinstance(value, str):
+            continue
+        normalized = value.casefold()
+        dangerous = any(token in normalized for token in ("raw", "jinja", "j2"))
+        explanation = (
+            "A Jenkins Job Builder custom YAML tag references or transforms content that "
+            "readtheplan intentionally does not load or render."
+        )
+        if dangerous:
+            explanation += " The tag can inject templated or executable source into a job."
+        changes.append(
+            {
+                "Address": (
+                    f"jenkins_job_builder.{definition['location']}.external_source."
+                    f"{len(changes) + 1}"
+                ),
+                "Kind": "external_source",
+                "Action": "configure",
+                "Risk": "dangerous" if dangerous else "review",
+                "Explanation": explanation,
+            }
+        )
+    return changes
+
+
+def _job_builder_changes(definitions: list[dict[str, Any]]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    for definition in definitions:
+        changes.append(_definition_change(definition))
+        body = definition["body"]
+        for section in _JJB_COMPONENT_SECTIONS:
+            if section not in body:
+                continue
+            raw_components = body[section]
+            if isinstance(raw_components, list):
+                components = raw_components
+            else:
+                components = [raw_components]
+            for index, value in enumerate(components, start=1):
+                changes.append(_component_change(definition, section, index, value))
+        changes.extend(_tag_changes(definition))
+    changes.append(
+        {
+            "Address": "jenkins_job_builder.effective_configuration",
+            "Kind": "resolution_boundary",
+            "Action": "configure",
+            "Risk": "review",
+            "Explanation": (
+                "Effective Jenkins jobs also depend on included files, template/default and macro "
+                "expansion, JJB and plugin versions, installed controller plugins, credentials, "
+                "Jenkins permissions, and live controller state; readtheplan does not resolve or "
+                "execute those inputs."
+            ),
+        }
+    )
+    return changes
 
 
 class JenkinsProjectAdapter(BaseAdapter):
@@ -326,20 +813,26 @@ class JenkinsProjectAdapter(BaseAdapter):
 
     def can_handle(self, input_data: dict[str, Any]) -> bool:
         project = input_data.get("jenkins_project")
-        return (
-            isinstance(project, dict)
-            and project.get("artifact_type") in {"plugins_txt", "plugins_yaml"}
-            and isinstance(project.get("document"), dict)
-            and isinstance(project["document"].get("plugins"), list)
-        )
+        if not isinstance(project, dict) or not isinstance(project.get("document"), dict):
+            return False
+        artifact_type = project.get("artifact_type")
+        if artifact_type in {"plugins_txt", "plugins_yaml"}:
+            return isinstance(project["document"].get("plugins"), list)
+        if artifact_type in {"job_builder_yaml", "job_builder_json"}:
+            return isinstance(project["document"].get("definitions"), list)
+        return False
 
     def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
-        plugins = input_data["jenkins_project"]["document"]["plugins"]
+        project = input_data["jenkins_project"]
+        if project["artifact_type"] in {"job_builder_yaml", "job_builder_json"}:
+            return _job_builder_changes(project["document"]["definitions"])
+        plugins = project["document"]["plugins"]
         changes = [_plugin_change(plugin) for plugin in plugins]
         changes.append(
             {
                 "Address": "jenkins_plugins.effective_set",
                 "Kind": "resolution_boundary",
+                "Action": "install",
                 "Risk": "review",
                 "Explanation": (
                     "Effective Jenkins plugin code also depends on the Jenkins core version, "
@@ -355,7 +848,7 @@ class JenkinsProjectAdapter(BaseAdapter):
         return ResourceChange(
             address=str(raw["Address"]),
             resource_type=f"jenkins_project_{raw['Kind']}",
-            actions=("install",),
+            actions=(str(raw["Action"]),),
             risk=str(raw["Risk"]),
             explanation=str(raw["Explanation"]),
         )
@@ -372,6 +865,13 @@ def analyze_jenkins_project(data: dict[str, Any], *, catalog=None) -> dict[str, 
     project = data["jenkins_project"]
     gate["adapter"] = "jenkins-project"
     gate["artifact_type"] = project["artifact_type"]
-    gate["plugin_count"] = len(project["document"]["plugins"])
+    if project["artifact_type"] in {"plugins_txt", "plugins_yaml"}:
+        gate["plugin_count"] = len(project["document"]["plugins"])
+    else:
+        definitions = project["document"]["definitions"]
+        gate["definition_count"] = len(definitions)
+        gate["job_count"] = sum(
+            definition["kind"] in {"job", "job-template"} for definition in definitions
+        )
     gate["total_changes"] = len(changes)
     return gate

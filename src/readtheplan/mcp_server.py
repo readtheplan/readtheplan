@@ -2627,7 +2627,7 @@ def agent_gate_configuration_management(
         except JenkinsProjectInputError as exc:
             raise MCPToolInputError(
                 code="INVALID_INPUT",
-                message=f"Invalid Jenkins plugin catalog {input_path}: {exc}",
+                message=f"Invalid Jenkins project input {input_path}: {exc}",
             ) from exc
         adapter = JenkinsProjectAdapter()
         analyze = analyze_jenkins_project
@@ -3443,7 +3443,8 @@ def create_server() -> Any:
         """Return a gate for supported configuration-management source.
 
         Args:
-            input_path: Local path to a playbook, Jenkinsfile, plugin catalog, recipe, or manifest.
+            input_path: Local path to a playbook, Jenkinsfile, Jenkins project file, recipe, or
+                manifest.
             ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, jenkins-project, teamcity,
                 chef, chef-project, puppet, puppet-project, salt-project, dsc, or cfengine.
             framework: Optional compliance framework for control checks.

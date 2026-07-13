@@ -1,0 +1,63 @@
+- defaults:
+    name: global
+    concurrent: true
+
+- job-template:
+    name: "{name}-{environment}-deploy"
+    project-type: pipeline
+    node: built-in
+    auth-token: fixture-remote-token-do-not-leak
+    sandbox: false
+    dsl: |
+      node { sh('deploy') }
+    builders:
+      - shell: !include-raw-verbatim scripts/deploy.sh
+    scm:
+      - git:
+          url: http://fixture-user:fixture-password@git.example.invalid/app.git
+          branches:
+            - main
+          credentials-id: fixture-scm-credential-do-not-leak
+    triggers:
+      - timed: "H/5 * * * *"
+    wrappers:
+      - ssh-agent:
+          users:
+            - fixture-ssh-credential-do-not-leak
+    parameters:
+      - password:
+          name: DEPLOY_TOKEN
+          default: fixture-parameter-secret-do-not-leak
+    properties:
+      - authorization:
+          anonymous:
+            - job-read
+    publishers:
+      - deploy:
+          war: build/app.war
+      - raw:
+          xml: "<dangerous fixture-secret='do-not-leak'/>"
+
+- project:
+    name: application
+    environment:
+      - env-01
+      - env-02
+      - env-03
+      - env-04
+      - env-05
+      - env-06
+      - env-07
+      - env-08
+      - env-09
+    region:
+      - region-01
+      - region-02
+      - region-03
+      - region-04
+      - region-05
+      - region-06
+      - region-07
+      - region-08
+    jobs:
+      - "{name}-{environment}-deploy"

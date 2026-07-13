@@ -121,7 +121,7 @@ def test_text_catalog_supports_every_official_coordinate_shape() -> None:
             "plugins.yaml",
             "duplicate plugin artifact ID",
         ),
-        ("hello: world\n", "plugins.yaml", "only a plugins list"),
+        ("hello: world\n", "plugins.yaml", "must be a list of definitions"),
     ],
 )
 def test_parser_rejects_empty_ambiguous_duplicate_or_malformed_catalogs(
@@ -136,6 +136,131 @@ def test_parser_rejects_empty_ambiguous_duplicate_or_malformed_catalogs(
 def test_parser_handles_long_adversarial_plugin_id_linearly() -> None:
     with pytest.raises(JenkinsProjectInputError, match="invalid plugin artifact ID"):
         parse_jenkins_project("a" * 100_000 + "!:1.0\n", filename="plugins.txt")
+
+
+def test_job_builder_yaml_surfaces_execution_expansion_secrets_and_raw_boundaries() -> None:
+    fixture = FIXTURES / "jenkins_job_builder_risky" / "jenkins-jobs.yaml"
+    source = fixture.read_text(encoding="utf-8")
+    data = parse_jenkins_project(source, filename=str(fixture))
+    changes = JenkinsProjectAdapter().analyze(data, tool_name="Jenkins project")
+    encoded = json.dumps(
+        [{"address": change.address, "explanation": change.explanation} for change in changes]
+    )
+
+    assert data["jenkins_project"]["artifact_type"] == "job_builder_yaml"
+    assert len(data["jenkins_project"]["document"]["definitions"]) == 3
+    assert len(changes) == 13
+    assert sum(change.risk == "dangerous" for change in changes) == 11
+    assert any("Cartesian product" in change.explanation for change in changes)
+    assert any("controller for execution" in change.explanation for change in changes)
+    assert any("Raw XML" in change.explanation for change in changes)
+    assert any("does not load or render" in change.explanation for change in changes)
+    assert any("mutable or dynamically resolved" in change.explanation for change in changes)
+    for secret in (
+        "fixture-remote-token-do-not-leak",
+        "fixture-user",
+        "fixture-password",
+        "git.example.invalid",
+        "fixture-scm-credential-do-not-leak",
+        "fixture-ssh-credential-do-not-leak",
+        "fixture-parameter-secret-do-not-leak",
+        "fixture-secret",
+    ):
+        assert secret not in encoded
+
+
+def test_job_builder_json_with_pinned_scm_and_archive_is_review_only() -> None:
+    commit = "a" * 40
+    source = json.dumps(
+        [
+            {
+                "job": {
+                    "name": "review-job",
+                    "disabled": True,
+                    "scm": [
+                        {
+                            "git": {
+                                "url": "https://git.example.invalid/app.git",
+                                "branches": [commit],
+                            }
+                        }
+                    ],
+                    "publishers": [{"archive": {"artifacts": "build/**"}}],
+                }
+            }
+        ]
+    )
+    data = parse_jenkins_project(source, filename="jenkins-jobs.json")
+    changes = JenkinsProjectAdapter().analyze(data)
+
+    assert data["jenkins_project"]["artifact_type"] == "job_builder_json"
+    assert len(changes) == 4
+    assert {change.risk for change in changes} == {"review"}
+    assert {change.actions for change in changes} == {("configure",)}
+
+
+def test_job_builder_yaml_accepts_documented_anchors_and_tuple_values_inertly() -> None:
+    source = (
+        "- _job_defaults: &job_defaults\n"
+        "    disabled: true\n"
+        "    axes: !!python/tuple [linux, windows]\n"
+        "- job:\n"
+        "    <<: *job_defaults\n"
+        "    name: anchored-job\n"
+    )
+    data = parse_jenkins_project(source, filename="jjb.yaml")
+    definitions = data["jenkins_project"]["document"]["definitions"]
+
+    assert len(definitions) == 1
+    assert definitions[0]["body"]["disabled"] is True
+    assert definitions[0]["body"]["axes"] == ["linux", "windows"]
+
+
+@pytest.mark.parametrize(
+    ("source", "filename", "error"),
+    [
+        ("{}", "jobs.json", "must be a list"),
+        ('[{"job":{"name":"one","name":"two"}}]', "jobs.json", "duplicate JSON key"),
+        ("- job: value\n", "jobs.yaml", "must be a mapping"),
+        ("- unknown:\n    name: nope\n", "jobs.yaml", "unsupported"),
+        ("- builder:\n    name: only-a-macro\n", "jobs.yaml", "does not contain"),
+        (
+            "- job:\n    name: duplicate\n- job:\n    name: duplicate\n",
+            "jobs.yaml",
+            "duplicate Jenkins Job Builder job name",
+        ),
+        ("- job:\n    name: one\n    name: two\n", "jobs.yaml", "duplicate YAML key"),
+    ],
+)
+def test_job_builder_parser_rejects_ambiguous_duplicate_or_malformed_inputs(
+    source: str,
+    filename: str,
+    error: str,
+) -> None:
+    with pytest.raises(JenkinsProjectInputError, match=error):
+        parse_jenkins_project(source, filename=filename)
+
+
+def test_job_builder_gate_and_cli_report_definition_metadata(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = FIXTURES / "jenkins_job_builder_risky" / "jenkins-jobs.yaml"
+    data = parse_jenkins_project(fixture.read_text(encoding="utf-8"), filename=str(fixture))
+    gate = analyze_jenkins_project(data)
+
+    assert gate["adapter"] == "jenkins-project"
+    assert gate["artifact_type"] == "job_builder_yaml"
+    assert gate["definition_count"] == 3
+    assert gate["job_count"] == 1
+    assert gate["total_changes"] == 13
+    assert gate["decision"] == "block"
+    assert "plugin_count" not in gate
+
+    assert main(["jenkins-project", "--framework", "soc2", str(fixture)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["artifact_type"] == "job_builder_yaml"
+    assert payload["definition_count"] == 3
+    assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
 
 
 @pytest.mark.parametrize(

@@ -507,6 +507,25 @@ def test_project_scan_analyzes_jenkins_plugin_catalog(tmp_path: Path) -> None:
     assert "plugins.example.invalid" not in encoded
 
 
+def test_project_scan_analyzes_jenkins_job_builder_definitions(tmp_path: Path) -> None:
+    fixture = FIXTURES / "jenkins_job_builder_risky" / "jenkins-jobs.yaml"
+    target = tmp_path / "jjb" / "jobs.yaml"
+    target.parent.mkdir()
+    target.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "jenkins-project"
+    assert payload["files"][0]["total_changes"] == 13
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-password" not in encoded
+    assert "fixture-parameter-secret-do-not-leak" not in encoded
+
+
 def test_project_scan_analyzes_chef_runtime_configuration(tmp_path: Path) -> None:
     source = FIXTURES / "chef_runtime"
     targets = {

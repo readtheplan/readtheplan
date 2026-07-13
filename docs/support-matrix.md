@@ -42,7 +42,7 @@ matrix makes those boundaries explicit.
 | Nix / NixOS | `flake.nix`, `flake.lock`, or NixOS module source | `readtheplan nix flake.nix` | Input/lock provenance and graph integrity, substituters/trusted users/signatures/sandbox, fetchers/impurity/build code, users/SSH/sudo/firewall/services/systemd/kernel/storage/network/containers/secrets, and evaluation boundaries | Built-in |
 | Jenkins | Jenkinsfile | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step scanner covering agents/images/host arguments, libraries, credentials, commands/dynamic Groovy, triggers, approvals, checkout/HTTP/artifacts, and cleanup | Conservative |
 | Jenkins Configuration as Code | JCasC YAML | `readtheplan jenkins-jcasc jenkins.yaml` | Security realms, authorization, credentials, controller executors, nodes/clouds, agent images/privilege, libraries, script approval, Job DSL, endpoints/TLS, and plugin boundaries | Built-in |
-| Jenkins plugin catalog | Plugin Installation Manager `.txt`, `.yaml`, or `.yml` | `readtheplan jenkins-project plugins.txt` | Strict duplicate-safe catalogs; implicit/latest, experimental, and incremental versions; direct URL transport/credential exposure; privileged plugin capabilities; and explicit update-center, dependency, advisory, checksum, core, installed-plugin, and installer-flag boundaries | Built-in |
+| Jenkins project | Plugin Installation Manager catalogs or Jenkins Job Builder YAML/JSON | `readtheplan jenkins-project jenkins-jobs.yaml` | Strict duplicate-safe plugin catalogs plus JJB jobs/templates/projects/defaults/macros; Cartesian expansion, builders, SCM, triggers, credentials, publishers, raw XML, custom include/Jinja tags, and explicit controller/plugin/runtime boundaries | Built-in |
 | Chef | Recipe Ruby source | `readtheplan chef default.rb` | Broad built-in resource/action scanner covering execution, identities, schedules/networking, remote artifacts and checksums, guards, notifications, permissions, and cookbook includes | Conservative |
 | Chef project / dependencies / runtime | `Policyfile.rb`, `Policyfile.lock.json`, `Berksfile`, modern/legacy `Berksfile.lock`, `metadata.rb`, runtime configs, or supported `.d` fragments | `readtheplan chef-project Berksfile.lock` | Policy/run lists, cookbook provenance, Berkshelf migration/source ordering/groups/solver, direct and transitive lock graph integrity, exact constraint consistency, attributes/dependencies, client identity/convergence, Workstation bootstrap/SSH, Solo remote content, Server TLS/LDAP/database controls, credentials, duplicate overrides, and dynamic Ruby/external-state boundaries | Built-in |
 | Puppet | Manifest source | `readtheplan puppet site.pp` | Built-in and namespaced resource/state scanner covering execution/identity/connectivity, classes, dynamic data/templates, custom types, virtual/exported resources, collectors, refresh relationships, sources, and permissions | Conservative |
@@ -128,6 +128,9 @@ the same optional `framework` parameter through its MCP tool.
 - Jenkins JCasC analysis parses one YAML file without resolving supplementary
   configuration files, secret-source/environment interpolation, installed-plugin
   schemas, init hooks, system properties, or live controller state.
+- Jenkins Job Builder analysis does not load includes, render templates/Jinja, import component
+  plugins, generate XML, or contact Jenkins. Effective defaults/macros, installed plugins,
+  credentials, permissions, and controller state remain review boundaries.
 - Generate plans and rendered artifacts with the upstream tool in the trust
   boundary where that tool already runs, then pass the artifact to readtheplan.
 - Dynamic includes, plugins, controller behavior, and custom code cannot always
