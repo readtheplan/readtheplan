@@ -108,7 +108,8 @@ readtheplan circleci .circleci/config.yml
 readtheplan docker-compose compose.yml
 readtheplan nomad job.nomad.hcl
 readtheplan packer image.pkr.hcl
-readtheplan skaffold skaffold.yaml</code></pre>
+readtheplan skaffold skaffold.yaml
+readtheplan devspace devspace.yaml</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -148,6 +149,17 @@ readtheplan skaffold skaffold.yaml</code></pre>
             Review build, render, deploy, verify, and custom-action boundaries statically:
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan skaffold --framework soc2 skaffold.yaml</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="devspace-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="devspace-title">DevSpace projects</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review executable pipelines, image builds, deployments, and live-development
+            mutations without invoking DevSpace or contacting a cluster:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan devspace --framework soc2 devspace.yaml</code></pre>
         </div>
       </section>
 

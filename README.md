@@ -123,6 +123,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Nomad | `readtheplan nomad job.nomad.hcl` | HCL/JSON jobspecs plus structured scheduler plans: task drivers, commands/images, artifacts/templates, identities, Vault/Consul, services/networking, storage, secrets, placement, rollout, replacement, and stops |
 | Packer | `readtheplan packer image.pkr.hcl` | Native HCL/JSON templates or inspect output: plugin/core constraints, variables/locals/data, builders/communicators/base images, provisioners, post-processors, publishing, secrets, functions, and non-execution boundaries |
 | Skaffold | `readtheplan skaffold skaffold.yaml` | Config dependencies, build backends/artifacts/hooks, manifest renderers, deploy engines/flags, verification, custom actions, profiles, port forwarding, secrets, and non-execution boundaries |
+| DevSpace | `readtheplan devspace devspace.yaml` | Imports/dependencies, POSIX pipelines/functions/commands, image builders, Helm/Kubernetes deployments, live development mutation/sync/ports/SSH, hooks, profiles, registry credentials, plugins, and non-execution boundaries |
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
 | cloud-init | `readtheplan cloud-init user-data.yml` | Users, SSH, packages, files, commands, storage, power state, includes, scripts, and merged configuration |
 | systemd | `readtheplan systemd example.service` | Commands, identities, capabilities, credentials, sandboxing, filesystems, devices, sockets, timers, mounts, restart behavior, and merged-unit boundaries |
@@ -158,8 +159,8 @@ mode enumerates executable components and explicitly reminds reviewers that insp
 is not validation. Neither mode initializes plugins or runs a build.
 Skaffold Config YAML is parsed without resolving imported configs, building images,
 rendering manifests, executing hooks/actions, or contacting Kubernetes clusters.
-Skaffold Config YAML is parsed without resolving imports, building images, rendering
-manifests, executing hooks/actions, or contacting Kubernetes clusters.
+DevSpace YAML is parsed without resolving imports, dependencies, variables, expressions,
+or profiles and without executing pipelines, hooks, plugins, builds, or deployments.
 Vagrantfiles are scanned as Ruby source without evaluation; known DSL operations,
 host-command escape hatches, and merged configuration boundaries remain visible.
 cloud-init user-data is parsed without executing guest code; scripts, boothooks,
