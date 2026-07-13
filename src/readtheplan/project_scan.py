@@ -243,6 +243,10 @@ def identify_project_input(
         )
     ):
         return "puppet-project"
+    if suffix == ".yaml" and "plans" in parts[:-1] and _bolt_content_context(path, parts, "plans"):
+        return "puppet-project"
+    if suffix == ".json" and "tasks" in parts[:-1] and _bolt_content_context(path, parts, "tasks"):
+        return "puppet-project"
 
     if name == "ansible.cfg":
         return "ansible-project"
@@ -256,12 +260,17 @@ def identify_project_input(
         "galaxy.yml",
     }:
         return "ansible-project"
-    if len(parts) > 1 and parts[-2] == "meta" and name in {
-        "argument_specs.yaml",
-        "argument_specs.yml",
-        "runtime.yaml",
-        "runtime.yml",
-    }:
+    if (
+        len(parts) > 1
+        and parts[-2] == "meta"
+        and name
+        in {
+            "argument_specs.yaml",
+            "argument_specs.yml",
+            "runtime.yaml",
+            "runtime.yml",
+        }
+    ):
         return "ansible-project"
     if len(parts) > 1 and parts[-2] == "meta" and name in {"main.yaml", "main.yml"}:
         role_markers = {"defaults", "files", "handlers", "tasks", "templates", "vars"}
@@ -356,8 +365,7 @@ def identify_project_input(
     }:
         return "jenkins-project"
     if suffix in {".json", ".yaml", ".yml"} and any(
-        part in {".jjb", "jenkins-job-builder", "jenkins-jobs", "jjb"}
-        for part in parts[:-1]
+        part in {".jjb", "jenkins-job-builder", "jenkins-jobs", "jjb"} for part in parts[:-1]
     ):
         return "jenkins-project"
     if name == "plugins.txt" and (
@@ -424,17 +432,12 @@ def identify_project_input(
     if name in {"chef-server.rb", "knife.rb"}:
         return "chef-project"
     if name in {"client.rb", "solo.rb"} and (
-        len(parts) == 1
-        or any(part in {".chef", "chef", "opscode"} for part in parts[:-1])
+        len(parts) == 1 or any(part in {".chef", "chef", "opscode"} for part in parts[:-1])
     ):
         return "chef-project"
-    if name == "config.rb" and any(
-        part in {".chef", "chef", "workstation"} for part in parts[:-1]
-    ):
+    if name == "config.rb" and any(part in {".chef", "chef", "workstation"} for part in parts[:-1]):
         return "chef-project"
-    if suffix == ".rb" and any(
-        part in {"client.d", "config.d", "solo.d"} for part in parts[:-1]
-    ):
+    if suffix == ".rb" and any(part in {"client.d", "config.d", "solo.d"} for part in parts[:-1]):
         return "chef-project"
     if name == "metadata.rb" and (
         len(parts) == 1 or any(part in {"chef", "cookbooks"} for part in parts[:-1])
@@ -679,14 +682,26 @@ def _looks_like_ansible_inventory_yaml(text: str) -> bool:
     return False
 
 
+def _bolt_content_context(path: Path, parts: tuple[str, ...], directory: str) -> bool:
+    """Recognize Bolt content in projects and Puppet module layouts."""
+    if any(part in {"modules", "site-modules", "site_modules"} for part in parts[:-1]):
+        return True
+    for ancestor in path.parents:
+        if ancestor.name.casefold() != directory:
+            continue
+        content_root = ancestor.parent
+        return (content_root / "bolt-project.yaml").is_file() or (
+            content_root / "metadata.json"
+        ).is_file()
+    return False
+
+
 def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return None
-    if suffix in (*_YAML_SUFFIXES, ".json", ".env", ".ini") and _SOPS_ENCRYPTED_HINT.search(
-        text
-    ):
+    if suffix in (*_YAML_SUFFIXES, ".json", ".env", ".ini") and _SOPS_ENCRYPTED_HINT.search(text):
         return "sops"
     if suffix in _YAML_SUFFIXES and _SOPS_YAML_HINT.search(text):
         return "sops"
@@ -753,8 +768,7 @@ def _looks_like_terraform_plan_prefix(text: str) -> bool:
     head = text[:4096]
     has_format = re.search(r'^\s*\{.{0,4000}"format_version"\s*:', head, re.DOTALL)
     has_plan_shape = any(
-        f'"{key}"' in text
-        for key in ("terraform_version", "planned_values", "resource_changes")
+        f'"{key}"' in text for key in ("terraform_version", "planned_values", "resource_changes")
     )
     return has_format is not None and has_plan_shape
 
@@ -883,6 +897,11 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "variable_count",
         "callback_count",
         "template_count",
+        "step_count",
+        "parameter_count",
+        "implementation_count",
+        "file_count",
+        "sensitive_parameter_count",
     ):
         if isinstance(payload.get(field), int):
             result[field] = payload[field]
@@ -1075,7 +1094,6 @@ def _project_pr_comment(
 
 def _markdown_code(value: object) -> str:
     cleaned = "".join(
-        character if character >= " " and character != "\x7f" else " "
-        for character in str(value)
+        character if character >= " " and character != "\x7f" else " " for character in str(value)
     ).replace("`", "\N{MODIFIER LETTER GRAVE ACCENT}")
     return f"`{cleaned}`"

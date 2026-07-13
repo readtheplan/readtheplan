@@ -1769,6 +1769,41 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet Bolt YAML plan
+        id: puppet_bolt_plan
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/bolt_content_risky/modules/fixture/plans/deploy.yaml
+          framework: soc2
+
+      - name: Assert Puppet Bolt YAML plan outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_bolt_plan.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_bolt_plan.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_bolt_plan.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "37"
+          test "$RISK_COUNTS" = '{"dangerous":24,"irreversible":0,"review":13,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "bolt_yaml_plan"
+          assert payload["step_count"] == 10
+          assert payload["parameter_count"] == 2
+          assert payload["dynamic_count"] == 8
+          assert payload["decision"] == "block"
+          assert "fixture-bolt" not in serialized
+          assert "example.invalid" not in serialized
+          assert "fixture-package" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Docker Compose
         id: docker_compose
         uses: ./

@@ -17,9 +17,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _changes(fixture: str):
-    data = parse_puppet_project(
-        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
-    )
+    data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture)
     return PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
 
 
@@ -387,9 +385,7 @@ def test_puppetdb_conf_surfaces_transport_fail_open_and_partial_persistence() ->
 
 def test_server_auth_surfaces_header_identity_wildcards_and_privileged_apis() -> None:
     data = parse_puppet_project(
-        (FIXTURES / "puppet_server_policy_risky" / "auth.conf").read_text(
-            encoding="utf-8"
-        ),
+        (FIXTURES / "puppet_server_policy_risky" / "auth.conf").read_text(encoding="utf-8"),
         filename="auth.conf",
     )
     changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
@@ -446,17 +442,17 @@ def test_server_runtime_surfaces_code_paths_environment_and_jruby_lifecycle() ->
         "puppet_project_server_jruby_recycling",
         "puppet_project_server_jruby_multithreading",
     } <= kinds
-    assert sum(
-        change.resource_type == "puppet_project_server_ruby_code_path" for change in changes
-    ) == 3
+    assert (
+        sum(change.resource_type == "puppet_project_server_ruby_code_path" for change in changes)
+        == 3
+    )
 
 
 def test_server_routes_surface_admin_ca_status_and_metrics_mounts() -> None:
     changes = _changes("puppet_server_policy_risky/web-routes.conf")
 
     assert any(
-        change.resource_type == "puppet_project_server_api_routes"
-        and change.risk == "dangerous"
+        change.resource_type == "puppet_project_server_api_routes" and change.risk == "dangerous"
         for change in changes
     )
 
@@ -497,13 +493,13 @@ def test_hardened_puppet_server_policy_stays_review_only() -> None:
             "  version: 1\n"
             "  rules: [{\n"
             "    match-request: {\n"
-            "      path: \"/puppet/v3/catalog\"\n"
+            '      path: "/puppet/v3/catalog"\n'
             "      type: path\n"
             "      method: post\n"
             "    }\n"
-            "    allow: [\"primary.example.test\"]\n"
+            '    allow: ["primary.example.test"]\n'
             "    sort-order: 500\n"
-            "    name: \"catalog\"\n"
+            '    name: "catalog"\n'
             "  }]\n"
             "}\n",
         ),
@@ -583,8 +579,7 @@ def test_hocon_substitution_concatenation_is_an_unresolved_boundary() -> None:
     changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
 
     assert any(
-        change.resource_type == "puppet_project_server_hocon_substitution"
-        for change in changes
+        change.resource_type == "puppet_project_server_hocon_substitution" for change in changes
     )
     assert "PUPPET_BASE" not in json.dumps(analyze_puppet_project(data))
 
@@ -594,6 +589,177 @@ def test_hocon_parser_rejects_excessive_nesting() -> None:
 
     with pytest.raises(PuppetProjectInputError, match="nesting exceeds"):
         parse_puppet_project(source, filename="puppetserver.conf")
+
+
+def test_bolt_yaml_plan_surfaces_orchestration_without_leaking_values() -> None:
+    fixture = "bolt_content_risky/modules/fixture/plans/deploy.yaml"
+    data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture)
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    gate = analyze_puppet_project(data)
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(gate)
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_yaml_plan"
+    assert len(changes) == 37
+    assert sum(change.risk == "dangerous" for change in changes) == 24
+    assert sum(change.risk == "review" for change in changes) == 13
+    assert gate["step_count"] == 10
+    assert gate["parameter_count"] == 2
+    assert gate["dynamic_count"] == 8
+    assert {
+        "puppet_project_bolt_plan_command",
+        "puppet_project_bolt_plan_command_download",
+        "puppet_project_bolt_plan_command_dynamic_execution",
+        "puppet_project_bolt_plan_download",
+        "puppet_project_bolt_plan_dynamic_expression",
+        "puppet_project_bolt_plan_expression",
+        "puppet_project_bolt_plan_failure_continuation",
+        "puppet_project_bolt_plan_literal_secret",
+        "puppet_project_bolt_plan_nested_plan",
+        "puppet_project_bolt_plan_privilege",
+        "puppet_project_bolt_plan_resource",
+        "puppet_project_bolt_plan_script",
+        "puppet_project_bolt_plan_sensitive_file",
+        "puppet_project_bolt_plan_sensitive_parameter",
+        "puppet_project_bolt_plan_target_scope",
+        "puppet_project_bolt_plan_task",
+        "puppet_project_bolt_plan_transfer_path",
+        "puppet_project_bolt_plan_upload",
+    } <= kinds
+    for sensitive in (
+        "fixture-bolt-plan-password-do-not-leak",
+        "fixture-bolt-plan-token-do-not-leak",
+        "fixture-task-password-do-not-leak",
+        "fixture-script-secret-do-not-leak",
+        "downloads.example.invalid",
+        "windows.example.invalid",
+        "fixture-package",
+        "fixture-service",
+    ):
+        assert sensitive not in encoded
+
+
+def test_bolt_task_metadata_surfaces_execution_contract_without_values() -> None:
+    fixture = "bolt_content_risky/modules/fixture/tasks/deploy.json"
+    data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture)
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    gate = analyze_puppet_project(data)
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(gate)
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_task_metadata"
+    assert len(changes) == 12
+    assert sum(change.risk == "dangerous" for change in changes) == 6
+    assert sum(change.risk == "review" for change in changes) == 6
+    assert gate["parameter_count"] == 4
+    assert gate["implementation_count"] == 2
+    assert gate["file_count"] == 3
+    assert gate["sensitive_parameter_count"] == 0
+    assert {
+        "puppet_project_bolt_task_bundled_files",
+        "puppet_project_bolt_task_implementation",
+        "puppet_project_bolt_task_input_contract",
+        "puppet_project_bolt_task_noop_unavailable",
+        "puppet_project_bolt_task_private_visibility",
+        "puppet_project_bolt_task_remote_execution",
+        "puppet_project_bolt_task_sensitive_parameter",
+        "puppet_project_bolt_task_unconstrained_input",
+    } <= kinds
+    assert "fixture-bolt-task-password-do-not-leak" not in encoded
+    assert "fixture/files" not in encoded
+    assert "deploy.sh" not in encoded
+
+
+def test_hardened_bolt_content_stays_review_only() -> None:
+    fixtures = (
+        "bolt_content_review/modules/fixture/plans/inspect.yaml",
+        "bolt_content_review/modules/fixture/tasks/inspect.json",
+    )
+    for fixture in fixtures:
+        changes = _changes(fixture)
+        assert {change.risk for change in changes} == {"review"}
+
+
+def test_bolt_content_parsers_never_execute_source(tmp_path: Path) -> None:
+    marker = tmp_path / "bolt-source-was-executed"
+    source = f"steps:\n  - command: touch '{marker}'\n    targets: localhost\n"
+
+    parse_puppet_project(source, filename="modules/demo/plans/check.yaml")
+
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize(
+    ("source", "filename", "error"),
+    [
+        (
+            "steps:\n  - command: one\n    task: two\n    targets: all\n",
+            "modules/demo/plans/bad.yaml",
+            "exactly one action",
+        ),
+        (
+            "steps:\n  - command: one\n",
+            "modules/demo/plans/bad.yaml",
+            "missing required",
+        ),
+        (
+            "steps:\n  - message: one\n    catch_errors: true\n",
+            "modules/demo/plans/bad.yaml",
+            "unsupported message fields",
+        ),
+        (
+            "steps:\n  - message: one\nsteps: []\n",
+            "modules/demo/plans/bad.yaml",
+            "duplicate YAML key",
+        ),
+        (
+            '{"parameters":{"Bad":{"type":"String"}}}',
+            "modules/demo/tasks/bad.json",
+            "lowercase identifiers",
+        ),
+        (
+            '{"puppet_task_version":2}',
+            "modules/demo/tasks/bad.json",
+            "must be 1",
+        ),
+        (
+            '{"remote":"yes"}',
+            "modules/demo/tasks/bad.json",
+            "must be a boolean",
+        ),
+        (
+            '{"remote":true,"remote":false}',
+            "modules/demo/tasks/bad.json",
+            "duplicate JSON key",
+        ),
+    ],
+)
+def test_bolt_content_parsers_reject_ambiguous_or_malformed_input(
+    source: str, filename: str, error: str
+) -> None:
+    with pytest.raises(PuppetProjectInputError, match=error):
+        parse_puppet_project(source, filename=filename)
+
+
+def test_bolt_content_parsers_enforce_source_and_structure_limits() -> None:
+    filename = "modules/demo/plans/bad.yaml"
+    with pytest.raises(PuppetProjectInputError, match="2 MiB"):
+        parse_puppet_project("steps:\n  - message: " + "x" * (2 * 1024 * 1024), filename=filename)
+    with pytest.raises(PuppetProjectInputError, match="line count"):
+        parse_puppet_project("# filler\n" * 100_001, filename=filename)
+    with pytest.raises(PuppetProjectInputError, match="NUL byte"):
+        parse_puppet_project("steps:\n  - message: bad\x00value\n", filename=filename)
+    nested = "steps:\n  - eval:\n" + "      -" * 102 + " value\n"
+    with pytest.raises(PuppetProjectInputError, match="nesting depth"):
+        parse_puppet_project(nested, filename=filename)
+
+
+def test_bolt_yaml_plan_rejects_recursive_aliases() -> None:
+    with pytest.raises(PuppetProjectInputError, match="recursive YAML alias"):
+        parse_puppet_project(
+            "steps: &steps\n  - eval: *steps\n",
+            filename="modules/demo/plans/bad.yaml",
+        )
 
 
 @pytest.mark.parametrize(
@@ -642,6 +808,8 @@ def test_r10k_parser_rejects_duplicate_unrelated_or_malformed_input(
         ("puppet_conf_risky.conf", "config"),
         ("bolt_project/bolt-project.yaml", "bolt_project"),
         ("bolt_inventory/inventory.yaml", "bolt_inventory"),
+        ("bolt_content_risky/modules/fixture/plans/deploy.yaml", "bolt_yaml_plan"),
+        ("bolt_content_risky/modules/fixture/tasks/deploy.json", "bolt_task_metadata"),
         ("puppet_r10k_risky/r10k.yaml", "r10k"),
         ("puppet_server_policy_risky/environment.conf", "environment"),
         ("puppet_server_policy_risky/puppetdb.conf", "puppetdb"),

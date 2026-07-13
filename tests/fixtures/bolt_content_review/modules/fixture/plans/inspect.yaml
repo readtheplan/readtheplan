@@ -1,0 +1,17 @@
+description: Review-only Bolt plan fixture
+parameters:
+  api_token:
+    type: Sensitive[String]
+  targets:
+    type: TargetSpec
+steps:
+  - message: Starting inspection
+  - task: facts
+    targets: $targets
+    noop: true
+  - resources:
+      - package: fixture-package
+        parameters:
+          ensure: present
+    targets: $targets
+    noop: true
