@@ -105,7 +105,7 @@ def _source_changes(source: str) -> list[dict[str, Any]]:
         if literal:
             path = literal.group("path")
             external = _external_path(path)
-            vendor = path.startswith("vendor/") or "github.com/" in path
+            vendor = path.startswith(("vendor/", "github.com/"))
             risk = "dangerous" if external else "review"
             detail = (
                 " escapes the project boundary"
