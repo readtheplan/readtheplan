@@ -266,6 +266,32 @@ def identify_project_input(
     }:
         return "ansible-project"
     if name in {
+        "ansible-controller-export.json",
+        "ansible-controller-export.yaml",
+        "ansible-controller-export.yml",
+        "awx-export.json",
+        "awx-export.yaml",
+        "awx-export.yml",
+        "awx_export.json",
+        "awx_export.yaml",
+        "awx_export.yml",
+        "controller-export.json",
+        "controller-export.yaml",
+        "controller-export.yml",
+        "controller_export.json",
+        "controller_export.yaml",
+        "controller_export.yml",
+        "tower-export.json",
+        "tower-export.yaml",
+        "tower-export.yml",
+    }:
+        return "ansible-project"
+    if name in {"resources.json", "resources.yaml", "resources.yml"} and any(
+        part in {"aap", "ansible-controller", "automation-controller", "awx", "tower"}
+        for part in parts[:-1]
+    ):
+        return "ansible-project"
+    if name in {
         "hosts",
         "hosts.ini",
         "hosts.yaml",
@@ -804,6 +830,10 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         result["suite_count"] = payload["suite_count"]
     if isinstance(payload.get("dynamic_erb"), bool):
         result["dynamic_erb"] = payload["dynamic_erb"]
+    if isinstance(payload.get("asset_count"), int):
+        result["asset_count"] = payload["asset_count"]
+    if isinstance(payload.get("asset_type_count"), int):
+        result["asset_type_count"] = payload["asset_type_count"]
     return result
 
 

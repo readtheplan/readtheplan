@@ -1139,6 +1139,40 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Automation Controller export
+        id: ansible_controller_export
+        uses: ./
+        with:
+          tool: ansible-project
+          input-file: tests/fixtures/ansible_controller_export_risky.json
+          framework: soc2
+
+      - name: Assert Automation Controller export outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.ansible_controller_export.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.ansible_controller_export.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.ansible_controller_export.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "41"
+          test "$RISK_COUNTS" = '{"dangerous":32,"irreversible":0,"review":9,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "ansible-project"
+          assert payload["artifact_type"] == "controller_export"
+          assert payload["asset_count"] == 12
+          assert payload["asset_type_count"] == 12
+          assert payload["decision"] == "block"
+          assert "fixture-controller-password-do-not-leak" not in serialized
+          assert "fixture-deploy" not in serialized
+          assert "example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Jenkinsfile
         id: jenkins
         uses: ./

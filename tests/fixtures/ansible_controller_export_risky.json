@@ -1,0 +1,140 @@
+{
+  "users": [
+    {
+      "username": "fixture-admin",
+      "password": "fixture-controller-password-do-not-leak",
+      "is_superuser": true,
+      "natural_key": {"username": "fixture-admin", "type": "user"}
+    }
+  ],
+  "organizations": [
+    {
+      "name": "fixture-org",
+      "natural_key": {"name": "fixture-org", "type": "organization"},
+      "related": {
+        "roles": [
+          {"name": "admin", "user": {"username": "fixture-admin", "type": "user"}}
+        ]
+      }
+    }
+  ],
+  "credential_types": [
+    {
+      "name": "fixture-cloud-credential",
+      "kind": "cloud",
+      "inputs": {"fields": [{"id": "api_token", "secret": true}]},
+      "injectors": {"env": {"FIXTURE_TOKEN": "{{ api_token }}"}},
+      "natural_key": {"name": "fixture-cloud-credential", "kind": "cloud", "type": "credential_type"}
+    }
+  ],
+  "credentials": [
+    {
+      "name": "fixture-credential",
+      "inputs": {
+        "username": "fixture-user",
+        "password": "fixture-credential-secret-do-not-leak"
+      },
+      "credential_type": {"name": "fixture-cloud-credential", "kind": "cloud", "type": "credential_type"},
+      "natural_key": {"name": "fixture-credential", "credential_type": {"name": "fixture-cloud-credential", "kind": "cloud", "type": "credential_type"}, "type": "credential"}
+    }
+  ],
+  "projects": [
+    {
+      "name": "fixture-project",
+      "scm_type": "git",
+      "scm_url": "http://fixture-user:fixture-password@example.invalid/repo.git",
+      "scm_branch": "main",
+      "scm_update_on_launch": true,
+      "allow_override": true,
+      "signature_validation_credential": null,
+      "natural_key": {"name": "fixture-project", "organization": {"name": "fixture-org", "type": "organization"}, "type": "project"}
+    }
+  ],
+  "inventory": [
+    {
+      "name": "fixture-inventory",
+      "variables": {"api_token": "fixture-inventory-token-do-not-leak"},
+      "natural_key": {"name": "fixture-inventory", "organization": {"name": "fixture-org", "type": "organization"}, "type": "inventory"},
+      "related": {
+        "hosts": [{"name": "fixture-host", "variables": {"ansible_host": "192.0.2.10"}}],
+        "groups": [{"name": "fixture-group"}]
+      }
+    }
+  ],
+  "inventory_sources": [
+    {
+      "name": "fixture-dynamic-source",
+      "source": "ec2",
+      "source_vars": {"api_token": "fixture-source-token-do-not-leak"},
+      "overwrite": true,
+      "overwrite_vars": true,
+      "update_on_launch": true,
+      "credential": {"name": "fixture-credential", "type": "credential"},
+      "natural_key": {"name": "fixture-dynamic-source", "inventory": {"name": "fixture-inventory", "type": "inventory"}, "type": "inventory_source"}
+    }
+  ],
+  "execution_environments": [
+    {
+      "name": "fixture-ee",
+      "image": "registry.example.invalid/fixture-ee:latest",
+      "pull": "always",
+      "credential": {"name": "fixture-credential", "type": "credential"},
+      "natural_key": {"name": "fixture-ee", "type": "execution_environment"}
+    }
+  ],
+  "notification_templates": [
+    {
+      "name": "fixture-notification",
+      "notification_type": "webhook",
+      "notification_configuration": {
+        "url": "http://example.invalid/hook",
+        "token": "fixture-notification-token-do-not-leak"
+      },
+      "natural_key": {"name": "fixture-notification", "organization": {"name": "fixture-org", "type": "organization"}, "type": "notification_template"}
+    }
+  ],
+  "job_templates": [
+    {
+      "name": "fixture-deploy",
+      "job_type": "run",
+      "playbook": "deploy.yml",
+      "become_enabled": true,
+      "ask_variables_on_launch": true,
+      "webhook_service": "github",
+      "webhook_credential": {"name": "fixture-credential", "type": "credential"},
+      "extra_vars": {"api_token": "fixture-job-token-do-not-leak"},
+      "natural_key": {"name": "fixture-deploy", "organization": {"name": "fixture-org", "type": "organization"}, "type": "job_template"},
+      "related": {
+        "credentials": [{"name": "fixture-credential", "type": "credential"}],
+        "schedules": [{"name": "fixture-schedule", "type": "schedule"}],
+        "notification_templates_error": [{"name": "fixture-notification", "type": "notification_template"}],
+        "survey_spec": {"spec": [{"variable": "password", "default": "fixture-survey-password-do-not-leak", "type": "password"}]}
+      }
+    }
+  ],
+  "workflow_job_templates": [
+    {
+      "name": "fixture-workflow",
+      "webhook_service": "gitlab",
+      "natural_key": {"name": "fixture-workflow", "organization": {"name": "fixture-org", "type": "organization"}, "type": "workflow_job_template"},
+      "related": {
+        "workflow_nodes": [
+          {
+            "identifier": "deploy",
+            "unified_job_template": {"name": "fixture-deploy", "type": "job_template"},
+            "related": {"failure_nodes": [{"identifier": "cleanup"}]}
+          }
+        ]
+      }
+    }
+  ],
+  "schedules": [
+    {
+      "name": "fixture-schedule",
+      "enabled": true,
+      "rrule": "DTSTART:20260713T000000Z RRULE:FREQ=DAILY",
+      "extra_data": {"api_token": "fixture-schedule-token-do-not-leak"},
+      "natural_key": {"name": "fixture-schedule", "unified_job_template": {"name": "fixture-deploy", "type": "job_template"}, "type": "schedule"}
+    }
+  ]
+}
