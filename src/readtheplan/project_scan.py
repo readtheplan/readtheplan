@@ -379,6 +379,8 @@ def identify_project_input(
         part in {"jenkins", ".jenkins", "jenkins_home"} for part in parts[:-1]
     ):
         return "jenkins-project"
+    if suffix == ".groovy" and _jenkins_groovy_hook_context(parts):
+        return "jenkins-project"
     if suffix == ".groovy" and len(parts) > 1 and parts[-2] == "vars":
         return "jenkins-project"
     if suffix == ".groovy" and "src" in parts[:-1]:
@@ -700,6 +702,16 @@ def _bolt_content_context(path: Path, parts: tuple[str, ...], directory: str) ->
     return False
 
 
+def _jenkins_groovy_hook_context(parts: tuple[str, ...]) -> bool:
+    """Recognize Jenkins controller hook paths without matching generic Groovy source."""
+    if not parts:
+        return False
+    name = parts[-1]
+    if name in {"init.groovy", "boot-failure.groovy"}:
+        return True
+    return any(part in {"init.groovy.d", "boot-failure.groovy.d"} for part in parts[:-1])
+
+
 def _ansible_role_content_context(path: Path, parts: tuple[str, ...]) -> bool:
     """Recognize executable task/handler YAML in standard role layouts."""
     for index, part in enumerate(parts[:-2]):
@@ -938,6 +950,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
     for field in (
         "language",
         "hook_name",
+        "source_kind",
     ):
         if isinstance(payload.get(field), str):
             result[field] = payload[field]
@@ -957,6 +970,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "implementation_count",
         "file_count",
         "sensitive_parameter_count",
+        "source_line_count",
     ):
         if isinstance(payload.get(field), int):
             result[field] = payload[field]

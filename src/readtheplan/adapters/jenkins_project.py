@@ -158,6 +158,88 @@ _GROOVY_FINDINGS = (
         "and downstream deployment effects.",
     ),
 )
+_GROOVY_HOOK_FINDINGS = (
+    (
+        "security_configuration",
+        "dangerous",
+        re.compile(
+            r"(?:\bsetSecurityRealm\s*\(|\bsetAuthorizationStrategy\s*\(|"
+            r"\bsetCrumbIssuer\s*\(|\bScriptApproval\b|\bGlobalMatrixAuthorizationStrategy\b|"
+            r"\bFullControlOnceLoggedInAuthorizationStrategy\b)"
+        ),
+        "The controller hook changes authentication, authorization, CSRF, or script-approval "
+        "policy with system-level privileges.",
+    ),
+    (
+        "credential_configuration",
+        "dangerous",
+        re.compile(
+            r"(?:\bCredentialsProvider\b|\bSystemCredentialsProvider\b|"
+            r"\b(?:add|remove|update)Credentials\s*\(|\bCredentialsScope\b)"
+        ),
+        "The controller hook reads or mutates Jenkins credential storage; review scope, secret "
+        "source, replacement behavior, and log exposure.",
+    ),
+    (
+        "identity_configuration",
+        "dangerous",
+        re.compile(
+            r"(?:\bcreateAccount\s*\(|\bUser\.get\s*\(|\bApiTokenProperty\b|"
+            r"\bsetPassword\s*\()"
+        ),
+        "The controller hook creates or changes a Jenkins identity or API-token boundary.",
+    ),
+    (
+        "plugin_configuration",
+        "dangerous",
+        re.compile(
+            r"(?:\bpluginManager\b|\bupdateCenter\b|\bdeploy\s*\(|\binstall\s*\(|"
+            r"\b(?:disable|enable)Plugin\s*\()"
+        ),
+        "The controller hook changes installed or enabled plugin code; review provenance, "
+        "compatibility, restart behavior, and rollback.",
+    ),
+    (
+        "agent_configuration",
+        "dangerous",
+        re.compile(
+            r"(?:\b(?:add|remove)Node\s*\(|\bsetNodes\s*\(|\bclouds\s*\.\s*(?:add|remove)|"
+            r"\bsetNumExecutors\s*\(|\bsetMode\s*\()"
+        ),
+        "The controller hook changes agents, clouds, executors, or scheduling mode and therefore "
+        "the execution trust boundary for jobs.",
+    ),
+    (
+        "job_configuration",
+        "dangerous",
+        re.compile(
+            r"(?:\bcreateProject\s*\(|\bcreateItem\s*\(|\bcopy\s*\(|"
+            r"\bgetItemByFullName\s*\([^\n]*\)\s*\.\s*delete\s*\()"
+        ),
+        "The controller hook creates, copies, or deletes Jenkins jobs outside a reviewed job "
+        "configuration transaction.",
+    ),
+    (
+        "controller_lifecycle",
+        "dangerous",
+        re.compile(
+            r"(?:\bdoQuietDown\s*\(|\bdoCancelQuietDown\s*\(|\bdoSafeRestart\s*\(|"
+            r"\bsafeRestart\s*\(|\brestart\s*\()"
+        ),
+        "The controller hook changes controller availability or restart state.",
+    ),
+    (
+        "runtime_configuration",
+        "review",
+        re.compile(r"(?:\bSystem\.(?:getenv|getProperty)\s*\(|\.save\s*\()"),
+        "The controller hook depends on runtime environment or persists live configuration; "
+        "review effective values, idempotence, and restart behavior.",
+    ),
+)
+_GROOVY_HOOK_TYPES = {
+    "boot-failure": "boot_failure_hook",
+    "init": "init_hook",
+}
 _LIBRARY_RESOURCE = re.compile(r"\blibraryResource\s*\(")
 _DYNAMIC_LIBRARY_RESOURCE = re.compile(r"\blibraryResource\s*\(\s*[A-Za-z_$]")
 _CLASS_DECLARATION = re.compile(r"\bclass\s+[A-Za-z_$][A-Za-z0-9_$]*")
@@ -534,8 +616,7 @@ def _parse_job_builder_document(document: Any, *, artifact_type: str) -> dict[st
         identity = (kind, name.casefold())
         if identity in seen:
             raise JenkinsProjectInputError(
-                f"duplicate Jenkins Job Builder {kind} name on entries "
-                f"{seen[identity]} and {entry}"
+                f"duplicate Jenkins Job Builder {kind} name on entries {seen[identity]} and {entry}"
             )
         seen[identity] = entry
         definitions.append(
@@ -631,9 +712,7 @@ def _mask_groovy_comments_and_strings(
                 for offset in range(width):
                     output[index + offset] = " "
                 value = "".join(literal)
-                interpolated = quote == '"' and bool(
-                    re.search(r"(?:\$\{|\$[A-Za-z_])", value)
-                )
+                interpolated = quote == '"' and bool(re.search(r"(?:\$\{|\$[A-Za-z_])", value))
                 literals.append((literal_line, value, interpolated))
                 state = "code"
                 index += width
@@ -685,6 +764,39 @@ def _parse_shared_library(source: str, *, filename: str) -> dict[str, Any]:
     }
 
 
+def _groovy_hook_context(filename: str) -> tuple[str, str] | None:
+    path = PurePosixPath(filename.replace("\\", "/"))
+    name = path.name.casefold()
+    for hook_name, artifact_type in _GROOVY_HOOK_TYPES.items():
+        if name == f"{hook_name}.groovy" or path.parent.name.casefold() == (
+            f"{hook_name}.groovy.d"
+        ):
+            return artifact_type, hook_name
+    return None
+
+
+def _parse_groovy_hook(source: str, *, filename: str) -> dict[str, Any]:
+    if len(source.encode("utf-8")) > _MAX_GROOVY_SOURCE_BYTES:
+        raise JenkinsProjectInputError("Groovy input exceeds the static-analysis size limit")
+    if Path(filename).suffix.casefold() != ".groovy":
+        raise JenkinsProjectInputError("Jenkins Groovy hooks must use a .groovy filename")
+    context = _groovy_hook_context(filename)
+    if context is None:
+        raise JenkinsProjectInputError(
+            "Jenkins Groovy hook must use an init or boot-failure hook path"
+        )
+    artifact_type, hook_name = context
+    _mask_groovy_comments_and_strings(source)
+    return {
+        "artifact_type": artifact_type,
+        "document": {
+            "source": source,
+            "line_count": len(source.splitlines()),
+            "hook_name": hook_name,
+        },
+    }
+
+
 def parse_jenkins_project(source: str, *, filename: str = "") -> dict[str, Any]:
     """Parse Jenkins project artifacts without rendering templates or executing source."""
     if not source.strip():
@@ -699,7 +811,11 @@ def parse_jenkins_project(source: str, *, filename: str = "") -> dict[str, Any]:
         "",
     )
     if suffix == ".groovy":
-        parsed = _parse_shared_library(source, filename=filename)
+        parsed = (
+            _parse_groovy_hook(source, filename=filename)
+            if _groovy_hook_context(filename)
+            else _parse_shared_library(source, filename=filename)
+        )
     elif suffix == ".json":
         parsed = _parse_job_builder_json(source)
     elif suffix in {".yaml", ".yml"} or first == "plugins:" or first.startswith("-"):
@@ -965,9 +1081,7 @@ def _component_change(
         reasons.append("Raw XML bypasses JJB's typed module validation and plugin abstractions.")
 
     return {
-        "Address": (
-            f"jenkins_job_builder.{definition['location']}.{section}.{index}"
-        ),
+        "Address": (f"jenkins_job_builder.{definition['location']}.{section}.{index}"),
         "Kind": kind,
         "Action": "configure",
         "Risk": risk,
@@ -1036,14 +1150,20 @@ def _job_builder_changes(definitions: list[dict[str, Any]]) -> list[dict[str, st
     return changes
 
 
-def _shared_library_change(
+def _groovy_source_change(
+    artifact_type: str,
     line: int,
     kind: str,
     risk: str,
     explanation: str,
 ) -> dict[str, str]:
+    prefix = (
+        "jenkins_shared_library"
+        if artifact_type in {"shared_library_var", "shared_library_class"}
+        else "jenkins_groovy_hook"
+    )
     return {
-        "Address": f"jenkins_shared_library.line.{line}.{kind}",
+        "Address": f"{prefix}.line.{line}.{kind}",
         "Kind": kind,
         "Action": "execute",
         "Risk": risk,
@@ -1061,29 +1181,79 @@ def _has_secret_assignment(line: str) -> bool:
     return False
 
 
-def _shared_library_changes(source: str, *, artifact_type: str) -> list[dict[str, str]]:
+def _contextual_groovy_explanation(explanation: str, artifact_type: str) -> str:
+    if artifact_type in {"shared_library_var", "shared_library_class"}:
+        return explanation
+    return (
+        explanation.replace("The shared library", "The controller hook")
+        .replace("the shared library", "the controller hook")
+        .replace("Shared-library source", "Controller-hook source")
+        .replace("shared-library source", "controller-hook source")
+        .replace("A global-variable script", "The controller hook")
+    )
+
+
+def _groovy_source_changes(source: str, *, artifact_type: str) -> list[dict[str, str]]:
     code, literals = _mask_groovy_comments_and_strings(source)
     literal_lines = {line_number for line_number, _, _ in literals}
+    shared_library = artifact_type in {"shared_library_var", "shared_library_class"}
+    if shared_library:
+        opening_risk = "review"
+        opening_explanation = (
+            "This file defines executable Jenkins Shared Library Groovy. Its effective "
+            "privileges depend on global or folder library configuration, SCM ownership, "
+            "sandboxing, and script approvals."
+        )
+    elif artifact_type == "init_hook":
+        opening_risk = "dangerous"
+        opening_explanation = (
+            "This Groovy hook executes inside the Jenkins controller JVM after initialization "
+            "with access to Jenkins core, plugins, credentials, and the controller host."
+        )
+    else:
+        opening_risk = "dangerous"
+        opening_explanation = (
+            "This Groovy hook executes inside the Jenkins controller JVM after a boot failure "
+            "with access to Jenkins core, plugins, failure state, and the controller host."
+        )
     changes: list[dict[str, str]] = [
-        _shared_library_change(
+        _groovy_source_change(
+            artifact_type,
             1,
             "executable_source",
-            "review",
-            (
-                "This file defines executable Jenkins Shared Library Groovy. Its effective "
-                "privileges depend on global or folder library configuration, SCM ownership, "
-                "sandboxing, and script approvals."
-            ),
+            opening_risk,
+            opening_explanation,
         )
     ]
     for line_number, line in enumerate(code.splitlines(), start=1):
         for kind, risk, pattern, explanation in _GROOVY_FINDINGS:
             if pattern.search(line):
-                changes.append(_shared_library_change(line_number, kind, risk, explanation))
-        if _LIBRARY_RESOURCE.search(line):
+                changes.append(
+                    _groovy_source_change(
+                        artifact_type,
+                        line_number,
+                        kind,
+                        risk,
+                        _contextual_groovy_explanation(explanation, artifact_type),
+                    )
+                )
+        if not shared_library:
+            for kind, risk, pattern, explanation in _GROOVY_HOOK_FINDINGS:
+                if pattern.search(line):
+                    changes.append(
+                        _groovy_source_change(
+                            artifact_type,
+                            line_number,
+                            kind,
+                            risk,
+                            explanation,
+                        )
+                    )
+        if shared_library and _LIBRARY_RESOURCE.search(line):
             dynamic = bool(_DYNAMIC_LIBRARY_RESOURCE.search(line))
             changes.append(
-                _shared_library_change(
+                _groovy_source_change(
+                    artifact_type,
                     line_number,
                     "library_resource",
                     "dangerous" if dynamic else "review",
@@ -1098,29 +1268,38 @@ def _shared_library_changes(source: str, *, artifact_type: str) -> list[dict[str
             )
         if line_number in literal_lines and _has_secret_assignment(line):
             changes.append(
-                _shared_library_change(
+                _groovy_source_change(
+                    artifact_type,
                     line_number,
                     "literal_secret",
                     "dangerous",
-                    "A credential-like variable is assigned a literal value in shared-library "
-                    "source; the identifier and value are intentionally redacted.",
+                    (
+                        "A credential-like variable is assigned a literal value in "
+                        f"{'shared-library' if shared_library else 'controller-hook'} source; "
+                        "the identifier and value are intentionally redacted."
+                    ),
                 )
             )
 
     for line_number, literal, interpolated in literals:
         if _SECRET_NAME.search(literal) and re.search(r"[:=]", literal):
             changes.append(
-                _shared_library_change(
+                _groovy_source_change(
+                    artifact_type,
                     line_number,
                     "literal_secret",
                     "dangerous",
-                    "Shared-library source contains a credential-like literal; its contents are "
-                    "intentionally redacted.",
+                    (
+                        f"{'Shared-library' if shared_library else 'Controller-hook'} source "
+                        "contains a credential-like literal; its contents are intentionally "
+                        "redacted."
+                    ),
                 )
             )
         if interpolated:
             changes.append(
-                _shared_library_change(
+                _groovy_source_change(
+                    artifact_type,
                     line_number,
                     "runtime_interpolation",
                     "review",
@@ -1134,7 +1313,8 @@ def _shared_library_changes(source: str, *, artifact_type: str) -> list[dict[str
         if class_match and not _SERIALIZABLE_CLASS.search(code):
             line_number = code.count("\n", 0, class_match.start()) + 1
             changes.append(
-                _shared_library_change(
+                _groovy_source_change(
+                    artifact_type,
                     line_number,
                     "cps_serialization",
                     "review",
@@ -1143,19 +1323,30 @@ def _shared_library_changes(source: str, *, artifact_type: str) -> list[dict[str
                 )
             )
 
+    if shared_library:
+        boundary_address = "jenkins_shared_library.effective_execution"
+        boundary_explanation = (
+            "Effective Shared Library behavior also depends on library trust level, SCM "
+            "revision and ownership, implicit loading and version override settings, folder "
+            "permissions, controller plugins, sandbox approvals, replay, CPS transformation, "
+            "bundled resources, credentials, and runtime values; readtheplan does not contact "
+            "Jenkins or execute Groovy."
+        )
+    else:
+        boundary_address = "jenkins_groovy_hook.effective_execution"
+        boundary_explanation = (
+            "Effective Groovy-hook behavior also depends on hook ordering, Jenkins core and plugin "
+            "versions, controller filesystem and environment values, existing configuration, "
+            "credentials, initialization state, and runtime exceptions; readtheplan does not start "
+            "Jenkins or execute Groovy."
+        )
     changes.append(
         {
-            "Address": "jenkins_shared_library.effective_execution",
+            "Address": boundary_address,
             "Kind": "resolution_boundary",
             "Action": "execute",
             "Risk": "review",
-            "Explanation": (
-                "Effective Shared Library behavior also depends on library trust level, SCM "
-                "revision and ownership, implicit loading and version override settings, folder "
-                "permissions, controller plugins, sandbox approvals, replay, CPS transformation, "
-                "bundled resources, credentials, and runtime values; readtheplan does not contact "
-                "Jenkins or execute Groovy."
-            ),
+            "Explanation": boundary_explanation,
         }
     )
     unique: dict[tuple[str, str], dict[str, str]] = {}
@@ -1178,7 +1369,12 @@ class JenkinsProjectAdapter(BaseAdapter):
             return isinstance(project["document"].get("plugins"), list)
         if artifact_type in {"job_builder_yaml", "job_builder_json"}:
             return isinstance(project["document"].get("definitions"), list)
-        if artifact_type in {"shared_library_var", "shared_library_class"}:
+        if artifact_type in {
+            "shared_library_var",
+            "shared_library_class",
+            "init_hook",
+            "boot_failure_hook",
+        }:
             return isinstance(project["document"].get("source"), str)
         return False
 
@@ -1186,8 +1382,13 @@ class JenkinsProjectAdapter(BaseAdapter):
         project = input_data["jenkins_project"]
         if project["artifact_type"] in {"job_builder_yaml", "job_builder_json"}:
             return _job_builder_changes(project["document"]["definitions"])
-        if project["artifact_type"] in {"shared_library_var", "shared_library_class"}:
-            return _shared_library_changes(
+        if project["artifact_type"] in {
+            "shared_library_var",
+            "shared_library_class",
+            "init_hook",
+            "boot_failure_hook",
+        }:
+            return _groovy_source_changes(
                 project["document"]["source"],
                 artifact_type=project["artifact_type"],
             )
@@ -1239,11 +1440,15 @@ def analyze_jenkins_project(data: dict[str, Any], *, catalog=None) -> dict[str, 
             definition["kind"] in {"job", "job-template"} for definition in definitions
         )
     else:
-        gate["source_kind"] = (
-            "global_variable"
-            if project["artifact_type"] == "shared_library_var"
-            else "class"
-        )
+        source_kinds = {
+            "shared_library_var": "global_variable",
+            "shared_library_class": "class",
+            "init_hook": "controller_init_hook",
+            "boot_failure_hook": "controller_boot_failure_hook",
+        }
+        gate["source_kind"] = source_kinds[project["artifact_type"]]
         gate["source_line_count"] = project["document"]["line_count"]
+        if isinstance(project["document"].get("hook_name"), str):
+            gate["hook_name"] = project["document"]["hook_name"]
     gate["total_changes"] = len(changes)
     return gate

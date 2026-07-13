@@ -9,6 +9,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Jenkins controller Groovy-hook gates across the CLI, GitHub Action, project scan, and MCP.
+  Bounded, non-executing inspection now recognizes `init.groovy(.d)` and
+  `boot-failure.groovy(.d)` and surfaces controller APIs, security/authorization, credentials,
+  identities, plugins, agents/clouds, jobs, lifecycle, commands, filesystem/network access,
+  runtime configuration, literal secrets, and explicit hook-order/runtime boundaries.
 - Chef cookbook-content gates across the CLI, GitHub Action, project scan, and MCP. Bounded,
   non-executing inspection now covers recipes, attributes, custom resources, libraries, legacy
   providers/definitions, and ERB templates, including resources/actions, precedence, sensitive

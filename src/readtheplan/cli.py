@@ -394,11 +394,18 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     jenkins_project = subparsers.add_parser(
         "jenkins-project",
-        help="Emit the agent-gate decision for Jenkins plugin catalogs or Job Builder files.",
+        help=(
+            "Emit the agent-gate decision for Jenkins plugins, jobs, Shared Libraries, "
+            "or controller Groovy hooks."
+        ),
     )
     jenkins_project.add_argument("--framework", help="Include checks from a compliance framework.")
     jenkins_project.add_argument(
-        "input_file", help="Path to a Plugin Installation Manager catalog or JJB YAML/JSON file."
+        "input_file",
+        help=(
+            "Path to a Plugin Installation Manager catalog, JJB YAML/JSON, Shared Library "
+            "Groovy, or init/boot-failure Groovy hook."
+        ),
     )
     jenkins_project.set_defaults(func=_jenkins_project_gate)
 
