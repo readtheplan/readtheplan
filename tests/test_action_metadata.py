@@ -25,6 +25,7 @@ def test_action_uses_json_cli_contract() -> None:
         "ansible|ansible-project|jenkins|jenkins-jcasc|chef|chef-project|"
         "puppet|puppet-project|"
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
+        "travis-ci|drone-ci|woodpecker-ci|"
         "atlantis|"
         "docker-compose|"
         "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|vagrant|"
@@ -151,6 +152,12 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/bitbucket_pipelines_deploy.yml" in workflow
     assert "tool: buildkite" in workflow
     assert "input-file: tests/fixtures/buildkite_deploy.yml" in workflow
+    assert "tool: travis-ci" in workflow
+    assert "input-file: tests/fixtures/travis_ci_risky.yml" in workflow
+    assert "tool: drone-ci" in workflow
+    assert "input-file: tests/fixtures/drone_ci_risky.yml" in workflow
+    assert "tool: woodpecker-ci" in workflow
+    assert "input-file: tests/fixtures/woodpecker_ci_risky.yml" in workflow
     assert "tool: atlantis" in workflow
     assert "input-file: tests/fixtures/atlantis_risky.yaml" in workflow
     assert "tool: envoy" in workflow

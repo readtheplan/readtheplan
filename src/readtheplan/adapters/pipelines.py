@@ -52,7 +52,13 @@ def parse_pipeline_yaml(source: str, ecosystem: str) -> dict[str, Any]:
         list("tTfF"),
     )
     try:
-        parsed = yaml.load(source, Loader=WorkflowLoader)
+        if ecosystem == "drone-ci":
+            documents = list(yaml.load_all(source, Loader=WorkflowLoader))
+            if not documents or any(not isinstance(document, dict) for document in documents):
+                raise PipelineInputError("Drone pipeline YAML documents must be objects")
+            parsed: Any = {"documents": documents}
+        else:
+            parsed = yaml.load(source, Loader=WorkflowLoader)
     except yaml.YAMLError as exc:
         raise PipelineInputError(str(exc)) from exc
     if not isinstance(parsed, dict):
@@ -65,6 +71,9 @@ def parse_pipeline_yaml(source: str, ecosystem: str) -> dict[str, Any]:
         "github-actions": "github_actions",
         "gitlab-ci": "gitlab_ci",
         "circleci": "circleci",
+        "drone-ci": "drone_ci",
+        "travis-ci": "travis_ci",
+        "woodpecker-ci": "woodpecker_ci",
     }
     try:
         wrapper = wrappers[ecosystem]
@@ -1687,6 +1696,475 @@ class BuildkiteAdapter(_PipelineAdapter):
         )
 
 
+_TRAVIS_COMMAND_PHASES = (
+    "before_install",
+    "install",
+    "before_script",
+    "script",
+    "before_cache",
+    "after_success",
+    "after_failure",
+    "after_script",
+)
+
+
+def _pipeline_contains_sensitive_input(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(
+            str(key).lower() in {"from_secret", "secret", "secure"}
+            or _SENSITIVE_VARIABLE_NAME.search(str(key)) is not None
+            or _pipeline_contains_sensitive_input(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_pipeline_contains_sensitive_input(item) for item in value)
+    text = str(value)
+    return bool(
+        re.search(
+            r"(?:\$|\$\{|\$\{\{)[^}\s]*(?:TOKEN|SECRET|PASSWORD|PRIVATE_KEY|API_KEY)",
+            text,
+            re.IGNORECASE,
+        )
+        or text.lower().startswith("secure:")
+    )
+
+
+class TravisCIAdapter(_PipelineAdapter):
+    wrapper_key = "travis_ci"
+    tool_name = "Travis CI"
+
+    @property
+    def adapter_name(self) -> str:
+        return "travis-ci"
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        pipeline = input_data[self.wrapper_key]
+        changes: list[dict[str, Any]] = []
+        self._scope(pipeline, "pipeline", changes)
+
+        jobs = pipeline.get("jobs")
+        if isinstance(jobs, dict):
+            includes = jobs.get("include", [])
+            if isinstance(includes, list):
+                for index, job in enumerate(includes):
+                    if isinstance(job, dict):
+                        self._scope(job, f"jobs.include[{index}]", changes)
+                    else:
+                        changes.append(
+                            _change(
+                                f"jobs.include[{index}]",
+                                "unresolved",
+                                "review",
+                                "Travis CI matrix job is not an object and requires review.",
+                            )
+                        )
+            if jobs.get("allow_failures") is not None:
+                changes.append(
+                    _change(
+                        "jobs.allow_failures",
+                        "soft_fail",
+                        "dangerous",
+                        "Allowed failures can bypass a failing security or deployment gate.",
+                    )
+                )
+
+        if not changes:
+            changes.append(
+                _change(
+                    "pipeline",
+                    "unresolved",
+                    "review",
+                    "Travis CI configuration has no statically analyzable execution phases.",
+                )
+            )
+        changes.append(
+            _change(
+                "pipeline.effective_configuration",
+                "effective_configuration",
+                "review",
+                "Travis CI execution also depends on repository settings, encrypted variables, "
+                "build conditions, and the selected worker image.",
+            )
+        )
+        return changes
+
+    def _scope(
+        self,
+        scope: dict[str, Any],
+        address: str,
+        changes: list[dict[str, Any]],
+    ) -> None:
+        imports = scope.get("import")
+        if imports is not None:
+            values = imports if isinstance(imports, list) else [imports]
+            for index, reference in enumerate(values):
+                text = str(reference)
+                pinned = re.search(
+                    r"(?<![0-9a-fA-F])[0-9a-fA-F]{40}(?![0-9a-fA-F])", text
+                ) is not None
+                changes.append(
+                    _change(
+                        f"{address}.import[{index}]",
+                        "import",
+                        "review" if pinned else "dangerous",
+                        "Travis CI import executes external build configuration; require a "
+                        "trusted source and immutable commit reference.",
+                    )
+                )
+
+        sudo = scope.get("sudo")
+        if sudo is True or str(sudo).lower() in {"required", "enabled", "true"}:
+            changes.append(
+                _change(
+                    f"{address}.sudo",
+                    "privileged",
+                    "dangerous",
+                    "Travis CI job requests elevated worker privileges.",
+                )
+            )
+        services = scope.get("services")
+        services = services if isinstance(services, list) else [services] if services else []
+        for index, service in enumerate(services):
+            risky = str(service).lower() in {"docker", "docker:dind"}
+            changes.append(
+                _change(
+                    f"{address}.services[{index}]",
+                    "service",
+                    "dangerous" if risky else "review",
+                    "Travis CI service changes the job network and worker capabilities; Docker "
+                    "service access can control sibling containers and images.",
+                )
+            )
+
+        for phase in _TRAVIS_COMMAND_PHASES:
+            if scope.get(phase) is not None:
+                changes.append(
+                    _change(
+                        f"{address}.{phase}",
+                        "script",
+                        "dangerous",
+                        f"Travis CI {phase} phase executes arbitrary commands on the worker.",
+                    )
+                )
+                if _pipeline_contains_sensitive_input(scope[phase]):
+                    changes.append(self._secret(f"{address}.{phase}.secrets"))
+
+        if scope.get("deploy") is not None:
+            changes.append(
+                _change(
+                    f"{address}.deploy",
+                    "deployment",
+                    "dangerous",
+                    "Travis CI deploy provider can mutate external infrastructure or publish "
+                    "artifacts; verify provider, conditions, and credentials.",
+                )
+            )
+            if _pipeline_contains_sensitive_input(scope["deploy"]):
+                changes.append(self._secret(f"{address}.deploy.secrets"))
+        if scope.get("env") is not None:
+            sensitive = _pipeline_contains_sensitive_input(scope["env"])
+            changes.append(
+                _change(
+                    f"{address}.env",
+                    "secret_input" if sensitive else "environment",
+                    "dangerous" if sensitive else "review",
+                    "Travis CI environment values enter every command in this scope; keep "
+                    "credentials encrypted and narrowly scoped.",
+                )
+            )
+        for key, kind, explanation in (
+            ("cache", "cache", "Persistent caches can carry poisoned files between builds."),
+            ("addons", "addons", "Addons install packages or connect external services."),
+            ("if", "condition", "Build conditions control which refs reach privileged phases."),
+            ("branches", "condition", "Branch filters control which refs reach this job."),
+            ("notifications", "notification", "Notifications send build data to external systems."),
+        ):
+            if scope.get(key) is not None:
+                changes.append(_change(f"{address}.{key}", kind, "review", explanation))
+
+    def _secret(self, address: str) -> dict[str, str]:
+        return _change(
+            address,
+            "secret_input",
+            "dangerous",
+            "Travis CI phase receives credential material; verify fork policy, masking, logs, "
+            "and deployment scope.",
+        )
+
+
+class _ContainerPipelineAdapter(_PipelineAdapter):
+    """Shared static gate for Drone and Woodpecker container-native pipelines."""
+
+    def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        wrapped = input_data[self.wrapper_key]
+        documents = wrapped.get("documents") if isinstance(wrapped, dict) else None
+        documents = documents if isinstance(documents, list) else [wrapped]
+        changes: list[dict[str, Any]] = []
+        for index, pipeline in enumerate(documents):
+            address = f"documents[{index}]" if len(documents) > 1 else "pipeline"
+            if not isinstance(pipeline, dict):
+                changes.append(
+                    _change(address, "unresolved", "review", "Pipeline document is not an object.")
+                )
+                continue
+            self._pipeline(pipeline, address, changes)
+        if not changes:
+            changes.append(
+                _change(
+                    "pipeline",
+                    "unresolved",
+                    "review",
+                    f"{self.tool_name} configuration has no statically analyzable steps.",
+                )
+            )
+        return changes
+
+    def _pipeline(
+        self,
+        pipeline: dict[str, Any],
+        address: str,
+        changes: list[dict[str, Any]],
+    ) -> None:
+        kind = str(pipeline.get("kind", "pipeline")).lower()
+        if kind != "pipeline":
+            risk = "safe" if kind == "signature" else "dangerous" if kind == "secret" else "review"
+            changes.append(
+                _change(
+                    f"{address}.kind",
+                    kind or "unresolved",
+                    risk,
+                    f"{self.tool_name} document kind changes the pipeline trust boundary.",
+                )
+            )
+            return
+
+        runner_type = str(pipeline.get("type", "docker")).lower()
+        if runner_type not in {"", "docker"}:
+            dangerous = runner_type in {"exec", "ssh"}
+            changes.append(
+                _change(
+                    f"{address}.type",
+                    "runner",
+                    "dangerous" if dangerous else "review",
+                    f"{self.tool_name} runner type selects host or cluster execution "
+                    "infrastructure; verify isolation and credentials.",
+                )
+            )
+        for key in ("node", "platform", "labels"):
+            if pipeline.get(key) is not None:
+                changes.append(
+                    _change(
+                        f"{address}.{key}",
+                        "runner_selection",
+                        "review",
+                        f"{self.tool_name} runner selection controls host, architecture, and "
+                        "private-network access.",
+                    )
+                )
+        for key in ("trigger", "when", "depends_on", "runs_on", "concurrency"):
+            if pipeline.get(key) is not None:
+                changes.append(
+                    _change(
+                        f"{address}.{key}",
+                        "condition" if key in {"trigger", "when"} else "orchestration",
+                        "review",
+                        f"{self.tool_name} {key} changes when or in what order workflows run.",
+                    )
+                )
+        if pipeline.get("skip_clone") is True or pipeline.get("clone") is not None:
+            changes.append(
+                _change(
+                    f"{address}.clone",
+                    "clone",
+                    "review",
+                    f"{self.tool_name} custom clone behavior changes source and "
+                    "credential handling.",
+                )
+            )
+        if pipeline.get("workspace") is not None:
+            changes.append(
+                _change(
+                    f"{address}.workspace",
+                    "workspace",
+                    "review",
+                    "Shared workspace configuration changes persistence and "
+                    "cross-step file access.",
+                )
+            )
+        self._volumes(pipeline.get("volumes"), f"{address}.volumes", changes)
+        self._containers(pipeline.get("services"), f"{address}.services", changes, service=True)
+        self._containers(pipeline.get("steps"), f"{address}.steps", changes, service=False)
+        changes.append(
+            _change(
+                f"{address}.effective_configuration",
+                "effective_configuration",
+                "review",
+                f"{self.tool_name} execution also depends on repository trust, runner backend, "
+                "secret policy, plugin allowlists, and server-side settings.",
+            )
+        )
+
+    def _containers(
+        self,
+        value: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+        *,
+        service: bool,
+    ) -> None:
+        if isinstance(value, dict):
+            containers = [
+                {"name": name, **raw} if isinstance(raw, dict) else {"name": name, "image": raw}
+                for name, raw in value.items()
+            ]
+        elif isinstance(value, list):
+            containers = value
+        else:
+            containers = []
+        if not containers and not service:
+            changes.append(
+                _change(
+                    address,
+                    "unresolved",
+                    "review",
+                    f"{self.tool_name} pipeline has no statically analyzable steps.",
+                )
+            )
+            return
+        for index, raw in enumerate(containers):
+            item_address = f"{address}[{index}]"
+            if not isinstance(raw, dict):
+                changes.append(
+                    _change(item_address, "unresolved", "review", "Container entry is malformed.")
+                )
+                continue
+            image = raw.get("image")
+            if image is not None:
+                changes.append(
+                    _change(
+                        f"{item_address}.image",
+                        "service_image" if service else "image",
+                        "review" if _is_digest_pinned_image(image) else "dangerous",
+                        f"{self.tool_name} container image executes pipeline code; pin a trusted "
+                        "digest and verify registry credentials.",
+                    )
+                )
+            if raw.get("commands") is not None or raw.get("command") is not None:
+                changes.append(
+                    _change(
+                        f"{item_address}.commands",
+                        "service_command" if service else "commands",
+                        "dangerous",
+                        f"{self.tool_name} container executes arbitrary commands.",
+                    )
+                )
+            if raw.get("privileged") is True:
+                changes.append(
+                    _change(
+                        f"{item_address}.privileged",
+                        "privileged",
+                        "dangerous",
+                        "Privileged container can gain host-level capabilities and must be "
+                        "restricted to explicitly trusted repositories and runners.",
+                    )
+                )
+            self._volumes(raw.get("volumes"), f"{item_address}.volumes", changes)
+            for key in ("environment", "settings", "secrets"):
+                if raw.get(key) is not None:
+                    sensitive = key == "secrets" or _pipeline_contains_sensitive_input(raw[key])
+                    changes.append(
+                        _change(
+                            f"{item_address}.{key}",
+                            "secret_input" if sensitive else key,
+                            "dangerous" if sensitive else "review",
+                            f"{self.tool_name} {key} enters the container; verify secret scope, "
+                            "literal values, plugin trust, and log handling.",
+                        )
+                    )
+            if str(raw.get("failure", "")).lower() in {"ignore", "always"}:
+                changes.append(
+                    _change(
+                        f"{item_address}.failure",
+                        "soft_fail",
+                        "dangerous",
+                        "Failure policy can bypass a failed security or deployment step.",
+                    )
+                )
+            for key, kind, risk in (
+                ("detach", "detached", "review"),
+                ("when", "condition", "review"),
+                ("depends_on", "dependency", "review"),
+                ("backend_options", "backend_options", "dangerous"),
+                ("network_mode", "host_network", "dangerous"),
+                ("devices", "device", "dangerous"),
+                ("cap_add", "capability", "dangerous"),
+            ):
+                if raw.get(key) is not None:
+                    if key == "detach" and raw.get(key) is not True:
+                        continue
+                    changes.append(
+                        _change(
+                            f"{item_address}.{key}",
+                            kind,
+                            risk,
+                            f"{self.tool_name} {key} changes execution, host, or "
+                            "ordering boundaries.",
+                        )
+                    )
+            if image is None and not any(key in raw for key in ("commands", "command", "settings")):
+                changes.append(
+                    _change(
+                        item_address,
+                        "unresolved",
+                        "review",
+                        f"{self.tool_name} container has no recognized image, commands, "
+                        "or settings.",
+                    )
+                )
+
+    def _volumes(
+        self,
+        value: Any,
+        address: str,
+        changes: list[dict[str, Any]],
+    ) -> None:
+        volumes = value if isinstance(value, list) else [value] if value is not None else []
+        for index, volume in enumerate(volumes):
+            text = str(volume).lower()
+            host = isinstance(volume, dict) and any(
+                key in volume for key in ("host", "host_path", "hostPath")
+            )
+            source = text.split(":", 1)[0]
+            host = host or source.startswith(("/", "./", "../", "~")) or "docker.sock" in text
+            changes.append(
+                _change(
+                    f"{address}[{index}]",
+                    "host_volume" if host else "volume",
+                    "dangerous" if host else "review",
+                    "Host volume can expose runner files or container-engine control; named "
+                    "volumes still persist data across execution boundaries.",
+                )
+            )
+
+
+class DroneCIAdapter(_ContainerPipelineAdapter):
+    wrapper_key = "drone_ci"
+    tool_name = "Drone CI"
+
+    @property
+    def adapter_name(self) -> str:
+        return "drone-ci"
+
+
+class WoodpeckerCIAdapter(_ContainerPipelineAdapter):
+    wrapper_key = "woodpecker_ci"
+    tool_name = "Woodpecker CI"
+
+    @property
+    def adapter_name(self) -> str:
+        return "woodpecker-ci"
+
+
 def analyze_pipeline(
     adapter: _PipelineAdapter, data: dict[str, Any], *, catalog=None
 ) -> dict[str, Any]:
@@ -1724,3 +2202,15 @@ def analyze_bitbucket_pipelines(data: dict[str, Any], *, catalog=None) -> dict[s
 
 def analyze_buildkite(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
     return analyze_pipeline(BuildkiteAdapter(), data, catalog=catalog)
+
+
+def analyze_travis_ci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(TravisCIAdapter(), data, catalog=catalog)
+
+
+def analyze_drone_ci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(DroneCIAdapter(), data, catalog=catalog)
+
+
+def analyze_woodpecker_ci(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
+    return analyze_pipeline(WoodpeckerCIAdapter(), data, catalog=catalog)

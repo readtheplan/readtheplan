@@ -11,9 +11,13 @@ from readtheplan.adapters.pipelines import (
     BitbucketPipelinesAdapter,
     BuildkiteAdapter,
     CircleCIAdapter,
+    DroneCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
     PipelineInputError,
+    TravisCIAdapter,
+    WoodpeckerCIAdapter,
+    analyze_pipeline,
     parse_pipeline_yaml,
 )
 from readtheplan.cli import main
@@ -342,6 +346,113 @@ def test_buildkite_flags_commands_plugins_secrets_agents_and_dynamic_uploads() -
     assert by_type["buildkite_wait"] == ["safe"]
 
 
+def test_travis_ci_flags_imports_privilege_commands_deploy_and_secrets() -> None:
+    source = (Path(__file__).parent / "fixtures" / "travis_ci_risky.yml").read_text(
+        encoding="utf-8"
+    )
+    data = parse_pipeline_yaml(source, "travis-ci")
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, TravisCIAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+
+    assert by_type["travis_ci_import"] == ["dangerous"]
+    assert by_type["travis_ci_privileged"] == ["dangerous"]
+    assert by_type["travis_ci_service"] == ["dangerous"]
+    assert by_type["travis_ci_script"] == ["dangerous", "dangerous", "dangerous"]
+    assert by_type["travis_ci_deployment"] == ["dangerous"]
+    assert by_type["travis_ci_secret_input"] == ["dangerous", "dangerous"]
+    assert by_type["travis_ci_soft_fail"] == ["dangerous"]
+    assert by_type["travis_ci_cache"] == ["review"]
+    payload = analyze_pipeline(adapter, data)
+    assert "literal-example-token" not in json.dumps(payload)
+
+
+def test_travis_ci_immutable_import_is_review_instead_of_dangerous() -> None:
+    commit = "a" * 40
+    data = parse_pipeline_yaml(f"import: example/shared.yml@{commit}\n", "travis-ci")
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, TravisCIAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    imported = next(change for change in changes if change.resource_type == "travis_ci_import")
+    assert imported.risk == "review"
+
+
+def test_drone_ci_supports_multi_document_pipelines_and_signatures() -> None:
+    source = (Path(__file__).parent / "fixtures" / "drone_ci_risky.yml").read_text(
+        encoding="utf-8"
+    )
+    data = parse_pipeline_yaml(source, "drone-ci")
+    assert len(data["drone_ci"]["documents"]) == 2
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, DroneCIAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+
+    assert by_type["drone_ci_runner_selection"] == ["review"]
+    assert by_type["drone_ci_host_volume"] == ["dangerous", "dangerous"]
+    assert by_type["drone_ci_image"] == ["dangerous", "dangerous"]
+    assert by_type["drone_ci_service_image"] == ["dangerous"]
+    assert by_type["drone_ci_commands"] == ["dangerous", "dangerous"]
+    assert by_type["drone_ci_privileged"] == ["dangerous", "dangerous"]
+    assert by_type["drone_ci_secret_input"] == ["dangerous"]
+    assert by_type["drone_ci_soft_fail"] == ["dangerous"]
+    assert by_type["drone_ci_signature"] == ["safe"]
+
+
+def test_drone_ci_rejects_non_object_yaml_documents() -> None:
+    with pytest.raises(PipelineInputError, match="documents must be objects"):
+        parse_pipeline_yaml("kind: pipeline\nsteps: []\n---\n- invalid\n", "drone-ci")
+
+
+def test_woodpecker_ci_flags_runner_host_access_plugins_and_secrets() -> None:
+    source = (Path(__file__).parent / "fixtures" / "woodpecker_ci_risky.yml").read_text(
+        encoding="utf-8"
+    )
+    data = parse_pipeline_yaml(source, "woodpecker-ci")
+    adapter = detect_adapter(data)
+    assert isinstance(adapter, WoodpeckerCIAdapter)
+    changes = adapter.analyze(data, use_rules=False)
+    by_type: dict[str, list[str]] = {}
+    for change in changes:
+        by_type.setdefault(change.resource_type, []).append(change.risk)
+
+    assert by_type["woodpecker_ci_runner_selection"] == ["review"]
+    assert by_type["woodpecker_ci_clone"] == ["review"]
+    assert by_type["woodpecker_ci_host_volume"] == ["dangerous", "dangerous"]
+    assert by_type["woodpecker_ci_image"] == ["dangerous", "dangerous"]
+    assert by_type["woodpecker_ci_service_image"] == ["dangerous"]
+    assert by_type["woodpecker_ci_commands"] == ["dangerous"]
+    assert by_type["woodpecker_ci_privileged"] == ["dangerous", "dangerous"]
+    assert by_type["woodpecker_ci_secret_input"] == ["dangerous", "dangerous"]
+
+
+@pytest.mark.parametrize("ecosystem", ["drone-ci", "woodpecker-ci"])
+def test_container_pipeline_digest_pin_and_named_volume_reduce_risk(ecosystem: str) -> None:
+    source = """
+steps:
+  - name: test
+    image: alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    volumes:
+      - cache:/cache
+    commands: [echo test]
+"""
+    if ecosystem == "drone-ci":
+        source = "kind: pipeline\ntype: docker\n" + source
+    data = parse_pipeline_yaml(source, ecosystem)
+    adapter = detect_adapter(data)
+    assert adapter is not None
+    changes = adapter.analyze(data, use_rules=False)
+    by_type = {change.resource_type: change.risk for change in changes}
+    prefix = ecosystem.replace("-", "_")
+    assert by_type[f"{prefix}_image"] == "review"
+    assert by_type[f"{prefix}_volume"] == "review"
+
+
 @pytest.mark.parametrize(
     ("tool", "source", "expected_code", "expected_adapter"),
     [
@@ -375,6 +486,25 @@ def test_buildkite_flags_commands_plugins_secrets_agents_and_dynamic_uploads() -
             "steps:\n  - command: ./deploy.sh\n",
             2,
             "buildkite",
+        ),
+        (
+            "travis-ci",
+            "language: minimal\nscript: ./deploy.sh\n",
+            2,
+            "travis-ci",
+        ),
+        (
+            "drone-ci",
+            "kind: pipeline\ntype: docker\nsteps:\n"
+            "  - name: deploy\n    image: alpine\n    commands: [./deploy.sh]\n",
+            2,
+            "drone-ci",
+        ),
+        (
+            "woodpecker-ci",
+            "steps:\n  - name: deploy\n    image: alpine\n    commands: [./deploy.sh]\n",
+            2,
+            "woodpecker-ci",
         ),
     ],
 )

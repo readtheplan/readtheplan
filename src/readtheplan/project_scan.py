@@ -255,6 +255,14 @@ def identify_project_input(
         return "docker-compose"
     if name == ".gitlab-ci.yml" or name == ".gitlab-ci.yaml":
         return "gitlab-ci"
+    if name in {".travis.yml", ".travis.yaml"}:
+        return "travis-ci"
+    if name in {".drone.yml", ".drone.yaml"}:
+        return "drone-ci"
+    if name in {".woodpecker.yml", ".woodpecker.yaml"} or (
+        ".woodpecker" in parts and suffix in _YAML_SUFFIXES
+    ):
+        return "woodpecker-ci"
     if lowered.startswith(".github/workflows/") and suffix in _YAML_SUFFIXES:
         return "github-actions"
     if lowered in {".circleci/config.yml", ".circleci/config.yaml"}:

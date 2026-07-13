@@ -43,8 +43,11 @@ from readtheplan.adapters.pipelines import (
     BitbucketPipelinesAdapter,
     BuildkiteAdapter,
     CircleCIAdapter,
+    DroneCIAdapter,
     GitHubActionsAdapter,
     GitLabCIAdapter,
+    TravisCIAdapter,
+    WoodpeckerCIAdapter,
 )
 from readtheplan.adapters.proxy_configs import HAProxyAdapter, NginxAdapter
 from readtheplan.adapters.pulumi import PulumiAdapter
@@ -165,6 +168,9 @@ register_adapter(BitbucketPipelinesAdapter())
 register_adapter(BuildkiteAdapter())
 register_adapter(GitLabCIAdapter())
 register_adapter(CircleCIAdapter())
+register_adapter(TravisCIAdapter())
+register_adapter(DroneCIAdapter())
+register_adapter(WoodpeckerCIAdapter())
 register_adapter(DockerComposeAdapter())
 register_adapter(NomadPlanAdapter())
 register_adapter(PackerInspectAdapter())
@@ -211,6 +217,7 @@ __all__ = [
     "DockerComposeAdapter",
     "DockerfileAdapter",
     "DscAdapter",
+    "DroneCIAdapter",
     "DevSpaceAdapter",
     "EnvoyAdapter",
     "GrafanaAdapter",
@@ -254,7 +261,9 @@ __all__ = [
     "TiltfileAdapter",
     "TerragruntAdapter",
     "TraefikAdapter",
+    "TravisCIAdapter",
     "VagrantAdapter",
+    "WoodpeckerCIAdapter",
     "register_adapter",
     "get_adapter",
     "detect_adapter",

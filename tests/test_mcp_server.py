@@ -392,6 +392,23 @@ def test_agent_gate_pipeline_rejects_unknown_ecosystem() -> None:
 
 
 @pytest.mark.parametrize(
+    ("ecosystem", "fixture"),
+    [
+        ("travis-ci", "travis_ci_risky.yml"),
+        ("drone-ci", "drone_ci_risky.yml"),
+        ("woodpecker-ci", "woodpecker_ci_risky.yml"),
+    ],
+)
+def test_agent_gate_pipeline_supports_additional_ci_ecosystems(
+    ecosystem: str, fixture: str
+) -> None:
+    result = agent_gate_pipeline(str(FIXTURES / fixture), ecosystem, "soc2")
+    assert result["adapter"] == ecosystem
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+@pytest.mark.parametrize(
     ("ecosystem", "fixture", "adapter"),
     [
         ("docker-compose", "docker_compose_risky.yml", "docker-compose"),

@@ -1,0 +1,33 @@
+language: minimal
+sudo: required
+services:
+  - docker
+import:
+  - example/platform-ci:travis/common.yml@main
+env:
+  global:
+    - DEPLOY_TOKEN=literal-example-token
+    - secure: encrypted-example-value
+if: branch = main
+cache:
+  directories:
+    - .terraform
+before_install:
+  - curl -fsSL https://example.test/install.sh | sh
+script:
+  - terraform apply -auto-approve
+deploy:
+  provider: script
+  script: ./deploy-production.sh
+  api_key:
+    secure: encrypted-deploy-key
+jobs:
+  allow_failures:
+    - name: policy
+  include:
+    - name: production
+      stage: deploy
+      env:
+        - API_TOKEN=literal-job-token
+      after_failure:
+        - ./rollback.sh

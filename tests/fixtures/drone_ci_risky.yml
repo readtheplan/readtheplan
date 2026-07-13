@@ -1,0 +1,35 @@
+kind: pipeline
+type: docker
+name: deploy
+node:
+  environment: production
+trigger:
+  branch: [main]
+volumes:
+  - name: docker-socket
+    host:
+      path: /var/run/docker.sock
+steps:
+  - name: plan
+    image: hashicorp/terraform:latest
+    commands:
+      - terraform plan
+  - name: deploy
+    image: docker:latest
+    privileged: true
+    failure: ignore
+    environment:
+      DEPLOY_TOKEN:
+        from_secret: deploy_token
+    volumes:
+      - name: docker-socket
+        path: /var/run/docker.sock
+    commands:
+      - docker build -t example/app .
+services:
+  - name: docker
+    image: docker:dind
+    privileged: true
+---
+kind: signature
+hmac: example-signature

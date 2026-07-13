@@ -7,6 +7,9 @@ CI/CD, policy, and configuration artifacts without executing them or contacting
 infrastructure. It classifies changes as safe, review, dangerous, or irreversible
 and can map findings to six built-in compliance catalogs.
 
+CI/CD analysis includes GitHub Actions, GitLab CI, CircleCI, Azure Pipelines,
+Bitbucket Pipelines, Buildkite, Travis CI, Drone CI, and Woodpecker CI.
+
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.
 Local MCP clients can call `agent_gate_project` for the same repository gate;
