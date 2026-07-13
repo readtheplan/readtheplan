@@ -9,6 +9,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Chef cookbook-content gates across the CLI, GitHub Action, project scan, and MCP. Bounded,
+  non-executing inspection now covers recipes, attributes, custom resources, libraries, legacy
+  providers/definitions, and ERB templates, including resources/actions, precedence, sensitive
+  values, commands, direct filesystem/network access, Chef extensions, external data/code, and
+  explicit call-site/render/runtime boundaries.
 - Native Terraform/OpenTofu dependency-lock gates across the CLI, GitHub Action,
   and MCP. Strict `.terraform.lock.hcl` parsing now covers duplicate or malformed
   blocks, exact provider selection, constraints, origin registries, pre-release
