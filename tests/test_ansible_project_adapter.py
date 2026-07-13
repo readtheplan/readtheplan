@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from readtheplan.adapters.ansible_code import ansible_code_metadata
 from readtheplan.adapters.ansible_project import (
     AnsibleProjectAdapter,
     AnsibleProjectInputError,
@@ -22,6 +23,109 @@ def _changes(fixture: str):
         (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
     )
     return AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+
+
+def test_custom_module_source_surfaces_target_execution_without_leaking_values() -> None:
+    path = FIXTURES / "ansible_collection_code_risky" / "plugins" / "modules" / "deploy.py"
+    data = parse_ansible_project(path.read_text(encoding="utf-8"), filename=str(path))
+    document = data["ansible_project"]["document"]
+
+    assert data["ansible_project"]["artifact_type"] == "module_source"
+    assert document["language"] == "python"
+    assert document["source_kind"] == "target_module"
+    assert document["plugin_type"] == "module"
+    assert document["component_name"] == "deploy"
+    assert document["source_line_count"] == 17
+
+    gate = analyze_ansible_project(data)
+    kinds = {
+        change.resource_type
+        for change in AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+    }
+    assert {
+        "ansible_project_argument_logging",
+        "ansible_project_command_execution",
+        "ansible_project_destructive_filesystem",
+        "ansible_project_environment_input",
+        "ansible_project_execution_boundary",
+        "ansible_project_network_access",
+        "ansible_project_secret_handling",
+        "ansible_project_shell_execution",
+        "ansible_project_tls_verification_disabled",
+        "ansible_project_unsafe_deserialization",
+    } <= kinds
+    assert gate["artifact_type"] == "module_source"
+    assert gate["source_kind"] == "target_module"
+    assert gate["plugin_type"] == "module"
+    assert gate["component_name"] == "deploy"
+    assert gate["decision"] == "block"
+    encoded = json.dumps(gate)
+    assert "RTP_FIXTURE_ANSIBLE_SECRET_DO_NOT_LEAK" not in encoded
+    assert "api_token" not in encoded
+
+
+def test_controller_plugin_source_uses_execute_actions_and_ignores_strings_comments() -> None:
+    root = FIXTURES / "ansible_collection_code_risky" / "plugins"
+    risky = root / "action" / "deploy.py"
+    review = root / "filter" / "sanitize.py"
+
+    data = parse_ansible_project(risky.read_text(encoding="utf-8"), filename=str(risky))
+    changes = AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+    kinds = {change.resource_type for change in changes}
+    assert data["ansible_project"]["artifact_type"] == "controller_plugin_source"
+    assert data["ansible_project"]["document"]["plugin_type"] == "action"
+    assert "ansible_project_controller_module_execution" in kinds
+    assert "ansible_project_command_execution" in kinds
+    assert {change.actions for change in changes} == {("execute",)}
+
+    review_data = parse_ansible_project(review.read_text(encoding="utf-8"), filename=str(review))
+    review_changes = AnsibleProjectAdapter().analyze(review_data, tool_name="Ansible project")
+    assert [change.resource_type for change in review_changes] == [
+        "ansible_project_execution_boundary"
+    ]
+    assert review_changes[0].risk == "review"
+
+
+def test_module_utils_and_windows_module_sources_are_classified() -> None:
+    utility = FIXTURES / "ansible_collection_code_risky" / "plugins" / "module_utils" / "files.py"
+    powershell = (
+        FIXTURES
+        / "ansible_role_windows_module_risky"
+        / "roles"
+        / "windows"
+        / "library"
+        / "manage.ps1"
+    )
+
+    utility_data = parse_ansible_project(utility.read_text(encoding="utf-8"), filename=str(utility))
+    assert utility_data["ansible_project"]["artifact_type"] == "module_utility_source"
+    assert utility_data["ansible_project"]["document"]["source_kind"] == ("shared_module_utility")
+
+    powershell_data = parse_ansible_project(
+        powershell.read_text(encoding="utf-8"), filename=str(powershell)
+    )
+    gate = analyze_ansible_project(powershell_data)
+    assert gate["artifact_type"] == "module_source"
+    assert gate["language"] == "powershell"
+    assert gate["decision"] == "block"
+    assert gate["risk_counts"]["dangerous"] == 4
+
+
+def test_executable_source_limits_and_unsupported_paths_are_rejected() -> None:
+    assert ansible_code_metadata("scripts/example.py") is None
+    with pytest.raises(AnsibleProjectInputError, match="NUL byte"):
+        parse_ansible_project("print('ok')\x00\n", filename="plugins/modules/example.py")
+    with pytest.raises(AnsibleProjectInputError, match="line count limit"):
+        parse_ansible_project("pass\n" * 100_001, filename="plugins/modules/example.py")
+
+
+def test_custom_module_cli_emits_source_metadata(capsys: pytest.CaptureFixture[str]) -> None:
+    path = FIXTURES / "ansible_collection_code_risky" / "plugins" / "modules" / "deploy.py"
+    assert main(["ansible-project", str(path)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["artifact_type"] == "module_source"
+    assert payload["source_kind"] == "target_module"
+    assert payload["language"] == "python"
 
 
 def test_ansible_cfg_surfaces_transport_privilege_plugins_secrets_and_galaxy() -> None:

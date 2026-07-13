@@ -1082,6 +1082,39 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Ansible custom module source
+        id: ansible_custom_module
+        uses: ./
+        with:
+          tool: ansible-project
+          input-file: tests/fixtures/ansible_collection_code_risky/plugins/modules/deploy.py
+          framework: soc2
+
+      - name: Assert Ansible custom module outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.ansible_custom_module.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.ansible_custom_module.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.ansible_custom_module.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "10"
+          test "$RISK_COUNTS" = '{"dangerous":7,"irreversible":0,"review":3,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "ansible-project"
+          assert payload["artifact_type"] == "module_source"
+          assert payload["source_kind"] == "target_module"
+          assert payload["plugin_type"] == "module"
+          assert payload["language"] == "python"
+          assert payload["decision"] == "block"
+          assert "RTP_FIXTURE_ANSIBLE_SECRET_DO_NOT_LEAK" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Ansible execution environment
         id: ansible_execution_environment
         uses: ./
