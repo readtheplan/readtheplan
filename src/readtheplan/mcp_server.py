@@ -3443,8 +3443,8 @@ def create_server() -> Any:
         """Return a gate for supported configuration-management source.
 
         Args:
-            input_path: Local path to a playbook, scenario configuration, Jenkinsfile, Jenkins
-                project file, recipe, or manifest.
+            input_path: Local path to a playbook, Ansible project/content policy file, scenario
+                configuration, Jenkinsfile, Jenkins project file, recipe, or manifest.
             ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, jenkins-project, teamcity,
                 chef, chef-project, puppet, puppet-project, salt-project, dsc, or cfengine.
             framework: Optional compliance framework for control checks.

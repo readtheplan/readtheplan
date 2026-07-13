@@ -1,0 +1,20 @@
+profile: basic
+use_default_rules: false
+skip_action_validation: true
+skip_list:
+  - schema
+  - risky-file-permissions
+warn_list:
+  - no-log-password
+exclude_paths:
+  - roles/**
+rulesdir:
+  - custom_rules
+mock_modules:
+  - example.fixture.module
+kinds:
+  - yaml: "**/*.fixture.yml"
+write_list:
+  - all
+extra_vars:
+  fixture_ci_password: fixture-lint-password-do-not-leak

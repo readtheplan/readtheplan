@@ -1,0 +1,22 @@
+argument_specs:
+  main:
+    short_description: Configure a fixture
+    options:
+      fixture_api_token:
+        type: str
+        default: fixture-argument-token-do-not-leak
+      required_with_default:
+        type: str
+        required: true
+        default: impossible
+      nested:
+        type: dict
+        options:
+          fixture_private_key:
+            type: str
+            no_log: false
+  alternate:
+    options:
+      templated:
+        type: str
+        default: "{{ fixture_external_value }}"
