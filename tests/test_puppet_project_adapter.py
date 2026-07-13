@@ -11,6 +11,7 @@ from readtheplan.adapters.puppet_project import (
     analyze_puppet_project,
     parse_puppet_project,
 )
+from readtheplan.adapters.puppet_ruby import puppet_ruby_metadata
 from readtheplan.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -19,6 +20,195 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def _changes(fixture: str):
     data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture)
     return PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+
+@pytest.mark.parametrize(
+    ("relative", "extension_type", "source_kind"),
+    [
+        ("facter/cloud_inventory.rb", "custom_fact", "agent_fact"),
+        (
+            "puppet/functions/site/lookup_secret.rb",
+            "ruby_function",
+            "server_compile_function",
+        ),
+        (
+            "puppet/parser/functions/legacy_lookup.rb",
+            "legacy_function",
+            "server_compile_function",
+        ),
+        (
+            "puppet/provider/managed_service/systemd.rb",
+            "resource_provider",
+            "server_agent_provider",
+        ),
+        (
+            "puppet/reports/webhook.rb",
+            "report_processor",
+            "server_report_processor",
+        ),
+        ("puppet/type/managed_service.rb", "resource_type", "server_agent_type"),
+    ],
+)
+def test_puppet_ruby_extensions_are_classified_by_runtime_boundary(
+    relative: str, extension_type: str, source_kind: str
+) -> None:
+    path = (
+        FIXTURES
+        / "puppet_ruby_extensions_risky"
+        / "modules"
+        / "site"
+        / "lib"
+        / Path(relative)
+    )
+    data = parse_puppet_project(path.read_text(encoding="utf-8"), filename=str(path))
+    gate = analyze_puppet_project(data)
+
+    assert data["puppet_project"]["artifact_type"] == "ruby_extension"
+    assert gate["artifact_type"] == "ruby_extension"
+    assert gate["extension_type"] == extension_type
+    assert gate["source_kind"] == source_kind
+    assert gate["language"] == "ruby"
+    assert gate["component_name"]
+    assert gate["source_line_count"] > 0
+
+
+def test_custom_fact_surfaces_agent_network_data_timeout_and_secret_risks() -> None:
+    path = (
+        FIXTURES
+        / "puppet_ruby_extensions_risky"
+        / "modules"
+        / "site"
+        / "lib"
+        / "facter"
+        / "cloud_inventory.rb"
+    )
+    data = parse_puppet_project(path.read_text(encoding="utf-8"), filename=str(path))
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    kinds = {change.resource_type for change in changes}
+    gate = analyze_puppet_project(data)
+
+    assert {
+        "puppet_project_dynamic_dependency",
+        "puppet_project_extension_execution_boundary",
+        "puppet_project_fact_platform_scope",
+        "puppet_project_fact_resolution_timeout",
+        "puppet_project_network_access",
+        "puppet_project_runtime_data_access",
+        "puppet_project_secret_handling",
+        "puppet_project_unsafe_deserialization",
+    } <= kinds
+    assert {change.actions for change in changes} == {("execute",)}
+    assert gate["total_changes"] == 10
+    assert gate["risk_counts"]["dangerous"] == 3
+    assert gate["decision"] == "block"
+    encoded = json.dumps(gate)
+    assert "RTP_FIXTURE_PUPPET_FACT_SECRET_DO_NOT_LEAK" not in encoded
+    assert "facts.example.invalid" not in encoded
+
+
+def test_provider_function_and_report_extension_findings_are_redacted() -> None:
+    root = FIXTURES / "puppet_ruby_extensions_risky" / "modules" / "site" / "lib"
+    cases = {
+        "puppet/functions/site/lookup_secret.rb": {
+            "dynamic_execution",
+            "filesystem_mutation",
+        },
+        "puppet/provider/managed_service/systemd.rb": {
+            "destructive_filesystem",
+            "process_execution",
+            "provider_command",
+        },
+        "puppet/reports/webhook.rb": {
+            "network_access",
+            "report_serialization",
+            "tls_verification_disabled",
+        },
+        "puppet/parser/functions/legacy_lookup.rb": {
+            "catalog_mutation",
+            "compiler_scope_access",
+        },
+    }
+    for relative, expected in cases.items():
+        path = root / Path(relative)
+        data = parse_puppet_project(path.read_text(encoding="utf-8"), filename=str(path))
+        changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+        kinds = {
+            change.resource_type.removeprefix("puppet_project_") for change in changes
+        }
+        assert expected <= kinds
+        assert "extension_execution_boundary" in kinds
+        encoded = json.dumps(analyze_puppet_project(data))
+        assert "DO_NOT_LEAK" not in encoded
+        assert "reports.example.invalid" not in encoded
+        assert "/bin/systemctl" not in encoded
+
+
+def test_resource_type_ignores_risky_words_in_comments_and_strings() -> None:
+    path = (
+        FIXTURES
+        / "puppet_ruby_extensions_risky"
+        / "modules"
+        / "site"
+        / "lib"
+        / "puppet"
+        / "type"
+        / "managed_service.rb"
+    )
+    data = parse_puppet_project(path.read_text(encoding="utf-8"), filename=str(path))
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+    assert [change.resource_type for change in changes] == [
+        "puppet_project_dynamic_dependency",
+        "puppet_project_extension_execution_boundary",
+    ]
+    assert {change.risk for change in changes} == {"review"}
+
+
+def test_puppet_ruby_block_comments_do_not_emit_interpolation_findings() -> None:
+    source = (
+        "=begin\n"
+        "Documentation mentions #{system('do not inspect')}.\n"
+        "=end\n"
+        "Puppet::Type.newtype(:example) do\n"
+        "end\n"
+    )
+    data = parse_puppet_project(source, filename="modules/site/lib/puppet/type/example.rb")
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+    assert [change.resource_type for change in changes] == [
+        "puppet_project_extension_execution_boundary"
+    ]
+
+
+def test_puppet_ruby_source_limits_and_unsupported_paths_are_rejected() -> None:
+    assert puppet_ruby_metadata("scripts/example.rb") is None
+    filename = "modules/site/lib/facter/example.rb"
+    with pytest.raises(PuppetProjectInputError, match="NUL byte"):
+        parse_puppet_project("Facter.add(:x) {}\x00\n", filename=filename)
+    with pytest.raises(PuppetProjectInputError, match="line count limit"):
+        parse_puppet_project("nil\n" * 100_001, filename=filename)
+    with pytest.raises(PuppetProjectInputError, match="unterminated Ruby"):
+        parse_puppet_project("Facter.add(:x) { 'oops\n", filename=filename)
+
+
+def test_puppet_ruby_cli_emits_extension_metadata(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = (
+        FIXTURES
+        / "puppet_ruby_extensions_risky"
+        / "modules"
+        / "site"
+        / "lib"
+        / "puppet"
+        / "reports"
+        / "webhook.rb"
+    )
+    assert main(["puppet-project", str(path)]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["artifact_type"] == "ruby_extension"
+    assert payload["extension_type"] == "report_processor"
+    assert payload["source_kind"] == "server_report_processor"
 
 
 def test_puppetfile_surfaces_transport_mutability_paths_and_ruby_execution() -> None:

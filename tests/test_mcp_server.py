@@ -867,6 +867,35 @@ def test_agent_gate_configuration_management_supports_bolt_task_implementation()
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_puppet_ruby_extension() -> None:
+    result = agent_gate_configuration_management(
+        str(
+            FIXTURES
+            / "puppet_ruby_extensions_risky"
+            / "modules"
+            / "site"
+            / "lib"
+            / "facter"
+            / "cloud_inventory.rb"
+        ),
+        "puppet-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "puppet-project"
+    assert result["artifact_type"] == "ruby_extension"
+    assert result["extension_type"] == "custom_fact"
+    assert result["language"] == "ruby"
+    assert result["source_kind"] == "agent_fact"
+    assert result["total_changes"] == 10
+    assert result["risk_counts"]["dangerous"] == 3
+    assert result["risk_counts"]["review"] == 7
+    assert result["decision"] == "block"
+    assert "RTP_FIXTURE_PUPPET_FACT_SECRET_DO_NOT_LEAK" not in encoded
+    assert "facts.example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_r10k_configuration() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_r10k_risky" / "r10k.yaml"),
@@ -2733,6 +2762,50 @@ def test_stdio_server_tools_list() -> None:
             bolt_implementation_content[0]["text"]
         )
         assert "downloads.example.invalid" not in bolt_implementation_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Puppet Ruby extension) ---
+        puppet_ruby_req = {
+            "jsonrpc": "2.0",
+            "id": 75,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "puppet_ruby_extensions_risky"
+                            / "modules"
+                            / "site"
+                            / "lib"
+                            / "facter"
+                            / "cloud_inventory.rb"
+                        ).resolve()
+                    ),
+                    "ecosystem": "puppet-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        puppet_ruby_resp = _send_jsonrpc(proc, puppet_ruby_req)
+        assert "result" in puppet_ruby_resp, (
+            f"Puppet Ruby extension tools/call failed: {puppet_ruby_resp}"
+        )
+        puppet_ruby_content = puppet_ruby_resp["result"]["content"]
+        assert len(puppet_ruby_content) == 1
+        puppet_ruby_summary = json.loads(puppet_ruby_content[0]["text"])
+        assert puppet_ruby_summary["adapter"] == "puppet-project"
+        assert puppet_ruby_summary["artifact_type"] == "ruby_extension"
+        assert puppet_ruby_summary["extension_type"] == "custom_fact"
+        assert puppet_ruby_summary["language"] == "ruby"
+        assert puppet_ruby_summary["source_kind"] == "agent_fact"
+        assert puppet_ruby_summary["total_changes"] == 10
+        assert puppet_ruby_summary["risk_counts"]["dangerous"] == 3
+        assert puppet_ruby_summary["risk_counts"]["review"] == 7
+        assert "RTP_FIXTURE_PUPPET_FACT_SECRET_DO_NOT_LEAK" not in (
+            puppet_ruby_content[0]["text"]
+        )
+        assert "facts.example.invalid" not in puppet_ruby_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Jenkins plugins) ---
         jenkins_project_req = {

@@ -1,0 +1,9 @@
+{
+  "name": "example-site",
+  "version": "1.0.0",
+  "author": "Example",
+  "summary": "Fixture Puppet module",
+  "license": "Apache-2.0",
+  "source": "https://example.invalid/site",
+  "dependencies": []
+}

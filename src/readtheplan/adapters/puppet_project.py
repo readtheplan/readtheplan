@@ -24,6 +24,12 @@ from readtheplan.adapters.bolt_content import (
     parse_bolt_task_metadata,
     parse_bolt_yaml_plan,
 )
+from readtheplan.adapters.puppet_ruby import (
+    PuppetRubyInputError,
+    parse_puppet_ruby_extension,
+    puppet_ruby_extension_changes,
+    puppet_ruby_metadata,
+)
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.plan import PlanSummary, ResourceChange
 
@@ -911,7 +917,13 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
         raise PuppetProjectInputError("input is empty")
     basename = Path(filename).name.casefold()
     try:
-        if is_bolt_task_implementation(filename, source):
+        if puppet_ruby_metadata(filename) is not None:
+            document = parse_puppet_ruby_extension(source, filename)
+            parsed = {
+                "artifact_type": "ruby_extension",
+                "document": document,
+            }
+        elif is_bolt_task_implementation(filename, source):
             parsed = {
                 "artifact_type": "bolt_task_implementation",
                 "document": parse_bolt_task_implementation(source, filename=filename),
@@ -945,7 +957,7 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
             parsed = _parse_bolt_yaml(source, "bolt_inventory")
         else:
             parsed = _parse_json(source)
-    except BoltContentInputError as exc:
+    except (BoltContentInputError, PuppetRubyInputError) as exc:
         raise PuppetProjectInputError(str(exc)) from exc
     if parsed is None:
         first = next(
@@ -3503,6 +3515,7 @@ class PuppetProjectAdapter(BaseAdapter):
                 "environment",
                 "puppetdb",
                 "r10k",
+                "ruby_extension",
                 "server_auth",
                 "server_ca",
                 "server_routes",
@@ -3528,12 +3541,15 @@ class PuppetProjectAdapter(BaseAdapter):
             "environment": _environment_changes,
             "puppetdb": _puppetdb_changes,
             "r10k": _r10k_changes,
+            "ruby_extension": puppet_ruby_extension_changes,
             "server_auth": _server_auth_changes,
             "server_ca": _server_ca_changes,
             "server_routes": _server_routes_changes,
             "server_runtime": _server_runtime_changes,
             "server_web": _server_web_changes,
         }[artifact_type](project["document"])
+        if artifact_type == "ruby_extension":
+            return changes
         if artifact_type == "bolt_task_implementation":
             boundary = (
                 "Effective Bolt task behavior also depends on its metadata input contract and "
@@ -3630,5 +3646,15 @@ def analyze_puppet_project(data: dict[str, Any], *, catalog=None) -> dict[str, A
                 data["puppet_project"]["document"],
             )
         )
+    if data["puppet_project"]["artifact_type"] == "ruby_extension":
+        document = data["puppet_project"]["document"]
+        for field in (
+            "component_name",
+            "extension_type",
+            "language",
+            "source_kind",
+            "source_line_count",
+        ):
+            gate[field] = document[field]
     gate["total_changes"] = len(changes)
     return gate

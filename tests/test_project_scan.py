@@ -838,6 +838,49 @@ def test_project_scan_analyzes_ansible_modules_plugins_and_module_utils(
     assert "RTP_FIXTURE_CONTROLLER_SECRET_DO_NOT_LEAK" not in encoded
 
 
+def test_project_scan_analyzes_puppet_ruby_module_extensions(tmp_path: Path) -> None:
+    source = FIXTURES / "puppet_ruby_extensions_risky"
+    shutil.copytree(source, tmp_path, dirs_exist_ok=True)
+
+    payload = scan_project(tmp_path, display_root=".")
+    extensions = [
+        item for item in payload["files"] if item.get("artifact_type") == "ruby_extension"
+    ]
+
+    assert len(extensions) == 6
+    assert {item["extension_type"] for item in extensions} == {
+        "custom_fact",
+        "legacy_function",
+        "report_processor",
+        "resource_provider",
+        "resource_type",
+        "ruby_function",
+    }
+    assert {item["source_kind"] for item in extensions} == {
+        "agent_fact",
+        "server_agent_provider",
+        "server_agent_type",
+        "server_compile_function",
+        "server_report_processor",
+    }
+    assert {item["language"] for item in extensions} == {"ruby"}
+    assert all(item["source_line_count"] > 0 for item in extensions)
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "DO_NOT_LEAK" not in encoded
+    assert "facts.example.invalid" not in encoded
+    assert "reports.example.invalid" not in encoded
+
+
+def test_project_scan_ignores_unclassified_puppet_library_ruby(tmp_path: Path) -> None:
+    helper = tmp_path / "modules" / "site" / "lib" / "puppet" / "util" / "helper.rb"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("module Puppet::Util::Helper\nend\n", encoding="utf-8")
+
+    assert identify_project_input(helper, "modules/site/lib/puppet/util/helper.rb") is None
+    assert scan_project(tmp_path, display_root=".")["discovered_file_count"] == 0
+
+
 def test_project_scan_does_not_claim_generic_python_plugin_paths(tmp_path: Path) -> None:
     plugin = tmp_path / "plugins" / "filter" / "example.py"
     plugin.parent.mkdir(parents=True)
