@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
   { name = "texasich", email = "info@readtheplan.dev" }
 ]
-keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
+keywords = ["terraform", "terraform-config", "terraform-lock", "terraform-state", "opentofu", "terragrunt", "terramate", "pulumi", "cdk", "azure", "bicep", "azure-pipelines", "bitbucket-pipelines", "buildkite", "atlantis", "ansible", "ansible-project", "salt", "salt-project", "nix", "nixos", "dsc", "powershell-dsc", "cfengine", "opa", "rego", "conftest", "sentinel", "jenkins", "jenkins-jcasc", "chef", "chef-project", "puppet", "puppet-project", "kubernetes", "helm", "helmfile", "kustomize", "skaffold", "devspace", "tilt", "tiltfile", "cue", "cuelang", "jsonnet", "tanka", "jsonnet-bundler", "crossplane", "serverless", "sam", "docker-compose", "dockerfile", "nomad", "packer", "vagrant", "cloud-init", "systemd", "nginx", "haproxy", "envoy", "traefik", "caddy", "prometheus", "alertmanager", "grafana", "loki", "vault", "consul", "opentelemetry", "iac", "devops", "devsecops", "compliance", "plan", "review"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -71,6 +71,7 @@ cue = "readtheplan.adapters.cue:CueAdapter"
 jsonnet = "readtheplan.adapters.jsonnet:JsonnetAdapter"
 tanka = "readtheplan.adapters.jsonnet:JsonnetAdapter"
 helmfile = "readtheplan.adapters.helmfile:HelmfileAdapter"
+terramate = "readtheplan.adapters.terramate:TerramateAdapter"
 envoy = "readtheplan.adapters.envoy:EnvoyAdapter"
 grafana = "readtheplan.adapters.grafana:GrafanaAdapter"
 github-actions = "readtheplan.adapters.pipelines:GitHubActionsAdapter"

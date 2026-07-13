@@ -114,7 +114,8 @@ readtheplan tilt Tiltfile
 readtheplan cue deploy_tool.cue
 readtheplan jsonnet main.jsonnet
 readtheplan tanka environments/production/spec.json
-readtheplan helmfile helmfile.yaml.gotmpl</code></pre>
+readtheplan helmfile helmfile.yaml.gotmpl
+readtheplan terramate terramate.tm.hcl</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -213,6 +214,19 @@ readtheplan jsonnet jsonnetfile.lock.json</code></pre>
           </p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan helmfile --framework soc2 helmfile.yaml.gotmpl
 readtheplan helmfile helmfile.lock</code></pre>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="terramate-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="terramate-title">Terramate orchestration and generation</h2>
+          <p style="color:var(--muted);margin:8px 0 16px">
+            Review stacks, safeguards, generated infrastructure, scripts, output sharing, and
+            cloud synchronization without traversing the project, generating files, or executing
+            Terramate, Terraform, OpenTofu, or Terragrunt:
+          </p>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan terramate --framework soc2 terramate.tm.hcl
+readtheplan terramate backend.tf.tmgen</code></pre>
         </div>
       </section>
 
