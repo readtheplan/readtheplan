@@ -1,7 +1,9 @@
 {
   "path": "examples/01-small-create/plan.json",
   "terraform_version": "1.8.5",
+  "format_version": "1.2",
   "resource_change_count": 3,
+  "plan_finding_count": 0,
   "actions": {
     "create": 2,
     "update": 1
@@ -80,6 +82,7 @@
       ]
     }
   ],
+  "plan_findings": [],
   "framework": {
     "name": "soc2",
     "version": "2017-tsc",

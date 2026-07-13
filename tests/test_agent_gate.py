@@ -7,6 +7,8 @@ from readtheplan.agent_gate import SCHEMA, agent_gate_to_dict
 from readtheplan.controls import load_catalog
 from readtheplan.plan import analyze_plan_file
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
 
 def _write_plan(
     tmp_path: Path,
@@ -118,3 +120,25 @@ def test_pr_comment_shows_truncation_indicator(tmp_path: Path) -> None:
     comment = gate["pr_comment"]
     assert comment.count("aws_s3_bucket.example") == 5
     assert "...and 5 more" in comment
+
+
+def test_plan_integrity_findings_block_even_with_only_safe_resource_changes() -> None:
+    summary = analyze_plan_file(FIXTURES / "terraform_plan_integrity_risky.json")
+
+    gate = agent_gate_to_dict(summary, load_catalog("soc2"))
+
+    assert gate["decision"] == "block"
+    assert gate["risk"] == "dangerous"
+    assert gate["resource_change_count"] == 1
+    assert gate["plan_finding_count"] == 13
+    assert gate["total_changes"] == 14
+    assert gate["risk_counts"] == {
+        "safe": 1,
+        "review": 4,
+        "dangerous": 9,
+        "irreversible": 0,
+    }
+    assert "1 resource change(s) and 13 plan-level finding(s)" in gate["reason"]
+    assert "Plan-level findings: `13`" in gate["pr_comment"]
+    assert "terraform.plan.errored" in gate["pr_comment"]
+    assert "rtp.control.soc2.CC8.1" in gate["required_checks"]

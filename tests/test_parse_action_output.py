@@ -75,6 +75,40 @@ def test_parse_action_output_writes_compact_outputs(
     assert count_file.read_text(encoding="utf-8") == "1"
 
 
+def test_parse_action_output_renders_plan_level_findings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = {
+        "resource_change_count": 0,
+        "plan_finding_count": 1,
+        "actions": {},
+        "risks": {"dangerous": 1},
+        "changes": [],
+        "plan_findings": [
+            {
+                "risk": "dangerous",
+                "actions": ["invoke"],
+                "address": "action.aws_lambda_invoke.rotate",
+                "type": "terraform_action_invocation",
+                "explanation": "Provider action requires approval.",
+            }
+        ],
+    }
+
+    _, step_summary, count_file = _run_parser(tmp_path, payload, monkeypatch)
+
+    captured = capsys.readouterr()
+    rendered = step_summary.read_text(encoding="utf-8")
+    assert "Plan-level findings: 1" in rendered
+    assert "### Plan-level findings" in rendered
+    assert "terraform_action_invocation" in rendered
+    assert "action.aws_lambda_invoke.rotate" in rendered
+    assert "0 resource changes and 1 plan-level findings" in captured.out
+    assert count_file.read_text(encoding="utf-8") == "0"
+
+
 def test_parse_action_output_skips_oversized_summary_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

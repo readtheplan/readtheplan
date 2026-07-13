@@ -1,6 +1,8 @@
 # readtheplan summary: examples/03-multi-resource/plan.json
 Terraform version: 1.8.5
+Plan format version: 1.2
 Resource changes: 12
+Plan-level findings: 0
 
 ## Actions
 - create: 2

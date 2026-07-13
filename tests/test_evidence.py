@@ -87,8 +87,29 @@ def test_build_evidence_empty_plan() -> None:
 
     assert payload["schema"] == EVIDENCE_SCHEMA
     assert payload["summary"]["resource_change_count"] == 0
+    assert payload["summary"]["plan_finding_count"] == 0
     assert payload["summary"]["controls_touched"] == []
     assert payload["changes"] == []
+
+
+def test_build_evidence_includes_redacted_plan_integrity_findings() -> None:
+    plan_path = FIXTURES / "terraform_plan_integrity_risky.json"
+    envelope = build_evidence(
+        plan_summary=analyze_plan_file(plan_path),
+        plan_json=plan_path.read_bytes(),
+        catalog=controls.load_catalog("soc2"),
+        agent_id="readtheplan@test",
+        generated_at=FIXED_TIME,
+    )
+    payload = envelope.to_dict()
+    encoded = json.dumps(payload)
+
+    assert payload["summary"]["resource_change_count"] == 1
+    assert payload["summary"]["plan_finding_count"] == 13
+    assert len(payload["changes"]) == 14
+    assert _change_by_address(payload, "terraform.plan.errored")["risk"] == "dangerous"
+    assert "fixture-action-payload-secret-do-not-leak" not in encoded
+    assert "fixture-ansible-token-do-not-leak" not in encoded
 
 
 def test_build_evidence_reviewer_null_by_default() -> None:

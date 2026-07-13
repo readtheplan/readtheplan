@@ -1334,7 +1334,7 @@ def _fail_on_exit_code(summary: PlanSummary, threshold: str | None) -> int:
         return 0
 
     threshold_rank = RISK_ORDER[threshold]
-    count = sum(RISK_ORDER[change.risk] >= threshold_rank for change in summary.resource_changes)
+    count = sum(RISK_ORDER[change.risk] >= threshold_rank for change in summary.all_changes)
     if count == 0:
         return 0
 
@@ -3298,6 +3298,8 @@ def _apply_overlays_to_summary(
         path=summary.path,
         terraform_version=summary.terraform_version,
         resource_changes=tuple(changes),
+        format_version=summary.format_version,
+        plan_findings=summary.plan_findings,
     )
 
 
@@ -3333,43 +3335,73 @@ def _print_summary(
     print(f"# readtheplan summary: {summary.path}", file=stream)
     if summary.terraform_version:
         print(f"Terraform version: {summary.terraform_version}", file=stream)
+    if summary.format_version:
+        print(f"Plan format version: {summary.format_version}", file=stream)
 
     print(f"Resource changes: {len(summary.resource_changes)}", file=stream)
-    if not summary.resource_changes:
-        print("No resource changes found.", file=stream)
+    print(f"Plan-level findings: {len(summary.plan_findings)}", file=stream)
+    if not summary.all_changes:
+        print("No resource changes or plan-level findings found.", file=stream)
         return
 
-    print("", file=stream)
-    print("## Actions", file=stream)
-    for action, count in sorted(summary.action_counts.items()):
-        print(f"- {action}: {count}", file=stream)
+    if summary.resource_changes:
+        print("", file=stream)
+        print("## Actions", file=stream)
+        for action, count in sorted(summary.action_counts.items()):
+            print(f"- {action}: {count}", file=stream)
 
     print("", file=stream)
     print("## Risk", file=stream)
     for risk, count in sorted(summary.risk_counts.items()):
         print(f"- {risk}: {count}", file=stream)
 
-    print("", file=stream)
-    print("## Changes", file=stream)
-    if catalog is None:
-        print("| Risk | Actions | Resource | Type | Explanation |", file=stream)
-        print("| --- | --- | --- | --- | --- |", file=stream)
-    else:
-        print("| Risk | Actions | Resource | Type | Explanation | Controls |", file=stream)
-        print("| --- | --- | --- | --- | --- | --- |", file=stream)
-    for change in summary.resource_changes:
-        actions = "/".join(change.actions)
-        row = (
-            f"| {change.risk} | {actions} | {change.address} | "
-            f"{change.resource_type} | {change.explanation}"
-        )
-        if catalog is not None:
-            controls = catalog.controls_for(
-                resource_type=change.resource_type,
-                actions=change.actions,
+    if summary.resource_changes:
+        print("", file=stream)
+        print("## Changes", file=stream)
+        if catalog is None:
+            print("| Risk | Actions | Resource | Type | Explanation |", file=stream)
+            print("| --- | --- | --- | --- | --- |", file=stream)
+        else:
+            print(
+                "| Risk | Actions | Resource | Type | Explanation | Controls |",
+                file=stream,
             )
-            row = f"{row} | {', '.join(control.id for control in controls)}"
-        print(f"{row} |", file=stream)
+            print("| --- | --- | --- | --- | --- | --- |", file=stream)
+        for change in summary.resource_changes:
+            actions = "/".join(change.actions)
+            row = (
+                f"| {change.risk} | {actions} | {change.address} | "
+                f"{change.resource_type} | {change.explanation}"
+            )
+            if catalog is not None:
+                controls = catalog.controls_for(
+                    resource_type=change.resource_type,
+                    actions=change.actions,
+                )
+                row = f"{row} | {', '.join(control.id for control in controls)}"
+            print(f"{row} |", file=stream)
+
+    if summary.plan_findings:
+        print("", file=stream)
+        print("## Plan-level findings", file=stream)
+        if catalog is None:
+            print("| Risk | Signal | Address | Explanation |", file=stream)
+            print("| --- | --- | --- | --- |", file=stream)
+        else:
+            print("| Risk | Signal | Address | Explanation | Controls |", file=stream)
+            print("| --- | --- | --- | --- | --- |", file=stream)
+        for finding in summary.plan_findings:
+            row = (
+                f"| {finding.risk} | {finding.resource_type} | {finding.address} | "
+                f"{finding.explanation}"
+            )
+            if catalog is not None:
+                controls = catalog.controls_for(
+                    resource_type=finding.resource_type,
+                    actions=finding.actions,
+                )
+                row = f"{row} | {', '.join(control.id for control in controls)}"
+            print(f"{row} |", file=stream)
 
 
 # ── Evolution handlers ────────────────────────────────────────────
