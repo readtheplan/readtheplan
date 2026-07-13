@@ -263,6 +263,25 @@ def identify_project_input(
         return "jenkins-jcasc"
     if name in {"policyfile.rb", "policyfile.lock.json"}:
         return "chef-project"
+    if name in {"chef-server.rb", "knife.rb"}:
+        return "chef-project"
+    if name in {"client.rb", "solo.rb"} and (
+        len(parts) == 1
+        or any(part in {".chef", "chef", "opscode"} for part in parts[:-1])
+    ):
+        return "chef-project"
+    if name == "config.rb" and any(
+        part in {".chef", "chef", "workstation"} for part in parts[:-1]
+    ):
+        return "chef-project"
+    if suffix == ".rb" and any(
+        part in {"client.d", "config.d", "solo.d"} for part in parts[:-1]
+    ):
+        return "chef-project"
+    if name == "metadata.rb" and (
+        len(parts) == 1 or any(part in {"chef", "cookbooks"} for part in parts[:-1])
+    ):
+        return "chef-project"
     if suffix == ".rb" and "recipes" in parts:
         return "chef"
     if name in {"puppet.conf", "puppetfile", "hiera.yaml", "hiera.yml"}:

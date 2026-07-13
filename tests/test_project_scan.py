@@ -35,6 +35,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("plugins.txt", "jenkins-project"),
         ("jenkins/plugins.yaml", "jenkins-project"),
         ("cookbooks/base/recipes/default.rb", "chef"),
+        ("client.rb", "chef-project"),
+        (".chef/config.rb", "chef-project"),
+        ("chef/chef-server.rb", "chef-project"),
+        ("chef/client.d/security.rb", "chef-project"),
         ("manifests/site.pp", "puppet"),
         ("puppet/puppet.conf", "puppet-project"),
         ("states/web.sls", "salt"),
@@ -246,6 +250,9 @@ def test_pr_comment_sanitizes_untrusted_path_markdown() -> None:
         "tools/playbook-helper.py",
         "config/repos.yaml",
         "provisioning/application.yaml",
+        "src/client.rb",
+        "lib/solo.rb",
+        "config/config.rb",
     ],
 )
 def test_similarly_named_source_and_generic_config_files_are_not_infrastructure(
@@ -455,6 +462,33 @@ def test_project_scan_analyzes_jenkins_plugin_catalog(tmp_path: Path) -> None:
     assert "fixture-user" not in encoded
     assert "fixture-password" not in encoded
     assert "plugins.example.invalid" not in encoded
+
+
+def test_project_scan_analyzes_chef_runtime_configuration(tmp_path: Path) -> None:
+    source = FIXTURES / "chef_runtime"
+    targets = {
+        "client.rb": "client.rb",
+        ".chef/config.rb": ".chef/config.rb",
+        "solo.rb": "solo.rb",
+        "chef-server.rb": "chef-server.rb",
+    }
+    for destination, fixture in targets.items():
+        target = tmp_path / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((source / fixture).read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 4
+    assert payload["scanned_file_count"] == 4
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"chef-project"}
+    assert {item["adapter"] for item in payload["files"]} == {"chef-project"}
+    assert payload["total_changes"] == 61
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-chef" not in encoded
+    assert "example.invalid" not in encoded
 
 
 def test_project_scan_analyzes_sops_policy_and_encrypted_documents(tmp_path: Path) -> None:

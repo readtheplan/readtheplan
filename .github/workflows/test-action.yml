@@ -1190,6 +1190,38 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Chef client runtime configuration
+        id: chef_runtime
+        uses: ./
+        with:
+          tool: chef-project
+          input-file: tests/fixtures/chef_runtime/client.rb
+          framework: soc2
+
+      - name: Assert Chef client runtime outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef_runtime.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef_runtime.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef_runtime.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "18"
+          test "$RISK_COUNTS" = '{"dangerous":12,"irreversible":0,"review":6,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "chef-project"
+          assert payload["artifact_type"] == "client_config"
+          assert payload["setting_count"] == 16
+          assert payload["decision"] == "block"
+          assert "fixture-chef" not in serialized
+          assert "example.invalid" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Puppet manifest
         id: puppet
         uses: ./

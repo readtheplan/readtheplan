@@ -29,7 +29,8 @@ _SECRET = re.compile(
     re.IGNORECASE,
 )
 _RUBY_EXECUTION = re.compile(
-    r"(?:^|\W)(?:eval|exec|spawn|system|require|load|IO\.popen|Open3\.)\s*(?:\(|['\"])"
+    r"(?:^|\W)(?:eval|exec|spawn|system|require|load|from_file|instance_eval|class_eval|"
+    r"module_eval|IO\.popen|Open3\.)\s*(?:\(|['\"])"
     r"|`[^`]+`|%x\s*\W"
 )
 _RUBY_DYNAMIC = re.compile(
@@ -59,6 +60,48 @@ _METADATA_CALLS = {
     "supports",
     "version",
 }
+_CONFIG_INDEXED = re.compile(
+    r"^\s*(?P<scope>[A-Za-z_][A-Za-z0-9_:]*)\s*\[\s*"
+    r"(?::(?P<symbol>[A-Za-z_][A-Za-z0-9_.-]*)|"
+    r"(?P<quote>['\"])(?P<quoted>[A-Za-z_][A-Za-z0-9_.-]*)(?P=quote))"
+    r"\s*\]\s*=\s*(?P<value>.+?)\s*$"
+)
+_CONFIG_SETTING = re.compile(
+    r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*(?:(?:::|\.)[A-Za-z_][A-Za-z0-9_]*)*)"
+    r"(?:\s*=\s*|\s+)(?P<value>.+?)\s*$"
+)
+_CONFIG_FILENAMES = {
+    "client.rb": "client_config",
+    "config.rb": "workstation_config",
+    "knife.rb": "workstation_config",
+    "solo.rb": "solo_config",
+    "chef-server.rb": "server_config",
+}
+_SECRET_PATH_SETTINGS = {
+    "client_key",
+    "encrypted_data_bag_secret",
+    "secret_file",
+    "ssl_certificate_key",
+    "ssl_client_key",
+    "validation_key",
+}
+_PATH_SETTINGS = {
+    "chef_repo_path",
+    "client_d_dir",
+    "cookbook_path",
+    "data_bag_path",
+    "environment_path",
+    "file_backup_path",
+    "file_cache_path",
+    "json_attribs",
+    "lockfile",
+    "node_path",
+    "role_path",
+    "sandbox_path",
+    "syntax_check_cache_path",
+    "trusted_certs_dir",
+}
+_MAX_CONFIG_STATEMENT = 1_000_000
 
 
 def _change(address: str, kind: str, risk: str, explanation: str) -> dict[str, str]:
@@ -270,11 +313,156 @@ def _parse_lock(source: str) -> dict[str, Any] | None:
     return {"artifact_type": "lock", "document": document}
 
 
-def parse_chef_project(source: str) -> dict[str, Any]:
-    """Parse static Chef policy/cookbook project files without executing Ruby."""
+def _config_artifact_type(filename: str) -> str:
+    normalized = filename.replace("\\", "/").casefold()
+    path = Path(normalized)
+    name = path.name
+    if name in _CONFIG_FILENAMES:
+        if name != "config.rb" or not filename or any(
+            part in {".chef", "chef", "workstation"} for part in path.parts[:-1]
+        ):
+            return _CONFIG_FILENAMES[name]
+        # An explicitly supplied config.rb is the documented Workstation/knife filename.
+        return "workstation_config"
+    for part, artifact_type in {
+        "client.d": "client_config",
+        "config.d": "workstation_config",
+        "solo.d": "solo_config",
+    }.items():
+        if part in path.parts and name.endswith(".rb"):
+            return artifact_type
+    return ""
+
+
+def _config_statements(source: str) -> list[tuple[int, str]]:
+    statements: list[tuple[int, str]] = []
+    buffer: list[str] = []
+    start_line = 0
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    length = 0
+    for line_number, original in enumerate(source.splitlines(), start=1):
+        line = _strip_comment(original).strip()
+        if not line:
+            continue
+        if not buffer:
+            start_line = line_number
+        buffer.append(line)
+        length += len(line)
+        if length > _MAX_CONFIG_STATEMENT:
+            raise ChefProjectInputError(
+                f"Chef configuration statement exceeds {_MAX_CONFIG_STATEMENT} characters"
+            )
+        for char in line:
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\" and quote:
+                escaped = True
+                continue
+            if char in {"'", '"'}:
+                quote = None if quote == char else char if quote is None else quote
+                continue
+            if quote is None:
+                if char in "([{":
+                    depth += 1
+                elif char in ")]}" and depth > 0:
+                    depth -= 1
+        if quote is None and depth == 0 and not line.endswith("\\"):
+            statements.append((start_line, " ".join(buffer)))
+            buffer = []
+            length = 0
+    if buffer:
+        statements.append((start_line, " ".join(buffer)))
+    return statements
+
+
+def _config_value(value: str) -> dict[str, Any]:
+    value = value.strip()
+    if (
+        _RUBY_EXECUTION.search(value)
+        or _RUBY_DYNAMIC.search(value)
+        or re.search(r"#\{|<%|\$\{", value)
+    ):
+        return {"kind": "dynamic", "value": "", "raw": value}
+    quoted = _read_quoted(value, 0)
+    if quoted is not None and not value[quoted[1] :].strip():
+        return {"kind": "string", "value": quoted[0], "raw": value}
+    symbol = re.fullmatch(r":([A-Za-z_][A-Za-z0-9_.-]*)", value)
+    if symbol:
+        return {"kind": "symbol", "value": symbol.group(1), "raw": value}
+    if value.casefold() in {"true", "false"}:
+        return {"kind": "boolean", "value": value.casefold() == "true", "raw": value}
+    if value.casefold() == "nil":
+        return {"kind": "nil", "value": None, "raw": value}
+    if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", value):
+        return {"kind": "number", "value": value, "raw": value}
+    if (value.startswith("[") and value.endswith("]")) or re.fullmatch(
+        r"%w[({\[].*[)}\]]", value, re.DOTALL
+    ):
+        return {
+            "kind": "array",
+            "value": _quoted_values(value),
+            "raw": value,
+        }
+    if re.fullmatch(r"[A-Z][A-Za-z0-9_:]*", value):
+        return {"kind": "constant", "value": value, "raw": value}
+    return {"kind": "dynamic", "value": "", "raw": value}
+
+
+def _parse_runtime_config(source: str, artifact_type: str) -> dict[str, Any]:
+    settings: list[dict[str, Any]] = []
+    dynamic: list[dict[str, Any]] = []
+    previous: dict[str, str] = {}
+    for line_number, statement in _config_statements(source):
+        if _RUBY_EXECUTION.search(statement) or _contains_unquoted(statement, ";"):
+            dynamic.append({"line": line_number, "source": statement})
+            continue
+        indexed = _CONFIG_INDEXED.match(statement)
+        if indexed:
+            scope = indexed.group("scope").casefold()
+            key = (indexed.group("symbol") or indexed.group("quoted")).casefold()
+            canonical = key if scope == "chef::config" else f"{scope}.{key}"
+            raw_value = indexed.group("value")
+        else:
+            direct = _CONFIG_SETTING.match(statement)
+            if not direct:
+                dynamic.append({"line": line_number, "source": statement})
+                continue
+            canonical = direct.group("name").replace("::", ".").casefold()
+            raw_value = direct.group("value")
+        parsed_value = _config_value(raw_value)
+        prior = previous.get(canonical)
+        setting = {
+            "name": canonical,
+            "line": line_number,
+            "value": parsed_value,
+            "duplicate": prior is not None,
+            "conflicting": prior is not None and prior != parsed_value["raw"],
+        }
+        settings.append(setting)
+        previous[canonical] = parsed_value["raw"]
+        if parsed_value["kind"] == "dynamic":
+            dynamic.append({"line": line_number, "source": parsed_value["raw"]})
+    if not settings and not dynamic:
+        raise ChefProjectInputError("Chef runtime configuration contains no settings")
+    return {
+        "artifact_type": artifact_type,
+        "document": {"settings": settings, "dynamic": dynamic},
+    }
+
+
+def parse_chef_project(source: str, *, filename: str = "") -> dict[str, Any]:
+    """Parse static Chef project/runtime files without executing Ruby."""
     if not source.strip():
         raise ChefProjectInputError("input is empty")
-    parsed = _parse_lock(source) or _parse_ruby(source)
+    artifact_type = _config_artifact_type(filename)
+    parsed = (
+        _parse_runtime_config(source, artifact_type)
+        if artifact_type
+        else _parse_lock(source) or _parse_ruby(source)
+    )
     return {"chef_project": parsed}
 
 
@@ -663,6 +851,225 @@ def _walk_keys(value: Any, prefix: str = "") -> list[str]:
     return keys
 
 
+def _setting_text(setting: dict[str, Any]) -> str:
+    value = setting["value"]
+    scalar = value.get("value")
+    if isinstance(scalar, bool):
+        return "true" if scalar else "false"
+    if scalar is None:
+        return "nil"
+    return str(scalar).casefold()
+
+
+def _runtime_setting_change(
+    setting: dict[str, Any], artifact_type: str
+) -> dict[str, str]:
+    name = str(setting["name"])
+    key = name.rsplit(".", maxsplit=1)[-1]
+    value = setting["value"]
+    kind = str(value["kind"])
+    text = _setting_text(setting)
+    risk = "review"
+    reasons: list[str] = []
+
+    if setting["conflicting"]:
+        risk = "dangerous"
+        reasons.append("A later assignment overrides a different value in the same file.")
+    elif setting["duplicate"]:
+        reasons.append("The setting is assigned more than once in the same file.")
+
+    if _SECRET.search(key) or key.endswith("_pass"):
+        if key in _SECRET_PATH_SETTINGS:
+            reasons.append("It selects a credential, key, certificate, or secret file boundary.")
+        elif kind == "dynamic":
+            reasons.append("Credential-bearing input is resolved dynamically at runtime.")
+        else:
+            risk = "dangerous"
+            reasons.append("It contains literal credential or authentication material.")
+
+    if key in _PATH_SETTINGS:
+        reasons.append("It changes a filesystem input, cache, lock, or content boundary.")
+
+    if kind == "string":
+        raw_text = str(value["value"])
+        try:
+            endpoint = urlsplit(raw_text)
+        except ValueError:
+            endpoint = None
+        if endpoint and endpoint.scheme:
+            if endpoint.scheme.casefold() in {"http", "ftp", "git"}:
+                risk = "dangerous"
+                reasons.append("The endpoint uses plaintext or unauthenticated transport.")
+            if endpoint.username or endpoint.password:
+                risk = "dangerous"
+                reasons.append("The endpoint embeds credentials that can leak in logs or metadata.")
+        if key == "recipe_url":
+            risk = "dangerous"
+            reasons.append(
+                "Chef Solo downloads executable cookbook content without an integrity pin in "
+                "this configuration."
+            )
+
+    if key == "ssl_verify_mode":
+        if text == "verify_none":
+            risk = "dangerous"
+            reasons.append("TLS certificate verification is disabled for HTTPS requests.")
+        else:
+            reasons.append("It controls certificate verification for Chef and content requests.")
+    elif key == "verify_api_cert" and text == "false":
+        reasons.append("Chef Server certificate checks delegate to the configured SSL verify mode.")
+    elif name == "nginx.enable_non_ssl" and text == "true":
+        risk = "dangerous"
+        reasons.append("The Chef Server API accepts non-TLS traffic.")
+    elif name == "postgresql.sslmode" and text == "disable":
+        risk = "dangerous"
+        reasons.append("Chef Server disables encryption for PostgreSQL connections.")
+    elif name == "nginx.ssl_protocols" and re.search(
+        r"(?:^|[,\s])TLSv1(?:\.0)?(?:[,\s]|$)|(?:^|[,\s])TLSv1\.1(?:[,\s]|$)",
+        text,
+        re.IGNORECASE,
+    ):
+        risk = "dangerous"
+        reasons.append("Chef Server enables a legacy TLS protocol below TLS 1.2.")
+    elif name == "nginx.ssl_ciphers":
+        tokens = {item for item in re.split(r"[:\s]+", text.upper()) if item}
+        enabled = {item for item in tokens if not item.startswith("!")}
+        weak = {
+            item
+            for item in enabled
+            if item in {"ANULL", "ENULL", "EXP", "LOW", "NULL", "SSLV2", "SSLV3"}
+            or item.startswith(("3DES", "DES", "MD5", "RC4"))
+        }
+        if weak:
+            risk = "dangerous"
+            reasons.append("Chef Server explicitly permits a weak TLS cipher class.")
+        else:
+            reasons.append("It changes the accepted Chef Server TLS cipher policy.")
+
+    if name == "insecure_addon_compat" and text == "true":
+        risk = "dangerous"
+        reasons.append("Compatibility mode writes secrets into additional configuration files.")
+    if name == "required_recipe.enable" and text == "true":
+        risk = "dangerous"
+        reasons.append("Chef Server forces a recipe onto every connecting client run.")
+    if key == "file_atomic_update" and text == "false":
+        risk = "dangerous"
+        reasons.append("Global atomic file updates are disabled, risking partial writes or loss.")
+    if key == "data_bag_decrypt_minimum_version" and text in {"1", "2"}:
+        risk = "dangerous"
+        reasons.append("Encrypted data bags may use a legacy format below version 3.")
+    if key == "strict_search_result_acls" and text == "false":
+        risk = "dangerous"
+        reasons.append("Strict ACL filtering for Chef Server search results is disabled.")
+    if name == "knife.forward_agent" and text == "true":
+        risk = "dangerous"
+        reasons.append("Knife forwards the local SSH agent to remote bootstrap targets.")
+    if name == "knife.yes" and text == "true":
+        risk = "dangerous"
+        reasons.append("Knife automatically confirms prompts, including destructive operations.")
+    if name == "knife.bootstrap_version" and not text:
+        risk = "dangerous"
+        reasons.append("Bootstrap does not pin the Chef Infra Client version to install.")
+    if key == "listen" and text == "true":
+        risk = "dangerous"
+        reasons.append("Chef Zero binds a local HTTP listener.")
+    if key == "add_formatter":
+        risk = "dangerous"
+        reasons.append("Chef loads third-party Ruby formatter code during execution.")
+    if key == "log_level" and text in {"debug", "trace"}:
+        risk = "dangerous"
+        reasons.append("Verbose debug logging can expose sensitive runtime data.")
+    if key == "umask" and text in {"0", "0000"}:
+        risk = "dangerous"
+        reasons.append("The process umask permits world-writable files by default.")
+    if key in {"chef_server_url", "data_collector.server_url", "server_url"}:
+        reasons.append("It changes the remote Chef control-plane or reporting endpoint.")
+    if key in {"node_name", "policy_group", "policy_name", "environment"}:
+        reasons.append("It changes node identity or the policy scope selected for convergence.")
+    if key in {"client_key", "validation_client_name", "validation_key"}:
+        reasons.append("It changes Chef Server authentication or legacy bootstrap identity.")
+    if key in {"local_mode", "solo", "use_policyfile"}:
+        reasons.append("It changes how Chef resolves policy and whether it uses Chef Server.")
+    if key in {"interval", "splay", "run_lock_timeout"}:
+        reasons.append("It changes recurring convergence or run-lock behavior.")
+    if key == "fips" and text == "false":
+        reasons.append("FIPS cryptographic mode is explicitly disabled.")
+    if not reasons:
+        reasons.append("It changes effective Chef runtime behavior or service configuration.")
+
+    label = artifact_type.replace("_", " ")
+    return _change(
+        f"chef_config.{artifact_type}.line.{setting['line']}.{name}",
+        "runtime_setting",
+        risk,
+        f"Chef {label} setting {name!r} is explicitly configured. " + " ".join(reasons),
+    )
+
+
+def _runtime_config_changes(
+    document: dict[str, Any], artifact_type: str
+) -> list[dict[str, str]]:
+    settings = document["settings"]
+    changes = [_runtime_setting_change(setting, artifact_type) for setting in settings]
+    effective = {str(setting["name"]): _setting_text(setting) for setting in settings}
+    if artifact_type == "server_config" and any(
+        key.startswith("ldap.") for key in effective
+    ):
+        encrypted = (
+            effective.get("ldap.tls_enabled") == "true"
+            or effective.get("ldap.ssl_enabled") == "true"
+            or effective.get("ldap.encryption") in {"simple_tls", "start_tls"}
+        )
+        if effective.get("ldap.host") and not encrypted:
+            changes.append(
+                _change(
+                    "chef_config.server_config.ldap_transport",
+                    "ldap_transport",
+                    "dangerous",
+                    "Chef Server configures an LDAP identity endpoint without an explicit "
+                    "TLS/SSL mode.",
+                )
+            )
+    artifact_name = {
+        "client_config": "client.rb",
+        "workstation_config": "Workstation config.rb/knife.rb",
+        "solo_config": "solo.rb",
+        "server_config": "chef-server.rb",
+    }[artifact_type]
+    changes.extend(_dynamic_changes(document.get("dynamic", []), artifact_name))
+    boundary = {
+        "client_config": (
+            "Effective Chef client behavior also depends on command-line flags, environment "
+            "variables, merged client.d fragments, node/server policy, credentials, cookbook "
+            "content, and runtime Ruby evaluation."
+        ),
+        "workstation_config": (
+            "Effective Chef Workstation behavior also depends on command-line flags, credentials, "
+            "knife plugins, merged config.d fragments, bootstrap templates, and runtime Ruby "
+            "evaluation."
+        ),
+        "solo_config": (
+            "Effective Chef Solo behavior also depends on command-line flags, local roles, data "
+            "bags, environments, cookbook contents, downloaded archives, and runtime Ruby "
+            "evaluation."
+        ),
+        "server_config": (
+            "Effective Chef Server behavior also depends on built-in defaults, topology, external "
+            "secrets, generated service configuration, installed add-ons, reconfigure state, and "
+            "runtime Ruby conditions."
+        ),
+    }[artifact_type]
+    changes.append(
+        _change(
+            f"chef_config.{artifact_type}.effective_configuration",
+            "runtime_boundary",
+            "review",
+            boundary,
+        )
+    )
+    return changes
+
+
 class ChefProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -672,7 +1079,16 @@ class ChefProjectAdapter(BaseAdapter):
         project = input_data.get("chef_project")
         return (
             isinstance(project, dict)
-            and project.get("artifact_type") in {"policyfile", "lock", "metadata"}
+            and project.get("artifact_type")
+            in {
+                "policyfile",
+                "lock",
+                "metadata",
+                "client_config",
+                "workstation_config",
+                "solo_config",
+                "server_config",
+            }
             and isinstance(project.get("document"), dict)
         )
 
@@ -680,6 +1096,8 @@ class ChefProjectAdapter(BaseAdapter):
         project = input_data["chef_project"]
         artifact_type = project["artifact_type"]
         document = project["document"]
+        if artifact_type.endswith("_config"):
+            return _runtime_config_changes(document, artifact_type)
         changes = {
             "policyfile": _policy_changes,
             "lock": _lock_changes,
@@ -716,6 +1134,9 @@ def analyze_chef_project(data: dict[str, Any], *, catalog=None) -> dict[str, Any
     )
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="Chef project")
     gate["adapter"] = "chef-project"
-    gate["artifact_type"] = data["chef_project"]["artifact_type"]
+    project = data["chef_project"]
+    gate["artifact_type"] = project["artifact_type"]
+    if project["artifact_type"].endswith("_config"):
+        gate["setting_count"] = len(project["document"]["settings"])
     gate["total_changes"] = len(changes)
     return gate

@@ -653,6 +653,23 @@ def test_agent_gate_configuration_management_supports_jenkins_plugin_catalog() -
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_chef_runtime_config() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "chef_runtime" / "client.rb"),
+        "chef-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+    assert result["adapter"] == "chef-project"
+    assert result["artifact_type"] == "client_config"
+    assert result["setting_count"] == 16
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 18
+    assert "fixture-chef" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_dsc() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "powershell_dsc_risky.ps1"),
@@ -2263,6 +2280,36 @@ def test_stdio_server_tools_list() -> None:
         assert "fixture-user" not in jenkins_project_content[0]["text"]
         assert "fixture-password" not in jenkins_project_content[0]["text"]
         assert "plugins.example.invalid" not in jenkins_project_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Chef client.rb) ---
+        chef_runtime_req = {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (FIXTURES / "chef_runtime" / "client.rb").resolve()
+                    ),
+                    "ecosystem": "chef-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        chef_runtime_resp = _send_jsonrpc(proc, chef_runtime_req)
+        assert "result" in chef_runtime_resp, (
+            f"Chef runtime tools/call failed: {chef_runtime_resp}"
+        )
+        chef_runtime_content = chef_runtime_resp["result"]["content"]
+        assert len(chef_runtime_content) == 1
+        chef_runtime_summary = json.loads(chef_runtime_content[0]["text"])
+        assert chef_runtime_summary["adapter"] == "chef-project"
+        assert chef_runtime_summary["artifact_type"] == "client_config"
+        assert chef_runtime_summary["setting_count"] == 16
+        assert chef_runtime_summary["total_changes"] == 18
+        assert "fixture-chef" not in chef_runtime_content[0]["text"]
+        assert "example.invalid" not in chef_runtime_content[0]["text"]
 
     finally:
         proc.stdin.close()  # type: ignore[union-attr]

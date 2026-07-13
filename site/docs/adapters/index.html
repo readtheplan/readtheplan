@@ -65,7 +65,7 @@
             Terraform and OpenTofu work natively with strict dependency-lock analysis and first-party AWS, GCP, Azure,
             complete HashiCorp Kubernetes, Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE provider rules. Built-in adapters cover <strong>CloudFormation and AWS CDK</strong>,
             <strong>Azure Bicep source and ARM What-If</strong>, <strong>Kubernetes</strong>, <strong>Ansible playbooks and project configuration</strong>, <strong>Salt states and project configuration</strong>, <strong>Nix flakes/locks and NixOS modules</strong>, <strong>Microsoft DSC and PowerShell DSC</strong>, <strong>CFEngine policy and Augments</strong>, <strong>Jenkins pipelines/JCasC</strong>,
-            <strong>Pulumi</strong>, <strong>Chef recipes and projects</strong>, <strong>Puppet manifests and projects</strong>, <strong>GitHub Actions</strong>,
+            <strong>Pulumi</strong>, <strong>Chef recipes, projects, and runtime configuration</strong>, <strong>Puppet manifests and projects</strong>, <strong>GitHub Actions</strong>,
             <strong>GitLab CI</strong>, <strong>CircleCI</strong>, <strong>Docker Compose and Buildx Bake</strong>,
             <strong>HashiCorp Nomad</strong>, <strong>HashiCorp Packer</strong>, <strong>HashiCorp Vagrant</strong>, <strong>cloud-init</strong>, <strong>Dockerfiles</strong>, <strong>Azure Pipelines</strong>, and <strong>Bitbucket Pipelines</strong>. Rendered Helm,
             Kustomize, and Crossplane resources flow through the Kubernetes gate. Terragrunt
@@ -111,6 +111,8 @@ readtheplan jenkins-project plugins.txt
 readtheplan teamcity .teamcity/settings.kts
 readtheplan chef default.rb
 readtheplan chef-project Policyfile.rb
+readtheplan chef-project client.rb
+readtheplan chef-project chef-server.rb
 readtheplan puppet site.pp
 readtheplan puppet-project Puppetfile
 readtheplan puppet-project puppet.conf
@@ -159,7 +161,7 @@ readtheplan kapp kapp-config.yml</code></pre>
             conservative scanner. Docker Compose and Buildx Bake definitions are parsed structurally without resolving external
             files, build contexts, caches, or registries, while Nomad accepts HCL/JSON jobspec source or the scheduler's structured job-plan API response and
             Packer consumes saved human or machine-readable inspect output.
-            Jenkinsfiles, Chef recipes/projects, Puppet manifests/projects, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning; <code>puppet.conf</code> is parsed as duplicate-safe sectioned configuration for agent, server, and CA trust and execution settings;
+            Jenkinsfiles, Chef recipes/projects/runtime configuration, Puppet manifests/projects, GitHub Actions, GitLab CI, and CircleCI use conservative syntax-aware scanning; Chef <code>client.rb</code>, Workstation <code>config.rb</code>/<code>knife.rb</code>, <code>solo.rb</code>, <code>chef-server.rb</code>, and supported <code>.d</code> fragments are parsed statically without evaluating Ruby; <code>puppet.conf</code> is parsed as duplicate-safe sectioned configuration for agent, server, and CA trust and execution settings;
             Jenkins JCasC YAML is parsed structurally for controller identity, credentials, agents, libraries, and script authority:
             unknown or unexpanded constructs become <code>review</code>, and source files are
             never executed.
