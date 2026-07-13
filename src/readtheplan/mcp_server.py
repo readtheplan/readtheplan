@@ -2563,7 +2563,7 @@ def agent_gate_configuration_management(
         analyze = analyze_ansible_project
     elif ecosystem == "chef-project":
         try:
-            data = parse_chef_project(source)
+            data = parse_chef_project(source, filename=input_path)
         except ChefProjectInputError as exc:
             raise MCPToolInputError(
                 code="INVALID_INPUT",

@@ -418,6 +418,7 @@ for (const token of [
   "Docker Buildx Bake definitions",
   "ansible-project",
   "chef-project",
+  "Chef recipes/projects/client, Workstation, Solo, and Server runtime configuration",
   "puppet-project",
   "salt-project",
   "NixOS",
