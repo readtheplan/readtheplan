@@ -78,6 +78,10 @@
     }
     .suggestion:hover { border-color: var(--matrix-green); color: var(--matrix-green); }
     .error-msg { color: #ff5555; font-size: 0.8rem; text-align: center; }
+    .error-msg button {
+      margin-left: 0.5rem; color: inherit; background: transparent;
+      border: 1px solid currentColor; cursor: pointer;
+    }
     .privacy-note { color: var(--matrix-fg-dim); font-size: 0.75rem; margin: 0.35rem 0; }
   </style>
 </head>
@@ -157,6 +161,7 @@ function addMsg(role, text) {
   }
   document.getElementById('messages').appendChild(div);
   document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+  return div;
 }
 
 function showTyping() {
@@ -182,10 +187,11 @@ async function send() {
 
   input.value = '';
   btn.disabled = true;
+  err.replaceChildren();
   err.style.display = 'none';
   document.getElementById('suggestions').style.display = 'none';
 
-  addMsg('user', text);
+  const userMessage = addMsg('user', text);
   history.push({ role: 'user', content: text });
   showTyping();
 
@@ -195,15 +201,31 @@ async function send() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: history.slice(-10) })
     });
-    if (!resp.ok) throw new Error(`API ${resp.status}`);
-    const data = await resp.json();
+    const isJson = (resp.headers.get('Content-Type') || '').includes('application/json');
+    const data = isJson ? await resp.json() : {};
+    if (!resp.ok) {
+      const retryAfter = resp.headers.get('Retry-After');
+      const message = resp.status === 429
+        ? `Too many requests. Try again${retryAfter ? ` in ${retryAfter} seconds` : ' shortly'}.`
+        : (data.reply || data.error || `The AI service is temporarily unavailable (HTTP ${resp.status}).`);
+      throw new Error(message);
+    }
     hideTyping();
     const reply = data.reply || "Sorry, I couldn't process that. Try rephrasing?";
     addMsg('agent', reply);
     history.push({ role: 'assistant', content: reply });
   } catch (e) {
     hideTyping();
-    err.textContent = 'Connection error — try again in a moment.';
+    err.append(document.createTextNode(e.message || 'Connection error — try again in a moment.'));
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Retry';
+    retry.onclick = () => {
+      userMessage.remove();
+      input.value = text;
+      send();
+    };
+    err.appendChild(retry);
     err.style.display = 'block';
     // Remove the user message from history so retry works
     history.pop();

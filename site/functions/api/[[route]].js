@@ -70,10 +70,10 @@ export async function onRequest(context) {
   if (route[0] === "v1" && route[1] === "version") {
     const idx = await fetchData(request, "/data/index.json");
     if (!idx) {
-      return json({ version: "0.3.0", service: "readtheplan", data_available: false });
+      return json({ version: null, service: "readtheplan", data_available: false });
     }
     return json({
-      version: idx.version || "0.3.0",
+      version: idx.version || null,
       frameworks: Object.keys(idx.frameworks || {}).length,
       controls_total: Object.values(idx.frameworks || {})
         .reduce((sum, f) => sum + (f.control_count || 0), 0),

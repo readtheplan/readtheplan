@@ -1,4 +1,5 @@
 export async function onRequest(context) {
+  let version = null;
   let frameworks = 0;
   let controlsTotal = 0;
   try {
@@ -6,6 +7,7 @@ export async function onRequest(context) {
     const resp = await fetch(url);
     if (resp.ok) {
       const idx = await resp.json();
+      version = idx.version || null;
       frameworks = Object.keys(idx.frameworks || {}).length;
       controlsTotal = Object.values(idx.frameworks || {})
         .reduce((sum, f) => sum + (f.control_count || 0), 0);
@@ -15,7 +17,7 @@ export async function onRequest(context) {
   return new Response(JSON.stringify({
     status: "ok",
     service: "readtheplan",
-    version: "0.3.0",
+    version,
     frameworks,
     controls_total: controlsTotal,
     timestamp: new Date().toISOString()
