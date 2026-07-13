@@ -1400,6 +1400,41 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Jenkins controller Groovy hook
+        id: jenkins_groovy_hook
+        uses: ./
+        with:
+          tool: jenkins-project
+          input-file: tests/fixtures/jenkins_groovy_hooks_risky/init.groovy.d/10-security.groovy
+          framework: soc2
+
+      - name: Assert Jenkins controller Groovy hook outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.jenkins_groovy_hook.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.jenkins_groovy_hook.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.jenkins_groovy_hook.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "17"
+          test "$RISK_COUNTS" = '{"dangerous":14,"irreversible":0,"review":3,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "jenkins-project"
+          assert payload["artifact_type"] == "init_hook"
+          assert payload["source_kind"] == "controller_init_hook"
+          assert payload["hook_name"] == "init"
+          assert payload["source_line_count"] == 15
+          assert payload["decision"] == "block"
+          assert "fixture-controller-token-do-not-leak" not in serialized
+          assert "fixture-controller-command-do-not-run" not in serialized
+          assert "FIXTURE_ENDPOINT" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef recipe
         id: chef
         uses: ./

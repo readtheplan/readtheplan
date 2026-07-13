@@ -917,6 +917,33 @@ def test_agent_gate_configuration_management_supports_jenkins_shared_library() -
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_jenkins_groovy_hooks() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "jenkins_groovy_hooks_risky" / "init.groovy.d" / "10-security.groovy"),
+        "jenkins-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "jenkins-project"
+    assert result["artifact_type"] == "init_hook"
+    assert result["source_kind"] == "controller_init_hook"
+    assert result["hook_name"] == "init"
+    assert result["source_line_count"] == 15
+    assert result["total_changes"] == 17
+    assert result["risk_counts"] == {
+        "safe": 0,
+        "review": 3,
+        "dangerous": 14,
+        "irreversible": 0,
+    }
+    assert result["decision"] == "block"
+    assert "fixture-controller-token-do-not-leak" not in encoded
+    assert "fixture-controller-command-do-not-run" not in encoded
+    assert "FIXTURE_ENDPOINT" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_chef_runtime_config() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "chef_runtime" / "client.rb"),
@@ -2641,6 +2668,44 @@ def test_stdio_server_tools_list() -> None:
         assert "fixture-user" not in jenkins_project_content[0]["text"]
         assert "fixture-password" not in jenkins_project_content[0]["text"]
         assert "plugins.example.invalid" not in jenkins_project_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Jenkins Groovy hook) ---
+        jenkins_hook_req = {
+            "jsonrpc": "2.0",
+            "id": 73,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "jenkins_groovy_hooks_risky"
+                            / "init.groovy.d"
+                            / "10-security.groovy"
+                        ).resolve()
+                    ),
+                    "ecosystem": "jenkins-project",
+                    "framework": "soc2",
+                },
+            },
+        }
+        jenkins_hook_resp = _send_jsonrpc(proc, jenkins_hook_req)
+        assert "result" in jenkins_hook_resp, (
+            f"Jenkins Groovy hook tools/call failed: {jenkins_hook_resp}"
+        )
+        jenkins_hook_content = jenkins_hook_resp["result"]["content"]
+        assert len(jenkins_hook_content) == 1
+        jenkins_hook_summary = json.loads(jenkins_hook_content[0]["text"])
+        assert jenkins_hook_summary["adapter"] == "jenkins-project"
+        assert jenkins_hook_summary["artifact_type"] == "init_hook"
+        assert jenkins_hook_summary["source_kind"] == "controller_init_hook"
+        assert jenkins_hook_summary["hook_name"] == "init"
+        assert jenkins_hook_summary["source_line_count"] == 15
+        assert jenkins_hook_summary["total_changes"] == 17
+        assert "fixture-controller-token-do-not-leak" not in jenkins_hook_content[0]["text"]
+        assert "fixture-controller-command-do-not-run" not in jenkins_hook_content[0]["text"]
+        assert "FIXTURE_ENDPOINT" not in jenkins_hook_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Chef client.rb) ---
         chef_runtime_req = {

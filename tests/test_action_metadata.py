@@ -232,6 +232,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "input-file: tests/fixtures/jenkins_jcasc_risky.yml" in workflow
     assert "tool: jenkins-project" in workflow
     assert "input-file: tests/fixtures/jenkins_plugins_risky.txt" in workflow
+    assert (
+        "input-file: "
+        "tests/fixtures/jenkins_groovy_hooks_risky/init.groovy.d/10-security.groovy" in workflow
+    )
     assert "input-file: tests/fixtures/chef_config_management_risky.rb" in workflow
     assert "input-file: tests/fixtures/chef_cookbook_risky/resources/application.rb" in workflow
     assert "tool: chef-project" in workflow
