@@ -4,6 +4,7 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -24,6 +25,12 @@ _SECRET_KEY = re.compile(
 )
 _SECRET_INTERPOLATION = re.compile(r"(?<!\^)\$\{(?P<name>[^}]+)\}")
 _MUTABLE_VERSION = {"", "head", "latest", "main", "master", "trunk"}
+_IMMUTABLE_REVISION = re.compile(r"[0-9a-f]{40,64}$", re.IGNORECASE)
+_DYNAMIC_VALUE = re.compile(r"(?:\$\{|\{\{|<%|#\{)")
+_LIBRARY_ROOTS = {
+    "globallibraries": ("trusted", True),
+    "globaluntrustedlibraries": ("untrusted", False),
+}
 _BROAD_PERMISSION = re.compile(
     r"(?:overall/administer|credentials/(?:create|delete|manage|update|view)|"
     r"agent/(?:build|configure|connect|create|delete)|job/(?:build|configure|create|delete)|"
@@ -344,29 +351,211 @@ def _controller_and_agent_changes(jenkins: dict[str, Any]) -> list[dict[str, str
     return changes
 
 
-def _library_changes(document: dict[str, Any]) -> list[dict[str, str]]:
-    library_roots = [
-        value
-        for path, value in _walk(document)
-        if path and _normalized_key(path[-1]) in {"globallibraries", "libraries"}
-    ]
-    if not library_roots:
-        return []
-    strings = _flatten_strings(library_roots)
-    versions: list[str] = []
-    for root in library_roots:
-        for path, value in _walk(root):
-            if path and _normalized_key(path[-1]) == "defaultversion":
-                versions.append(str(value).strip())
-    mutable = [version for version in versions if version.lower() in _MUTABLE_VERSION]
-    insecure = [value for value in strings if value.lower().startswith(("http://", "git://"))]
-    risk = "dangerous" if mutable or insecure else "review"
-    reasons = ["JCasC configures Pipeline shared libraries whose external code is not expanded."]
-    if mutable:
-        reasons.append("A library uses a mutable or implicit default version.")
+def _normalized_field(mapping: dict[str, Any], name: str, default: Any = None) -> Any:
+    for key, value in mapping.items():
+        if _normalized_key(key) == name:
+            return value
+    return default
+
+
+def _configured_libraries(
+    document: dict[str, Any],
+) -> list[tuple[str, bool, int, dict[str, Any]]]:
+    configured: list[tuple[str, bool, int, dict[str, Any]]] = []
+    for path, value in _walk(document):
+        if not path:
+            continue
+        root = _LIBRARY_ROOTS.get(_normalized_key(path[-1]))
+        if root is None or not isinstance(value, dict):
+            continue
+        scope, trusted = root
+        libraries = _normalized_field(value, "libraries", [])
+        if not isinstance(libraries, list):
+            continue
+        for index, library in enumerate(libraries, start=1):
+            if isinstance(library, dict):
+                configured.append((scope, trusted, index, library))
+    return configured
+
+
+def _library_version_change(
+    library: dict[str, Any], *, scope: str, index: int
+) -> tuple[dict[str, str], bool]:
+    version = str(_normalized_field(library, "defaultversion", "") or "").strip()
+    allow_value = _normalized_field(library, "allowversionoverride", True)
+    allow_override = allow_value is not False
+    immutable = bool(_IMMUTABLE_REVISION.fullmatch(version))
+    dangerous = not immutable or allow_override
+    reasons = ["JCasC defines the revision-selection policy for this Shared Library."]
+    if not version:
+        reasons.append("No default revision is configured.")
+    elif version.casefold() in _MUTABLE_VERSION:
+        reasons.append("The default follows a mutable branch or symbolic revision.")
+    elif not immutable:
+        reasons.append("The default is a branch or tag rather than an immutable commit ID.")
+    else:
+        reasons.append("The default is pinned to an immutable commit ID.")
+    if allow_override:
+        reasons.append(
+            "Pipeline authors may override the default with another branch, tag, or commit."
+        )
+    else:
+        reasons.append("Pipeline authors cannot override the pinned default revision.")
+    return (
+        _change(
+            f"jenkins_libraries.{scope}.{index}.version_policy",
+            "library_version_policy",
+            "dangerous" if dangerous else "review",
+            " ".join(reasons),
+        ),
+        dangerous,
+    )
+
+
+def _library_source_change(
+    library: dict[str, Any], *, scope: str, index: int
+) -> dict[str, str]:
+    retriever = _mapping(_normalized_field(library, "retriever", {}))
+    retriever_types = {_normalized_key(key) for key in retriever}
+    legacy = "legacyscm" in retriever_types
+    endpoints: list[str] = []
+    credential_reference = False
+    broad_fork_trust = False
+    for path, value in _walk(retriever):
+        if not path:
+            continue
+        key = _normalized_key(path[-1])
+        if key in {"remote", "url", "server"} and isinstance(value, str):
+            endpoints.append(value.strip())
+        if "credential" in key and value not in (None, ""):
+            credential_reference = True
+        if key == "trust" and "everyone" in _normalized_key(value):
+            broad_fork_trust = True
+
+    insecure = False
+    embedded_credentials = False
+    dynamic = False
+    for endpoint in endpoints:
+        dynamic = dynamic or bool(_DYNAMIC_VALUE.search(endpoint))
+        try:
+            parsed = urlsplit(endpoint)
+        except ValueError:
+            continue
+        insecure = insecure or parsed.scheme.casefold() in {"file", "git", "http"}
+        embedded_credentials = embedded_credentials or bool(parsed.username or parsed.password)
+
+    dangerous = legacy or insecure or embedded_credentials or dynamic or broad_fork_trust
+    reasons = ["JCasC configures the external SCM retriever for Shared Library code."]
+    if not retriever:
+        dangerous = True
+        reasons.append("No recognizable retriever is configured.")
+    elif legacy:
+        reasons.append(
+            "Legacy SCM relies on configuration interpolation and cannot validate revisions as "
+            "an SCMSource retriever can."
+        )
+    elif "modernscm" in retriever_types:
+        reasons.append("The library uses a modern SCMSource retriever.")
+    else:
+        reasons.append("The plugin-provided retriever type is an external behavior boundary.")
     if insecure:
-        reasons.append("A library source uses an unauthenticated plaintext transport.")
-    return [_change("unclassified.globalLibraries", "global_libraries", risk, " ".join(reasons))]
+        reasons.append("The source uses local or unauthenticated plaintext transport.")
+    if embedded_credentials:
+        reasons.append("The source endpoint embeds credentials that can leak in configuration.")
+    if dynamic:
+        reasons.append("The effective source endpoint is dynamically interpolated.")
+    if credential_reference:
+        reasons.append("The checkout exposes a Jenkins-managed credential to the SCM plugin.")
+    if broad_fork_trust:
+        reasons.append("SCM discovery trusts code from unreviewed fork contributors.")
+    return _change(
+        f"jenkins_libraries.{scope}.{index}.source",
+        "library_source",
+        "dangerous" if dangerous else "review",
+        " ".join(reasons),
+    )
+
+
+def _library_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    libraries = _configured_libraries(document)
+    if not libraries:
+        return []
+    changes: list[dict[str, str]] = []
+    for scope, trusted, index, library in libraries:
+        changes.append(
+            _change(
+                f"jenkins_libraries.{scope}.{index}.trust",
+                "trusted_library" if trusted else "untrusted_library",
+                "dangerous" if trusted else "review",
+                (
+                    "This globally configured Shared Library is trusted; anyone who can modify "
+                    "its SCM source can execute unsandboxed code with Jenkins controller access."
+                    if trusted
+                    else "This globally configured Shared Library remains subject to the Groovy "
+                    "sandbox; its Pipeline steps and external effects still require review."
+                ),
+            )
+        )
+        version_change, mutable_resolution = _library_version_change(
+            library, scope=scope, index=index
+        )
+        changes.append(version_change)
+
+        if _enabled(_normalized_field(library, "implicit", False)):
+            changes.append(
+                _change(
+                    f"jenkins_libraries.{scope}.{index}.implicit",
+                    "implicit_library",
+                    "dangerous" if trusted else "review",
+                    (
+                        "Jenkins loads this library into every qualifying Pipeline without an "
+                        "explicit @Library declaration; top-level source can run automatically."
+                    ),
+                )
+            )
+        if _normalized_field(library, "includeinchangesets", True) is False:
+            changes.append(
+                _change(
+                    f"jenkins_libraries.{scope}.{index}.changelog",
+                    "library_changelog",
+                    "dangerous",
+                    "Library revisions are excluded from job changesets, reducing audit visibility "
+                    "for changes to executable Pipeline code.",
+                )
+            )
+        caching = _mapping(_normalized_field(library, "cachingconfiguration", {}))
+        if caching:
+            refresh = _normalized_field(caching, "refreshtimeminutes", 0)
+            refresh_enabled = isinstance(refresh, (int, float)) and not isinstance(refresh, bool)
+            refresh_enabled = refresh_enabled and refresh > 0
+            changes.append(
+                _change(
+                    f"jenkins_libraries.{scope}.{index}.cache",
+                    "library_cache",
+                    "dangerous" if refresh_enabled and mutable_resolution else "review",
+                    (
+                        "Jenkins periodically refreshes cached code selected by a mutable library "
+                        "version policy."
+                        if refresh_enabled and mutable_resolution
+                        else "Jenkins caches Shared Library source on the controller; review "
+                        "refresh timing and included or excluded version patterns."
+                    ),
+                )
+            )
+        changes.append(_library_source_change(library, scope=scope, index=index))
+
+    changes.append(
+        _change(
+            "jenkins_libraries.effective_resolution",
+            "library_resolution_boundary",
+            "review",
+            "Effective library code also depends on SCM permissions and revisions, retriever and "
+            "credential plugins, controller cache state, folder-level libraries and overrides, "
+            "sandbox approvals, and runtime @Library or library step arguments; readtheplan does "
+            "not contact Jenkins or SCM.",
+        )
+    )
+    return changes
 
 
 def _global_configuration_changes(document: dict[str, Any]) -> list[dict[str, str]]:
@@ -525,5 +714,9 @@ def analyze_jenkins_jcasc(data: dict[str, Any], *, catalog=None) -> dict[str, An
     )
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="Jenkins JCasC")
     gate["adapter"] = "jenkins-jcasc"
+    libraries = _configured_libraries(data["jenkins_jcasc"])
+    if libraries:
+        gate["library_count"] = len(libraries)
+        gate["trusted_library_count"] = sum(trusted for _, trusted, _, _ in libraries)
     gate["total_changes"] = len(changes)
     return gate

@@ -741,6 +741,31 @@ def test_agent_gate_configuration_management_supports_jenkins_plugin_catalog() -
     assert "fixture-password" not in encoded
 
 
+def test_agent_gate_configuration_management_supports_jenkins_library_trust() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "jenkins_jcasc_risky.yml"),
+        "jenkins-jcasc",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "jenkins-jcasc"
+    assert result["library_count"] == 1
+    assert result["trusted_library_count"] == 1
+    assert result["total_changes"] == 26
+    assert result["risk_counts"] == {
+        "safe": 0,
+        "review": 7,
+        "dangerous": 19,
+        "irreversible": 0,
+    }
+    assert result["decision"] == "block"
+    assert "fixture-library-credential-do-not-leak" not in encoded
+    assert "git.example.test" not in encoded
+    assert "shared-deploy" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_jenkins_job_builder() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "jenkins_job_builder_risky" / "jenkins-jobs.yaml"),
