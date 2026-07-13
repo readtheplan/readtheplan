@@ -63,6 +63,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("cookbooks/base/providers/legacy.rb", "chef"),
         ("cookbooks/base/definitions/legacy.rb", "chef"),
         ("cookbooks/base/templates/default/application.erb", "chef"),
+        ("cookbooks/base/ohai/cloud_inventory.rb", "chef"),
         ("client.rb", "chef-project"),
         (".chef/config.rb", "chef-project"),
         ("chef/chef-server.rb", "chef-project"),
@@ -1145,6 +1146,59 @@ def test_project_scan_analyzes_chef_cookbook_content() -> None:
     assert "fixture-secret-value" not in encoded
     assert "fixturectl" not in encoded
     assert "api_token" not in encoded
+
+
+def test_project_scan_analyzes_chef_ohai_plugins() -> None:
+    payload = scan_project(FIXTURES / "chef_ohai_risky", display_root=".")
+
+    assert payload["discovered_file_count"] == 2
+    assert payload["scanned_file_count"] == 2
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"chef", "chef-project"}
+    plugin = next(item for item in payload["files"] if item["tool"] == "chef")
+    assert plugin["artifact_type"] == "ohai_plugin"
+    assert plugin["plugin_count"] == 1
+    assert plugin["named_plugin_count"] == 1
+    assert plugin["provides_count"] == 2
+    assert plugin["depends_count"] == 1
+    assert plugin["collect_data_count"] == 1
+    assert plugin["platform_count"] == 1
+    assert plugin["dynamic_count"] == 7
+    assert payload["total_changes"] == 20
+    assert payload["risk_counts"] == {
+        "safe": 0,
+        "review": 11,
+        "dangerous": 9,
+        "irreversible": 0,
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-ohai-secret-do-not-leak" not in encoded
+    assert "FIXTURE_OHAI_ENDPOINT" not in encoded
+    assert "fixture-ohai-inventory" not in encoded
+
+
+def test_project_scan_discovers_standalone_chef_ohai_plugin_by_dsl(tmp_path: Path) -> None:
+    plugin = tmp_path / "plugins" / "inventory.rb"
+    plugin.parent.mkdir()
+    plugin.write_text(
+        """
+Ohai.plugin(:Inventory) do
+  provides 'inventory'
+  collect_data do
+    inventory Mash.new
+  end
+end
+""",
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "chef"
+    assert payload["files"][0]["artifact_type"] == "ohai_plugin"
 
 
 def test_project_scan_analyzes_test_kitchen_configuration(tmp_path: Path) -> None:

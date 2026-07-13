@@ -412,14 +412,14 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     chef = subparsers.add_parser(
         "chef",
-        help="Emit the agent-gate decision for Chef recipe and cookbook content.",
+        help="Emit the agent-gate decision for Chef recipe, Ohai, and cookbook content.",
     )
     chef.add_argument("--framework", help="Include checks from a compliance framework.")
     chef.add_argument(
         "input_file",
         help=(
             "Path to a Chef recipe, attribute file, custom resource, library, provider, "
-            "definition, or ERB template."
+            "definition, ERB template, or custom Ohai plugin/shared library."
         ),
     )
     chef.set_defaults(func=_chef_gate)
@@ -1784,7 +1784,7 @@ def _jenkins_project_gate(args: argparse.Namespace) -> int:
 
 
 def _chef_gate(args: argparse.Namespace) -> int:
-    """Emit the agent-gate contract for Chef recipe and cookbook content."""
+    """Emit the agent-gate contract for Chef recipe, Ohai, and cookbook content."""
     from readtheplan.adapters.chef import (
         ChefAdapter,
         ChefInputError,
@@ -1800,10 +1800,10 @@ def _chef_gate(args: argparse.Namespace) -> int:
     try:
         data = parse_chef(source, filename=args.input_file)
     except ChefInputError as exc:
-        print(f"Error: invalid Chef cookbook input: {exc}", file=sys.stderr)
+        print(f"Error: invalid Chef/Ohai cookbook input: {exc}", file=sys.stderr)
         return 1
     if not ChefAdapter().can_handle(data):
-        print("Error: input not recognized as Chef cookbook content", file=sys.stderr)
+        print("Error: input not recognized as Chef/Ohai cookbook content", file=sys.stderr)
         return 1
     catalog = _adapter_catalog(args.framework)
     if args.framework and catalog is None:
@@ -1811,7 +1811,7 @@ def _chef_gate(args: argparse.Namespace) -> int:
     try:
         return _write_adapter_gate(analyze_chef(data, catalog=catalog))
     except ChefInputError as exc:
-        print(f"Error: invalid Chef cookbook input: {exc}", file=sys.stderr)
+        print(f"Error: invalid Chef/Ohai cookbook input: {exc}", file=sys.stderr)
         return 1
 
 
