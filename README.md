@@ -121,7 +121,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | Docker Compose | `readtheplan docker-compose compose.yml` | Images, builds, commands, host namespaces, capabilities, mounts, devices, secrets, and ports |
 | Dockerfile / Containerfile | `readtheplan dockerfile Dockerfile` | Base images, stages, commands, build secrets, copied credentials, runtime users, health, and build-context boundaries |
 | Nomad | `readtheplan nomad job.nomad.hcl` | HCL/JSON jobspecs plus structured scheduler plans: task drivers, commands/images, artifacts/templates, identities, Vault/Consul, services/networking, storage, secrets, placement, rollout, replacement, and stops |
-| Packer | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and inspect limitations |
+| Packer | `readtheplan packer image.pkr.hcl` | Native HCL/JSON templates or inspect output: plugin/core constraints, variables/locals/data, builders/communicators/base images, provisioners, post-processors, publishing, secrets, functions, and non-execution boundaries |
 | Vagrant | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and Ruby boundaries |
 | cloud-init | `readtheplan cloud-init user-data.yml` | Users, SSH, packages, files, commands, storage, power state, includes, scripts, and merged configuration |
 | systemd | `readtheplan systemd example.service` | Commands, identities, capabilities, credentials, sandboxing, filesystems, devices, sockets, timers, mounts, restart behavior, and merged-unit boundaries |
@@ -151,9 +151,10 @@ render-time execution-module calls are dangerous and generated state remains rev
 Docker Compose parsing follows Docker's documented trust boundary without resolving
 external files. Nomad accepts HCL/JSON jobspec source or the JSON response from the job plan HTTP API so
 scheduler decisions remain structured rather than being inferred from HCL text.
-Packer consumes saved output from `packer inspect` or
-`packer inspect -machine-readable`; it enumerates executable components without
-running a build and explicitly reminds reviewers that inspect is not validation.
+Packer accepts native `.pkr.hcl`/`.pkr.json`, legacy JSON, saved `packer inspect`, or
+`packer inspect -machine-readable`; source mode inspects configuration while inspect
+mode enumerates executable components and explicitly reminds reviewers that inspect
+is not validation. Neither mode initializes plugins or runs a build.
 Vagrantfiles are scanned as Ruby source without evaluation; known DSL operations,
 host-command escape hatches, and merged configuration boundaries remain visible.
 cloud-init user-data is parsed without executing guest code; scripts, boothooks,

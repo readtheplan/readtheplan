@@ -171,6 +171,24 @@ def parse_packer_inspect(source: str) -> dict[str, Any]:
     }
 
 
+def parse_packer(source: str) -> dict[str, Any]:
+    """Parse saved inspect output or native Packer HCL/JSON template source."""
+    try:
+        return parse_packer_inspect(source)
+    except PackerInspectError as inspect_error:
+        from readtheplan.adapters.packer_template import (
+            PackerTemplateInputError,
+            parse_packer_template,
+        )
+
+        try:
+            return parse_packer_template(source)
+        except PackerTemplateInputError as template_error:
+            raise PackerInspectError(
+                f"input is neither Packer inspect output nor template: {template_error}"
+            ) from inspect_error
+
+
 def _change(address: str, kind: str, risk: str, explanation: str) -> dict[str, str]:
     return {
         "Address": address,
@@ -187,9 +205,19 @@ class PackerInspectAdapter(BaseAdapter):
 
     def can_handle(self, input_data: dict[str, Any]) -> bool:
         inspect = input_data.get("packer_inspect")
-        return isinstance(inspect, dict) and isinstance(inspect.get("builds"), list)
+        template = input_data.get("packer_template")
+        return (
+            isinstance(inspect, dict)
+            and isinstance(inspect.get("builds"), list)
+            or isinstance(template, dict)
+            and isinstance(template.get("document"), dict)
+        )
 
     def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        if "packer_template" in input_data:
+            from readtheplan.adapters.packer_template import packer_template_changes
+
+            return packer_template_changes(input_data["packer_template"])
         inspect = input_data["packer_inspect"]
         changes: list[dict[str, Any]] = []
 
@@ -329,5 +357,6 @@ def analyze_packer(data: dict[str, Any], *, catalog=None) -> dict[str, Any]:
     )
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="Packer")
     gate["adapter"] = "packer"
+    gate["artifact_type"] = "template" if "packer_template" in data else "inspect"
     gate["total_changes"] = len(changes)
     return gate

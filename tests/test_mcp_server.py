@@ -413,6 +413,14 @@ def test_agent_gate_packer_supports_framework_checks() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_packer_supports_native_template() -> None:
+    result = agent_gate_packer(str(FIXTURES / "packer_template_risky.pkr.hcl"), "soc2")
+    assert result["adapter"] == "packer"
+    assert result["artifact_type"] == "template"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 29
+
+
 def test_agent_gate_salt_supports_framework_checks() -> None:
     result = agent_gate_salt(str(FIXTURES / "salt_states_risky.sls"), "soc2")
     assert result["adapter"] == "salt"
