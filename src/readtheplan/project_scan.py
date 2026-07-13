@@ -318,6 +318,16 @@ def identify_project_input(
         part in {"jenkins", ".jenkins", "jenkins_home"} for part in parts[:-1]
     ):
         return "jenkins-project"
+    if suffix == ".groovy" and len(parts) > 1 and parts[-2] == "vars":
+        return "jenkins-project"
+    if suffix == ".groovy" and "src" in parts[:-1]:
+        for ancestor in path.parents:
+            if ancestor.name.casefold() != "src":
+                continue
+            library_root = ancestor.parent
+            if (library_root / "vars").is_dir() or (library_root / "resources").is_dir():
+                return "jenkins-project"
+            break
     if ".teamcity" in parts and suffix in {".kt", ".kts"}:
         return "teamcity"
     if name in {"jenkins.yaml", "jenkins.yml"} and any(
