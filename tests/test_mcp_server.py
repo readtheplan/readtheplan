@@ -26,6 +26,7 @@ from readtheplan.mcp_server import (
     agent_gate_configuration_management,
     agent_gate_consul,
     agent_gate_crossplane,
+    agent_gate_devspace,
     agent_gate_dockerfile,
     agent_gate_dsc,
     agent_gate_envoy,
@@ -426,6 +427,14 @@ def test_agent_gate_skaffold_supports_framework_checks() -> None:
     result = agent_gate_skaffold(str(FIXTURES / "skaffold_risky.yaml"), "soc2")
     assert result["adapter"] == "skaffold"
     assert result["config_count"] == 2
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_devspace_supports_framework_checks() -> None:
+    result = agent_gate_devspace(str(FIXTURES / "devspace_risky.yaml"), "soc2")
+    assert result["adapter"] == "devspace"
+    assert result["project_name"] == "platform"
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -1042,6 +1051,19 @@ def test_agent_gate_skaffold_rejects_path_outside_root(monkeypatch, tmp_path) ->
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_devspace_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "devspace.yaml"
+    outside.write_text("version: v2beta1\nname: example\n", encoding="utf-8")
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_devspace(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1388,6 +1410,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_workload" in tool_names
         assert "agent_gate_packer" in tool_names
         assert "agent_gate_skaffold" in tool_names
+        assert "agent_gate_devspace" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
@@ -1437,6 +1460,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(packer_schema["properties"])
         skaffold_schema = tools_by_name["agent_gate_skaffold"]["inputSchema"]
         assert {"input_path", "framework"} <= set(skaffold_schema["properties"])
+        devspace_schema = tools_by_name["agent_gate_devspace"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(devspace_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]

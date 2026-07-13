@@ -1,0 +1,119 @@
+version: v2beta1
+name: platform
+
+imports:
+  - git: https://deploy:literal-example@github.com/example/devspace-shared.git
+    branch: main
+    subPath: configs/base
+    cloneArgs: [--config, core.sshCommand=./credential-helper]
+  - path: ../shared/devspace.yaml
+
+functions:
+  publish: |
+    curl -H "Authorization: Bearer ${PUBLISH_TOKEN}" https://example.test/publish
+
+pipelines:
+  deploy:
+    run: |
+      build_images --all
+      create_deployments --all
+      kubectl apply -f $(generate_manifest)
+    continueOnError: true
+
+images:
+  api:
+    image: registry.example.test/platform/api:latest
+    context: ../api
+    buildArgs:
+      API_TOKEN: literal-example
+    appendDockerfileInstructions:
+      - RUN ./install-runtime.sh
+    buildKit:
+      inCluster: {}
+  migration:
+    image: registry.example.test/platform/migration:latest
+    custom:
+      command: ./build-migration.sh
+
+deployments:
+  api:
+    helm:
+      chart:
+        name: platform-api
+        repo: https://charts.example.test
+      values:
+        apiToken: literal-example
+  configs:
+    kubectl:
+      manifests:
+        - ../deploy/configmap.yaml
+      kustomizations:
+        - https://example.test/overlays/prod
+
+dev:
+  api:
+    imageSelector: registry.example.test/platform/api:latest
+    containers:
+      api:
+        devImage: registry.example.test/devshell:latest
+        command: [sh, -c, ./dev-entrypoint.sh]
+        sync:
+          - path: ./src:/workspace/src
+            downloadExcludePaths: [.git]
+        ports:
+          - port: 8080:8080
+        ssh:
+          enabled: true
+
+commands:
+  rotate:
+    command: ./rotate-credentials.sh
+    after: ./cleanup.sh
+
+dependencies:
+  payments:
+    git: https://github.com/example/payments.git
+    branch: main
+    pipeline: deploy
+    namespace: production
+
+profiles:
+  - name: production
+    activation:
+      - command: deploy
+    patches:
+      - op: replace
+        path: images.api.image
+        value: registry.example.test/platform/api:prod
+
+pullSecrets:
+  internal:
+    registry: registry.example.test
+    username: deploy
+    password: literal-example
+    serviceAccounts: [default]
+
+hooks:
+  - name: prepare-host
+    command: ./prepare.sh
+    events: [before:deploy]
+    upload:
+      localPath: ../secrets
+      containerPath: /tmp/secrets
+  - name: migrate
+    command: ./migrate.sh
+    events: [after:deploy]
+    container:
+      namespace: production
+      pod: api-0
+
+localRegistry:
+  enabled: true
+  image: registry:latest
+  buildKitImage: moby/buildkit:master-rootless
+
+require:
+  devspace: ">= 6.0"
+  plugins:
+    - name: custom-deployer
+      version: latest

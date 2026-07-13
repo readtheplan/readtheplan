@@ -17,6 +17,7 @@ from readtheplan.adapters.chef_project import ChefProjectAdapter
 from readtheplan.adapters.cloud_init import CloudInitAdapter
 from readtheplan.adapters.cloudformation import CloudFormationAdapter
 from readtheplan.adapters.crossplane import CrossplaneAdapter
+from readtheplan.adapters.devspace import DevSpaceAdapter
 from readtheplan.adapters.dockerfile import DockerfileAdapter
 from readtheplan.adapters.dsc import DscAdapter
 from readtheplan.adapters.envoy import EnvoyAdapter
@@ -118,6 +119,7 @@ register_adapter(AtlantisAdapter())
 register_adapter(CloudInitAdapter())
 register_adapter(DockerfileAdapter())
 register_adapter(DscAdapter())
+register_adapter(DevSpaceAdapter())
 register_adapter(EnvoyAdapter())
 register_adapter(GrafanaAdapter())
 register_adapter(VaultAdapter())
@@ -193,6 +195,7 @@ __all__ = [
     "DockerComposeAdapter",
     "DockerfileAdapter",
     "DscAdapter",
+    "DevSpaceAdapter",
     "EnvoyAdapter",
     "GrafanaAdapter",
     "HelmAdapter",

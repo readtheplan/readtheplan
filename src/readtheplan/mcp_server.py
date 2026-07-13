@@ -697,6 +697,45 @@ def agent_gate_skaffold(
     return analyze_skaffold(data, catalog=catalog)
 
 
+def agent_gate_devspace(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local DevSpace configuration."""
+    from readtheplan.adapters.devspace import (
+        DevSpaceAdapter,
+        DevSpaceInputError,
+        analyze_devspace,
+        parse_devspace,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read DevSpace input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_devspace(source)
+    except DevSpaceInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid DevSpace input in {input_path}: {exc}",
+        ) from exc
+    if not DevSpaceAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as DevSpace configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_devspace(data, catalog=catalog)
+
+
 def agent_gate_salt(
     input_path: str,
     framework: str | None = None,
@@ -2028,6 +2067,7 @@ def create_server() -> Any:
     agent_gate_workload_handler = agent_gate_workload
     agent_gate_packer_handler = agent_gate_packer
     agent_gate_skaffold_handler = agent_gate_skaffold
+    agent_gate_devspace_handler = agent_gate_devspace
     agent_gate_salt_handler = agent_gate_salt
     agent_gate_nix_handler = agent_gate_nix
     agent_gate_dsc_handler = agent_gate_dsc
@@ -2237,6 +2277,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_skaffold_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_devspace")
+    def _agent_gate_devspace_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for DevSpace project configuration.
+
+        Args:
+            input_path: Local path to devspace.yaml.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_devspace_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_salt")
     def _agent_gate_salt_tool(
