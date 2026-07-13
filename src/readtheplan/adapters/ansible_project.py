@@ -9,6 +9,12 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from readtheplan.adapters.ansible_code import (
+    AnsibleCodeInputError,
+    ansible_code_changes,
+    ansible_code_metadata,
+    parse_ansible_code,
+)
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.plan import PlanSummary, ResourceChange
@@ -1434,6 +1440,17 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
     """Parse Ansible project configuration, dependencies, or inventory without execution."""
     if not source.strip():
         raise AnsibleProjectInputError("input is empty")
+    if ansible_code_metadata(filename) is not None:
+        try:
+            document = parse_ansible_code(source, filename)
+        except AnsibleCodeInputError as exc:
+            raise AnsibleProjectInputError(str(exc)) from exc
+        return {
+            "ansible_project": {
+                "artifact_type": document["artifact_type"],
+                "document": document,
+            }
+        }
     filename_suffix = (
         PurePosixPath(filename.replace("\\", "/")).suffix.lower() if filename else ""
     )
@@ -4685,11 +4702,14 @@ class AnsibleProjectAdapter(BaseAdapter):
                 "inventory_yaml",
                 "execution_environment",
                 "molecule",
+                "module_source",
+                "module_utility_source",
                 "navigator",
                 "requirements",
                 "role_metadata",
                 "rulebook",
                 "runtime_metadata",
+                "controller_plugin_source",
             }
             and isinstance(config.get("document"), dict)
         )
@@ -4724,6 +4744,12 @@ class AnsibleProjectAdapter(BaseAdapter):
             changes = _molecule_runtime_changes(document)
         elif artifact_type == "inventory_plugin":
             changes = _plugin_inventory_changes(document)
+        elif artifact_type in {
+            "controller_plugin_source",
+            "module_source",
+            "module_utility_source",
+        }:
+            changes = ansible_code_changes(document)
         else:
             changes = _static_inventory_changes(document, artifact_type)
         boundary = (
@@ -4742,10 +4768,13 @@ class AnsibleProjectAdapter(BaseAdapter):
             "controller_export",
             "execution_environment",
             "molecule",
+            "module_source",
+            "module_utility_source",
             "navigator",
             "role_metadata",
             "rulebook",
             "runtime_metadata",
+            "controller_plugin_source",
         }:
             changes.append(
                 _change(
@@ -4761,7 +4790,7 @@ class AnsibleProjectAdapter(BaseAdapter):
         return ResourceChange(
             address=str(raw["Address"]),
             resource_type=f"ansible_project_{raw['Kind']}",
-            actions=("configure",),
+            actions=(str(raw.get("Action") or "configure"),),
             risk=str(raw["Risk"]),
             explanation=str(raw["Explanation"]),
         )
@@ -4777,6 +4806,20 @@ def analyze_ansible_project(data: dict[str, Any], *, catalog=None) -> dict[str, 
     gate = agent_gate_to_dict(summary, catalog=catalog, tool_name="Ansible project")
     gate["adapter"] = "ansible-project"
     gate["artifact_type"] = data["ansible_project"]["artifact_type"]
+    if gate["artifact_type"] in {
+        "controller_plugin_source",
+        "module_source",
+        "module_utility_source",
+    }:
+        document = data["ansible_project"]["document"]
+        for field in (
+            "component_name",
+            "language",
+            "plugin_type",
+            "source_kind",
+            "source_line_count",
+        ):
+            gate[field] = document[field]
     if gate["artifact_type"] == "molecule":
         platforms = data["ansible_project"]["document"].get("platforms", [])
         gate["platform_count"] = len(platforms) if isinstance(platforms, list) else 0

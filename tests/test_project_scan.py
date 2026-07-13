@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -799,6 +800,51 @@ def test_root_bolt_inventory_wins_over_generic_ansible_inventory(tmp_path: Path)
     inventory.write_text("targets:\n  - target.example.com\n", encoding="utf-8")
 
     assert identify_project_input(inventory, "inventory.yaml") == "puppet-project"
+
+
+def test_project_scan_analyzes_ansible_modules_plugins_and_module_utils(
+    tmp_path: Path,
+) -> None:
+    source = FIXTURES / "ansible_collection_code_risky"
+    target = tmp_path / "collections" / "acme" / "operations"
+    shutil.copytree(source, target)
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    code = [
+        item
+        for item in payload["files"]
+        if item.get("artifact_type")
+        in {"controller_plugin_source", "module_source", "module_utility_source"}
+    ]
+    assert len(code) == 4
+    assert {item["source_kind"] for item in code} == {
+        "controller_plugin",
+        "shared_module_utility",
+        "target_module",
+    }
+    assert {item["plugin_type"] for item in code} == {
+        "action",
+        "filter",
+        "module",
+        "module_utils",
+    }
+    module = next(item for item in code if item["artifact_type"] == "module_source")
+    assert module["component_name"] == "deploy"
+    assert module["source_line_count"] == 17
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "RTP_FIXTURE_ANSIBLE_SECRET_DO_NOT_LEAK" not in encoded
+    assert "RTP_FIXTURE_CONTROLLER_SECRET_DO_NOT_LEAK" not in encoded
+
+
+def test_project_scan_does_not_claim_generic_python_plugin_paths(tmp_path: Path) -> None:
+    plugin = tmp_path / "plugins" / "filter" / "example.py"
+    plugin.parent.mkdir(parents=True)
+    plugin.write_text("def filter_value(value):\n    return value\n", encoding="utf-8")
+
+    assert identify_project_input(plugin, "plugins/filter/example.py") is None
+    assert scan_project(tmp_path, display_root=".")["discovered_file_count"] == 0
 
 
 def test_root_bolt_content_uses_project_or_module_context(tmp_path: Path) -> None:

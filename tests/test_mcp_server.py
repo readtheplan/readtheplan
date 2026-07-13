@@ -620,6 +620,26 @@ def test_agent_gate_configuration_management_supports_ansible_inventory() -> Non
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_ansible_custom_modules() -> None:
+    path = FIXTURES / "ansible_collection_code_risky" / "plugins" / "modules" / "deploy.py"
+    result = agent_gate_configuration_management(
+        str(path),
+        "ansible-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "ansible-project"
+    assert result["artifact_type"] == "module_source"
+    assert result["source_kind"] == "target_module"
+    assert result["plugin_type"] == "module"
+    assert result["component_name"] == "deploy"
+    assert result["language"] == "python"
+    assert result["decision"] == "block"
+    assert "RTP_FIXTURE_ANSIBLE_SECRET_DO_NOT_LEAK" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 @pytest.mark.parametrize(
     ("relative", "artifact_type", "total_changes", "dangerous", "review"),
     [
