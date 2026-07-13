@@ -155,6 +155,95 @@ def test_dynamic_inventory_plugin_surfaces_supply_chain_scope_and_api_risk() -> 
     assert "AWS_SECRET_ACCESS_KEY" not in explanations
 
 
+def test_execution_environment_surfaces_build_supply_chain_and_privilege_risk() -> None:
+    changes = _changes("ansible_execution_environment/execution-environment.yml")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert by_type["ansible_project_execution_environment_schema"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_image"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_build_file"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_build_command"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_literal_secret"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_root_user"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_container_init"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_hardening_bypass"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_mutable_tag"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_boundary"].risk == "review"
+    assert "fixture-registry-password-do-not-leak" not in "\n".join(
+        change.explanation for change in changes
+    )
+
+
+def test_navigator_surfaces_container_host_secret_and_command_risk() -> None:
+    changes = _changes("ansible_navigator/ansible-navigator.yml")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert by_type["ansible_project_navigator_host_execution"].risk == "dangerous"
+    assert by_type["ansible_project_execution_environment_image"].risk == "dangerous"
+    assert by_type["ansible_project_navigator_container_options"].risk == "dangerous"
+    assert by_type["ansible_project_navigator_volume_mount"].risk == "review"
+    assert by_type["ansible_project_navigator_secret_environment_boundary"].risk == "review"
+    assert by_type["ansible_project_navigator_literal_secret"].risk == "dangerous"
+    assert by_type["ansible_project_navigator_registry_tls"].risk == "dangerous"
+    assert by_type["ansible_project_navigator_pull_policy"].risk == "review"
+    assert by_type["ansible_project_navigator_ansible_arguments"].risk == "dangerous"
+    assert by_type["ansible_project_navigator_exec_command"].risk == "dangerous"
+    assert by_type["ansible_project_navigator_editor_command"].risk == "dangerous"
+    assert by_type["ansible_project_navigator_debug_logging"].risk == "review"
+    assert by_type["ansible_project_navigator_artifact_replay"].risk == "review"
+    assert by_type["ansible_project_navigator_boundary"].risk == "review"
+    assert "fixture-navigator-password-do-not-leak" not in "\n".join(
+        change.explanation for change in changes
+    )
+
+
+def test_digest_pinned_execution_environment_stays_review_only() -> None:
+    digest = "a" * 64
+    data = parse_ansible_project(
+        f"""
+version: 3
+images:
+  base_image:
+    name: registry.example.test/automation/ee@sha256:{digest}
+dependencies:
+  ansible_core:
+    package_pip: ansible-core==2.18.6
+options:
+  user: 1000
+""",
+        filename="execution-environment.yml",
+    )
+
+    changes = AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+    assert data["ansible_project"]["artifact_type"] == "execution_environment"
+    assert {change.risk for change in changes} == {"review"}
+
+
+def test_navigator_json_uses_canonical_filename_routing() -> None:
+    data = parse_ansible_project(
+        '{"ansible-navigator":{"execution-environment":{"enabled":true}}}',
+        filename="ansible-navigator.json",
+    )
+
+    assert data["ansible_project"]["artifact_type"] == "navigator"
+
+
+@pytest.mark.parametrize(
+    ("filename", "source", "error"),
+    [
+        ("execution-environment.yml", "version: true\n", "version must be an integer"),
+        ("execution-environment.yml", "version: 3\nunknown: true\n", "unsupported"),
+        ("ansible-navigator.yml", "[defaults]\nforks=5\n", "document start"),
+        ("ansible-navigator.yml", "other: {}\n", "ansible-navigator mapping"),
+    ],
+)
+def test_execution_layer_parser_rejects_malformed_canonical_files(
+    filename: str, source: str, error: str
+) -> None:
+    with pytest.raises(AnsibleProjectInputError, match=error):
+        parse_ansible_project(source, filename=filename)
+
+
 @pytest.mark.parametrize(
     "source,error",
     [
@@ -179,6 +268,12 @@ def test_ansible_project_parser_rejects_unrelated_or_ambiguous_input(
         ("ansible_requirements_risky.yml", "requirements", "block"),
         ("ansible_inventory_risky.yml", "inventory_yaml", "block"),
         ("ansible_inventory_review.ini", "inventory_ini", "warn"),
+        (
+            "ansible_execution_environment/execution-environment.yml",
+            "execution_environment",
+            "block",
+        ),
+        ("ansible_navigator/ansible-navigator.yml", "navigator", "block"),
         (
             "ansible_inventory_plugin_risky.aws_ec2.yml",
             "inventory_plugin",
@@ -207,8 +302,10 @@ def test_ansible_project_cli_reads_both_formats(
         "ansible_requirements_risky.yml",
         "ansible_inventory_risky.yml",
         "ansible_inventory_plugin_risky.aws_ec2.yml",
+        "ansible_execution_environment/execution-environment.yml",
+        "ansible_navigator/ansible-navigator.yml",
     ):
-        source = tmp_path / fixture
+        source = tmp_path / Path(fixture).name
         source.write_text((FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8")
         assert main(["ansible-project", "--framework", "soc2", str(source)]) == 2
         payload = json.loads(capsys.readouterr().out)

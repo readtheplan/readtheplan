@@ -1,0 +1,35 @@
+ansible-navigator:
+  ansible:
+    cmdline: --become --inventory production.ini
+  execution-environment:
+    enabled: false
+    image: registry.example.test/automation/ee:latest
+    container-options:
+      - --privileged
+      - --network=host
+    volume-mounts:
+      - src: /var/run/docker.sock
+        dest: /var/run/docker.sock
+        options: rw
+      - src: ./project
+        dest: /runner/project
+        options: ro
+    environment-variables:
+      pass:
+        - DEEPSEEK_API_KEY
+      set:
+        REGISTRY_PASSWORD: fixture-navigator-password-do-not-leak
+    pull:
+      policy: never
+      arguments:
+        - --tls-verify=false
+  exec:
+    command: /bin/sh
+    shell: true
+  editor:
+    command: sh -c 'editor {filename}'
+    console: true
+  logging:
+    level: debug
+  playbook-artifact:
+    replay: artifacts/production.json

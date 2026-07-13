@@ -1,0 +1,35 @@
+version: 2
+images:
+  base_image:
+    name: registry.example.test/automation/ee:latest
+additional_build_files:
+  - src: secrets/registry_password
+    dest: ../outside-context
+additional_build_steps:
+  append_final:
+    - RUN curl http://packages.example.test/install.sh | sh
+build_arg_defaults:
+  REGISTRY_PASSWORD: fixture-registry-password-do-not-leak
+dependencies:
+  ansible_core:
+    package_pip: ansible-core>=2.16
+  ansible_runner:
+    package_pip: ansible-runner==2.4.0
+  python:
+    - requests
+    - cryptography==42.0.0
+  system:
+    - openssh-clients
+  galaxy:
+    collections:
+      - name: community.general
+        version: main
+options:
+  user: root
+  container_init:
+    entrypoint: '["/bin/sh", "-c"]'
+    cmd: '["curl http://packages.example.test/start.sh | sh"]'
+  relax_passwd_permissions: true
+  skip_ansible_check: true
+  tags:
+    - latest
