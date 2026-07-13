@@ -1,0 +1,84 @@
+---
+dependency:
+  name: shell
+  command: bash scripts/install-dependencies.sh
+  options:
+    ignore-certs: true
+  env:
+    DEPENDENCY_TOKEN: fixture-molecule-dependency-token-do-not-leak
+driver:
+  name: custom-cloud
+  options:
+    managed: false
+    login_cmd_template: ssh {address}
+    ansible_connection_options:
+      ansible_connection: ssh
+platforms:
+  - name: privileged-platform
+    image: registry.example.test/automation/molecule:latest
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    published_ports:
+      - 0.0.0.0:2222:22
+    command: /sbin/init
+    provider_options:
+      region: fixture-region
+      security_group: fixture-security-group
+      validate_certs: false
+    registry:
+      url: https://registry.example.test
+      credentials:
+        username: fixture-user
+        password: fixture-molecule-registry-password-do-not-leak
+  - name: pinned-platform
+    image: registry.example.test/automation/molecule@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    volumes:
+      - cache:/var/cache:ro
+    env:
+      CLOUD_TOKEN: ${MOLECULE_CLOUD_TOKEN}
+ansible:
+  cfg:
+    defaults:
+      host_key_checking: false
+  env:
+    ANSIBLE_PASSWORD: fixture-molecule-ansible-password-do-not-leak
+  executor:
+    backend: ansible-playbook
+    args:
+      ansible_playbook:
+        - --become
+        - --inventory=shared/production
+  playbooks:
+    create: create.yml
+    converge: converge.yml
+    destroy: destroy.yml
+provisioner:
+  name: ansible
+  inventory:
+    hosts:
+      all:
+        hosts:
+          privileged-platform:
+            ansible_password: fixture-molecule-inventory-password-do-not-leak
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - create
+    - converge
+    - chaos
+    - verify
+    - destroy
+verifier:
+  name: testinfra
+  directory: tests
+  additional_files_or_dirs:
+    - shared-tests
+  env:
+    VERIFY_TOKEN: ${MOLECULE_VERIFY_TOKEN}
+lint: bash -c 'ansible-lint && yamllint .'
+prerun: true
+role_name_check: 0
+shared_state: true

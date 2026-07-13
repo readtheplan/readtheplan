@@ -228,6 +228,10 @@ def identify_project_input(
 
     if name == "ansible.cfg":
         return "ansible-project"
+    if name in {"molecule.yaml", "molecule.yml"} or (
+        name in {"config.yaml", "config.yml"} and "molecule" in parts[:-1]
+    ):
+        return "ansible-project"
     if name in {
         "execution-environment.yaml",
         "execution-environment.yml",
@@ -710,7 +714,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
     if not isinstance(total_changes, int):
         total_changes = sum(counts.values())
     required = payload.get("required_checks")
-    return {
+    result = {
         "path": item.relative_path,
         "tool": item.tool,
         "adapter": str(payload.get("adapter") or item.tool),
@@ -723,6 +727,11 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         else [],
         "reason": str(payload.get("reason") or "Analysis completed without a reason."),
     }
+    if isinstance(payload.get("artifact_type"), str):
+        result["artifact_type"] = payload["artifact_type"]
+    if isinstance(payload.get("platform_count"), int):
+        result["platform_count"] = payload["platform_count"]
+    return result
 
 
 def aggregate_project_scan(
