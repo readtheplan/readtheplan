@@ -1077,6 +1077,37 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Nomad HCL jobspec
+        id: nomad-jobspec
+        uses: ./
+        with:
+          tool: nomad
+          input-file: tests/fixtures/nomad_job_risky.nomad.hcl
+          framework: soc2
+
+      - name: Assert Nomad jobspec outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.nomad-jobspec.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.nomad-jobspec.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.nomad-jobspec.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+
+          test "$CHANGE_COUNT" = "34"
+          test "$RISK_COUNTS" = '{"dangerous":26,"irreversible":0,"review":8,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "nomad"
+          assert payload["artifact_type"] == "jobspec"
+          assert payload["decision"] == "block"
+          assert "system" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Azure What-If
         id: azure
         uses: ./

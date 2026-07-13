@@ -572,18 +572,18 @@ def agent_gate_workload(
     ecosystem: str,
     framework: str | None = None,
 ) -> dict[str, object]:
-    """Return the gate decision for Docker Compose or a Nomad plan response."""
+    """Return the gate decision for Docker Compose or a Nomad plan/jobspec."""
     from readtheplan.adapters import detect_adapter
     from readtheplan.adapters.workloads import (
         WorkloadInputError,
         analyze_workload,
         parse_docker_compose,
-        parse_nomad_plan,
+        parse_nomad,
     )
 
     parsers = {
         "docker-compose": parse_docker_compose,
-        "nomad": parse_nomad_plan,
+        "nomad": parse_nomad,
     }
     if ecosystem not in parsers:
         raise MCPToolInputError(
@@ -2159,10 +2159,10 @@ def create_server() -> Any:
         ecosystem: str,
         framework: str | None = None,
     ) -> dict[str, object]:
-        """Return a gate for Docker Compose or a Nomad job plan response.
+        """Return a gate for Docker Compose or a Nomad plan/jobspec.
 
         Args:
-            input_path: Local path to Compose YAML or Nomad plan response JSON.
+            input_path: Local path to Compose YAML, Nomad plan JSON, or HCL/JSON jobspec.
             ecosystem: docker-compose or nomad.
             framework: Optional compliance framework for control checks.
         """
