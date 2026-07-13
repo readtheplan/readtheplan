@@ -843,6 +843,45 @@ def agent_gate_opa(
     return analyze_opa(data, catalog=catalog)
 
 
+def agent_gate_sentinel(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate decision for local Sentinel policy or configuration."""
+    from readtheplan.adapters.sentinel import (
+        SentinelAdapter,
+        SentinelInputError,
+        analyze_sentinel,
+        parse_sentinel,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Cannot read Sentinel input {input_path}: {exc}"
+        ) from exc
+    try:
+        data = parse_sentinel(source, Path(input_path).name)
+    except SentinelInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Sentinel input in {input_path}: {exc}",
+        ) from exc
+    if not SentinelAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Sentinel policy or configuration",
+        )
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_sentinel(data, catalog=catalog)
+
+
 def agent_gate_vagrant(
     input_path: str,
     framework: str | None = None,
@@ -1954,6 +1993,7 @@ def create_server() -> Any:
     agent_gate_dsc_handler = agent_gate_dsc
     agent_gate_cfengine_handler = agent_gate_cfengine
     agent_gate_opa_handler = agent_gate_opa
+    agent_gate_sentinel_handler = agent_gate_sentinel
     agent_gate_vagrant_handler = agent_gate_vagrant
     agent_gate_cloud_init_handler = agent_gate_cloud_init
     agent_gate_systemd_handler = agent_gate_systemd
@@ -2209,6 +2249,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_opa_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_sentinel")
+    def _agent_gate_sentinel_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return a gate for Sentinel policy or CLI configuration without evaluation.
+
+        Args:
+            input_path: Local path to .sentinel, sentinel.hcl, or sentinel.json.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_sentinel_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_vagrant")
     def _agent_gate_vagrant_tool(

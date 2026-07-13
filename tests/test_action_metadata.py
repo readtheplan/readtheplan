@@ -27,7 +27,7 @@ def test_action_uses_json_cli_contract() -> None:
         "github-actions|gitlab-ci|circleci|azure-pipelines|bitbucket-pipelines|buildkite|"
         "atlantis|"
         "docker-compose|"
-        "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|vagrant|"
+        "dockerfile|nomad|packer|salt|salt-project|nix|dsc|cfengine|opa|sentinel|vagrant|"
         "cloud-init|systemd|nginx|haproxy|envoy|traefik|caddy|grafana|loki|vault|consul|"
         "prometheus|alertmanager|"
         "otel-collector"

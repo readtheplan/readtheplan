@@ -525,6 +525,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     opa.set_defaults(func=_opa_gate)
 
+    sentinel = subparsers.add_parser(
+        "sentinel",
+        help="Emit the agent-gate decision for Sentinel policy or CLI configuration.",
+    )
+    sentinel.add_argument("--framework", help="Include checks from a compliance framework.")
+    sentinel.add_argument(
+        "input_file",
+        help="Path to a .sentinel policy or sentinel.hcl/sentinel.json configuration.",
+    )
+    sentinel.set_defaults(func=_sentinel_gate)
+
     vagrant = subparsers.add_parser(
         "vagrant",
         help="Emit the agent-gate decision for a Vagrantfile.",
@@ -1822,6 +1833,35 @@ def _opa_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_opa(data, catalog=catalog))
+
+
+def _sentinel_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for Sentinel policy or configuration."""
+    from readtheplan.adapters.sentinel import (
+        SentinelAdapter,
+        SentinelInputError,
+        analyze_sentinel,
+        parse_sentinel,
+    )
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_sentinel(source, path.name)
+    except SentinelInputError as exc:
+        print(f"Error: invalid Sentinel input: {exc}", file=sys.stderr)
+        return 1
+    if not SentinelAdapter().can_handle(data):
+        print("Error: input not recognized as Sentinel policy or configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_sentinel(data, catalog=catalog))
 
 
 def _vagrant_gate(args: argparse.Namespace) -> int:
