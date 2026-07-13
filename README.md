@@ -113,7 +113,7 @@ deterministic agent-gate schema; native plan analysis can also produce
 | SOPS | `readtheplan sops .sops.yaml` | Creation rules, path scopes, KMS/Vault/age/PGP identities, key groups and Shamir thresholds, encryption selectors, MAC coverage, destination rules, and encrypted YAML/JSON/dotenv/INI documents without decryption or key-service access |
 | Jenkins | `readtheplan jenkins Jenkinsfile` | Declarative/scripted step, agent image/arguments, shared-library, credential, trigger, dynamic Groovy, artifact, and workspace analysis |
 | Jenkins Configuration as Code | `readtheplan jenkins-jcasc jenkins.yaml` | Controller realms/authorization, credentials, executors, agents/clouds, libraries, script approvals, Job DSL, endpoints, TLS, and plugin boundaries |
-| Jenkins plugin catalog | `readtheplan jenkins-project plugins.txt` | Plugin Installation Manager text/YAML catalogs, mutable/experimental/incremental versions, direct URLs, transport and credential risks, privileged plugin capabilities, and external resolution boundaries |
+| Jenkins project | `readtheplan jenkins-project jenkins-jobs.yaml` | Plugin Installation Manager catalogs plus Jenkins Job Builder YAML/JSON definitions, template expansion, builders, SCM, triggers, credentials, publishers, raw XML, custom tags, and external resolution boundaries |
 | TeamCity | `readtheplan teamcity .teamcity/settings.kts` | Kotlin DSL commands, credentials, VCS roots, triggers, dependencies, agents, integrations, cleanup, images, artifacts, and settings-generation code |
 | Chef | `readtheplan chef default.rb` | Recipe resources/actions, remote artifacts, identities, schedules, notifications, guards, permissions, and cookbook includes |
 | Chef project / dependencies / runtime | `readtheplan chef-project Berksfile.lock` | Policyfiles/locks, Berksfiles and dependency graphs, cookbook metadata, Infra Client, Workstation/knife, Solo, and Server configuration; migration, trust, credentials, provenance, graph integrity, execution, bootstrap, TLS/LDAP/database controls, and Ruby boundaries |
@@ -499,6 +499,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 - Full language interpretation for dynamic Jenkins, Chef, or Puppet code (unknown constructs require review)
 - Chef runtime configuration is analyzed statically; merged fragments, command-line/environment overrides, plugins, cookbook contents, external secrets, generated service state, and Ruby conditions remain review boundaries
 - Jenkins plugin catalogs are analyzed offline; update-center metadata, transitive dependencies, advisories, checksums, core compatibility, installed plugins, and installer flags remain external review inputs
+- Jenkins Job Builder analysis never loads includes, renders Jinja/templates, imports component plugins, generates XML, or contacts Jenkins; effective defaults/macros, installed plugins, credentials, permissions, and controller state remain review boundaries
 - Bolt project and inventory analysis is static; configuration precedence, installed module/plugin code, resolved dynamic inventory, external secrets, target state, and selected tasks, plans, commands, scripts, and Puppet code remain runtime boundaries
 - SaaS dashboard (local-first by design)
 - Hosted analyzer service until ADR 0013 security gates are implemented and enforced

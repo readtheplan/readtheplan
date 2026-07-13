@@ -1164,6 +1164,39 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Jenkins Job Builder definitions
+        id: jenkins_job_builder
+        uses: ./
+        with:
+          tool: jenkins-project
+          input-file: tests/fixtures/jenkins_job_builder_risky/jenkins-jobs.yaml
+          framework: soc2
+
+      - name: Assert Jenkins Job Builder outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.jenkins_job_builder.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.jenkins_job_builder.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.jenkins_job_builder.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "13"
+          test "$RISK_COUNTS" = '{"dangerous":11,"irreversible":0,"review":2,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "jenkins-project"
+          assert payload["artifact_type"] == "job_builder_yaml"
+          assert payload["definition_count"] == 3
+          assert payload["job_count"] == 1
+          assert payload["decision"] == "block"
+          assert "fixture-password" not in serialized
+          assert "fixture-parameter-secret-do-not-leak" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef recipe
         id: chef
         uses: ./

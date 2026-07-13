@@ -676,6 +676,24 @@ def test_agent_gate_configuration_management_supports_jenkins_plugin_catalog() -
     assert result["total_changes"] == 8
     assert "fixture-user" not in encoded
     assert "fixture-password" not in encoded
+
+
+def test_agent_gate_configuration_management_supports_jenkins_job_builder() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "jenkins_job_builder_risky" / "jenkins-jobs.yaml"),
+        "jenkins-project",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "jenkins-project"
+    assert result["artifact_type"] == "job_builder_yaml"
+    assert result["definition_count"] == 3
+    assert result["job_count"] == 1
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 13
+    assert "fixture-password" not in encoded
+    assert "fixture-parameter-secret-do-not-leak" not in encoded
     assert "plugins.example.invalid" not in encoded
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
