@@ -795,6 +795,37 @@ def test_agent_gate_configuration_management_supports_berksfile_lock() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+@pytest.mark.parametrize(
+    ("relative", "artifact_type"),
+    [
+        ("inspec.yml", "metadata"),
+        ("inspec.lock", "lock"),
+        ("controls/main.rb", "control"),
+        ("libraries/custom.rb", "library"),
+        ("waivers.yml", "waiver"),
+    ],
+)
+def test_agent_gate_configuration_management_supports_inspec_artifacts(
+    relative: str, artifact_type: str
+) -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "inspec_profile_risky" / relative),
+        "inspec",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "inspec"
+    assert result["artifact_type"] == artifact_type
+    assert result["decision"] == "block"
+    assert "fixture-user" not in encoded
+    assert "fixture-password" not in encoded
+    assert "fixture-secret-value" not in encoded
+    assert "fixture-control-id" not in encoded
+    assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_dsc() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "powershell_dsc_risky.ps1"),
@@ -2435,6 +2466,39 @@ def test_stdio_server_tools_list() -> None:
         assert chef_runtime_summary["total_changes"] == 18
         assert "fixture-chef" not in chef_runtime_content[0]["text"]
         assert "example.invalid" not in chef_runtime_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Chef InSpec) ---
+        inspec_req = {
+            "jsonrpc": "2.0",
+            "id": 71,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES
+                            / "inspec_profile_risky"
+                            / "controls"
+                            / "main.rb"
+                        ).resolve()
+                    ),
+                    "ecosystem": "inspec",
+                    "framework": "soc2",
+                },
+            },
+        }
+        inspec_resp = _send_jsonrpc(proc, inspec_req)
+        assert "result" in inspec_resp, f"Chef InSpec tools/call failed: {inspec_resp}"
+        inspec_content = inspec_resp["result"]["content"]
+        assert len(inspec_content) == 1
+        inspec_summary = json.loads(inspec_content[0]["text"])
+        assert inspec_summary["adapter"] == "inspec"
+        assert inspec_summary["artifact_type"] == "control"
+        assert inspec_summary["total_changes"] == 12
+        assert "fixture-control-id" not in inspec_content[0]["text"]
+        assert "fixture-token" not in inspec_content[0]["text"]
+        assert "example.invalid" not in inspec_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Molecule) ---
         molecule_req = {

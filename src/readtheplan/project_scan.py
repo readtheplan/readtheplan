@@ -326,6 +326,16 @@ def identify_project_input(
         return "jenkins-jcasc"
     if name in {"berksfile", "berksfile.lock", "policyfile.rb", "policyfile.lock.json"}:
         return "chef-project"
+    if name in {"inspec.yml", "inspec.yaml", "inspec.lock"}:
+        return "inspec"
+    if suffix == ".rb" and any(part in {"controls", "libraries"} for part in parts[:-1]):
+        for profile_root in path.parents:
+            if (profile_root / "inspec.yml").is_file() or (profile_root / "inspec.yaml").is_file():
+                return "inspec"
+    if suffix in {".yml", ".yaml", ".json", ".csv"} and (
+        "waivers" in parts[:-1] or "waiver" in name
+    ):
+        return "inspec"
     if name in {"chef-server.rb", "knife.rb"}:
         return "chef-project"
     if name in {"client.rb", "solo.rb"} and (

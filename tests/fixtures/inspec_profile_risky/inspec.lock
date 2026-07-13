@@ -1,0 +1,10 @@
+---
+lockfile_version: 1
+depends:
+  - name: mutable-baseline
+    resolved_source:
+      url: http://fixture-user:fixture-password@example.invalid/baseline.tar.gz
+  - name: pinned-baseline
+    resolved_source:
+      url: https://example.invalid/pinned.tar.gz
+      sha256: f15d94086d07cb81d2a69b2b774135b1dbfd1c1918415aec7d266658aecfb47a

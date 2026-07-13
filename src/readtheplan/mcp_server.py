@@ -2471,6 +2471,12 @@ def agent_gate_configuration_management(
         analyze_dsc,
         parse_dsc,
     )
+    from readtheplan.adapters.inspec import (
+        InSpecAdapter,
+        InSpecInputError,
+        analyze_inspec,
+        parse_inspec,
+    )
     from readtheplan.adapters.jenkins import JenkinsAdapter, analyze_jenkins
     from readtheplan.adapters.jenkins_jcasc import (
         JenkinsJCasCAdapter,
@@ -2507,6 +2513,7 @@ def agent_gate_configuration_management(
         "jenkins-project",
         "chef",
         "chef-project",
+        "inspec",
         "puppet",
         "puppet-project",
         "salt-project",
@@ -2571,6 +2578,16 @@ def agent_gate_configuration_management(
             ) from exc
         adapter = ChefProjectAdapter()
         analyze = analyze_chef_project
+    elif ecosystem == "inspec":
+        try:
+            data = parse_inspec(source, filename=input_path)
+        except InSpecInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Chef InSpec input {input_path}: {exc}",
+            ) from exc
+        adapter = InSpecAdapter()
+        analyze = analyze_inspec
     elif ecosystem == "puppet-project":
         try:
             data = parse_puppet_project(source, filename=input_path)
@@ -3444,9 +3461,10 @@ def create_server() -> Any:
 
         Args:
             input_path: Local path to a playbook, Ansible project/content policy file, scenario
-                configuration, Jenkinsfile, Jenkins project file, recipe, or manifest.
+                configuration, Jenkinsfile, Jenkins project file, recipe, InSpec artifact, or
+                manifest.
             ecosystem: ansible, ansible-project, jenkins, jenkins-jcasc, jenkins-project, teamcity,
-                chef, chef-project, puppet, puppet-project, salt-project, dsc, or cfengine.
+                chef, chef-project, inspec, puppet, puppet-project, salt-project, dsc, or cfengine.
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_configuration_management_handler(

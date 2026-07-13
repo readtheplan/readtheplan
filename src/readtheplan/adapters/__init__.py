@@ -33,6 +33,7 @@ from readtheplan.adapters.grafana import GrafanaAdapter
 from readtheplan.adapters.hashicorp import ConsulAdapter, VaultAdapter
 from readtheplan.adapters.helm import HelmAdapter
 from readtheplan.adapters.helmfile import HelmfileAdapter
+from readtheplan.adapters.inspec import InSpecAdapter
 from readtheplan.adapters.jenkins import JenkinsAdapter
 from readtheplan.adapters.jenkins_jcasc import JenkinsJCasCAdapter
 from readtheplan.adapters.jenkins_project import JenkinsProjectAdapter
@@ -152,6 +153,7 @@ register_adapter(ConsulAdapter())
 register_adapter(KubernetesAdapter())
 register_adapter(HelmAdapter())
 register_adapter(HelmfileAdapter())
+register_adapter(InSpecAdapter())
 register_adapter(KustomizeAdapter())
 register_adapter(LokiAdapter())
 register_adapter(PrometheusAdapter())
@@ -251,6 +253,7 @@ __all__ = [
     "GoogleCloudBuildAdapter",
     "HelmAdapter",
     "HelmfileAdapter",
+    "InSpecAdapter",
     "VaultAdapter",
     "ConsulAdapter",
     "JenkinsAdapter",

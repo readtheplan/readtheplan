@@ -51,6 +51,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("cookbooks/base/Berksfile", "chef-project"),
         ("cookbooks/base/Berksfile.lock", "chef-project"),
         ("chef/client.d/security.rb", "chef-project"),
+        ("profiles/linux/inspec.yml", "inspec"),
+        ("profiles/linux/inspec.lock", "inspec"),
+        ("profiles/linux/waivers.yml", "inspec"),
         ("manifests/site.pp", "puppet"),
         ("puppet/puppet.conf", "puppet-project"),
         ("puppet/r10k.yaml", "puppet-project"),
@@ -693,6 +696,36 @@ def test_project_scan_analyzes_chef_runtime_configuration(tmp_path: Path) -> Non
     assert payload["decision"] == "block"
     encoded = json.dumps(payload)
     assert "fixture-chef" not in encoded
+    assert "example.invalid" not in encoded
+
+
+def test_project_scan_analyzes_inspec_profile_artifacts(tmp_path: Path) -> None:
+    source = FIXTURES / "inspec_profile_risky"
+    for relative in (
+        "inspec.yml",
+        "inspec.lock",
+        "controls/main.rb",
+        "libraries/custom.rb",
+        "waivers.yml",
+    ):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((source / relative).read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 5
+    assert payload["scanned_file_count"] == 5
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"inspec"}
+    assert {item["adapter"] for item in payload["files"]} == {"inspec"}
+    assert payload["total_changes"] == 30
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-user" not in encoded
+    assert "fixture-password" not in encoded
+    assert "fixture-secret-value" not in encoded
+    assert "fixture-control-id" not in encoded
     assert "example.invalid" not in encoded
 
 

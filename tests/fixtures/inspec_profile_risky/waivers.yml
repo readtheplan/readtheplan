@@ -1,0 +1,7 @@
+fixture-control-id:
+  justification: temporary exception
+  run: false
+remote-control-id:
+  justification: ""
+  run: true
+  expiration_date: 2000-01-01
