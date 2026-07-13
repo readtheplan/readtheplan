@@ -54,7 +54,7 @@ matrix makes those boundaries explicit.
 | Docker Compose | Compose YAML | `readtheplan docker-compose compose.yml` | Images, builds, commands, privileges, host namespaces, capabilities, mounts, devices, secrets, external files, and published ports | Built-in |
 | Dockerfile / Containerfile | Dockerfile source | `readtheplan dockerfile Dockerfile` | Frontends, base-image pinning, stages, commands/heredocs, BuildKit mounts, secret ARG/ENV, COPY/ADD, users, health, deferred instructions, and context boundaries | Built-in |
 | HashiCorp Nomad | HCL/JSON jobspec or `/v1/job/:id/plan` JSON response | `readtheplan nomad job.nomad.hcl` | Source task drivers, commands/images, artifacts/templates, identity, Vault/Consul, services/networking, storage/secrets, plus scheduler placement/replacement/stops and failures | Built-in |
-| HashiCorp Packer | Human or `-machine-readable` inspect output | `readtheplan packer inspect.txt` | Builders, provisioners, post-processors, sensitive/unresolved variables, and explicit inspect limitations | Conservative |
+| HashiCorp Packer | Native HCL2/JSON or human/`-machine-readable` inspect output | `readtheplan packer image.pkr.hcl` | Plugin/core constraints, variables/locals/data, builders/communicators/base inputs, provisioners, post-processors/publishing, secrets, functions, and inspect/source boundaries | Built-in |
 | HashiCorp Vagrant | Vagrantfile Ruby source | `readtheplan vagrant Vagrantfile` | Boxes, providers, provisioners, networks, synced folders, triggers, host commands, and unresolved Ruby/configuration merging | Conservative |
 | cloud-init | Cloud-config YAML, scripts, boothooks, includes, or MIME user-data | `readtheplan cloud-init user-data.yml` | Packages, users, SSH trust, files, commands, storage, power state, external content, templates, and merged configuration | Built-in |
 
@@ -177,10 +177,11 @@ the same optional `framework` parameter through its MCP tool.
 - Nomad analysis accepts HCL/JSON jobspec source or the structured plan response returned by
   the HTTP API. Generate plans inside the existing Nomad trust boundary; readtheplan never contacts
   the cluster or submits a job.
-- Packer analysis accepts `packer inspect` output and never starts a build. Inspect
-  enumerates components but does not validate plugin-specific configuration, so
-  the gate always retains an explicit review finding and recommends separate
-  `packer validate` execution in the caller's trust boundary.
+- Packer analysis accepts native HCL2/JSON templates or `packer inspect` output and
+  never initializes plugins or starts a build. Source mode inspects plugin-specific
+  configuration without evaluating expressions; inspect output intentionally omits
+  that configuration and therefore retains a limitation finding. Run
+  `packer validate` only inside the caller's trust boundary.
 - Salt analysis parses static SLS YAML with duplicate-key rejection. Jinja-templated
   SLS files receive conservative line-based state discovery plus an unresolved
   renderer finding; calls such as `salt['cmd.run'](...)` during rendering block.

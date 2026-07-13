@@ -107,7 +107,7 @@ readtheplan gitlab-ci .gitlab-ci.yml
 readtheplan circleci .circleci/config.yml
 readtheplan docker-compose compose.yml
 readtheplan nomad job.nomad.hcl
-readtheplan packer inspect.txt</code></pre>
+readtheplan packer image.pkr.hcl</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
@@ -142,17 +142,17 @@ readtheplan packer inspect.txt</code></pre>
         <div class="gc utility-panel-wide">
           <h2 id="packer-title">Packer image builds</h2>
           <p style="color:var(--muted);margin:8px 0 16px">
-            Let Packer parse its own HCL or legacy JSON, save the inspect result, and gate the
-            component graph locally without starting a build:
+            Gate native Packer HCL/JSON source directly, or use saved inspect output, without
+            initializing plugins or starting a build:
           </p>
-          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>packer inspect -machine-readable image.pkr.hcl &gt; packer-inspect.txt
-readtheplan packer --framework soc2 packer-inspect.txt</code></pre>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan packer --framework soc2 image.pkr.hcl
+packer inspect -machine-readable image.pkr.hcl &gt; packer-inspect.txt
+readtheplan packer packer-inspect.txt</code></pre>
           <p style="color:var(--muted);margin:12px 0 0">
-            The gate classifies builders, guest and host provisioners, artifact post-processors,
-            masked sensitive variables, and unresolved build-time values. Packer documents that
-            <code>inspect</code> does not validate plugin-specific configuration, so readtheplan
-            always emits a separate review finding and recommends running <code>packer validate</code>
-            inside the caller's existing trust boundary.
+            Source mode classifies plugin provenance, builders, communicators, base inputs, guest
+            and host provisioners, artifact post-processors, publishing, variables, secrets, and
+            unresolved expressions. Inspect mode retains its explicit configuration limitation.
+            Run <code>packer validate</code> only inside the caller's existing trust boundary.
           </p>
         </div>
       </section>

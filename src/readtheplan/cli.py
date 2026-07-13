@@ -452,12 +452,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     packer = subparsers.add_parser(
         "packer",
-        help="Emit the agent-gate decision for Packer inspect output.",
+        help="Emit the agent-gate decision for Packer template source or inspect output.",
     )
     packer.add_argument("--framework", help="Include checks from a compliance framework.")
     packer.add_argument(
         "input_file",
-        help="Path to human or machine-readable `packer inspect` output.",
+        help="Path to .pkr.hcl/.pkr.json template or human/machine-readable inspect output.",
     )
     packer.set_defaults(func=_packer_gate)
 
@@ -1646,12 +1646,12 @@ def _workload_gate(args: argparse.Namespace) -> int:
 
 
 def _packer_gate(args: argparse.Namespace) -> int:
-    """Emit the shared agent-gate contract for Packer inspect output."""
+    """Emit the shared agent-gate contract for Packer template or inspect output."""
     from readtheplan.adapters import detect_adapter
     from readtheplan.adapters.packer import (
         PackerInspectError,
         analyze_packer,
-        parse_packer_inspect,
+        parse_packer,
     )
 
     try:
@@ -1660,13 +1660,13 @@ def _packer_gate(args: argparse.Namespace) -> int:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
     try:
-        data = parse_packer_inspect(source)
+        data = parse_packer(source)
     except PackerInspectError as exc:
-        print(f"Error: invalid Packer inspect input: {exc}", file=sys.stderr)
+        print(f"Error: invalid Packer input: {exc}", file=sys.stderr)
         return 1
     adapter = detect_adapter(data)
     if adapter is None or adapter.adapter_name != "packer":
-        print("Error: input not recognized as Packer inspect output", file=sys.stderr)
+        print("Error: input not recognized as Packer template or inspect output", file=sys.stderr)
         return 1
     catalog = _adapter_catalog(args.framework)
     if args.framework and catalog is None:
