@@ -55,6 +55,7 @@ _SECRET_OPTIONS = re.compile(
 )
 _EXACT_VERSION = re.compile(r"(?:==)?(?:v)?\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9._-]+)?$")
 _COMMIT = re.compile(r"[0-9a-f]{40,64}$", re.IGNORECASE)
+_OCI_SHA256 = re.compile(r"@sha256:[0-9a-f]{64}$", re.IGNORECASE)
 _MUTABLE_VERSIONS = {"", "*", "devel", "head", "latest", "main", "master", "trunk"}
 _INVENTORY_GROUP_KEYS = {"children", "hosts", "vars"}
 _INVENTORY_SCOPE_KEYS = {
@@ -90,6 +91,24 @@ _INVENTORY_FILENAME = re.compile(
     r"[.](?:aws_ec2|azure_rm|gcp_compute|openstack|constructed)[.](?:ya?ml)$",
     re.IGNORECASE,
 )
+_EXECUTION_ENVIRONMENT_FILENAMES = {"execution-environment.yaml", "execution-environment.yml"}
+_NAVIGATOR_FILENAMES = {
+    ".ansible-navigator.json",
+    ".ansible-navigator.yaml",
+    ".ansible-navigator.yml",
+    "ansible-navigator.json",
+    "ansible-navigator.yaml",
+    "ansible-navigator.yml",
+}
+_EE_KEYS = {
+    "additional_build_files",
+    "additional_build_steps",
+    "build_arg_defaults",
+    "dependencies",
+    "images",
+    "options",
+    "version",
+}
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -393,6 +412,62 @@ def _load_inventory_yaml(source: str) -> Any:
     return documents[0]
 
 
+def _artifact_filename(filename: str | None) -> str:
+    if not filename:
+        return ""
+    return PurePosixPath(filename.replace("\\", "/")).name.lower()
+
+
+def _parse_execution_environment(document: Any) -> dict[str, Any]:
+    if not isinstance(document, dict) or not document:
+        raise AnsibleProjectInputError("execution environment must be a non-empty YAML mapping")
+    unknown = set(document) - _EE_KEYS
+    if unknown:
+        raise AnsibleProjectInputError("execution environment contains unsupported top-level keys")
+    if "version" in document and (
+        not isinstance(document["version"], int) or isinstance(document["version"], bool)
+    ):
+        raise AnsibleProjectInputError("execution environment version must be an integer")
+    mapping_sections = (
+        "additional_build_steps",
+        "build_arg_defaults",
+        "dependencies",
+        "images",
+        "options",
+    )
+    for key in mapping_sections:
+        if key in document and not isinstance(document[key], dict):
+            raise AnsibleProjectInputError(f"execution environment {key} must be a mapping")
+    files = document.get("additional_build_files", [])
+    if not isinstance(files, list) or not all(isinstance(item, dict) for item in files):
+        raise AnsibleProjectInputError(
+            "execution environment additional_build_files must be a list of mappings"
+        )
+    return document
+
+
+def _parse_navigator(document: Any) -> dict[str, Any]:
+    if not isinstance(document, dict) or set(document) != {"ansible-navigator"}:
+        raise AnsibleProjectInputError(
+            "Navigator configuration must contain one ansible-navigator mapping"
+        )
+    settings = document["ansible-navigator"]
+    if not isinstance(settings, dict):
+        raise AnsibleProjectInputError("ansible-navigator settings must be a mapping")
+    navigator_mappings = (
+        "ansible",
+        "editor",
+        "execution-environment",
+        "exec",
+        "logging",
+        "playbook-artifact",
+    )
+    for key in navigator_mappings:
+        if key in settings and not isinstance(settings[key], dict):
+            raise AnsibleProjectInputError(f"ansible-navigator {key} must be a mapping")
+    return settings
+
+
 def parse_ansible_project(source: str, filename: str | None = None) -> dict[str, Any]:
     """Parse Ansible project configuration, dependencies, or inventory without execution."""
     if not source.strip():
@@ -400,6 +475,23 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
     filename_suffix = (
         PurePosixPath(filename.replace("\\", "/")).suffix.lower() if filename else ""
     )
+    artifact_filename = _artifact_filename(filename)
+    if artifact_filename in _EXECUTION_ENVIRONMENT_FILENAMES:
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "execution_environment",
+                "document": _parse_execution_environment(document),
+            }
+        }
+    if artifact_filename in _NAVIGATOR_FILENAMES:
+        document = _load_inventory_yaml(source)
+        return {
+            "ansible_project": {
+                "artifact_type": "navigator",
+                "document": _parse_navigator(document),
+            }
+        }
     if _inventory_filename(filename) and filename_suffix == ".ini":
         inventory = _parse_inventory_ini(source)
         return {"ansible_project": {"artifact_type": "inventory_ini", "document": inventory}}
@@ -432,6 +524,411 @@ def parse_ansible_project(source: str, filename: str | None = None) -> dict[str,
         return {"ansible_project": {"artifact_type": "inventory_ini", "document": inventory}}
     requirements = _parse_requirements(source)
     return {"ansible_project": {"artifact_type": "requirements", "document": requirements}}
+
+
+def _image_change(address: str, image: Any) -> dict[str, str] | None:
+    if not isinstance(image, str) or not image.strip():
+        return None
+    text = image.strip()
+    lowered = text.lower()
+    reasons = ["The container image supplies executable controller dependencies."]
+    risk = "review"
+    if not _OCI_SHA256.search(text):
+        risk = "dangerous"
+        tail = text.rsplit("/", 1)[-1]
+        if ":" not in tail or tail.lower().endswith(":latest"):
+            reasons.append("The image uses an implicit or latest mutable tag.")
+        else:
+            reasons.append("A tag can be replaced in its registry; pin an immutable digest.")
+    else:
+        reasons.append("The image is pinned by digest; review registry trust and provenance.")
+    if lowered.startswith("http://"):
+        risk = "dangerous"
+        reasons.append("The image reference uses plaintext transport.")
+    if _embedded_url_credential(text):
+        risk = "dangerous"
+        reasons.append("The image reference embeds credentials that can leak through metadata.")
+    return _change(address, "execution_environment_image", risk, " ".join(reasons))
+
+
+def _dependency_spec_changes(value: Any, address: str) -> list[dict[str, str]]:
+    if isinstance(value, str):
+        return [
+            _change(
+                address,
+                "execution_environment_dependency_file",
+                "review",
+                "The execution environment loads dependencies from another file; its resolved "
+                "contents and installation behavior are outside this artifact.",
+            )
+        ]
+    if not isinstance(value, list):
+        return []
+    changes: list[dict[str, str]] = []
+    for index, item in enumerate(value, start=1):
+        spec = item if isinstance(item, str) else ""
+        lowered = spec.lower().strip()
+        exact = bool(re.search(r"==[^,;\s]+", spec))
+        risk = "review" if exact else "dangerous"
+        reasons = ["The execution environment installs executable package content."]
+        if not exact:
+            reasons.append("The package is not pinned to one exact version.")
+        if lowered.startswith(("http://", "git://", "git+http://")):
+            risk = "dangerous"
+            reasons.append("The package uses an unauthenticated plaintext source.")
+        if _embedded_url_credential(spec):
+            risk = "dangerous"
+            reasons.append("The package reference embeds credentials.")
+        changes.append(
+            _change(
+                f"{address}.{index}",
+                "execution_environment_dependency",
+                risk,
+                " ".join(reasons),
+            )
+        )
+    return changes
+
+
+def _execution_environment_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    version = document.get("version")
+    if version != 3:
+        changes.append(
+            _change(
+                "execution_environment.version",
+                "execution_environment_schema",
+                "dangerous",
+                "The definition omits schema version 3 or selects a legacy schema, so modern "
+                "Builder validation and behavior are not guaranteed.",
+            )
+        )
+    images = document.get("images", {})
+    base = images.get("base_image", {}) if isinstance(images, dict) else {}
+    image = base.get("name") if isinstance(base, dict) else None
+    image_finding = _image_change("execution_environment.images.base_image", image)
+    if image_finding:
+        changes.append(image_finding)
+    else:
+        changes.append(
+            _change(
+                "execution_environment.images.base_image",
+                "execution_environment_image_boundary",
+                "review",
+                "Builder will select a base image outside this definition; review the effective "
+                "image, registry trust, signature policy, and digest pinning.",
+            )
+        )
+
+    for index, item in enumerate(document.get("additional_build_files", []), start=1):
+        src = str(item.get("src", ""))
+        dest = str(item.get("dest", ""))
+        suspicious = bool(_SECRET_OPTIONS.search(src))
+        escape = Path(dest).is_absolute() or ".." in PurePosixPath(dest.replace("\\", "/")).parts
+        if suspicious or escape:
+            changes.append(
+                _change(
+                    f"execution_environment.additional_build_files.{index}",
+                    "execution_environment_build_file",
+                    "dangerous",
+                    "A build file may include secret material or escapes Builder's expected "
+                    "build-context destination; review context exposure and destination safety.",
+                )
+            )
+
+    steps = document.get("additional_build_steps", {})
+    for key, value in steps.items() if isinstance(steps, dict) else ():
+        if value not in (None, "", []):
+            changes.append(
+                _change(
+                    f"execution_environment.additional_build_steps.{key}",
+                    "execution_environment_build_command",
+                    "dangerous",
+                    "Builder injects raw container-build commands at this stage; commands can "
+                    "download or execute code, alter trust, copy secrets, and bypass dependency "
+                    "policy.",
+                )
+            )
+
+    build_args = document.get("build_arg_defaults", {})
+    for index, (key, value) in enumerate(build_args.items(), start=1):
+        if _SECRET_OPTIONS.search(str(key)) and not _external_or_encrypted_value(value):
+            changes.append(
+                _change(
+                    f"execution_environment.build_arg_defaults.{index}",
+                    "execution_environment_literal_secret",
+                    "dangerous",
+                    "A secret-like build argument contains a literal value that can persist in "
+                    "source history, build logs, cache, or image metadata.",
+                )
+            )
+
+    dependencies = document.get("dependencies", {})
+    if isinstance(dependencies, dict):
+        for key in ("python", "system"):
+            changes.extend(
+                _dependency_spec_changes(
+                    dependencies.get(key), f"execution_environment.dependencies.{key}"
+                )
+            )
+        for key in ("ansible_core", "ansible_runner"):
+            item = dependencies.get(key)
+            if isinstance(item, dict) and "package_pip" in item:
+                changes.extend(
+                    _dependency_spec_changes(
+                        [item["package_pip"]], f"execution_environment.dependencies.{key}"
+                    )
+                )
+        galaxy = dependencies.get("galaxy")
+        if isinstance(galaxy, dict) and ({"roles", "collections"} & set(galaxy)):
+            changes.extend(_requirements_changes(galaxy))
+        elif galaxy is not None:
+            changes.extend(
+                _dependency_spec_changes(galaxy, "execution_environment.dependencies.galaxy")
+            )
+
+    options = document.get("options", {})
+    if isinstance(options, dict):
+        if str(options.get("user", "")).lower() in {"0", "root"}:
+            changes.append(
+                _change(
+                    "execution_environment.options.user",
+                    "execution_environment_root_user",
+                    "dangerous",
+                    "The resulting execution environment runs as root by default.",
+                )
+            )
+        for key, explanation in (
+            ("relax_passwd_permissions", "Builder relaxes passwd-file permissions in the image."),
+            ("skip_ansible_check", "Builder skips its Ansible installation validation check."),
+        ):
+            if _enabled(options.get(key)):
+                changes.append(
+                    _change(
+                        f"execution_environment.options.{key}",
+                        "execution_environment_hardening_bypass",
+                        "dangerous",
+                        explanation,
+                    )
+                )
+        tags = options.get("tags", [])
+        if isinstance(tags, list) and any(str(tag).lower() == "latest" for tag in tags):
+            changes.append(
+                _change(
+                    "execution_environment.options.tags",
+                    "execution_environment_mutable_tag",
+                    "dangerous",
+                    "Builder publishes a latest tag, which is mutable and cannot identify one "
+                    "image.",
+                )
+            )
+        container_init = options.get("container_init", {})
+        if isinstance(container_init, dict) and (
+            container_init.get("entrypoint") or container_init.get("cmd")
+        ):
+            changes.append(
+                _change(
+                    "execution_environment.options.container_init",
+                    "execution_environment_container_init",
+                    "dangerous",
+                    "The image overrides its entrypoint or default command, defining executable "
+                    "startup behavior for every container created from it.",
+                )
+            )
+    changes.append(
+        _change(
+            "execution_environment.effective_build",
+            "execution_environment_boundary",
+            "review",
+            "The effective image also depends on Builder/engine versions, dependency files and "
+            "transitive packages, registry state, build arguments, signature policy, and build "
+            "context.",
+        )
+    )
+    return changes
+
+
+def _navigator_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    execution = document.get("execution-environment", {})
+    if isinstance(execution, dict):
+        if _disabled(execution.get("enabled")):
+            changes.append(
+                _change(
+                    "navigator.execution_environment.enabled",
+                    "navigator_host_execution",
+                    "dangerous",
+                    "Navigator disables execution-environment isolation, so Ansible runs directly "
+                    "on the controller host.",
+                )
+            )
+        image_finding = _image_change(
+            "navigator.execution_environment.image", execution.get("image")
+        )
+        if image_finding:
+            changes.append(image_finding)
+        container_options = execution.get("container-options", [])
+        if isinstance(container_options, list) and container_options:
+            dangerous = any(
+                re.search(
+                    r"(?:--privileged|--network[= ]host|--pid[= ]host|--ipc[= ]host|"
+                    r"--device|--cap-add|unconfined|--user[= ](?:0|root))",
+                    str(option),
+                    re.IGNORECASE,
+                )
+                for option in container_options
+            )
+            changes.append(
+                _change(
+                    "navigator.execution_environment.container_options",
+                    "navigator_container_options",
+                    "dangerous" if dangerous else "review",
+                    "Navigator passes custom options to the container engine; they can expand "
+                    "host access, privileges, devices, namespaces, or runtime behavior.",
+                )
+            )
+        mounts = execution.get("volume-mounts", [])
+        if isinstance(mounts, list):
+            for index, mount in enumerate(mounts, start=1):
+                if not isinstance(mount, dict):
+                    continue
+                src = str(mount.get("src", ""))
+                options = str(mount.get("options", ""))
+                sensitive = src in {"/", "/etc", "/var/run/docker.sock"} or bool(
+                    re.search(
+                        r"(?:\.ssh|\.aws|\.kube|docker[.]sock|credentials|secrets?)",
+                        src,
+                        re.I,
+                    )
+                )
+                read_only = "ro" in {part.strip() for part in options.split(",")}
+                changes.append(
+                    _change(
+                        f"navigator.execution_environment.volume_mounts.{index}",
+                        "navigator_volume_mount",
+                        "dangerous" if sensitive or not read_only else "review",
+                        "Navigator exposes a host path inside the execution container; review "
+                        "path sensitivity, write access, ownership, and cross-job isolation.",
+                    )
+                )
+        environment = execution.get("environment-variables", {})
+        if isinstance(environment, dict):
+            passed = environment.get("pass", [])
+            if isinstance(passed, list) and any(_SECRET_OPTIONS.search(str(key)) for key in passed):
+                changes.append(
+                    _change(
+                        "navigator.execution_environment.environment.pass",
+                        "navigator_secret_environment_boundary",
+                        "review",
+                        "Navigator forwards secret-like environment variables into the container; "
+                        "their values and downstream exposure are outside this artifact.",
+                    )
+                )
+            assigned = environment.get("set", {})
+            if isinstance(assigned, dict) and any(
+                _SECRET_OPTIONS.search(str(key)) and not _external_or_encrypted_value(value)
+                for key, value in assigned.items()
+            ):
+                changes.append(
+                    _change(
+                        "navigator.execution_environment.environment.set",
+                        "navigator_literal_secret",
+                        "dangerous",
+                        "Navigator assigns a literal secret-like environment value that can leak "
+                        "through source history, processes, logs, or executed content.",
+                    )
+                )
+        pull = execution.get("pull", {})
+        if isinstance(pull, dict):
+            arguments = pull.get("arguments", [])
+            if isinstance(arguments, list) and any(
+                "tls-verify=false" in str(argument).lower() for argument in arguments
+            ):
+                changes.append(
+                    _change(
+                        "navigator.execution_environment.pull.arguments",
+                        "navigator_registry_tls",
+                        "dangerous",
+                        "Navigator disables registry TLS verification while pulling the image.",
+                    )
+                )
+            if str(pull.get("policy", "")).lower() == "never":
+                changes.append(
+                    _change(
+                        "navigator.execution_environment.pull.policy",
+                        "navigator_pull_policy",
+                        "review",
+                        "Navigator never refreshes the local image; review cache provenance and "
+                        "staleness.",
+                    )
+                )
+
+    ansible = document.get("ansible", {})
+    if isinstance(ansible, dict) and ansible.get("cmdline"):
+        changes.append(
+            _change(
+                "navigator.ansible.cmdline",
+                "navigator_ansible_arguments",
+                "dangerous",
+                "Navigator injects additional Ansible command-line arguments that can alter "
+                "inventory, privilege, transport, secrets, targeting, and execution behavior.",
+            )
+        )
+    command = document.get("exec", {})
+    if isinstance(command, dict) and (command.get("command") or command.get("shell")):
+        changes.append(
+            _change(
+                "navigator.exec",
+                "navigator_exec_command",
+                "dangerous",
+                "Navigator is configured to execute an arbitrary command or shell in the selected "
+                "execution context.",
+            )
+        )
+    editor = document.get("editor", {})
+    if isinstance(editor, dict) and editor.get("command"):
+        changes.append(
+            _change(
+                "navigator.editor.command",
+                "navigator_editor_command",
+                "dangerous",
+                "Navigator can launch the configured local editor command with artifact-derived "
+                "arguments; review command provenance and shell interpretation.",
+            )
+        )
+    logging = document.get("logging", {})
+    if isinstance(logging, dict) and str(logging.get("level", "")).lower() == "debug":
+        changes.append(
+            _change(
+                "navigator.logging.level",
+                "navigator_debug_logging",
+                "review",
+                "Navigator enables debug logging; review log access, retention, and possible "
+                "credential or inventory metadata exposure.",
+            )
+        )
+    artifact = document.get("playbook-artifact", {})
+    if isinstance(artifact, dict) and artifact.get("replay"):
+        changes.append(
+            _change(
+                "navigator.playbook_artifact.replay",
+                "navigator_artifact_replay",
+                "review",
+                "Navigator replays an external playbook artifact whose integrity, origin, and "
+                "captured sensitive data are outside this settings file.",
+            )
+        )
+    changes.append(
+        _change(
+            "navigator.effective_settings",
+            "navigator_boundary",
+            "review",
+            "Effective Navigator behavior also depends on configuration precedence, environment "
+            "variables, command-line arguments, container-engine state, image contents, inventory, "
+            "credentials, and the selected subcommand.",
+        )
+    )
+    return changes
 
 
 def _config_changes(document: dict[str, Any]) -> list[dict[str, str]]:
@@ -1217,6 +1714,8 @@ class AnsibleProjectAdapter(BaseAdapter):
                 "inventory_ini",
                 "inventory_plugin",
                 "inventory_yaml",
+                "execution_environment",
+                "navigator",
                 "requirements",
             }
             and isinstance(config.get("document"), dict)
@@ -1230,6 +1729,10 @@ class AnsibleProjectAdapter(BaseAdapter):
             changes = _config_changes(document)
         elif artifact_type == "requirements":
             changes = _requirements_changes(document)
+        elif artifact_type == "execution_environment":
+            changes = _execution_environment_changes(document)
+        elif artifact_type == "navigator":
+            changes = _navigator_changes(document)
         elif artifact_type == "inventory_plugin":
             changes = _plugin_inventory_changes(document)
         else:
@@ -1243,14 +1746,15 @@ class AnsibleProjectAdapter(BaseAdapter):
             "options, inventory, variables, vault/secret files, installed collections, roles, "
             "and controller plugin code."
         )
-        changes.append(
-            _change(
-                "ansible.effective_project",
-                "project_boundary",
-                "review",
-                boundary,
+        if artifact_type not in {"execution_environment", "navigator"}:
+            changes.append(
+                _change(
+                    "ansible.effective_project",
+                    "project_boundary",
+                    "review",
+                    boundary,
+                )
             )
-        )
         return changes
 
     def normalize_change(self, raw: dict[str, Any]) -> ResourceChange:

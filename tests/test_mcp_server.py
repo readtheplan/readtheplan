@@ -620,6 +620,19 @@ def test_agent_gate_configuration_management_supports_ansible_inventory() -> Non
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_execution_environments() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "ansible_execution_environment" / "execution-environment.yml"),
+        "ansible-project",
+        "soc2",
+    )
+    assert result["adapter"] == "ansible-project"
+    assert result["artifact_type"] == "execution_environment"
+    assert result["decision"] == "block"
+    assert "fixture-registry-password-do-not-leak" not in json.dumps(result)
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_puppet_runtime_config() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "puppet_conf_risky.conf"),

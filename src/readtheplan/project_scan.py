@@ -229,6 +229,17 @@ def identify_project_input(
     if name == "ansible.cfg":
         return "ansible-project"
     if name in {
+        "execution-environment.yaml",
+        "execution-environment.yml",
+        "ansible-navigator.json",
+        "ansible-navigator.yaml",
+        "ansible-navigator.yml",
+        ".ansible-navigator.json",
+        ".ansible-navigator.yaml",
+        ".ansible-navigator.yml",
+    }:
+        return "ansible-project"
+    if name in {
         "hosts",
         "hosts.ini",
         "hosts.yaml",
