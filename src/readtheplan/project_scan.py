@@ -1041,6 +1041,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
     for field in (
         "line_count",
         "command_count",
+        "credential_binding_count",
         "dynamic_count",
         "lookup_count",
         "resource_count",
@@ -1064,6 +1065,7 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "sensitive_parameter_count",
         "source_line_count",
         "resource_change_count",
+        "secret_interpolation_count",
         "plan_finding_count",
     ):
         if isinstance(payload.get(field), int):
@@ -1075,6 +1077,13 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         isinstance(item, str) for item in lookup_capabilities
     ):
         result["lookup_capabilities"] = sorted(set(lookup_capabilities))
+    credential_capabilities = payload.get("credential_exposure_capabilities")
+    if isinstance(credential_capabilities, list) and all(
+        isinstance(item, str) for item in credential_capabilities
+    ):
+        result["credential_exposure_capabilities"] = sorted(
+            set(credential_capabilities)
+        )
     if isinstance(payload.get("asset_type_count"), int):
         result["asset_type_count"] = payload["asset_type_count"]
     for field in ("ruleset_count", "source_count", "rule_count", "action_count"):

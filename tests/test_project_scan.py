@@ -1026,6 +1026,32 @@ def test_root_bolt_content_uses_project_or_module_context(tmp_path: Path) -> Non
     assert identify_project_input(implementation, "tasks/deploy") == "puppet-project"
 
 
+def test_project_scan_propagates_jenkins_credential_exposure_metadata(tmp_path: Path) -> None:
+    target = tmp_path / "Jenkinsfile"
+    target.write_text(
+        (FIXTURES / "Jenkinsfile.config-management-risky").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    result = payload["files"][0]
+    assert result["tool"] == "jenkins"
+    assert result["adapter"] == "jenkins"
+    assert result["credential_binding_count"] == 1
+    assert result["secret_interpolation_count"] == 1
+    assert result["credential_exposure_capabilities"] == ["command"]
+    assert result["total_changes"] == 18
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "production-deploy-token" not in encoded
+    assert "DEPLOY_TOKEN" not in encoded
+    assert "registry.example.com/platform/deployer:latest" not in encoded
+
+
 def test_project_scan_analyzes_jenkins_jcasc_library_trust(tmp_path: Path) -> None:
     target = tmp_path / "jenkins" / "jenkins.yaml"
     target.parent.mkdir()

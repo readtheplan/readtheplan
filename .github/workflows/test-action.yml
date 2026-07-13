@@ -1372,14 +1372,20 @@ jobs:
           RISK_COUNTS: ${{ steps.jenkins.outputs['risk-counts'] }}
         run: |
           set -euo pipefail
-          test "$CHANGE_COUNT" = "16"
-          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":5,"safe":2}'
+          test "$CHANGE_COUNT" = "18"
+          test "$RISK_COUNTS" = '{"dangerous":11,"irreversible":0,"review":5,"safe":2}'
           python - <<'PY'
           import json
           import os
           payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "jenkins"
+          assert payload["credential_binding_count"] == 1
+          assert payload["secret_interpolation_count"] == 1
+          assert payload["credential_exposure_capabilities"] == ["command"]
           assert payload["decision"] == "block"
           assert "not pinned by digest" in payload["pr_comment"]
+          assert "production-deploy-token" not in os.environ["SUMMARY_JSON"]
+          assert "DEPLOY_TOKEN" not in os.environ["SUMMARY_JSON"]
           PY
 
       - name: Run action on Jenkins Configuration as Code

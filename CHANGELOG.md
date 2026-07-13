@@ -9,6 +9,11 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Jenkinsfile credential-interpolation analysis across the CLI, GitHub Action, project scan, and
+  MCP. A non-executing Groovy lexical pass now distinguishes code from comments and string
+  contents, tracks declarative and `withCredentials` environment bindings, and reports managed
+  secrets interpolated into command, log, or file sinks without exposing credential IDs, variable
+  names, image references, or source values.
 - Native Ansible lookup analysis across the CLI, GitHub Action, project scan, and MCP. Static
   playbook, task, handler, play-variable, and role-parameter inspection now distinguishes
   controller-side command and state-changing lookups from filesystem, environment/configuration,
