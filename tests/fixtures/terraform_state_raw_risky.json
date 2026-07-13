@@ -1,0 +1,38 @@
+{
+  "version": 4,
+  "terraform_version": "1.14.3",
+  "serial": 42,
+  "lineage": "8afed2ab-700c-4c78-b994-1ffb7f0f64f8",
+  "outputs": {
+    "admin_password": {
+      "value": "raw-output-secret",
+      "type": "string",
+      "sensitive": false
+    }
+  },
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "acl": "public-read",
+            "secret_token": "raw-marked-resource-secret",
+            "api_key": "raw-unmarked-resource-secret"
+          },
+          "sensitive_attributes": [
+            ["secret_token"]
+          ],
+          "private": "provider-private-blob",
+          "status": "tainted",
+          "deposed": "deadbeef"
+        }
+      ]
+    }
+  ],
+  "check_results": null
+}

@@ -1220,6 +1220,52 @@ def agent_gate_terraform_lock(
     return analyze_terraform_lock(data, catalog=catalog)
 
 
+def agent_gate_terraform_state(
+    input_path: str,
+    framework: str | None = None,
+) -> dict[str, object]:
+    """Return the gate for saved Terraform/OpenTofu state JSON."""
+    from readtheplan.adapters.terraform_state import (
+        TerraformStateAdapter,
+        TerraformStateInputError,
+        analyze_terraform_state,
+        parse_terraform_state,
+    )
+
+    if not isinstance(input_path, str) or not input_path.strip():
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="input_path must be a non-empty string",
+        )
+    try:
+        source = _read_confined_bytes(input_path).decode("utf-8")
+    except FileNotFoundError as exc:
+        raise MCPToolInputError(
+            code="FILE_NOT_FOUND",
+            message=f"File not found: {input_path}",
+        ) from exc
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Cannot read {input_path}: {exc}",
+        ) from exc
+    try:
+        data = parse_terraform_state(source)
+    except TerraformStateInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Terraform/OpenTofu state in {input_path}: {exc}",
+        ) from exc
+    if not TerraformStateAdapter().can_handle(data):
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message="Input is not recognized as Terraform/OpenTofu state",
+        )
+
+    catalog = _load_catalog_for_tool(framework)
+    return analyze_terraform_state(data, catalog=catalog)
+
+
 def agent_gate_terragrunt(
     input_path: str,
     framework: str | None = None,
@@ -1887,6 +1933,7 @@ def create_server() -> Any:
     agent_gate_caddy_handler = agent_gate_caddy
     agent_gate_terraform_config_handler = agent_gate_terraform_config
     agent_gate_terraform_lock_handler = agent_gate_terraform_lock
+    agent_gate_terraform_state_handler = agent_gate_terraform_state
     agent_gate_terragrunt_handler = agent_gate_terragrunt
     agent_gate_helm_handler = agent_gate_helm
     agent_gate_kustomize_handler = agent_gate_kustomize
@@ -2235,6 +2282,19 @@ def create_server() -> Any:
             framework: Optional compliance framework for control checks.
         """
         return agent_gate_terraform_lock_handler(input_path, framework=framework)
+
+    @mcp.tool(name="agent_gate_terraform_state")
+    def _agent_gate_terraform_state_tool(
+        input_path: str,
+        framework: str | None = None,
+    ) -> dict[str, object]:
+        """Return the gate for saved Terraform/OpenTofu state JSON.
+
+        Args:
+            input_path: Path to show -json state output or a raw v4 state snapshot.
+            framework: Optional compliance framework for control checks.
+        """
+        return agent_gate_terraform_state_handler(input_path, framework=framework)
 
     @mcp.tool(name="agent_gate_terragrunt")
     def _agent_gate_terragrunt_tool(

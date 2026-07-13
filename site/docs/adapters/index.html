@@ -76,10 +76,12 @@
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan cloudformation changes.json
 readtheplan cdk cdk.out/manifest.json
 readtheplan terraform-lock .terraform.lock.hcl
+readtheplan terraform-state state.json
 readtheplan azure whatif.json
 readtheplan bicep main.bicep
 readtheplan kubernetes rendered.yaml
 readtheplan pulumi preview.json
+readtheplan pulumi-project Pulumi.yaml
 readtheplan ansible playbook.yml
 readtheplan ansible-project ansible.cfg
 readtheplan salt state.sls
@@ -110,7 +112,8 @@ readtheplan packer inspect.txt</code></pre>
             source receives conservative static analysis before compilation. Ansible playbooks,
             Galaxy requirements, static Salt SLS input, and rendered Salt master/minion, top, and
             roster files consume YAML structurally; Terraform/OpenTofu dependency locks use strict
-            literal HCL validation; Nix lock graphs use strict JSON while flake and
+            literal HCL validation, while state analysis accepts stable <code>show -json</code>
+            output or read-only raw v4 snapshots and never emits values or modifies state; Nix lock graphs use strict JSON while flake and
             NixOS module source uses a conservative syntax-aware scanner; DSC v3 documents use strict
             JSON/YAML and PowerShell DSC source is scanned without execution; CFEngine policy source
             is scanned without evaluation and Augments use strict JSON; <code>ansible.cfg</code> is parsed as INI,
