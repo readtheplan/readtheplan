@@ -1979,6 +1979,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_terraform_config" in tool_names
         assert "agent_gate_terraform_lock" in tool_names
         assert "agent_gate_terraform_state" in tool_names
+        assert "agent_gate_terraform_stack" in tool_names
         assert "agent_gate_terragrunt" in tool_names
         assert "agent_gate_helm" in tool_names
         assert "agent_gate_kustomize" in tool_names
@@ -2079,6 +2080,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(tf_lock_schema["properties"])
         tf_state_schema = tools_by_name["agent_gate_terraform_state"]["inputSchema"]
         assert {"input_path", "framework"} <= set(tf_state_schema["properties"])
+        tf_stack_schema = tools_by_name["agent_gate_terraform_stack"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(tf_stack_schema["properties"])
         terragrunt_schema = tools_by_name["agent_gate_terragrunt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(terragrunt_schema["properties"])
         helm_schema = tools_by_name["agent_gate_helm"]["inputSchema"]
