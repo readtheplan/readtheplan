@@ -9,6 +9,12 @@
   candidate generation never spawns external model tooling.
 
 ### Added
+- Puppet Bolt task-implementation gates across the CLI, GitHub Action, project scan, and MCP.
+  Bounded, non-executing inspection now recognizes shell, PowerShell, Python, and Ruby task
+  programs (including extensionless shebang scripts) and surfaces target execution, dynamic code
+  and process launches, destructive changes, network/remote access, privilege and permission
+  changes, system/filesystem mutation, unsafe deserialization, parameter/secret handling, and
+  explicit metadata/interpreter/target-state boundaries.
 - Jenkins controller Groovy-hook gates across the CLI, GitHub Action, project scan, and MCP.
   Bounded, non-executing inspection now recognizes `init.groovy(.d)` and
   `boot-failure.groovy(.d)` and surfaces controller APIs, security/authorization, credentials,

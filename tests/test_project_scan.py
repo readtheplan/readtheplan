@@ -754,6 +754,45 @@ def test_project_scan_analyzes_bolt_plans_and_task_metadata(tmp_path: Path) -> N
     assert "fixture-package" not in encoded
 
 
+def test_project_scan_analyzes_bolt_task_implementation_code(tmp_path: Path) -> None:
+    source = (
+        FIXTURES
+        / "bolt_task_implementation_risky"
+        / "modules"
+        / "fixture"
+        / "tasks"
+        / "deploy.sh"
+    )
+    target = tmp_path / "modules" / "fixture" / "tasks" / "deploy.sh"
+    target.parent.mkdir(parents=True)
+    target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["total_changes"] == 13
+    assert payload["risk_counts"] == {
+        "safe": 0,
+        "review": 5,
+        "dangerous": 8,
+        "irreversible": 0,
+    }
+    task = payload["files"][0]
+    assert task["path"] == "modules/fixture/tasks/deploy.sh"
+    assert task["tool"] == "puppet-project"
+    assert task["artifact_type"] == "bolt_task_implementation"
+    assert task["language"] == "shell"
+    assert task["source_kind"] == "target_task_implementation"
+    assert task["source_line_count"] == 12
+    assert task["task_name"] == "deploy"
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-bolt-implementation-secret-do-not-leak" not in encoded
+    assert "downloads.example.invalid" not in encoded
+
+
 def test_root_bolt_inventory_wins_over_generic_ansible_inventory(tmp_path: Path) -> None:
     (tmp_path / "bolt-project.yaml").write_text("name: root_project\n", encoding="utf-8")
     inventory = tmp_path / "inventory.yaml"
@@ -769,15 +808,19 @@ def test_root_bolt_content_uses_project_or_module_context(tmp_path: Path) -> Non
     tasks.mkdir()
     plan = plans / "deploy.yaml"
     task = tasks / "deploy.json"
+    implementation = tasks / "deploy"
     plan.write_text("steps:\n  - message: ok\n", encoding="utf-8")
     task.write_text('{"supports_noop":true}', encoding="utf-8")
+    implementation.write_text("#!/usr/bin/env python3\nprint('ok')\n", encoding="utf-8")
 
     assert identify_project_input(plan, "plans/deploy.yaml") is None
     assert identify_project_input(task, "tasks/deploy.json") is None
+    assert identify_project_input(implementation, "tasks/deploy") is None
 
     (tmp_path / "bolt-project.yaml").write_text("name: demo\n", encoding="utf-8")
     assert identify_project_input(plan, "plans/deploy.yaml") == "puppet-project"
     assert identify_project_input(task, "tasks/deploy.json") == "puppet-project"
+    assert identify_project_input(implementation, "tasks/deploy") == "puppet-project"
 
 
 def test_project_scan_analyzes_jenkins_jcasc_library_trust(tmp_path: Path) -> None:

@@ -13,10 +13,14 @@ from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.bolt_content import (
     BoltContentInputError,
     bolt_content_metadata,
+    bolt_task_implementation_changes,
     bolt_task_metadata_changes,
     bolt_yaml_plan_changes,
+    is_bolt_task_implementation,
     is_bolt_task_metadata,
+    is_bolt_task_path,
     is_bolt_yaml_plan,
+    parse_bolt_task_implementation,
     parse_bolt_task_metadata,
     parse_bolt_yaml_plan,
 )
@@ -907,7 +911,12 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
         raise PuppetProjectInputError("input is empty")
     basename = Path(filename).name.casefold()
     try:
-        if is_bolt_yaml_plan(filename):
+        if is_bolt_task_implementation(filename, source):
+            parsed = {
+                "artifact_type": "bolt_task_implementation",
+                "document": parse_bolt_task_implementation(source, filename=filename),
+            }
+        elif is_bolt_yaml_plan(filename):
             parsed = {
                 "artifact_type": "bolt_yaml_plan",
                 "document": parse_bolt_yaml_plan(source),
@@ -917,6 +926,11 @@ def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
                 "artifact_type": "bolt_task_metadata",
                 "document": parse_bolt_task_metadata(source),
             }
+        elif is_bolt_task_path(filename):
+            raise BoltContentInputError(
+                "unsupported Bolt task implementation; supported text formats are shell, "
+                "PowerShell, Python, and Ruby"
+            )
         elif basename in {"r10k.yaml", "r10k.yml"}:
             parsed = _parse_r10k_yaml(source)
         elif basename == "environment.conf":
@@ -3483,6 +3497,7 @@ class PuppetProjectAdapter(BaseAdapter):
                 "config",
                 "bolt_project",
                 "bolt_inventory",
+                "bolt_task_implementation",
                 "bolt_task_metadata",
                 "bolt_yaml_plan",
                 "environment",
@@ -3507,6 +3522,7 @@ class PuppetProjectAdapter(BaseAdapter):
             "config": _puppet_config_changes,
             "bolt_project": _bolt_project_changes,
             "bolt_inventory": _bolt_inventory_changes,
+            "bolt_task_implementation": bolt_task_implementation_changes,
             "bolt_task_metadata": bolt_task_metadata_changes,
             "bolt_yaml_plan": bolt_yaml_plan_changes,
             "environment": _environment_changes,
@@ -3518,7 +3534,16 @@ class PuppetProjectAdapter(BaseAdapter):
             "server_runtime": _server_runtime_changes,
             "server_web": _server_web_changes,
         }[artifact_type](project["document"])
-        if artifact_type.startswith("bolt_"):
+        if artifact_type == "bolt_task_implementation":
+            boundary = (
+                "Effective Bolt task behavior also depends on its metadata input contract and "
+                "implementation selection, bundled files, configuration precedence, target "
+                "facts and features, transport identity and privilege escalation, parameter and "
+                "secret values, interpreter and library versions, environment, target state, "
+                "and live results; readtheplan never executes the implementation."
+            )
+            address = "bolt_task.effective_implementation"
+        elif artifact_type.startswith("bolt_"):
             boundary = (
                 "Effective Bolt behavior also depends on configuration precedence, command-line "
                 "options, installed modules and plugins, resolved inventory data, target facts "
@@ -3572,7 +3597,7 @@ class PuppetProjectAdapter(BaseAdapter):
         return ResourceChange(
             address=str(raw["Address"]),
             resource_type=f"puppet_project_{raw['Kind']}",
-            actions=("configure",),
+            actions=(str(raw.get("Action", "configure")),),
             risk=str(raw["Risk"]),
             explanation=str(raw["Explanation"]),
         )
@@ -3595,6 +3620,7 @@ def analyze_puppet_project(data: dict[str, Any], *, catalog=None) -> dict[str, A
         rules = auth.get("rules", [])
         gate["rule_count"] = len(rules) if isinstance(rules, list) else 0
     if data["puppet_project"]["artifact_type"] in {
+        "bolt_task_implementation",
         "bolt_task_metadata",
         "bolt_yaml_plan",
     }:

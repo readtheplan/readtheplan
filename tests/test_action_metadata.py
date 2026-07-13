@@ -253,6 +253,10 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
         in workflow
     )
     assert "input-file: tests/fixtures/puppet_server_policy_risky/auth.conf" in workflow
+    assert (
+        "input-file: tests/fixtures/bolt_task_implementation_risky/modules/fixture/tasks/deploy.sh"
+        in workflow
+    )
     assert "steps.unsupported_tool.outcome != 'failure'" in workflow
     assert "steps.invalid.outcome != 'failure'" in workflow
     assert "steps.fail_on_changes.outcome != 'failure'" in workflow

@@ -670,6 +670,150 @@ def test_bolt_task_metadata_surfaces_execution_contract_without_values() -> None
     assert "deploy.sh" not in encoded
 
 
+def test_bolt_shell_task_implementation_surfaces_target_code_without_values() -> None:
+    fixture = "bolt_task_implementation_risky/modules/fixture/tasks/deploy.sh"
+    data = parse_puppet_project((FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture)
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    gate = analyze_puppet_project(data)
+    kinds = {change.resource_type for change in changes}
+    encoded = json.dumps(gate)
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_task_implementation"
+    assert len(changes) == 13
+    assert sum(change.risk == "dangerous" for change in changes) == 8
+    assert sum(change.risk == "review" for change in changes) == 5
+    assert gate["language"] == "shell"
+    assert gate["source_kind"] == "target_task_implementation"
+    assert gate["source_line_count"] == 12
+    assert gate["task_name"] == "deploy"
+    assert {
+        "puppet_project_bolt_task_destructive_operation",
+        "puppet_project_bolt_task_dynamic_execution",
+        "puppet_project_bolt_task_implementation_boundary",
+        "puppet_project_bolt_task_implementation_execution",
+        "puppet_project_bolt_task_network_access",
+        "puppet_project_bolt_task_parameter_input",
+        "puppet_project_bolt_task_permission_change",
+        "puppet_project_bolt_task_privilege_escalation",
+        "puppet_project_bolt_task_remote_access",
+        "puppet_project_bolt_task_secret_handling",
+        "puppet_project_bolt_task_system_mutation",
+    } <= kinds
+    assert all(change.actions == ("execute",) for change in changes[:-1])
+    assert "fixture-bolt-implementation-secret-do-not-leak" not in encoded
+    assert "downloads.example.invalid" not in encoded
+    assert "deploy@example.invalid" not in encoded
+    assert "rm -rf is documentation" not in encoded
+
+
+@pytest.mark.parametrize(
+    ("filename", "source", "language", "expected"),
+    [
+        (
+            "modules/demo/tasks/configure.ps1",
+            "param([string]$Path)\n"
+            "$api_token = 'fixture-powershell-secret'\n"
+            "Invoke-Expression $env:PT_command\n"
+            "Invoke-WebRequest 'https://example.invalid'\n"
+            "Set-Content -Path $Path -Value 'ok'\n"
+            "Remove-Item $Path -Recurse\n"
+            "# Add-Type and Restart-Computer are comments\n",
+            "powershell",
+            {
+                "puppet_project_bolt_task_destructive_operation",
+                "puppet_project_bolt_task_dynamic_execution",
+                "puppet_project_bolt_task_filesystem_mutation",
+                "puppet_project_bolt_task_network_access",
+            },
+        ),
+        (
+            "modules/demo/tasks/configure.py",
+            "import json, pickle, requests, shutil, subprocess, sys\n"
+            "params = json.load(sys.stdin)\n"
+            "api_token = 'fixture-python-secret'\n"
+            "subprocess.run(params['command'], shell=True)\n"
+            "requests.get(params['url'])\n"
+            "shutil.rmtree(params['path'])\n"
+            "pickle.loads(params['payload'])\n"
+            "# os.system('comment only')\n",
+            "python",
+            {
+                "puppet_project_bolt_task_destructive_operation",
+                "puppet_project_bolt_task_dynamic_execution",
+                "puppet_project_bolt_task_network_access",
+                "puppet_project_bolt_task_process_execution",
+                "puppet_project_bolt_task_unsafe_deserialization",
+            },
+        ),
+        (
+            "modules/demo/tasks/configure.rb",
+            "require 'json'\n"
+            "params = JSON.parse(STDIN.read)\n"
+            "api_token = 'fixture-ruby-secret'\n"
+            "system(params['command'])\n"
+            "eval(params['ruby'])\n"
+            "Net::HTTP.get(URI(params['url']))\n"
+            "FileUtils.rm_rf(params['path'])\n"
+            "YAML.load(params['payload'])\n"
+            "# `comment only`\n",
+            "ruby",
+            {
+                "puppet_project_bolt_task_destructive_operation",
+                "puppet_project_bolt_task_dynamic_execution",
+                "puppet_project_bolt_task_network_access",
+                "puppet_project_bolt_task_process_execution",
+                "puppet_project_bolt_task_unsafe_deserialization",
+            },
+        ),
+    ],
+)
+def test_bolt_task_implementation_languages_are_bounded_and_comment_aware(
+    filename: str, source: str, language: str, expected: set[str]
+) -> None:
+    data = parse_puppet_project(source, filename=filename)
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+    gate = analyze_puppet_project(data)
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_task_implementation"
+    assert gate["language"] == language
+    assert expected <= {change.resource_type for change in changes}
+    assert not any("comment only" in change.explanation for change in changes)
+    assert "fixture-" not in json.dumps(gate)
+
+
+def test_extensionless_bolt_task_uses_shebang_and_never_executes(tmp_path: Path) -> None:
+    marker = tmp_path / "bolt-task-was-executed"
+    source = f"#!/bin/sh\ntouch '{marker}'\n"
+    data = parse_puppet_project(source, filename="modules/demo/tasks/configure")
+
+    assert data["puppet_project"]["artifact_type"] == "bolt_task_implementation"
+    assert data["puppet_project"]["document"]["language"] == "shell"
+    assert not marker.exists()
+
+
+def test_bolt_task_implementation_rejects_unsupported_or_unsafe_text() -> None:
+    with pytest.raises(PuppetProjectInputError, match="supported text formats"):
+        parse_puppet_project("console.log('task')\n", filename="modules/demo/tasks/configure.js")
+    with pytest.raises(PuppetProjectInputError, match="2 MiB"):
+        parse_puppet_project(
+            "#!/bin/sh\n" + "x" * (2 * 1024 * 1024),
+            filename="modules/demo/tasks/configure",
+        )
+    with pytest.raises(PuppetProjectInputError, match="NUL byte"):
+        parse_puppet_project("#!/bin/sh\necho bad\x00value\n", filename="tasks/configure")
+
+
+def test_bolt_task_implementation_caps_finding_output() -> None:
+    source = "#!/bin/sh\n" + "eval $PT_command\n" * 2_100
+    data = parse_puppet_project(source, filename="modules/demo/tasks/configure.sh")
+    changes = PuppetProjectAdapter().analyze(data, tool_name="Puppet project")
+
+    assert len(changes) == 2_003
+    assert any(
+        change.resource_type == "puppet_project_bolt_task_finding_limit" for change in changes
+    )
+
+
 def test_hardened_bolt_content_stays_review_only() -> None:
     fixtures = (
         "bolt_content_review/modules/fixture/plans/inspect.yaml",
@@ -810,6 +954,10 @@ def test_r10k_parser_rejects_duplicate_unrelated_or_malformed_input(
         ("bolt_inventory/inventory.yaml", "bolt_inventory"),
         ("bolt_content_risky/modules/fixture/plans/deploy.yaml", "bolt_yaml_plan"),
         ("bolt_content_risky/modules/fixture/tasks/deploy.json", "bolt_task_metadata"),
+        (
+            "bolt_task_implementation_risky/modules/fixture/tasks/deploy.sh",
+            "bolt_task_implementation",
+        ),
         ("puppet_r10k_risky/r10k.yaml", "r10k"),
         ("puppet_server_policy_risky/environment.conf", "environment"),
         ("puppet_server_policy_risky/puppetdb.conf", "puppetdb"),
