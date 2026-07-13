@@ -19,6 +19,7 @@ from readtheplan.mcp_server import (
     agent_gate_azure,
     agent_gate_bicep,
     agent_gate_caddy,
+    agent_gate_carvel,
     agent_gate_cdk,
     agent_gate_cfengine,
     agent_gate_cloud_init,
@@ -480,6 +481,14 @@ def test_agent_gate_terramate_supports_framework_checks() -> None:
     result = agent_gate_terramate(str(FIXTURES / "terramate_risky.tm.hcl"), "soc2")
     assert result["adapter"] == "terramate"
     assert result["artifact_type"] == "configuration"
+    assert result["decision"] == "block"
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_carvel_supports_framework_checks() -> None:
+    result = agent_gate_carvel(str(FIXTURES / "vendir_risky.yml"), "soc2")
+    assert result["adapter"] == "carvel"
+    assert result["artifact_type"] == "vendir"
     assert result["decision"] == "block"
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
@@ -1171,6 +1180,21 @@ def test_agent_gate_terramate_rejects_path_outside_root(monkeypatch, tmp_path) -
     assert exc_info.value.code == "PATH_TRAVERSAL"
 
 
+def test_agent_gate_carvel_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "vendir.yml"
+    outside.write_text(
+        "apiVersion: vendir.k14s.io/v1alpha1\nkind: Config\ndirectories: []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MCP_ROOT", str(root))
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_carvel(str(outside))
+
+    assert exc_info.value.code == "PATH_TRAVERSAL"
+
+
 def test_agent_gate_salt_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -1523,6 +1547,7 @@ def test_stdio_server_tools_list() -> None:
         assert "agent_gate_jsonnet" in tool_names
         assert "agent_gate_helmfile" in tool_names
         assert "agent_gate_terramate" in tool_names
+        assert "agent_gate_carvel" in tool_names
         assert "agent_gate_salt" in tool_names
         assert "agent_gate_nix" in tool_names
         assert "agent_gate_dsc" in tool_names
@@ -1584,6 +1609,8 @@ def test_stdio_server_tools_list() -> None:
         assert {"input_path", "framework"} <= set(helmfile_schema["properties"])
         terramate_schema = tools_by_name["agent_gate_terramate"]["inputSchema"]
         assert {"input_path", "framework"} <= set(terramate_schema["properties"])
+        carvel_schema = tools_by_name["agent_gate_carvel"]["inputSchema"]
+        assert {"input_path", "framework"} <= set(carvel_schema["properties"])
         salt_schema = tools_by_name["agent_gate_salt"]["inputSchema"]
         assert {"input_path", "framework"} <= set(salt_schema["properties"])
         nix_schema = tools_by_name["agent_gate_nix"]["inputSchema"]

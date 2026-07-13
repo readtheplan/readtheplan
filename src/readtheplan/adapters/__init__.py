@@ -10,6 +10,7 @@ from readtheplan.adapters.azure import AzureWhatIfAdapter
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.adapters.bicep import BicepAdapter
 from readtheplan.adapters.caddy import CaddyAdapter
+from readtheplan.adapters.carvel import CarvelAdapter
 from readtheplan.adapters.cdk import CdkAdapter
 from readtheplan.adapters.cfengine import CFEngineAdapter
 from readtheplan.adapters.chef import ChefAdapter
@@ -120,6 +121,7 @@ register_adapter(CloudFormationAdapter())
 register_adapter(CrossplaneAdapter())
 register_adapter(CueAdapter())
 register_adapter(CaddyAdapter())
+register_adapter(CarvelAdapter())
 register_adapter(CdkAdapter())
 register_adapter(AtlantisAdapter())
 register_adapter(CloudInitAdapter())
@@ -194,6 +196,7 @@ __all__ = [
     "BitbucketPipelinesAdapter",
     "BuildkiteAdapter",
     "CaddyAdapter",
+    "CarvelAdapter",
     "CdkAdapter",
     "ChefAdapter",
     "ChefProjectAdapter",

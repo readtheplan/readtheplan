@@ -1,0 +1,31 @@
+apiVersion: kbld.k14s.io/v1alpha1
+kind: Config
+minimumRequiredVersion: 0.45.0
+searchRules:
+  - keyMatcher:
+      name: embeddedConfig
+    updateStrategy:
+      yaml:
+        searchRules:
+          - keyMatcher:
+              name: image
+overrides:
+  - image: platform
+    newImage: registry.example.test/platform:latest
+    preresolved: true
+  - image: worker
+    newImage: registry.example.test/worker
+    tagSelection:
+      semver:
+        constraints: ">=1.0.0"
+sources:
+  - image: platform
+    path: ../outside
+    docker:
+      build:
+        pull: true
+        noCache: true
+        rawOptions: ["--build-arg", "API_TOKEN=literal-build-token"]
+destinations:
+  - image: platform
+    newImage: registry.example.test/team/platform:latest

@@ -1,0 +1,11 @@
+apiVersion: vendir.k14s.io/v1alpha1
+kind: LockConfig
+directories:
+  - path: config/_ytt_lib
+    contents:
+      - path: pinned
+        git:
+          sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - path: floating
+        http:
+          url: https://downloads.example.test/latest.tgz

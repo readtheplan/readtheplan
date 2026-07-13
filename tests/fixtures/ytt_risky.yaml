@@ -1,0 +1,32 @@
+#@ load("@ytt:data", "data")
+#@ load("@ytt:overlay", "overlay")
+#@ load("../outside/helpers.star", "dangerous")
+#@ load("@company:platform.lib.yml", "platform")
+#@ load("@ytt:library", "library")
+
+#@data/values-schema
+---
+api_token: "literal-ytt-token"
+replicas: 1
+
+#@data/values
+---
+api_token: "literal-ytt-data-token"
+
+#@overlay/match by=overlay.subset({"kind": "Service"})
+---
+spec:
+  #@overlay/remove
+  clusterIP: ""
+
+---
+#@ app = library.get("@company")
+#@ rendered = app.with_data_values({"token": data.values.api_token}).eval()
+#@ for name in ["api", "worker"]:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: #@ name
+spec:
+  replicas: #@ data.values.replicas
+#@ end

@@ -521,6 +521,21 @@ def _build_parser() -> argparse.ArgumentParser:
     terramate.add_argument("input_file", help="Path to a .tm.hcl, .tm, .tm.json, or .tmgen file.")
     terramate.set_defaults(func=_terramate_gate)
 
+    for command, help_text in (
+        ("ytt", "ytt templates and data-value/overlay source"),
+        ("vendir", "vendir desired or locked directory content"),
+        ("kbld", "kbld image search/build/override/publish configuration"),
+        ("imgpkg", "imgpkg image or bundle lock configuration"),
+        ("kapp", "kapp deploy configuration or annotated manifests"),
+    ):
+        carvel = subparsers.add_parser(
+            command,
+            help=f"Emit the agent-gate decision for {help_text}.",
+        )
+        carvel.add_argument("--framework", help="Include checks from a compliance framework.")
+        carvel.add_argument("input_file", help=f"Path to {help_text}.")
+        carvel.set_defaults(func=_carvel_gate)
+
     salt = subparsers.add_parser(
         "salt",
         help="Emit the agent-gate decision for a Salt SLS state file.",
@@ -1911,6 +1926,32 @@ def _terramate_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_terramate(data, catalog=catalog))
+
+
+def _carvel_gate(args: argparse.Namespace) -> int:
+    """Emit the shared agent-gate contract for the Carvel tool family."""
+    from readtheplan.adapters import detect_adapter
+    from readtheplan.adapters.carvel import CarvelInputError, analyze_carvel, parse_carvel
+
+    path = Path(args.input_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_carvel(source, path.name)
+    except CarvelInputError as exc:
+        print(f"Error: invalid Carvel input: {exc}", file=sys.stderr)
+        return 1
+    adapter = detect_adapter(data)
+    if adapter is None or adapter.adapter_name != "carvel":
+        print("Error: input not recognized as Carvel configuration", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_carvel(data, catalog=catalog))
 
 
 def _salt_gate(args: argparse.Namespace) -> int:
