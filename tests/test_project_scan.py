@@ -26,6 +26,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("cdk.out/manifest.json", "cdk"),
         ("Pulumi.production.yaml", "pulumi-project"),
         ("ansible.cfg", "ansible-project"),
+        ("inventory/hosts.ini", "ansible-project"),
+        ("inventories/prod/inventory.yml", "ansible-project"),
+        ("inventory/prod.aws_ec2.yml", "ansible-project"),
+        ("ansible/collections/requirements.yml", "ansible-project"),
         ("Jenkinsfile.deploy", "jenkins"),
         ("cookbooks/base/recipes/default.rb", "chef"),
         ("manifests/site.pp", "puppet"),
@@ -92,6 +96,22 @@ def test_content_detection_for_kubernetes_ansible_and_terraform(tmp_path: Path) 
     assert identify_project_input(kubernetes, kubernetes.name) == "kubernetes"
     assert identify_project_input(ansible, ansible.name) == "ansible"
     assert identify_project_input(terraform, terraform.name) == "terraform"
+
+
+def test_content_detection_for_ansible_static_and_plugin_inventory(tmp_path: Path) -> None:
+    static_inventory = tmp_path / "production.yml"
+    static_inventory.write_text(
+        "all:\n  children:\n    web:\n      hosts:\n        web-1:\n",
+        encoding="utf-8",
+    )
+    plugin_inventory = tmp_path / "cloud.yml"
+    plugin_inventory.write_text(
+        "plugin: amazon.aws.aws_ec2\nregions:\n  - us-east-1\n",
+        encoding="utf-8",
+    )
+
+    assert identify_project_input(static_inventory, static_inventory.name) == "ansible-project"
+    assert identify_project_input(plugin_inventory, plugin_inventory.name) == "ansible-project"
 
 
 def test_content_detection_for_concourse_pipeline(tmp_path: Path) -> None:
@@ -355,6 +375,31 @@ def test_project_scan_analyzes_cloud_native_build_and_delivery(tmp_path: Path) -
     assert "literal-codebuild-token" not in encoded
     assert "literal-cloud-build-token" not in encoded
     assert "literal-codepipeline-token" not in encoded
+
+
+def test_project_scan_analyzes_ansible_static_and_dynamic_inventory(tmp_path: Path) -> None:
+    inventory = tmp_path / "inventory"
+    inventory.mkdir()
+    destinations = {
+        "inventory.yml": "ansible_inventory_risky.yml",
+        "prod.aws_ec2.yml": "ansible_inventory_plugin_risky.aws_ec2.yml",
+    }
+    for destination, fixture in destinations.items():
+        (inventory / destination).write_text(
+            (FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 2
+    assert payload["scanned_file_count"] == 2
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"ansible-project"}
+    assert {item["adapter"] for item in payload["files"]} == {"ansible-project"}
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-inventory-password-do-not-leak" not in encoded
+    assert "fixture-aws-access-key-do-not-leak" not in encoded
 
 
 def test_project_scan_analyzes_sops_policy_and_encrypted_documents(tmp_path: Path) -> None:

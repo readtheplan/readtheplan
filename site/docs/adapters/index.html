@@ -90,6 +90,7 @@ readtheplan pulumi preview.json
 readtheplan pulumi-project Pulumi.yaml
 readtheplan ansible playbook.yml
 readtheplan ansible-project ansible.cfg
+readtheplan ansible-project inventory.yml
 readtheplan salt state.sls
 readtheplan salt-project master
 readtheplan nix flake.nix
@@ -144,13 +145,14 @@ readtheplan kapp kapp-config.yml</code></pre>
             CloudFormation, Azure What-If, Kubernetes, and Pulumi consume structured diffs. AWS CDK
             consumes synthesized Cloud Assembly and asset manifests without executing the app. Bicep
             source receives conservative static analysis before compilation. Ansible playbooks,
-            Galaxy requirements, static Salt SLS input, and rendered Salt master/minion, top, and
+            Galaxy requirements, static YAML/INI inventory, dynamic inventory plugin configuration,
+            static Salt SLS input, and rendered Salt master/minion, top, and
             roster files consume YAML structurally; Terraform/OpenTofu dependency locks use strict
             literal HCL validation, while state analysis accepts stable <code>show -json</code>
             output or read-only raw v4 snapshots and never emits values or modifies state; Nix lock graphs use strict JSON while flake and
             NixOS module source uses a conservative syntax-aware scanner; DSC v3 documents use strict
             JSON/YAML and PowerShell DSC source is scanned without execution; CFEngine policy source
-            is scanned without evaluation and Augments use strict JSON; SOPS policy and encrypted YAML/JSON/dotenv/INI metadata are inspected without decryption or key-service access; <code>ansible.cfg</code> is parsed as INI,
+            is scanned without evaluation and Augments use strict JSON; SOPS policy and encrypted YAML/JSON/dotenv/INI metadata are inspected without decryption or key-service access; <code>ansible.cfg</code> and INI inventory are parsed without interpolation, while YAML inventory plugins are never executed or allowed to contact their APIs,
             while templated Salt SLS input falls back to a
             conservative scanner. Docker Compose and Buildx Bake definitions are parsed structurally without resolving external
             files, build contexts, caches, or registries, while Nomad accepts HCL/JSON jobspec source or the scheduler's structured job-plan API response and

@@ -17,7 +17,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _changes(fixture: str):
-    data = parse_ansible_project((FIXTURES / fixture).read_text(encoding="utf-8"))
+    data = parse_ansible_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
     return AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
 
 
@@ -77,11 +79,87 @@ def test_exact_requirements_and_signatures_stay_review_only() -> None:
     assert any("signatures" in change.explanation for change in changes)
 
 
+def test_static_yaml_inventory_surfaces_targeting_identity_and_execution_risk() -> None:
+    changes = _changes("ansible_inventory_risky.yml")
+    by_type = {change.resource_type: change for change in changes}
+
+    assert by_type["ansible_project_inventory_scope"].risk == "review"
+    assert by_type["ansible_project_inventory_literal_credential"].risk == "dangerous"
+    assert by_type["ansible_project_inventory_secret_boundary"].risk == "review"
+    assert by_type["ansible_project_inventory_privileged_identity"].risk == "dangerous"
+    assert by_type["ansible_project_inventory_ssh_host_verification"].risk == "dangerous"
+    assert by_type["ansible_project_inventory_ssh_proxy_command"].risk == "dangerous"
+    assert by_type["ansible_project_inventory_local_execution"].risk == "dangerous"
+    assert by_type["ansible_project_inventory_interpreter_override"].risk == "dangerous"
+    assert by_type["ansible_project_inventory_private_key_file"].risk == "review"
+    assert by_type["ansible_project_inventory_variable_evaluation"].risk == "dangerous"
+    assert "3 unique managed host(s)" in by_type[
+        "ansible_project_inventory_scope"
+    ].explanation
+
+
+def test_static_inventory_explanations_do_not_echo_hosts_or_secret_values() -> None:
+    explanations = "\n".join(
+        change.explanation for change in _changes("ansible_inventory_risky.yml")
+    )
+
+    assert "web-primary" not in explanations
+    assert "database-primary" not in explanations
+    assert "fixture-inventory-password-do-not-leak" not in explanations
+    assert "fixture-private-key-material-do-not-leak" not in explanations
+
+
+def test_ini_inventory_with_external_secrets_stays_review_only() -> None:
+    changes = _changes("ansible_inventory_review.ini")
+    kinds = {change.resource_type for change in changes}
+
+    assert {change.risk for change in changes} == {"review"}
+    assert "ansible_project_inventory_scope" in kinds
+    assert "ansible_project_inventory_connection_identity" in kinds
+    assert "ansible_project_inventory_secret_boundary" in kinds
+    assert "ansible_project_inventory_private_key_file" in kinds
+
+
+def test_extensionless_hosts_file_uses_ini_inventory_parser() -> None:
+    data = parse_ansible_project(
+        "host-one ansible_host=192.0.2.10\n", filename="inventories/prod/hosts"
+    )
+
+    assert data["ansible_project"]["artifact_type"] == "inventory_ini"
+    changes = AnsibleProjectAdapter().analyze(data, tool_name="Ansible project")
+    assert "1 unique managed host(s)" in changes[0].explanation
+
+
+def test_dynamic_inventory_plugin_surfaces_supply_chain_scope_and_api_risk() -> None:
+    changes = _changes("ansible_inventory_plugin_risky.aws_ec2.yml")
+    by_type = {change.resource_type: change for change in changes}
+
+    dangerous = {
+        "ansible_project_inventory_plugin_execution",
+        "ansible_project_inventory_plugin_broad_scope",
+        "ansible_project_inventory_plugin_literal_credential",
+        "ansible_project_inventory_plugin_plaintext_endpoint",
+        "ansible_project_inventory_plugin_tls_verification",
+        "ansible_project_inventory_plugin_fail_open",
+        "ansible_project_inventory_plugin_construction",
+        "ansible_project_inventory_plugin_extra_vars",
+    }
+    assert dangerous <= set(by_type)
+    assert {by_type[kind].risk for kind in dangerous} == {"dangerous"}
+    assert by_type["ansible_project_inventory_plugin_secret_boundary"].risk == "review"
+    assert by_type["ansible_project_inventory_plugin_cache"].risk == "review"
+    assert by_type["ansible_project_inventory_plugin_identity"].risk == "review"
+
+    explanations = "\n".join(change.explanation for change in changes)
+    assert "fixture-aws-access-key-do-not-leak" not in explanations
+    assert "AWS_SECRET_ACCESS_KEY" not in explanations
+
+
 @pytest.mark.parametrize(
     "source,error",
     [
         ("", "empty"),
-        ("[web]\nhost = example.test\n", "recognized ansible.cfg"),
+        ("[web]\nhost = example.test\n", "must be attached"),
         ("- hosts: all\n  tasks: []\n", "Galaxy requirements"),
         ("roles:\n  - name: one\n  - name: one\n    name: two\n", "duplicate YAML key"),
         ("roles: {}\n", "must be YAML lists"),
@@ -95,28 +173,61 @@ def test_ansible_project_parser_rejects_unrelated_or_ambiguous_input(
 
 
 @pytest.mark.parametrize(
-    ("fixture", "artifact_type"),
+    ("fixture", "artifact_type", "decision"),
     [
-        ("ansible_project_risky.cfg", "config"),
-        ("ansible_requirements_risky.yml", "requirements"),
+        ("ansible_project_risky.cfg", "config", "block"),
+        ("ansible_requirements_risky.yml", "requirements", "block"),
+        ("ansible_inventory_risky.yml", "inventory_yaml", "block"),
+        ("ansible_inventory_review.ini", "inventory_ini", "warn"),
+        (
+            "ansible_inventory_plugin_risky.aws_ec2.yml",
+            "inventory_plugin",
+            "block",
+        ),
     ],
 )
-def test_ansible_project_gate_uses_shared_contract(fixture: str, artifact_type: str) -> None:
-    data = parse_ansible_project((FIXTURES / fixture).read_text(encoding="utf-8"))
+def test_ansible_project_gate_uses_shared_contract(
+    fixture: str, artifact_type: str, decision: str
+) -> None:
+    data = parse_ansible_project(
+        (FIXTURES / fixture).read_text(encoding="utf-8"), filename=fixture
+    )
     gate = analyze_ansible_project(data)
     assert gate["adapter"] == "ansible-project"
     assert gate["artifact_type"] == artifact_type
-    assert gate["decision"] == "block"
+    assert gate["decision"] == decision
     assert gate["total_changes"] == sum(gate["risk_counts"].values())
 
 
 def test_ansible_project_cli_reads_both_formats(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    for fixture in ("ansible_project_risky.cfg", "ansible_requirements_risky.yml"):
+    for fixture in (
+        "ansible_project_risky.cfg",
+        "ansible_requirements_risky.yml",
+        "ansible_inventory_risky.yml",
+        "ansible_inventory_plugin_risky.aws_ec2.yml",
+    ):
         source = tmp_path / fixture
         source.write_text((FIXTURES / fixture).read_text(encoding="utf-8"), encoding="utf-8")
         assert main(["ansible-project", "--framework", "soc2", str(source)]) == 2
         payload = json.loads(capsys.readouterr().out)
         assert payload["adapter"] == "ansible-project"
         assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+
+
+def test_ansible_project_cli_reads_review_only_ini_inventory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "inventory.ini"
+    source.write_text(
+        (FIXTURES / "ansible_inventory_review.ini").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    assert main(["ansible-project", "--framework", "soc2", str(source)]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["adapter"] == "ansible-project"
+    assert payload["artifact_type"] == "inventory_ini"
+    assert payload["decision"] == "warn"
+    assert payload["risk_counts"]["dangerous"] == 0

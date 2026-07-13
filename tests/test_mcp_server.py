@@ -607,6 +607,19 @@ def test_agent_gate_configuration_management_supports_salt_project() -> None:
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+def test_agent_gate_configuration_management_supports_ansible_inventory() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "ansible_inventory_plugin_risky.aws_ec2.yml"),
+        "ansible-project",
+        "soc2",
+    )
+    assert result["adapter"] == "ansible-project"
+    assert result["artifact_type"] == "inventory_plugin"
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 12
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_dsc() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "powershell_dsc_risky.ps1"),

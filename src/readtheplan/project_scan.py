@@ -78,6 +78,14 @@ _CONFIG_BASENAME_SOURCE_SUFFIXES = frozenset(
 )
 _KUBERNETES_HINT = re.compile(r"(?ms)^\s*apiVersion\s*:\s*[^\s#]+.*?^\s*kind\s*:\s*[^\s#]+")
 _ANSIBLE_HINT = re.compile(r"(?ms)^\s*-?\s*hosts\s*:.*?^\s*(?:tasks|roles)\s*:")
+_ANSIBLE_INVENTORY_YAML_HINT = re.compile(
+    r"(?ms)^\s*(?:all|ungrouped)\s*:\s*(?:#.*)?\n"
+    r"(?:\s+.*\n)*?\s+(?:children|hosts|vars)\s*:"
+)
+_ANSIBLE_INVENTORY_PLUGIN_HINT = re.compile(
+    r"(?m)^\s*plugin\s*:\s*(?:ansible\.builtin\.[A-Za-z0-9_]+|"
+    r"[A-Za-z0-9_]+\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+)\s*(?:#.*)?$"
+)
 _CONCOURSE_HINT = re.compile(
     r"(?ms)^\s*jobs\s*:\s*\n.*?^\s*-\s*name\s*:.*?^\s*plan\s*:\s*\n"
     r".*?^\s*-\s*(?:task|get|put|set_pipeline|load_var)\s*:"
@@ -214,6 +222,25 @@ def identify_project_input(
         return "pulumi-project"
 
     if name == "ansible.cfg":
+        return "ansible-project"
+    if name in {
+        "hosts",
+        "hosts.ini",
+        "hosts.yaml",
+        "hosts.yml",
+        "inventory",
+        "inventory.ini",
+        "inventory.yaml",
+        "inventory.yml",
+    }:
+        return "ansible-project"
+    if suffix in _YAML_SUFFIXES and re.search(
+        r"[.](?:aws_ec2|azure_rm|constructed|gcp_compute|openstack)[.](?:ya?ml)$", name
+    ):
+        return "ansible-project"
+    if name in {"requirements.yaml", "requirements.yml"} and any(
+        part in {"ansible", "collections", "roles"} for part in parts[:-1]
+    ):
         return "ansible-project"
     if name in {"playbook.yml", "playbook.yaml"} or (
         name.startswith("playbook-") and suffix in _YAML_SUFFIXES
@@ -437,6 +464,10 @@ def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
             return "kubernetes"
         if _ANSIBLE_HINT.search(text):
             return "ansible"
+        if _ANSIBLE_INVENTORY_PLUGIN_HINT.search(text) or _ANSIBLE_INVENTORY_YAML_HINT.search(
+            text
+        ):
+            return "ansible-project"
         if _CONCOURSE_HINT.search(text):
             return "concourse"
         return None

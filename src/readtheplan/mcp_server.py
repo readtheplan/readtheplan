@@ -2546,7 +2546,7 @@ def agent_gate_configuration_management(
         analyze = analyze_ansible
     elif ecosystem == "ansible-project":
         try:
-            data = parse_ansible_project(source)
+            data = parse_ansible_project(source, filename=input_path)
         except AnsibleProjectInputError as exc:
             raise MCPToolInputError(
                 code="INVALID_INPUT",

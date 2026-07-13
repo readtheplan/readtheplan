@@ -1,0 +1,18 @@
+plugin: amazon.aws.aws_ec2
+aws_access_key: fixture-aws-access-key-do-not-leak
+aws_secret_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+endpoint_url: http://inventory-api.example.test
+validate_certs: false
+strict_permissions: false
+use_extra_vars: true
+cache: true
+cache_plugin: jsonfile
+cache_connection: /tmp/ansible-inventory-cache
+iam_role_arn: arn:aws:iam::123456789012:role/inventory-reader
+hostnames:
+  - "tag:Name | default(public_dns_name)"
+keyed_groups:
+  - prefix: environment
+    key: tags.Environment
+compose:
+  ansible_host: "{{ query('community.general.some_lookup') }}"
