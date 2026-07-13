@@ -1529,6 +1529,43 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Chef custom Ohai plugin
+        id: chef_ohai
+        uses: ./
+        with:
+          tool: chef
+          input-file: tests/fixtures/chef_ohai_risky/cookbooks/platform/ohai/cloud_inventory.rb
+          framework: soc2
+
+      - name: Assert Chef custom Ohai plugin outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef_ohai.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef_ohai.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef_ohai.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "18"
+          test "$RISK_COUNTS" = '{"dangerous":9,"irreversible":0,"review":9,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "chef"
+          assert payload["artifact_type"] == "ohai_plugin"
+          assert payload["plugin_count"] == 1
+          assert payload["provides_count"] == 2
+          assert payload["depends_count"] == 1
+          assert payload["collect_data_count"] == 1
+          assert payload["platform_count"] == 1
+          assert payload["decision"] == "block"
+          assert "fixture-ohai-secret-do-not-leak" not in serialized
+          assert "FIXTURE_OHAI_ENDPOINT" not in serialized
+          assert "fixture-ohai-inventory" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef project configuration
         id: chef_project
         uses: ./

@@ -20,11 +20,13 @@
   `boot-failure.groovy(.d)` and surfaces controller APIs, security/authorization, credentials,
   identities, plugins, agents/clouds, jobs, lifecycle, commands, filesystem/network access,
   runtime configuration, literal secrets, and explicit hook-order/runtime boundaries.
-- Chef cookbook-content gates across the CLI, GitHub Action, project scan, and MCP. Bounded,
-  non-executing inspection now covers recipes, attributes, custom resources, libraries, legacy
-  providers/definitions, and ERB templates, including resources/actions, precedence, sensitive
-  values, commands, direct filesystem/network access, Chef extensions, external data/code, and
-  explicit call-site/render/runtime boundaries.
+- Chef cookbook-content and custom-Ohai gates across the CLI, GitHub Action, project scan, and MCP.
+  Bounded, non-executing inspection now covers recipes, attributes, custom resources, libraries,
+  legacy providers/definitions, ERB templates, and Ohai plugins/shared libraries, including
+  resources/actions, precedence, collection blocks, automatic attributes, built-in/core
+  collisions, sensitive node data, hints/dependencies, commands, network/cloud metadata,
+  filesystem/environment access, mutation, unsafe deserialization, TLS bypass, and explicit
+  call-site/render/node/persistence boundaries.
 - Native Terraform/OpenTofu dependency-lock gates across the CLI, GitHub Action,
   and MCP. Strict `.terraform.lock.hcl` parsing now covers duplicate or malformed
   blocks, exact provider selection, constraints, origin registries, pre-release
