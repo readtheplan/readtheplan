@@ -620,6 +620,41 @@ def test_agent_gate_configuration_management_supports_ansible_inventory() -> Non
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
+@pytest.mark.parametrize(
+    ("relative", "artifact_type", "total_changes", "dangerous", "review"),
+    [
+        ("tasks/main.yml", "task_file", 11, 7, 4),
+        ("handlers/main.yml", "handler_file", 5, 2, 3),
+    ],
+)
+def test_agent_gate_configuration_management_supports_ansible_role_content(
+    relative: str,
+    artifact_type: str,
+    total_changes: int,
+    dangerous: int,
+    review: int,
+) -> None:
+    path = (
+        FIXTURES
+        / "ansible_role_content_risky"
+        / "roles"
+        / "application"
+        / Path(relative)
+    )
+    result = agent_gate_configuration_management(str(path), "ansible", "soc2")
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "ansible"
+    assert result["artifact_type"] == artifact_type
+    assert result["total_changes"] == total_changes
+    assert result["risk_counts"]["dangerous"] == dangerous
+    assert result["risk_counts"]["review"] == review
+    assert result["decision"] == "block"
+    assert "fixture-task-token-do-not-leak" not in encoded
+    assert "fixture-handler-name-do-not-leak" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
 def test_agent_gate_configuration_management_supports_execution_environments() -> None:
     result = agent_gate_configuration_management(
         str(FIXTURES / "ansible_execution_environment" / "execution-environment.yml"),
@@ -2705,6 +2740,57 @@ def test_stdio_server_tools_list() -> None:
         assert ansible_lint_summary["artifact_type"] == "ansible_lint"
         assert ansible_lint_summary["total_changes"] == 12
         assert "fixture-lint-password-do-not-leak" not in ansible_lint_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Ansible role content) ---
+        ansible_role_cases = (
+            (91, "tasks/main.yml", "task_file", 11, 7, 4, 11, 0),
+            (92, "handlers/main.yml", "handler_file", 5, 2, 3, 0, 4),
+        )
+        for (
+            request_id,
+            relative,
+            artifact_type,
+            total_changes,
+            dangerous,
+            review,
+            task_count,
+            handler_count,
+        ) in ansible_role_cases:
+            role_req = {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_gate_configuration_management",
+                    "arguments": {
+                        "input_path": str(
+                            (
+                                FIXTURES
+                                / "ansible_role_content_risky"
+                                / "roles"
+                                / "application"
+                                / Path(relative)
+                            ).resolve()
+                        ),
+                        "ecosystem": "ansible",
+                        "framework": "soc2",
+                    },
+                },
+            }
+            role_resp = _send_jsonrpc(proc, role_req)
+            assert "result" in role_resp, f"Ansible role tools/call failed: {role_resp}"
+            role_content = role_resp["result"]["content"]
+            assert len(role_content) == 1
+            role_summary = json.loads(role_content[0]["text"])
+            assert role_summary["adapter"] == "ansible"
+            assert role_summary["artifact_type"] == artifact_type
+            assert role_summary["total_changes"] == total_changes
+            assert role_summary["risk_counts"]["dangerous"] == dangerous
+            assert role_summary["risk_counts"]["review"] == review
+            assert role_summary["task_count"] == task_count
+            assert role_summary["handler_count"] == handler_count
+            assert "fixture-task-token-do-not-leak" not in role_content[0]["text"]
+            assert "fixture-handler-name-do-not-leak" not in role_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Puppet Server auth) ---
         puppet_server_req = {

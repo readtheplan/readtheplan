@@ -323,7 +323,7 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     ansible = subparsers.add_parser(
         "ansible",
-        help="Emit the agent-gate decision for an Ansible playbook.",
+        help="Analyze an Ansible playbook, reusable task file, or role handler file.",
     )
     ansible.add_argument(
         "--framework",
@@ -332,7 +332,10 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
             f"Currently available: {_framework_help_list()}."
         ),
     )
-    ansible.add_argument("input_file", help="Path to an Ansible playbook YAML file.")
+    ansible.add_argument(
+        "input_file",
+        help="Path to an Ansible playbook, role task file, or role handler YAML file.",
+    )
     ansible.set_defaults(func=_ansible_gate)
 
     ansible_project = subparsers.add_parser(
@@ -1549,28 +1552,26 @@ def _bicep_gate(args: argparse.Namespace) -> int:
 
 
 def _ansible_gate(args: argparse.Namespace) -> int:
-    """Emit the agent-gate contract for an Ansible playbook."""
-    import yaml
-
-    from readtheplan.adapters import detect_adapter
-    from readtheplan.adapters.ansible import analyze_ansible
+    """Emit the agent-gate contract for Ansible playbook and role task content."""
+    from readtheplan.adapters.ansible import (
+        AnsibleAdapter,
+        AnsibleInputError,
+        analyze_ansible,
+        parse_ansible,
+    )
 
     try:
-        documents = list(yaml.safe_load_all(Path(args.input_file).read_text(encoding="utf-8")))
-    except (OSError, yaml.YAMLError) as exc:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
-
-    plays: list[object] = []
-    for document in documents:
-        if isinstance(document, list):
-            plays.extend(document)
-        elif isinstance(document, dict):
-            plays.append(document)
-    data = {"plays": plays}
-    adapter = detect_adapter(data)
-    if adapter is None or adapter.adapter_name != "ansible":
-        print("Error: input not recognized as an Ansible playbook", file=sys.stderr)
+    try:
+        data = parse_ansible(source, filename=args.input_file)
+    except AnsibleInputError as exc:
+        print(f"Error: invalid Ansible input: {exc}", file=sys.stderr)
+        return 1
+    if not AnsibleAdapter().can_handle(data):
+        print("Error: input not recognized as Ansible automation content", file=sys.stderr)
         return 1
 
     catalog = _adapter_catalog(args.framework)

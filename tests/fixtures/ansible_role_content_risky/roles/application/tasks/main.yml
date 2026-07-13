@@ -1,0 +1,52 @@
+---
+- name: run deployment shell with a secret
+  ansible.builtin.shell:
+    cmd: ./deploy.sh
+    api_token: fixture-task-token-do-not-leak
+  become: true
+
+- name: load platform tasks dynamically
+  ansible.builtin.include_tasks: "{{ ansible_os_family | lower }}.yml"
+  when: deploy_enabled | bool
+  notify: fixture-handler-topic-do-not-leak
+
+- name: import a privileged role
+  ansible.builtin.import_role:
+    name: organization.privileged
+
+- name: download an unverified installer
+  ansible.builtin.get_url:
+    url: https://downloads.example.invalid/install.sh
+    dest: /tmp/install.sh
+    validate_certs: false
+
+- name: expose a deployment credential
+  ansible.builtin.debug:
+    msg: deployment started
+  environment:
+    DEPLOY_TOKEN: fixture-environment-token-do-not-leak
+
+- name: recover from a migration failure
+  block:
+    - name: force migration in check mode
+      ansible.builtin.command: /srv/application/migrate
+      check_mode: false
+      ignore_errors: true
+  rescue:
+    - name: restart the application
+      ansible.builtin.systemd:
+        name: application
+        state: restarted
+  always:
+    - name: record a dynamic result
+      ansible.builtin.set_fact:
+        deploy_result: "{{ migration_result | default('unknown') }}"
+
+- name: run on the controller
+  local_action: ansible.builtin.shell ./publish.sh
+  run_once: true
+
+- name: remove the previous release
+  ansible.builtin.file:
+    path: /srv/application/previous
+    state: absent
