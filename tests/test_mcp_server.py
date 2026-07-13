@@ -634,13 +634,7 @@ def test_agent_gate_configuration_management_supports_ansible_role_content(
     dangerous: int,
     review: int,
 ) -> None:
-    path = (
-        FIXTURES
-        / "ansible_role_content_risky"
-        / "roles"
-        / "application"
-        / Path(relative)
-    )
+    path = FIXTURES / "ansible_role_content_risky" / "roles" / "application" / Path(relative)
     result = agent_gate_configuration_management(str(path), "ansible", "soc2")
     encoded = json.dumps(result)
 
@@ -937,6 +931,27 @@ def test_agent_gate_configuration_management_supports_chef_runtime_config() -> N
     assert result["total_changes"] == 18
     assert "fixture-chef" not in encoded
     assert "example.invalid" not in encoded
+    assert "rtp.control.soc2.CC8.1" in result["required_checks"]
+
+
+def test_agent_gate_configuration_management_supports_chef_custom_resources() -> None:
+    result = agent_gate_configuration_management(
+        str(FIXTURES / "chef_cookbook_risky" / "resources" / "application.rb"),
+        "chef",
+        "soc2",
+    )
+    encoded = json.dumps(result)
+
+    assert result["adapter"] == "chef"
+    assert result["artifact_type"] == "custom_resource"
+    assert result["resource_count"] == 1
+    assert result["action_count"] == 1
+    assert result["property_count"] == 2
+    assert result["dynamic_count"] == 2
+    assert result["decision"] == "block"
+    assert result["total_changes"] == 7
+    assert "fixturectl" not in encoded
+    assert "api_token" not in encoded
     assert "rtp.control.soc2.CC8.1" in result["required_checks"]
 
 
@@ -2652,6 +2667,39 @@ def test_stdio_server_tools_list() -> None:
         assert chef_runtime_summary["total_changes"] == 18
         assert "fixture-chef" not in chef_runtime_content[0]["text"]
         assert "example.invalid" not in chef_runtime_content[0]["text"]
+
+        # --- tools/call: agent_gate_configuration_management (Chef custom resource) ---
+        chef_content_req = {
+            "jsonrpc": "2.0",
+            "id": 72,
+            "method": "tools/call",
+            "params": {
+                "name": "agent_gate_configuration_management",
+                "arguments": {
+                    "input_path": str(
+                        (
+                            FIXTURES / "chef_cookbook_risky" / "resources" / "application.rb"
+                        ).resolve()
+                    ),
+                    "ecosystem": "chef",
+                    "framework": "soc2",
+                },
+            },
+        }
+        chef_content_resp = _send_jsonrpc(proc, chef_content_req)
+        assert "result" in chef_content_resp, f"Chef content tools/call failed: {chef_content_resp}"
+        chef_content = chef_content_resp["result"]["content"]
+        assert len(chef_content) == 1
+        chef_content_summary = json.loads(chef_content[0]["text"])
+        assert chef_content_summary["adapter"] == "chef"
+        assert chef_content_summary["artifact_type"] == "custom_resource"
+        assert chef_content_summary["resource_count"] == 1
+        assert chef_content_summary["action_count"] == 1
+        assert chef_content_summary["property_count"] == 2
+        assert chef_content_summary["dynamic_count"] == 2
+        assert chef_content_summary["total_changes"] == 7
+        assert "fixturectl" not in chef_content[0]["text"]
+        assert "api_token" not in chef_content[0]["text"]
 
         # --- tools/call: agent_gate_configuration_management (Chef InSpec) ---
         inspec_req = {

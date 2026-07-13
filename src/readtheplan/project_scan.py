@@ -445,6 +445,8 @@ def identify_project_input(
         len(parts) == 1 or any(part in {"chef", "cookbooks"} for part in parts[:-1])
     ):
         return "chef-project"
+    if _chef_cookbook_content_context(path, parts, suffix):
+        return "chef"
     if suffix == ".rb" and "recipes" in parts:
         return "chef"
     if name in {
@@ -710,6 +712,41 @@ def _ansible_role_content_context(path: Path, parts: tuple[str, ...]) -> bool:
     return False
 
 
+def _chef_cookbook_content_context(
+    path: Path,
+    parts: tuple[str, ...],
+    suffix: str,
+) -> bool:
+    """Recognize executable content in high-confidence Chef cookbook layouts."""
+    directories = {
+        "attributes",
+        "definitions",
+        "libraries",
+        "providers",
+        "recipes",
+        "resources",
+        "templates",
+    }
+    for index, part in enumerate(parts[:-1]):
+        if part not in directories:
+            continue
+        if part == "templates":
+            if suffix not in {".erb", ".rb"}:
+                continue
+        elif suffix != ".rb":
+            continue
+        if "cookbooks" in parts[:index]:
+            return True
+        for ancestor in path.parents:
+            if ancestor.name.casefold() != part:
+                continue
+            cookbook_root = ancestor.parent
+            if (cookbook_root / "metadata.rb").is_file():
+                return True
+            break
+    return False
+
+
 def _identify_from_content_bytes(raw: bytes, suffix: str) -> str | None:
     try:
         text = raw.decode("utf-8")
@@ -908,6 +945,8 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         "line_count",
         "command_count",
         "dynamic_count",
+        "resource_count",
+        "property_count",
         "variable_count",
         "callback_count",
         "template_count",

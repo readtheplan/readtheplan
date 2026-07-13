@@ -404,10 +404,16 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     chef = subparsers.add_parser(
         "chef",
-        help="Emit the agent-gate decision for a Chef recipe.",
+        help="Emit the agent-gate decision for Chef recipe and cookbook content.",
     )
     chef.add_argument("--framework", help="Include checks from a compliance framework.")
-    chef.add_argument("input_file", help="Path to a Chef recipe (.rb).")
+    chef.add_argument(
+        "input_file",
+        help=(
+            "Path to a Chef recipe, attribute file, custom resource, library, provider, "
+            "definition, or ERB template."
+        ),
+    )
     chef.set_defaults(func=_chef_gate)
 
     chef_project = subparsers.add_parser(
@@ -533,9 +539,7 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
         "woodpecker-ci",
         help="Emit the agent-gate decision for a Woodpecker CI workflow.",
     )
-    woodpecker_ci.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    woodpecker_ci.add_argument("--framework", help="Include checks from a compliance framework.")
     woodpecker_ci.add_argument("input_file", help="Path to a Woodpecker workflow YAML file.")
     woodpecker_ci.set_defaults(func=_pipeline_gate)
 
@@ -890,9 +894,7 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
         "terraform-stack",
         help="Emit the agent-gate decision for Terraform Stack component or deployment HCL.",
     )
-    terraform_stack.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    terraform_stack.add_argument("--framework", help="Include checks from a compliance framework.")
     terraform_stack.add_argument(
         "input_file", help="Path to a .tfcomponent.hcl or .tfdeploy.hcl file."
     )
@@ -1010,9 +1012,7 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
         "docker-bake",
         help="Emit the agent-gate decision for a Docker Buildx Bake definition.",
     )
-    docker_bake.add_argument(
-        "--framework", help="Include checks from a compliance framework."
-    )
+    docker_bake.add_argument("--framework", help="Include checks from a compliance framework.")
     docker_bake.add_argument(
         "input_file",
         help="Path to docker-bake.hcl, docker-bake.json, or a Compose build file.",
@@ -1774,24 +1774,35 @@ def _jenkins_project_gate(args: argparse.Namespace) -> int:
 
 
 def _chef_gate(args: argparse.Namespace) -> int:
-    """Emit the agent-gate contract for a Chef recipe."""
-    from readtheplan.adapters import detect_adapter
-    from readtheplan.adapters.chef import analyze_chef
+    """Emit the agent-gate contract for Chef recipe and cookbook content."""
+    from readtheplan.adapters.chef import (
+        ChefAdapter,
+        ChefInputError,
+        analyze_chef,
+        parse_chef,
+    )
 
     try:
         source = Path(args.input_file).read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
-    data = {"chef_recipe": source}
-    adapter = detect_adapter(data)
-    if adapter is None or adapter.adapter_name != "chef":
-        print("Error: input not recognized as a Chef recipe", file=sys.stderr)
+    try:
+        data = parse_chef(source, filename=args.input_file)
+    except ChefInputError as exc:
+        print(f"Error: invalid Chef cookbook input: {exc}", file=sys.stderr)
+        return 1
+    if not ChefAdapter().can_handle(data):
+        print("Error: input not recognized as Chef cookbook content", file=sys.stderr)
         return 1
     catalog = _adapter_catalog(args.framework)
     if args.framework and catalog is None:
         return 1
-    return _write_adapter_gate(analyze_chef(data, catalog=catalog))
+    try:
+        return _write_adapter_gate(analyze_chef(data, catalog=catalog))
+    except ChefInputError as exc:
+        print(f"Error: invalid Chef cookbook input: {exc}", file=sys.stderr)
+        return 1
 
 
 def _chef_project_gate(args: argparse.Namespace) -> int:

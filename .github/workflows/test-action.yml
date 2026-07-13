@@ -1426,6 +1426,41 @@ jobs:
           assert "no checksum" in payload["pr_comment"]
           PY
 
+      - name: Run action on Chef custom resource
+        id: chef_custom_resource
+        uses: ./
+        with:
+          tool: chef
+          input-file: tests/fixtures/chef_cookbook_risky/resources/application.rb
+          framework: soc2
+
+      - name: Assert Chef custom resource outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.chef_custom_resource.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.chef_custom_resource.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.chef_custom_resource.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "7"
+          test "$RISK_COUNTS" = '{"dangerous":3,"irreversible":0,"review":4,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "chef"
+          assert payload["artifact_type"] == "custom_resource"
+          assert payload["resource_count"] == 1
+          assert payload["action_count"] == 1
+          assert payload["property_count"] == 2
+          assert payload["dynamic_count"] == 2
+          assert payload["decision"] == "block"
+          assert "fixturectl" not in serialized
+          assert "api_token" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef project configuration
         id: chef_project
         uses: ./

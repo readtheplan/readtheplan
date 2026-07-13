@@ -52,6 +52,12 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("plugins.txt", "jenkins-project"),
         ("jenkins/plugins.yaml", "jenkins-project"),
         ("cookbooks/base/recipes/default.rb", "chef"),
+        ("cookbooks/base/resources/application.rb", "chef"),
+        ("cookbooks/base/attributes/default.rb", "chef"),
+        ("cookbooks/base/libraries/helpers.rb", "chef"),
+        ("cookbooks/base/providers/legacy.rb", "chef"),
+        ("cookbooks/base/definitions/legacy.rb", "chef"),
+        ("cookbooks/base/templates/default/application.erb", "chef"),
         ("client.rb", "chef-project"),
         (".chef/config.rb", "chef-project"),
         ("chef/chef-server.rb", "chef-project"),
@@ -898,6 +904,33 @@ def test_project_scan_analyzes_chef_runtime_configuration(tmp_path: Path) -> Non
     encoded = json.dumps(payload)
     assert "fixture-chef" not in encoded
     assert "example.invalid" not in encoded
+
+
+def test_project_scan_analyzes_chef_cookbook_content() -> None:
+    payload = scan_project(FIXTURES / "chef_cookbook_risky", display_root=".")
+
+    assert payload["discovered_file_count"] == 5
+    assert payload["scanned_file_count"] == 5
+    assert payload["error_count"] == 0
+    assert {item["tool"] for item in payload["files"]} == {"chef", "chef-project"}
+    assert {item["artifact_type"] for item in payload["files"]} == {
+        "attribute_file",
+        "custom_resource",
+        "library",
+        "metadata",
+        "template",
+    }
+    resource = next(item for item in payload["files"] if item["artifact_type"] == "custom_resource")
+    assert resource["resource_count"] == 1
+    assert resource["action_count"] == 1
+    assert resource["property_count"] == 2
+    assert resource["dynamic_count"] == 2
+    assert payload["total_changes"] == 24
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-secret-value" not in encoded
+    assert "fixturectl" not in encoded
+    assert "api_token" not in encoded
 
 
 def test_project_scan_analyzes_test_kitchen_configuration(tmp_path: Path) -> None:

@@ -308,8 +308,10 @@ def _check_project_scan_arguments(
             code="INVALID_INPUT",
             message="excludes must be a list of non-empty repository-relative globs",
         )
-    if isinstance(max_files, bool) or not isinstance(max_files, int) or not (
-        1 <= max_files <= _MCP_PROJECT_SCAN_MAX_FILES
+    if (
+        isinstance(max_files, bool)
+        or not isinstance(max_files, int)
+        or not (1 <= max_files <= _MCP_PROJECT_SCAN_MAX_FILES)
     ):
         raise MCPToolInputError(
             code="INVALID_INPUT",
@@ -322,10 +324,7 @@ def _check_project_scan_arguments(
     ):
         raise MCPToolInputError(
             code="INVALID_INPUT",
-            message=(
-                "max_file_bytes must be between 1 and "
-                f"{_MCP_PROJECT_SCAN_MAX_FILE_BYTES}"
-            ),
+            message=(f"max_file_bytes must be between 1 and {_MCP_PROJECT_SCAN_MAX_FILE_BYTES}"),
         )
 
 
@@ -2463,7 +2462,12 @@ def agent_gate_configuration_management(
         analyze_cfengine,
         parse_cfengine,
     )
-    from readtheplan.adapters.chef import ChefAdapter, analyze_chef
+    from readtheplan.adapters.chef import (
+        ChefAdapter,
+        ChefInputError,
+        analyze_chef,
+        parse_chef,
+    )
     from readtheplan.adapters.chef_project import (
         ChefProjectAdapter,
         ChefProjectInputError,
@@ -2644,11 +2648,20 @@ def agent_gate_configuration_management(
             ) from exc
         adapter = JenkinsProjectAdapter()
         analyze = analyze_jenkins_project
+    elif ecosystem == "chef":
+        try:
+            data = parse_chef(source, filename=input_path)
+        except ChefInputError as exc:
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"Invalid Chef cookbook input {input_path}: {exc}",
+            ) from exc
+        adapter = ChefAdapter()
+        analyze = analyze_chef
     else:
         key, adapter, analyze = {
             "jenkins": ("jenkinsfile", JenkinsAdapter(), analyze_jenkins),
             "teamcity": ("teamcity", TeamCityAdapter(), analyze_teamcity),
-            "chef": ("chef_recipe", ChefAdapter(), analyze_chef),
             "puppet": ("puppet_manifest", PuppetAdapter(), analyze_puppet),
         }[ecosystem]
         data = {key: source}
@@ -2658,7 +2671,13 @@ def agent_gate_configuration_management(
             message=f"Input is not recognized as {ecosystem} source",
         )
     catalog = _load_catalog_for_tool(framework)
-    return analyze(data, catalog=catalog)
+    try:
+        return analyze(data, catalog=catalog)
+    except ChefInputError as exc:
+        raise MCPToolInputError(
+            code="INVALID_INPUT",
+            message=f"Invalid Chef cookbook input {input_path}: {exc}",
+        ) from exc
 
 
 def _load_catalog_for_tool(framework: str | None) -> ControlCatalog | None:
