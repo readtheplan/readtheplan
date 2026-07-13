@@ -1496,6 +1496,37 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Puppet Server authorization policy
+        id: puppet_server_auth
+        uses: ./
+        with:
+          tool: puppet-project
+          input-file: tests/fixtures/puppet_server_policy_risky/auth.conf
+          framework: soc2
+
+      - name: Assert Puppet Server authorization outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.puppet_server_auth.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.puppet_server_auth.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.puppet_server_auth.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "10"
+          test "$RISK_COUNTS" = '{"dangerous":8,"irreversible":0,"review":2,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "puppet-project"
+          assert payload["artifact_type"] == "server_auth"
+          assert payload["rule_count"] == 3
+          assert payload["decision"] == "block"
+          assert "HOCON" in payload["pr_comment"]
+          assert "fixture-admin-rule-do-not-leak" not in json.dumps(payload)
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Puppet Bolt inventory
         id: puppet_bolt_inventory
         uses: ./

@@ -96,6 +96,7 @@ def test_puppet_fixture_surfaces_modules_dynamic_data_and_cross_node_resources()
         ("chef-project", "chef_runtime/client.rb"),
         ("puppet", "puppet_config_management_risky.pp"),
         ("puppet-project", "Puppetfile.project-risky"),
+        ("puppet-project", "puppet_server_policy_risky/auth.conf"),
     ],
 )
 def test_configuration_management_mcp_gate_supports_all_ecosystems(

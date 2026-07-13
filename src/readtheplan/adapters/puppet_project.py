@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from readtheplan.adapters._puppet_hocon import PuppetHoconError, parse_puppet_hocon
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.agent_gate import agent_gate_to_dict
 from readtheplan.plan import PlanSummary, ResourceChange
@@ -173,6 +174,14 @@ _R10K_DEPLOY_KEYS = {
 }
 _R10K_LOGGING_KEYS = {"disable_default_stderr", "level", "outputs"}
 _R10K_DYNAMIC = re.compile(r"(?:\$\{|%\{|\{\{|<%|\$[A-Za-z_])")
+_PUPPET_SERVER_HOCON_FILES = {
+    "auth.conf": "server_auth",
+    "ca.conf": "server_ca",
+    "puppetserver.conf": "server_runtime",
+    "web-routes.conf": "server_routes",
+    "webserver.conf": "server_web",
+}
+_ENVIRONMENT_SETTINGS = {"config_version", "environment_timeout", "manifest", "modulepath"}
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -789,6 +798,63 @@ def _parse_puppet_conf(source: str) -> dict[str, Any]:
     return {"artifact_type": "config", "document": {"sections": sections}}
 
 
+def _parse_environment_conf(source: str) -> dict[str, Any]:
+    settings: dict[str, dict[str, Any]] = {}
+    for line_number, original in enumerate(source.splitlines(), start=1):
+        cleaned = _strip_comment(original)
+        line = cleaned.strip()
+        if not line:
+            continue
+        if line.startswith("["):
+            raise PuppetProjectInputError("environment.conf must not contain config sections")
+        match = _PUPPET_CONFIG_SETTING.fullmatch(cleaned)
+        if match is None:
+            raise PuppetProjectInputError(
+                f"invalid environment.conf setting on line {line_number}"
+            )
+        name = match.group("name").casefold()
+        if name not in _ENVIRONMENT_SETTINGS:
+            raise PuppetProjectInputError(
+                f"unsupported environment.conf setting on line {line_number}"
+            )
+        if name in settings:
+            raise PuppetProjectInputError(
+                f"duplicate environment.conf setting on line {line_number}"
+            )
+        value = match.group("value").strip()
+        if not value:
+            raise PuppetProjectInputError(
+                f"empty environment.conf setting on line {line_number}"
+            )
+        settings[name] = {"value": value, "line": line_number}
+    if not settings:
+        raise PuppetProjectInputError("environment.conf does not contain settings")
+    return {"artifact_type": "environment", "document": {"settings": settings}}
+
+
+def _parse_puppetdb_conf(source: str) -> dict[str, Any]:
+    parsed = _parse_puppet_conf(source)
+    sections = parsed["document"]["sections"]
+    if set(sections) != {"main"}:
+        raise PuppetProjectInputError("puppetdb.conf must contain only a main section")
+    return {"artifact_type": "puppetdb", "document": parsed["document"]}
+
+
+def _parse_puppet_server_hocon(source: str, artifact_type: str) -> dict[str, Any]:
+    try:
+        parsed = parse_puppet_hocon(source)
+    except PuppetHoconError as exc:
+        raise PuppetProjectInputError(str(exc)) from exc
+    return {
+        "artifact_type": artifact_type,
+        "document": {
+            "config": parsed.values,
+            "include_count": parsed.include_count,
+            "substitution_count": parsed.substitution_count,
+        },
+    }
+
+
 def _validate_hiera(document: dict[str, Any]) -> None:
     unknown = set(document) - {"version", "defaults", "hierarchy", "default_hierarchy"}
     if unknown:
@@ -836,12 +902,18 @@ def _validate_hiera_functions(values: dict[str, Any], address: str) -> None:
 
 
 def parse_puppet_project(source: str, *, filename: str = "") -> dict[str, Any]:
-    """Parse Puppet, Hiera, Bolt, or r10k configuration without executing code."""
+    """Parse Puppet, Hiera, Puppet Server, PuppetDB, Bolt, or r10k configuration."""
     if not source.strip():
         raise PuppetProjectInputError("input is empty")
     basename = Path(filename).name.casefold()
     if basename in {"r10k.yaml", "r10k.yml"}:
         parsed = _parse_r10k_yaml(source)
+    elif basename == "environment.conf":
+        parsed = _parse_environment_conf(source)
+    elif basename == "puppetdb.conf":
+        parsed = _parse_puppetdb_conf(source)
+    elif basename in _PUPPET_SERVER_HOCON_FILES:
+        parsed = _parse_puppet_server_hocon(source, _PUPPET_SERVER_HOCON_FILES[basename])
     elif basename == "bolt-project.yaml":
         parsed = _parse_bolt_yaml(source, "bolt_project")
     elif basename in {"inventory.yaml", "inventory.yml"}:
@@ -2753,6 +2825,642 @@ def _r10k_changes(document: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def _setting_value(document: dict[str, Any], name: str) -> str:
+    setting = document.get("settings", {}).get(name, {})
+    return str(setting.get("value", "")).strip() if isinstance(setting, dict) else ""
+
+
+def _environment_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    modulepath = _setting_value(document, "modulepath")
+    if modulepath:
+        paths = [item.strip() for item in re.split(r"[:;]", modulepath) if item.strip()]
+        external = sum(
+            1
+            for item in paths
+            if _path_escapes(item) and not item.startswith(("$codedir", "$basemodulepath"))
+        )
+        changes.append(
+            _change(
+                "environment.modulepath",
+                "environment_module_path",
+                "dangerous" if external else "review",
+                f"The environment loads executable Puppet modules from {len(paths)} path entry or "
+                "entries; "
+                + (
+                    f"{external} entry or entries escape the environment or standard interpolated "
+                    "code roots."
+                    if external
+                    else "review path precedence and deployed module ownership."
+                ),
+            )
+        )
+    manifest = _setting_value(document, "manifest")
+    if manifest:
+        external = _path_escapes(manifest) and not manifest.startswith("$codedir")
+        changes.append(
+            _change(
+                "environment.manifest",
+                "environment_manifest",
+                "dangerous" if external else "review",
+                "The environment overrides its main manifest with content outside the environment "
+                "directory."
+                if external
+                else "The environment overrides its main manifest; verify the selected Puppet "
+                "code and alphabetical directory evaluation order.",
+            )
+        )
+    config_version = _setting_value(document, "config_version")
+    if config_version:
+        changes.append(
+            _change(
+                "environment.config_version",
+                "environment_config_version_command",
+                "dangerous",
+                "Puppet Server executes the environment's config-version command during catalog "
+                "compilation; verify the executable, arguments, ownership, and output handling.",
+            )
+        )
+    timeout = _setting_value(document, "environment_timeout").casefold()
+    if timeout:
+        supported = timeout in {"0", "unlimited"} or bool(
+            re.fullmatch(r"\d+(?:\.\d+)?(?:ms|s|m|h|d|y)?", timeout)
+        )
+        if not supported:
+            changes.append(
+                _change(
+                    "environment.environment_timeout",
+                    "environment_cache_timeout",
+                    "dangerous",
+                    "The environment cache timeout is not a static Puppet duration, zero, or "
+                    "unlimited value.",
+                )
+            )
+        elif timeout == "unlimited":
+            changes.append(
+                _change(
+                    "environment.environment_timeout",
+                    "environment_cache_refresh",
+                    "review",
+                    "The environment remains cached until an explicit refresh or server restart; "
+                    "the deployment workflow must invalidate the cache after code changes.",
+                )
+            )
+        elif timeout == "0":
+            changes.append(
+                _change(
+                    "environment.environment_timeout",
+                    "environment_cache_disabled",
+                    "review",
+                    "Environment caching is disabled, reducing stale-code risk but increasing "
+                    "catalog compilation and module-loading pressure.",
+                )
+            )
+    return changes
+
+
+def _puppetdb_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    settings = document.get("sections", {}).get("main", {})
+    changes: list[dict[str, str]] = []
+
+    def value(name: str) -> str:
+        entry = settings.get(name, {})
+        return str(entry.get("value", "")).strip() if isinstance(entry, dict) else ""
+
+    endpoints: list[str] = []
+    for key in ("server_urls", "submit_only_server_urls"):
+        raw = value(key)
+        if not raw:
+            continue
+        urls = [item.strip() for item in raw.split(",") if item.strip()]
+        endpoints.extend(urls)
+        insecure = sum(1 for item in urls if not item.casefold().startswith("https://"))
+        credentials = sum(1 for item in urls if _embedded_credential(item))
+        changes.append(
+            _change(
+                f"puppetdb.{key}",
+                "puppetdb_endpoint",
+                "dangerous" if insecure or credentials else "review",
+                f"Puppet Server sends catalog, fact, report, or query data to {len(urls)} PuppetDB "
+                "endpoint(s); "
+                + (
+                    f"{insecure} endpoint(s) are not HTTPS and {credentials} embed credentials."
+                    if insecure or credentials
+                    else "review certificate trust, data scope, failover order, and ownership."
+                ),
+            )
+        )
+    if not endpoints:
+        changes.append(
+            _change(
+                "puppetdb.server_urls",
+                "puppetdb_endpoint_boundary",
+                "review",
+                "PuppetDB endpoints are selected by defaults or another configuration layer; "
+                "verify the effective HTTPS destinations and certificate trust.",
+            )
+        )
+    if value("soft_write_failure").casefold() in {"true", "yes", "1"}:
+        changes.append(
+            _change(
+                "puppetdb.soft_write_failure",
+                "puppetdb_fail_open",
+                "dangerous",
+                "Puppet Server continues compiling and serving catalogs when PuppetDB command "
+                "submission fails, allowing catalog/report/fact persistence to diverge.",
+            )
+        )
+    if value("command_broadcast").casefold() in {"true", "yes", "1"}:
+        changes.append(
+            _change(
+                "puppetdb.command_broadcast",
+                "puppetdb_command_broadcast",
+                "review",
+                "PuppetDB commands are broadcast to multiple servers; verify every destination's "
+                "trust, retention, capacity, and consistency policy.",
+            )
+        )
+    minimum = value("min_successful_submissions")
+    if minimum:
+        try:
+            minimum_count = int(minimum)
+        except ValueError:
+            minimum_count = 0
+        if minimum_count < 1 or (len(endpoints) > 1 and minimum_count < len(endpoints)):
+            changes.append(
+                _change(
+                    "puppetdb.min_successful_submissions",
+                    "puppetdb_submission_quorum",
+                    "dangerous",
+                    "The successful-submission threshold is invalid or lower than the configured "
+                    "PuppetDB destination count, permitting partial persistence.",
+                )
+            )
+    timeout = value("server_url_timeout")
+    if timeout:
+        try:
+            timeout_value = float(timeout)
+        except ValueError:
+            timeout_value = -1
+        if timeout_value <= 0:
+            changes.append(
+                _change(
+                    "puppetdb.server_url_timeout",
+                    "puppetdb_timeout",
+                    "dangerous",
+                    "The PuppetDB request timeout is non-positive or dynamic, which can break "
+                    "failure detection and endpoint failover.",
+                )
+            )
+    return changes
+
+
+def _server_config(document: dict[str, Any], section: str) -> dict[str, Any]:
+    config = document.get("config", {})
+    if not isinstance(config, dict):
+        return {}
+    selected = config.get(section, config)
+    return selected if isinstance(selected, dict) else {}
+
+
+def _hocon_boundary_changes(document: dict[str, Any], label: str) -> list[dict[str, str]]:
+    changes: list[dict[str, str]] = []
+    includes = int(document.get("include_count", 0))
+    substitutions = int(document.get("substitution_count", 0))
+    if includes:
+        changes.append(
+            _change(
+                f"{label}.includes",
+                "server_hocon_include",
+                "dangerous",
+                f"The Puppet Server configuration imports {includes} external HOCON source(s); "
+                "their effective policy is not present in this artifact.",
+            )
+        )
+    if substitutions:
+        changes.append(
+            _change(
+                f"{label}.substitutions",
+                "server_hocon_substitution",
+                "review",
+                f"The Puppet Server configuration resolves {substitutions} HOCON substitution(s) "
+                "from environment or merged configuration at startup.",
+            )
+        )
+    return changes
+
+
+def _contains_wildcard(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip() == "*" or value.startswith("/.*")
+    if isinstance(value, list):
+        return any(_contains_wildcard(item) for item in value)
+    if isinstance(value, dict):
+        return any(_contains_wildcard(item) for item in value.values())
+    return False
+
+
+def _server_auth_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    auth = _server_config(document, "authorization")
+    changes = _hocon_boundary_changes(document, "server_auth")
+    if auth.get("version") != 1:
+        changes.append(
+            _change(
+                "server_auth.version",
+                "server_auth_version",
+                "dangerous",
+                "Puppet Server authorization must declare static HOCON policy version 1.",
+            )
+        )
+    if auth.get("allow-header-cert-info") is True:
+        changes.append(
+            _change(
+                "server_auth.allow_header_cert_info",
+                "server_header_identity",
+                "dangerous",
+                "Puppet Server ignores presented client certificates and trusts X-Client headers "
+                "for identity; network and proxy spoofing controls become security-critical.",
+            )
+        )
+    rules = auth.get("rules")
+    if not isinstance(rules, list):
+        changes.append(
+            _change(
+                "server_auth.rules",
+                "server_auth_rules",
+                "dangerous",
+                "Puppet Server authorization does not declare a static rules array.",
+            )
+        )
+        return changes
+    for index, rule in enumerate(rules, start=1):
+        address = f"server_auth.rules.{index}"
+        if not isinstance(rule, dict):
+            changes.append(
+                _change(
+                    address,
+                    "server_auth_rule",
+                    "dangerous",
+                    "An authorization rule is not a static mapping.",
+                )
+            )
+            continue
+        match = rule.get("match-request", {})
+        if not isinstance(match, dict) or not match.get("path") or not match.get("type"):
+            changes.append(
+                _change(
+                    f"{address}.match",
+                    "server_auth_match",
+                    "dangerous",
+                    "An authorization rule lacks a static request path or match type.",
+                )
+            )
+            match = {}
+        path = str(match.get("path", ""))
+        broad_path = path in {"/", ".*", "^/.*", "^/.*$"} or path.startswith(".*")
+        methods = match.get("method")
+        method_values = methods if isinstance(methods, list) else [methods] if methods else []
+        mutating = any(
+            str(method).casefold() in {"delete", "post", "put"} for method in method_values
+        )
+        if rule.get("allow-unauthenticated") is True:
+            changes.append(
+                _change(
+                    f"{address}.unauthenticated",
+                    "server_unauthenticated_access",
+                    "dangerous",
+                    "An authorization rule permits unauthenticated requests to a Puppet Server "
+                    "API surface.",
+                )
+            )
+        if _contains_wildcard(rule.get("allow")):
+            changes.append(
+                _change(
+                    f"{address}.allow",
+                    "server_wildcard_identity",
+                    "dangerous",
+                    "An authorization rule allows a wildcard or match-all client identity.",
+                )
+            )
+        if broad_path or not method_values:
+            changes.append(
+                _change(
+                    f"{address}.scope",
+                    "server_broad_authorization",
+                    "dangerous",
+                    "An authorization rule matches a broad path or every HTTP method, expanding "
+                    "access beyond a narrowly scoped API operation.",
+                )
+            )
+        if mutating and any(marker in path for marker in ("admin", "certificate", "environment")):
+            changes.append(
+                _change(
+                    f"{address}.mutation",
+                    "server_privileged_api",
+                    "dangerous",
+                    "An authorization rule grants mutating access to an administrative, "
+                    "certificate, or environment-cache API.",
+                )
+            )
+        order = rule.get("sort-order")
+        if isinstance(order, (int, float)) and 1 <= order <= 399:
+            changes.append(
+                _change(
+                    f"{address}.sort_order",
+                    "server_auth_precedence",
+                    "dangerous",
+                    "An authorization rule is evaluated before Puppet's default rules and can "
+                    "override their effective protection.",
+                )
+            )
+        if not rule.get("name") or order is None:
+            changes.append(
+                _change(
+                    f"{address}.required",
+                    "server_auth_rule_metadata",
+                    "dangerous",
+                    "An authorization rule omits its required static name or sort order.",
+                )
+            )
+    return changes
+
+
+def _server_web_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    web = _server_config(document, "webserver")
+    changes = _hocon_boundary_changes(document, "server_web")
+    client_auth = str(web.get("client-auth", "")).casefold()
+    if client_auth and client_auth != "need":
+        changes.append(
+            _change(
+                "server_web.client_auth",
+                "server_client_authentication",
+                "dangerous",
+                "The HTTPS listener does not require a valid client certificate for every "
+                "connection.",
+            )
+        )
+    if any(key in web for key in ("host", "port")) or web.get("ssl-enabled") is False:
+        changes.append(
+            _change(
+                "server_web.plaintext",
+                "server_plaintext_listener",
+                "dangerous",
+                "Puppet Server declares a plaintext HTTP listener or disables its HTTPS listener.",
+            )
+        )
+    ssl_host = str(web.get("ssl-host", ""))
+    if ssl_host in {"0.0.0.0", "::", "*"}:
+        changes.append(
+            _change(
+                "server_web.ssl_host",
+                "server_network_exposure",
+                "review",
+                "The Puppet Server HTTPS listener binds all interfaces; verify firewall, load "
+                "balancer, and administrative API reachability.",
+            )
+        )
+    protocols = web.get("ssl-protocols", [])
+    protocol_values = protocols if isinstance(protocols, list) else [protocols]
+    if any(
+        str(item).casefold() in {"sslv3", "tlsv1", "tlsv1.0", "tlsv1.1"}
+        for item in protocol_values
+    ):
+        changes.append(
+            _change(
+                "server_web.ssl_protocols",
+                "server_legacy_tls",
+                "dangerous",
+                "The Puppet Server listener enables a legacy SSL/TLS protocol.",
+            )
+        )
+    if web.get("ssl-renegotiation-allowed") is True:
+        changes.append(
+            _change(
+                "server_web.ssl_renegotiation",
+                "server_tls_renegotiation",
+                "dangerous",
+                "The Puppet Server listener permits TLS renegotiation, increasing "
+                "denial-of-service and legacy protocol risk.",
+            )
+        )
+    custom_tls = any(key in web for key in ("ssl-cert", "ssl-key", "ssl-ca-cert"))
+    if custom_tls and not all(
+        key in web for key in ("ssl-cert", "ssl-key", "ssl-ca-cert", "ssl-crl-path")
+    ):
+        changes.append(
+            _change(
+                "server_web.tls_material",
+                "server_tls_material",
+                "dangerous",
+                "Custom TLS material is incomplete or omits a CRL path; verify certificate, key, "
+                "CA chain, revocation, ownership, and file permissions.",
+            )
+        )
+    if not web.get("access-log-config"):
+        changes.append(
+            _change(
+                "server_web.access_log",
+                "server_access_logging",
+                "review",
+                "The file does not configure HTTP access logging; verify effective request audit "
+                "coverage and sensitive-field redaction.",
+            )
+        )
+    return changes
+
+
+def _server_ca_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    ca = _server_config(document, "certificate-authority")
+    changes = _hocon_boundary_changes(document, "server_ca")
+    if ca.get("allow-subject-alt-names") is True:
+        changes.append(
+            _change(
+                "server_ca.subject_alt_names",
+                "server_ca_subject_alt_names",
+                "dangerous",
+                "The CA can sign requested subject alternative names, allowing a compromised or "
+                "misreviewed CSR to impersonate other nodes.",
+            )
+        )
+    if ca.get("allow-authorization-extensions") is True:
+        changes.append(
+            _change(
+                "server_ca.authorization_extensions",
+                "server_ca_authorization_extensions",
+                "dangerous",
+                "The CA can sign authorization extensions that may grant privileged Puppet Server "
+                "API identities.",
+            )
+        )
+    if ca.get("enable-infra-crl") is False:
+        changes.append(
+            _change(
+                "server_ca.infrastructure_crl",
+                "server_ca_revocation_scope",
+                "review",
+                "The separate infrastructure-node CRL is explicitly disabled; verify revocation "
+                "distribution and blast radius for agent and server certificates.",
+            )
+        )
+    return changes
+
+
+def _walk_mapping(value: Any) -> list[tuple[str, Any]]:
+    found: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            found.append((str(key), item))
+            found.extend(_walk_mapping(item))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(_walk_mapping(item))
+    return found
+
+
+def _server_runtime_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    runtime = _server_config(document, "jruby-puppet")
+    changes = _hocon_boundary_changes(document, "server_runtime")
+    if "compat-version" in runtime:
+        changes.append(
+            _change(
+                "server_runtime.compat_version",
+                "server_removed_setting",
+                "dangerous",
+                "The removed JRuby compatibility setting prevents supported Puppet Server "
+                "versions from starting.",
+            )
+        )
+    for key in ("ruby-load-path", "gem-home", "gem-path"):
+        if key in runtime:
+            changes.append(
+                _change(
+                    f"server_runtime.{key.replace('-', '_')}",
+                    "server_ruby_code_path",
+                    "dangerous",
+                    "Puppet Server loads Ruby or gem code from customized filesystem paths; verify "
+                    "ownership, write permissions, package provenance, and path precedence.",
+                )
+            )
+    environment = runtime.get("environment-vars", {})
+    environment_secret_count = 0
+    if isinstance(environment, dict) and environment:
+        environment_secret_count = sum(
+            1
+            for key, value in environment.items()
+            if _SECRET.search(str(key))
+            and not isinstance(value, (dict, list))
+            and value not in (None, "", "<unresolved-hocon-substitution>")
+        )
+        protected = sum(
+            1 for key in environment if str(key).upper() in {"GEM_HOME", "HOME", "PATH"}
+        )
+        changes.append(
+            _change(
+                "server_runtime.environment_vars",
+                "server_jruby_environment",
+                "dangerous" if environment_secret_count or protected else "review",
+                f"Puppet Server injects {len(environment)} environment variable(s) into JRuby; "
+                f"{environment_secret_count} contain literal secret-like values and {protected} "
+                "override protected runtime paths or homes.",
+            )
+        )
+    active = runtime.get("max-active-instances")
+    if isinstance(active, (int, float)) and active > 12:
+        changes.append(
+            _change(
+                "server_runtime.max_active_instances",
+                "server_jruby_concurrency",
+                "review",
+                "The configured JRuby concurrency exceeds twelve instances and can amplify memory, "
+                "code-cache, PuppetDB, and compile-primary pressure.",
+            )
+        )
+    if runtime.get("max-requests-per-instance") == 0:
+        changes.append(
+            _change(
+                "server_runtime.max_requests_per_instance",
+                "server_jruby_recycling",
+                "review",
+                "JRuby instances are never recycled by request count, so extension memory/state "
+                "growth persists until another lifecycle event or restart.",
+            )
+        )
+    if runtime.get("multithreaded") is True:
+        changes.append(
+            _change(
+                "server_runtime.multithreaded",
+                "server_jruby_multithreading",
+                "review",
+                "Puppet Server shares one multithreaded JRuby runtime; verify custom functions, "
+                "providers, and extensions are thread-safe.",
+            )
+        )
+    literal_secrets = max(
+        0,
+        sum(
+            1
+            for key, value in _walk_mapping(runtime)
+            if _SECRET.search(key)
+            and not isinstance(value, (dict, list))
+            and value not in (None, "", "<unresolved-hocon-substitution>")
+        )
+        - environment_secret_count,
+    )
+    if literal_secrets:
+        changes.append(
+            _change(
+                "server_runtime.literal_secrets",
+                "server_literal_secret",
+                "dangerous",
+                f"Puppet Server runtime configuration contains {literal_secrets} literal "
+                "secret-like value(s).",
+            )
+        )
+    return changes
+
+
+def _server_routes_changes(document: dict[str, Any]) -> list[dict[str, str]]:
+    routes = _server_config(document, "web-router-service")
+    changes = _hocon_boundary_changes(document, "server_routes")
+    if routes:
+        expected_routes = {
+            "certificate-authority-service": "/puppet-ca",
+            "master-service": "/puppet",
+            "metrics-service": "/metrics",
+            "puppet-admin-service": "/puppet-admin-api",
+            "status-service": "/status",
+        }
+        admin = sum(
+            1
+            for key in routes
+            if any(marker in key.casefold() for marker in ("admin", "metrics", "status", "ca."))
+        )
+        changed = 0
+        for key, value in routes.items():
+            expected = next(
+                (
+                    route
+                    for marker, route in expected_routes.items()
+                    if marker in key.casefold()
+                ),
+                None,
+            )
+            if expected is None or value != expected:
+                changed += 1
+        changes.append(
+            _change(
+                "server_routes.mounts",
+                "server_api_routes",
+                "dangerous" if changed else "review",
+                f"Puppet Server customizes {len(routes)} web application mount(s), including "
+                f"{admin} administrative, CA, metrics, or status service(s); authorization rules "
+                f"and clients must match the effective routes. {changed} mount(s) differ from "
+                "recognized defaults or target unrecognized services.",
+            )
+        )
+    return changes
+
+
 class PuppetProjectAdapter(BaseAdapter):
     @property
     def adapter_name(self) -> str:
@@ -2770,7 +3478,14 @@ class PuppetProjectAdapter(BaseAdapter):
                 "config",
                 "bolt_project",
                 "bolt_inventory",
+                "environment",
+                "puppetdb",
                 "r10k",
+                "server_auth",
+                "server_ca",
+                "server_routes",
+                "server_runtime",
+                "server_web",
             }
             and isinstance(project.get("document"), dict)
         )
@@ -2785,7 +3500,14 @@ class PuppetProjectAdapter(BaseAdapter):
             "config": _puppet_config_changes,
             "bolt_project": _bolt_project_changes,
             "bolt_inventory": _bolt_inventory_changes,
+            "environment": _environment_changes,
+            "puppetdb": _puppetdb_changes,
             "r10k": _r10k_changes,
+            "server_auth": _server_auth_changes,
+            "server_ca": _server_ca_changes,
+            "server_routes": _server_routes_changes,
+            "server_runtime": _server_runtime_changes,
+            "server_web": _server_web_changes,
         }[artifact_type](project["document"])
         if artifact_type.startswith("bolt_"):
             boundary = (
@@ -2804,6 +3526,28 @@ class PuppetProjectAdapter(BaseAdapter):
                 "server state; readtheplan does not fetch repositories or execute deployments."
             )
             address = "r10k.effective_deployment"
+        elif artifact_type.startswith("server_"):
+            boundary = (
+                "Effective Puppet Server behavior also depends on merged conf.d files, HOCON "
+                "includes and substitutions, command-line and service overrides, reverse proxy "
+                "trust, filesystem permissions, certificates and CRLs, installed Ruby/Clojure "
+                "extensions, network policy, and the live server version and state."
+            )
+            address = "puppet_server.effective_policy"
+        elif artifact_type == "environment":
+            boundary = (
+                "Effective environment behavior also depends on global Puppet settings, deployed "
+                "manifests and modules, Hiera data, path interpolation, environment-cache flushes, "
+                "filesystem ownership, and the code deployment workflow."
+            )
+            address = "puppet_environment.effective_policy"
+        elif artifact_type == "puppetdb":
+            boundary = (
+                "Effective PuppetDB behavior also depends on Puppet terminus routing, server and "
+                "client certificates, DNS, load balancers, PuppetDB retention and authorization, "
+                "command queues, endpoint health, and runtime overrides."
+            )
+            address = "puppetdb.effective_connection"
         else:
             boundary = (
                 "Effective Puppet behavior also depends on deployed module contents, transitive "
@@ -2837,5 +3581,9 @@ def analyze_puppet_project(data: dict[str, Any], *, catalog=None) -> dict[str, A
     gate["artifact_type"] = data["puppet_project"]["artifact_type"]
     if data["puppet_project"]["artifact_type"] == "r10k":
         gate["source_count"] = len(_r10k_sources(data["puppet_project"]["document"]))
+    if data["puppet_project"]["artifact_type"] == "server_auth":
+        auth = _server_config(data["puppet_project"]["document"], "authorization")
+        rules = auth.get("rules", [])
+        gate["rule_count"] = len(rules) if isinstance(rules, list) else 0
     gate["total_changes"] = len(changes)
     return gate

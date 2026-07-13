@@ -54,6 +54,13 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("manifests/site.pp", "puppet"),
         ("puppet/puppet.conf", "puppet-project"),
         ("puppet/r10k.yaml", "puppet-project"),
+        ("environments/production/environment.conf", "puppet-project"),
+        ("puppet/puppetdb.conf", "puppet-project"),
+        ("puppetserver/conf.d/puppetserver.conf", "puppet-project"),
+        ("puppetserver/conf.d/auth.conf", "puppet-project"),
+        ("puppetserver/conf.d/ca.conf", "puppet-project"),
+        ("puppetserver/conf.d/webserver.conf", "puppet-project"),
+        ("puppetserver/conf.d/web-routes.conf", "puppet-project"),
         ("bolt-project.yaml", "puppet-project"),
         ("bolt/inventory.yaml", "puppet-project"),
         ("states/web.sls", "salt"),
@@ -119,6 +126,14 @@ def test_content_detection_for_kubernetes_ansible_and_terraform(tmp_path: Path) 
     assert identify_project_input(kubernetes, kubernetes.name) == "kubernetes"
     assert identify_project_input(ansible, ansible.name) == "ansible"
     assert identify_project_input(terraform, terraform.name) == "terraform"
+
+
+def test_generic_auth_and_webserver_names_require_puppet_context() -> None:
+    assert identify_project_input(Path("auth.conf"), "auth.conf", inspect_content=False) is None
+    assert (
+        identify_project_input(Path("webserver.conf"), "webserver.conf", inspect_content=False)
+        is None
+    )
 
 
 def test_content_detection_for_ansible_static_and_plugin_inventory(tmp_path: Path) -> None:
@@ -535,6 +550,45 @@ def test_project_scan_analyzes_r10k_deployment_configuration(tmp_path: Path) -> 
     encoded = json.dumps(payload)
     assert "fixture-proxy-password" not in encoded
     assert "fixture-forge-token-do-not-leak" not in encoded
+
+
+def test_project_scan_analyzes_puppet_server_and_environment_policy(tmp_path: Path) -> None:
+    source_root = FIXTURES / "puppet_server_policy_risky"
+    destinations = {
+        "environment.conf": "environments/production/environment.conf",
+        "puppetdb.conf": "puppet/puppetdb.conf",
+        "puppetserver.conf": "puppetserver/conf.d/puppetserver.conf",
+        "auth.conf": "puppetserver/conf.d/auth.conf",
+        "ca.conf": "puppetserver/conf.d/ca.conf",
+        "webserver.conf": "puppetserver/conf.d/webserver.conf",
+        "web-routes.conf": "puppetserver/conf.d/web-routes.conf",
+    }
+    for source_name, destination in destinations.items():
+        target = tmp_path / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            (source_root / source_name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 7
+    assert payload["scanned_file_count"] == 7
+    assert payload["error_count"] == 0
+    assert {item["artifact_type"] for item in payload["files"]} == {
+        "environment",
+        "puppetdb",
+        "server_auth",
+        "server_ca",
+        "server_routes",
+        "server_runtime",
+        "server_web",
+    }
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-puppetdb-password-do-not-leak" not in encoded
+    assert "fixture-jruby-token-do-not-leak" not in encoded
+    assert "fixture-admin-rule-do-not-leak" not in encoded
 
 
 def test_project_scan_analyzes_bolt_project_and_inventory(tmp_path: Path) -> None:

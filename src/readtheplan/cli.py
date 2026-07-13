@@ -431,14 +431,17 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     puppet_project = subparsers.add_parser(
         "puppet-project",
-        help="Emit the agent-gate decision for Puppet project and runtime configuration.",
+        help=(
+            "Emit the agent-gate decision for Puppet project, server policy, and runtime "
+            "configuration."
+        ),
     )
     puppet_project.add_argument("--framework", help="Include checks from a compliance framework.")
     puppet_project.add_argument(
         "input_file",
         help=(
-            "Path to Puppetfile, metadata.json, hiera.yaml, puppet.conf, r10k.yaml, "
-            "bolt-project.yaml, or Bolt inventory.yaml."
+            "Path to Puppetfile, metadata.json, Hiera, puppet.conf, environment.conf, "
+            "puppetdb.conf, Puppet Server HOCON policy, r10k.yaml, Bolt project, or inventory."
         ),
     )
     puppet_project.set_defaults(func=_puppet_project_gate)
