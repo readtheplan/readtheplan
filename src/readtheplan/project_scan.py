@@ -244,6 +244,17 @@ def identify_project_input(
         return "ansible"
     if _named_config_variant(name, suffix, "jenkinsfile"):
         return "jenkins"
+    if name in {"jenkins-plugins.txt", "jenkins-plugins.yaml", "jenkins-plugins.yml"}:
+        return "jenkins-project"
+    if name == "plugins.txt" and (
+        len(parts) == 1
+        or any(part in {"jenkins", ".jenkins", "jenkins_home"} for part in parts[:-1])
+    ):
+        return "jenkins-project"
+    if name in {"plugins.yaml", "plugins.yml"} and any(
+        part in {"jenkins", ".jenkins", "jenkins_home"} for part in parts[:-1]
+    ):
+        return "jenkins-project"
     if ".teamcity" in parts and suffix in {".kt", ".kts"}:
         return "teamcity"
     if name in {"jenkins.yaml", "jenkins.yml"} and any(

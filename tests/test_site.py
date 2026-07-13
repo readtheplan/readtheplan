@@ -227,6 +227,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
         "agent_gate_terraform_stack",
         "agent_gate_spacelift",
         "jenkins-jcasc",
+        "jenkins-project",
         "TeamCity Kotlin DSL",
         "Concourse",
         "Bamboo Specs",

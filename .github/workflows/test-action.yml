@@ -1103,6 +1103,38 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Jenkins plugin catalog
+        id: jenkins_project
+        uses: ./
+        with:
+          tool: jenkins-project
+          input-file: tests/fixtures/jenkins_plugins_risky.txt
+          framework: soc2
+
+      - name: Assert Jenkins plugin catalog outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.jenkins_project.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.jenkins_project.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.jenkins_project.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "8"
+          test "$RISK_COUNTS" = '{"dangerous":5,"irreversible":0,"review":3,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          serialized = json.dumps(payload)
+          assert payload["adapter"] == "jenkins-project"
+          assert payload["artifact_type"] == "plugins_txt"
+          assert payload["plugin_count"] == 7
+          assert payload["decision"] == "block"
+          assert "fixture-user" not in serialized
+          assert "fixture-password" not in serialized
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Chef recipe
         id: chef
         uses: ./
