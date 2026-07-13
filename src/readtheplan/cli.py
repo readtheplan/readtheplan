@@ -382,6 +382,16 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     jenkins_jcasc.add_argument("input_file", help="Path to a JCasC YAML file.")
     jenkins_jcasc.set_defaults(func=_jenkins_jcasc_gate)
 
+    jenkins_project = subparsers.add_parser(
+        "jenkins-project",
+        help="Emit the agent-gate decision for Jenkins plugin installation catalogs.",
+    )
+    jenkins_project.add_argument("--framework", help="Include checks from a compliance framework.")
+    jenkins_project.add_argument(
+        "input_file", help="Path to a Plugin Installation Manager .txt or YAML catalog."
+    )
+    jenkins_project.set_defaults(func=_jenkins_project_gate)
+
     chef = subparsers.add_parser(
         "chef",
         help="Emit the agent-gate decision for a Chef recipe.",
@@ -1701,6 +1711,34 @@ def _jenkins_jcasc_gate(args: argparse.Namespace) -> int:
     if args.framework and catalog is None:
         return 1
     return _write_adapter_gate(analyze_jenkins_jcasc(data, catalog=catalog))
+
+
+def _jenkins_project_gate(args: argparse.Namespace) -> int:
+    """Emit the agent-gate contract for a Jenkins plugin installation catalog."""
+    from readtheplan.adapters.jenkins_project import (
+        JenkinsProjectAdapter,
+        JenkinsProjectInputError,
+        analyze_jenkins_project,
+        parse_jenkins_project,
+    )
+
+    try:
+        source = Path(args.input_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        data = parse_jenkins_project(source, filename=args.input_file)
+    except JenkinsProjectInputError as exc:
+        print(f"Error: invalid Jenkins plugin catalog: {exc}", file=sys.stderr)
+        return 1
+    if not JenkinsProjectAdapter().can_handle(data):
+        print("Error: input not recognized as a Jenkins plugin catalog", file=sys.stderr)
+        return 1
+    catalog = _adapter_catalog(args.framework)
+    if args.framework and catalog is None:
+        return 1
+    return _write_adapter_gate(analyze_jenkins_project(data, catalog=catalog))
 
 
 def _chef_gate(args: argparse.Namespace) -> int:

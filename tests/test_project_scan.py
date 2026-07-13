@@ -32,6 +32,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
         ("inventory/prod.aws_ec2.yml", "ansible-project"),
         ("ansible/collections/requirements.yml", "ansible-project"),
         ("Jenkinsfile.deploy", "jenkins"),
+        ("plugins.txt", "jenkins-project"),
+        ("jenkins/plugins.yaml", "jenkins-project"),
         ("cookbooks/base/recipes/default.rb", "chef"),
         ("manifests/site.pp", "puppet"),
         ("puppet/puppet.conf", "puppet-project"),
@@ -430,6 +432,29 @@ def test_project_scan_analyzes_puppet_runtime_configuration(tmp_path: Path) -> N
     encoded = json.dumps(payload)
     assert "fixture-puppet-proxy-password-do-not-leak" not in encoded
     assert "fixture-puppet-header-token-do-not-leak" not in encoded
+
+
+def test_project_scan_analyzes_jenkins_plugin_catalog(tmp_path: Path) -> None:
+    jenkins_directory = tmp_path / "jenkins"
+    jenkins_directory.mkdir()
+    (jenkins_directory / "plugins.txt").write_text(
+        (FIXTURES / "jenkins_plugins_risky.txt").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    payload = scan_project(tmp_path, display_root=".")
+
+    assert payload["discovered_file_count"] == 1
+    assert payload["scanned_file_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["files"][0]["tool"] == "jenkins-project"
+    assert payload["files"][0]["adapter"] == "jenkins-project"
+    assert payload["files"][0]["total_changes"] == 8
+    assert payload["decision"] == "block"
+    encoded = json.dumps(payload)
+    assert "fixture-user" not in encoded
+    assert "fixture-password" not in encoded
+    assert "plugins.example.invalid" not in encoded
 
 
 def test_project_scan_analyzes_sops_policy_and_encrypted_documents(tmp_path: Path) -> None:

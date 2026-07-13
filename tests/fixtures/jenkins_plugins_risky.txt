@@ -1,0 +1,8 @@
+# Jenkins Plugin Installation Manager catalog with intentionally risky entries.
+git:5.2.1
+workflow-cps:latest
+script-security:experimental
+job-dsl::http://fixture-user:fixture-password@plugins.internal.example/job-dsl.hpi
+kubernetes:incrementals;org.csanchez.jenkins.plugins;4346.v1e8e3b_7b_0b_f5
+configuration-as-code
+mailer:https://plugins.internal.example/mailer.hpi
