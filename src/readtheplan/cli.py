@@ -337,7 +337,7 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
 
     ansible_project = subparsers.add_parser(
         "ansible-project",
-        help="Emit the agent-gate decision for ansible.cfg or Galaxy requirements YAML.",
+        help="Analyze Ansible configuration, dependencies, or inventory.",
     )
     ansible_project.add_argument(
         "--framework",
@@ -347,7 +347,8 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
         ),
     )
     ansible_project.add_argument(
-        "input_file", help="Path to ansible.cfg or a Galaxy requirements YAML file."
+        "input_file",
+        help="Path to ansible.cfg, Galaxy requirements, or YAML/INI/plugin inventory.",
     )
     ansible_project.set_defaults(func=_ansible_project_gate)
 
@@ -1552,7 +1553,7 @@ def _ansible_project_gate(args: argparse.Namespace) -> int:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
     try:
-        data = parse_ansible_project(source)
+        data = parse_ansible_project(source, filename=args.input_file)
     except AnsibleProjectInputError as exc:
         print(f"Error: invalid Ansible project input: {exc}", file=sys.stderr)
         return 1

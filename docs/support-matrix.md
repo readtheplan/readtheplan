@@ -36,7 +36,7 @@ matrix makes those boundaries explicit.
 | Pulumi | Preview digest JSON or streaming JSON events | `readtheplan pulumi preview.json` | Structured operations, old/new inputs, provider normalization, deep resource rules | Built-in |
 | Pulumi project / stack / policy | `Pulumi.yaml`, `Pulumi.<stack>.yaml`, or `PulumiPolicy.yaml` | `readtheplan pulumi-project Pulumi.yaml` | Strict duplicate-safe YAML; runtime/compiler and path execution, backends, packages/plugins and provenance, project config schemas, encrypted/plaintext stack config, secrets providers, ESC imports, Pulumi YAML resources with deep rules, policy packs, and explicit evaluation boundaries | Built-in |
 | Ansible | Playbook YAML | `readtheplan ansible playbook.yml` | Structured plays/tasks/blocks/handlers/roles; privilege, controller delegation, check/error controls, includes, identity/host security, supply-chain inputs, TLS, and secret-bearing environments | Built-in |
-| Ansible project | `ansible.cfg` or Galaxy requirements YAML | `readtheplan ansible-project ansible.cfg` | Controller transport/privilege, plugins, callbacks, inventory, Galaxy endpoints and credentials, roles/collections, version pinning, SCM transport, signatures, and parse boundaries | Built-in |
+| Ansible project / inventory | `ansible.cfg`, Galaxy requirements, static YAML/INI inventory, or inventory plugin YAML | `readtheplan ansible-project inventory.yml` | Controller transport/privilege, plugins/callbacks, Galaxy endpoints and dependencies, inventory target/group scope, connection identities and secrets, SSH trust, local/interpreter execution, dynamic discovery scope/TLS/cache, and non-execution boundaries | Built-in |
 | Salt | SLS YAML/Jinja state | `readtheplan salt state.sls` | State modules/functions, destructive operations, execution modules, credential-like Pillar/SDB inputs, includes/extends, and dynamic renderer boundaries | Built-in |
 | Salt project | Master/minion YAML config, top files, or Salt SSH rosters | `readtheplan salt-project master` | PKI trust, remote authorization, state/Pillar/module roots, GitFS provenance, reactors/schedules/startup execution, fleet targeting, SSH privilege, credentials, proxies, and host verification | Built-in |
 | Nix / NixOS | `flake.nix`, `flake.lock`, or NixOS module source | `readtheplan nix flake.nix` | Input/lock provenance and graph integrity, substituters/trusted users/signatures/sandbox, fetchers/impurity/build code, users/SSH/sudo/firewall/services/systemd/kernel/storage/network/containers/secrets, and evaluation boundaries | Built-in |
@@ -112,9 +112,10 @@ the same optional `framework` parameter through its MCP tool.
   Pulumi, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,
   Docker Compose, Docker Buildx Bake, Dockerfiles, Nomad, Packer,
   Vagrant, cloud-init user-data, or provider code.
-- Ansible configuration precedence, inventory/plugin execution, transitive Galaxy
-  dependencies, includes/roles, and Jenkins shared libraries remain external code
-  boundaries. Chef policy-group/node assignment, credentials, config.rb,
+- Ansible configuration/variable precedence, combined inventory sources, inventory-plugin code
+  and live API responses, transitive Galaxy dependencies, includes/roles, and Jenkins shared
+  libraries remain external code boundaries. Chef policy-group/node assignment, credentials,
+  config.rb,
   cookbook contents, server-side state, Puppet module contents and transitive dependencies,
   Code Manager/r10k deployment settings, Hiera data, eyaml keys, Ruby extensions,
   custom providers/types, dynamic

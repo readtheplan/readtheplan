@@ -22,6 +22,9 @@ provenance, lifecycle, approval, identity, store, and cross-Stack data boundarie
 Kubernetes infrastructure-controller coverage includes Cluster API cluster,
 machine, control-plane, bootstrap, remediation, and provider lifecycles plus
 Karpenter node provisioning, disruption, cloud identity, image, and networking.
+Ansible coverage includes playbooks, controller configuration, Galaxy dependencies,
+static YAML/INI inventory, and dynamic inventory plugin configuration without
+executing plugins, resolving Vault values, contacting APIs, or connecting to hosts.
 
 Use `readtheplan scan .` to discover supported infrastructure files across a
 repository and return one aggregate gate with per-file analyzer results.

@@ -1020,6 +1020,35 @@ jobs:
           assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
           PY
 
+      - name: Run action on Ansible dynamic inventory
+        id: ansible_inventory
+        uses: ./
+        with:
+          tool: ansible-project
+          input-file: tests/fixtures/ansible_inventory_plugin_risky.aws_ec2.yml
+          framework: soc2
+
+      - name: Assert Ansible inventory outputs
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.ansible_inventory.outputs['summary-json'] }}
+          CHANGE_COUNT: ${{ steps.ansible_inventory.outputs['change-count'] }}
+          RISK_COUNTS: ${{ steps.ansible_inventory.outputs['risk-counts'] }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_COUNT" = "12"
+          test "$RISK_COUNTS" = '{"dangerous":8,"irreversible":0,"review":4,"safe":0}'
+          python - <<'PY'
+          import json
+          import os
+          payload = json.loads(os.environ["SUMMARY_JSON"])
+          assert payload["adapter"] == "ansible-project"
+          assert payload["artifact_type"] == "inventory_plugin"
+          assert payload["decision"] == "block"
+          assert "inventory plugin" in payload["pr_comment"]
+          assert "rtp.control.soc2.CC8.1" in payload["required_checks"]
+          PY
+
       - name: Run action on Jenkinsfile
         id: jenkins
         uses: ./

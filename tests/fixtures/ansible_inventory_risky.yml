@@ -1,0 +1,30 @@
+all:
+  vars:
+    ansible_user: root
+    ansible_become: true
+    ansible_become_password: !vault |
+      $ANSIBLE_VAULT;1.2;AES256;prod
+      663864393638336438656534643137663662343939616230
+  children:
+    web:
+      hosts:
+        web-primary:
+          ansible_host: 192.0.2.10
+          ansible_password: fixture-inventory-password-do-not-leak
+          ansible_connection: local
+          ansible_python_interpreter: /tmp/untrusted-python
+          ansible_ssh_private_key_file: /run/secrets/ansible-key
+          ansible_ssh_common_args: >-
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+            -o ProxyCommand='sh -c proxy-helper'
+          derived_value: "{{ lookup('env', 'INVENTORY_RUNTIME_VALUE') }}"
+        web-secondary:
+          ansible_host: 192.0.2.11
+    database:
+      hosts:
+        database-primary:
+          ansible_host: 192.0.2.20
+          tls_private_key: |
+            -----BEGIN PRIVATE KEY-----
+            fixture-private-key-material-do-not-leak
+            -----END PRIVATE KEY-----
