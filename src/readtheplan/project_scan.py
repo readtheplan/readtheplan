@@ -334,7 +334,18 @@ def identify_project_input(
         part in {"jenkins", "jcasc", "casc_configs"} for part in parts[:-1]
     ):
         return "jenkins-jcasc"
-    if name in {"berksfile", "berksfile.lock", "policyfile.rb", "policyfile.lock.json"}:
+    if name in {
+        ".kitchen.yaml",
+        ".kitchen.yml",
+        "berksfile",
+        "berksfile.lock",
+        "kitchen.local.yaml",
+        "kitchen.local.yml",
+        "kitchen.yaml",
+        "kitchen.yml",
+        "policyfile.rb",
+        "policyfile.lock.json",
+    }:
         return "chef-project"
     if name in {"inspec.yml", "inspec.yaml", "inspec.lock"}:
         return "inspec"
@@ -789,6 +800,10 @@ def _file_result(item: DiscoveredInput, payload: dict[str, Any]) -> dict[str, An
         result["artifact_type"] = payload["artifact_type"]
     if isinstance(payload.get("platform_count"), int):
         result["platform_count"] = payload["platform_count"]
+    if isinstance(payload.get("suite_count"), int):
+        result["suite_count"] = payload["suite_count"]
+    if isinstance(payload.get("dynamic_erb"), bool):
+        result["dynamic_erb"] = payload["dynamic_erb"]
     return result
 
 

@@ -1,0 +1,67 @@
+---
+driver:
+  name: ec2
+  privileged: true
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  network:
+    - forwarded_port: 8080
+  pre_create_command: fixture-driver-command-do-not-run
+  http_proxy: http://fixture-user:fixture-password@example.invalid:8080
+  secret_access_key: fixture-cloud-secret-do-not-leak
+
+provisioner:
+  name: chef_infra
+  product_version: <%= ENV['CHEF_VERSION'] || 'latest' %>
+  chef_omnibus_url: http://example.invalid/install.sh
+  encrypted_data_bag_secret_key_path: test/fixture-secret
+  client_rb:
+    ssl_verify_mode: verify_none
+
+transport:
+  name: ssh
+  username: root
+  password: fixture-transport-password-do-not-leak
+  ssh_key: test/fixture-private-key
+  verify_host_key: false
+  sudo: true
+
+verifier:
+  name: inspec
+  inspec_tests:
+    - test/integration/default
+  controls:
+    - fixture-control
+
+platforms:
+  - name: fixture-linux
+    driver:
+      name: dokken
+      privileged: true
+      volumes:
+        - /sys:/sys
+    transport:
+      name: docker
+
+suites:
+  - name: fixture-deploy
+    run_list:
+      - recipe[fixture::deploy]
+    attributes:
+      api_token: fixture-api-token-do-not-leak
+    verifier:
+      name: inspec
+      inspec_tests:
+        - https://example.invalid/fixture-profile
+    lifecycle:
+      pre_converge:
+        - local: fixture-local-command-do-not-run
+          environment:
+            API_KEY: fixture-hook-secret-do-not-leak
+
+lifecycle:
+  post_create:
+    - remote: fixture-remote-command-do-not-run
+  pre_destroy:
+    - local: fixture-cleanup-command-do-not-run
+      skippable: true
