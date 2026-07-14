@@ -5,27 +5,92 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'src/readtheplan/data/controls/**'
+      - 'src/readtheplan/plan.py'
+      - 'src/readtheplan/rules/**'
+      - 'pyproject.toml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 22
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install build dependencies
+        run: python -m pip install "PyYAML>=6,<7"
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Test site
+        working-directory: site
+        run: npm test
+
+      - name: Test browser classifier parity
+        working-directory: site
+        run: node analysis/classifier-parity.test.js
 
       - name: Build site
         working-directory: site
+        run: npm run build
+
+      - name: Deploy chat rate limiter
+        working-directory: site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          npx --yes wrangler@4.110.0 deploy
+          --config workers/chat-rate-limiter/wrangler.toml
+
+      - name: Download current Pages configuration
+        working-directory: site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npm ci
-          npm run build
+          test ! -e wrangler.toml
+          test ! -e wrangler.json
+          test ! -e wrangler.jsonc
+          npx --yes wrangler@4.110.0 pages download config readtheplan --force
+
+      - name: Prepare Pages configuration
+        working-directory: site
+        run: |
+          python scripts/prepare-pages-config.py wrangler.toml wrangler.json
+          rm -- wrangler.toml
 
       - name: Deploy production
         working-directory: site
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler pages deploy dist --project-name=readtheplan --branch=main --commit-dirty=true
+        run: >-
+          npx --yes wrangler@4.110.0 pages deploy dist
+          --project-name=readtheplan
+          --branch=main
+          --commit-hash="${GITHUB_SHA}"
+          --commit-dirty=true
+
+      - name: Remove downloaded configuration
+        if: always()
+        working-directory: site
+        run: rm -f -- wrangler.toml wrangler.json wrangler.jsonc

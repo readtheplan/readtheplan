@@ -81,7 +81,16 @@ assert.equal(response.status, 400);
 response = await chatApi.onRequest({ request: chatReq({ messages: [{ role: "user", content: "hello" }] }), env: {} });
 assert.equal(response.status, 500);
 globalThis.fetch = async () => new Response(JSON.stringify({ choices: [{ message: { content: "<b>ok</b> javascript:alert(1)" } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
-response = await chatApi.onRequest({ request: chatReq({ messages: [{ role: "user", content: "hello" }] }), env: { DEEPSEEK_API_KEY: "test" } });
+const chatRateLimiter = {
+  idFromName: (name) => name,
+  get: () => ({
+    fetch: async () => Response.json({ allowed: true, retryAfterSeconds: 0 }),
+  }),
+};
+response = await chatApi.onRequest({
+  request: chatReq({ messages: [{ role: "user", content: "hello" }] }),
+  env: { DEEPSEEK_API_KEY: "test", CHAT_RATE_LIMITER: chatRateLimiter },
+});
 assert.equal(response.status, 200);
 assert.equal(response.headers.get("Cache-Control"), "no-store");
 const success = await response.json();

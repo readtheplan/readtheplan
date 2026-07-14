@@ -1,0 +1,13 @@
+name = "readtheplan-chat-rate-limiter"
+main = "src/index.js"
+compatibility_date = "2026-07-14"
+workers_dev = false
+preview_urls = false
+
+[[durable_objects.bindings]]
+name = "CHAT_RATE_LIMITER"
+class_name = "ChatRateLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatRateLimiter"]

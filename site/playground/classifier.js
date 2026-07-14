@@ -1,9 +1,28 @@
-// readtheplan playground classifier — pure JS port of rules engine
-// v1: fully aligned with src/readtheplan/rules.py (parity pass 2026-06-02)
+// readtheplan playground classifier — JS rules plus generated Python risk floors.
+// Detailed browser rules explain supported types; generated floors prevent a
+// lower browser risk for canonical single-action and replacement tuples.
 
 const RISK_ORDER = { safe: 0, review: 1, dangerous: 2, irreversible: 3 };
 
-const KNOWN_ACTIONS = new Set(["no-op", "read", "create", "update", "delete"]);
+const KNOWN_ACTIONS = new Set(["no-op", "read", "create", "update", "delete", "forget"]);
+
+// Types that intentionally use only the generic baseline have to be audited
+// against Python and listed here. Other types use generated canonical floors,
+// while types absent from that generated registry fail closed to dangerous.
+const BROWSER_BASELINE_ONLY_TYPES = new Set(["aws_dynamodb_table"]);
+
+const GENERATED_RISK_FLOORS =
+  typeof module !== "undefined" && module.exports
+    ? require("./risk-floors.js")
+    : globalThis.READTHEPLAN_RISK_FLOORS;
+
+if (
+  GENERATED_RISK_FLOORS?.schemaVersion !== 2 ||
+  !Array.isArray(GENERATED_RISK_FLOORS.actionTuples) ||
+  !GENERATED_RISK_FLOORS.floors
+) {
+  throw new Error("Generated classifier risk floors are missing or invalid.");
+}
 
 // ── Baseline classification from action tuples ────────────────────────
 
@@ -13,6 +32,7 @@ function baselineRisk(actions) {
   if (s.has("delete") && s.has("create")) return "dangerous";
   if (s.has("delete")) return "irreversible";
   if (s.has("update")) return "review";
+  if (s.has("forget")) return "dangerous";
   if (isSubset(s, ["no-op", "read"])) return "safe";
   // Only allow "create" to produce "safe" when all actions are known.
   // Unknown/malformed actions must be "review" (ADR 0003).
@@ -30,6 +50,8 @@ function baselineExplanation(actions) {
     return "Terraform will delete this resource. Verify recovery, backups, and external dependencies before applying.";
   if (s.has("update"))
     return "Terraform will update this resource in place. Review the changed attributes and rollout timing before applying.";
+  if (s.has("forget"))
+    return "Terraform will remove this resource from state without destroying the remote object. Review ownership, drift, re-import, and recovery before applying.";
   if (isSubset(s, ["no-op", "read"]))
     return "Terraform is only reading or refreshing this resource.";
   if (s.has("create") && isSubsetOfKnown(s))
@@ -693,6 +715,60 @@ function observabilityRules(type, actions, change) {
 
 // ── Main classifier ────────────────────────────────────────────────────
 
+// Cloudflare identity
+function cloudflareIdentityRules(actions) {
+  const s = new Set(actions);
+
+  if (s.has("delete")) {
+    const replacing = s.has("create");
+    return [{
+      risk: replacing ? "dangerous" : "irreversible",
+      explanation:
+        "Terraform will delete this Cloudflare API token or account membership. " +
+        (replacing
+          ? "Resource identity and dependent bindings can change during replacement."
+          : "The removed configuration may cause an immediate outage or trust gap.") +
+        " Verify exports, dependencies, rollback, and recovery before applying.",
+    }];
+  }
+  if (s.has("create") || s.has("update")) {
+    return [{
+      risk: "dangerous",
+      explanation:
+        "This Cloudflare identity change grants or changes API/account permissions. " +
+        "Review least-privilege permission groups, account/zone resources, conditions, " +
+        "token lifetime, member roles, secret delivery, and revocation ownership.",
+    }];
+  }
+  return [];
+}
+
+function unsupportedBrowserRules(resourceType, actions) {
+  const s = new Set(actions);
+  if (!s.has("create") && !s.has("update") && !s.has("forget")) return [];
+  const floor = generatedRiskFloor(resourceType, actions);
+  return [{
+    risk: maxRisk("dangerous", floor || "dangerous"),
+    explanation:
+      "This resource type does not have audited browser-specific rules. " +
+      "The browser is treating it conservatively; run the Python analyzer before applying.",
+  }];
+}
+
+function generatedRiskFloor(resourceType, actions) {
+  if (!Array.isArray(actions)) return null;
+  const actionIndex = GENERATED_RISK_FLOORS.actionTuples.findIndex(
+    (candidate) =>
+      Array.isArray(candidate) &&
+      candidate.length === actions.length &&
+      candidate.every((action, index) => action === actions[index]),
+  );
+  if (actionIndex < 0) return null;
+  const floors = GENERATED_RISK_FLOORS.floors[resourceType];
+  if (!Array.isArray(floors)) return null;
+  return floors[actionIndex] || null;
+}
+
 function classifyChange(resourceType, actions, change) {
   const baseline = {
     risk: baselineRisk(actions),
@@ -705,12 +781,25 @@ function classifyChange(resourceType, actions, change) {
     result = maxRiskResult(result, c);
   }
 
+  const floor = generatedRiskFloor(resourceType || "", actions);
+  if (floor && RISK_ORDER[floor] > RISK_ORDER[result.risk]) {
+    result = {
+      risk: floor,
+      explanation:
+        "The generated canonical Python risk floor raises this basic resource action. " +
+        "Run the Python analyzer for the resource-specific explanation before applying.",
+    };
+  }
+
   return result;
 }
 
 function ruleCandidates(resourceType, actions, change) {
-  const s = new Set(actions);
   const rt = resourceType || "";
+
+  if (["cloudflare_api_token", "cloudflare_account_member"].includes(rt)) {
+    return cloudflareIdentityRules(actions);
+  }
 
   if (["aws_db_instance", "aws_rds_cluster"].includes(rt)) {
     return rdsRules(rt, actions, change);
@@ -752,7 +841,8 @@ function ruleCandidates(resourceType, actions, change) {
     return observabilityRules(rt, actions, change);
   }
 
-  return [];
+  if (BROWSER_BASELINE_ONLY_TYPES.has(rt)) return [];
+  return unsupportedBrowserRules(rt, actions);
 }
 
 // ── Plan parsing ───────────────────────────────────────────────────────
@@ -791,19 +881,34 @@ function matchCompliance(changes, framework, complianceData) {
 
   for (const change of changes) {
     change.controls = [];
-    for (const mapping of catalog.mappings || []) {
-      if (mapping.resource_type === change.type) {
-        const hasAction = mapping.actions.some(a => change.actions.includes(a));
-        if (hasAction || mapping.actions.includes("*")) {
-          for (const ctrl of mapping.controls || []) {
-            change.controls.push({ id: ctrl.id, title: ctrl.title });
-          }
+    const seen = new Set();
+    const action = canonicalComplianceAction(change.actions || []);
+
+    // Match resource-specific entries first, then the framework wildcard,
+    // mirroring ControlCatalog.controls_for in the Python implementation.
+    for (const resourceType of new Set([change.type, "*"])) {
+      for (const mapping of catalog.mappings || []) {
+        if (mapping.resource_type !== resourceType) continue;
+        if (!mapping.actions.includes(action) && !mapping.actions.includes("*")) continue;
+
+        for (const ctrl of mapping.controls || []) {
+          if (seen.has(ctrl.id)) continue;
+          seen.add(ctrl.id);
+          change.controls.push({ id: ctrl.id, title: ctrl.title });
         }
       }
     }
   }
 
   return changes;
+}
+
+function canonicalComplianceAction(actions) {
+  const actionSet = new Set(actions);
+  if (actionSet.size === 0) return "unknown";
+  if (actionSet.has("delete") && actionSet.has("create")) return "delete/create";
+  if (actionSet.size === 1) return actionSet.values().next().value;
+  return [...actionSet].sort().join("/");
 }
 
 // ── Risk summary ───────────────────────────────────────────────────────
@@ -821,5 +926,5 @@ function summarize(changes) {
 // ── Export ─────────────────────────────────────────────────────────────
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parsePlan, matchCompliance, summarize, classifyChange, baselineRisk, baselineExplanation, ruleCandidates };
+  module.exports = { parsePlan, matchCompliance, summarize, classifyChange, baselineRisk, baselineExplanation, ruleCandidates, canonicalComplianceAction };
 }

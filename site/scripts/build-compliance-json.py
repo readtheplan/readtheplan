@@ -21,7 +21,7 @@ OUTPUT = ROOT / "site" / "playground" / "compliance.json"
 def main():
     frameworks = {}
     for yaml_path in sorted(CONTROLS_DIR.glob("*.yaml")):
-        with open(yaml_path) as f:
+        with open(yaml_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         name = data["framework"]
         frameworks[name] = {
@@ -32,7 +32,7 @@ def main():
         print(f"  Loaded {name}: {len(frameworks[name]['mappings'])} mappings")
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT, "w") as f:
+    with open(OUTPUT, "w", encoding="utf-8", newline="\n") as f:
         json.dump(frameworks, f, indent=2)
     print(f"\nWrote {OUTPUT} ({OUTPUT.stat().st_size:,} bytes)")
 

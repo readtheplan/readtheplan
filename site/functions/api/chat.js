@@ -88,18 +88,156 @@ readtheplan analyze plan.json
 - "Can it prevent bad deploys?" → "readtheplan is an analysis tool, not a policy engine. It tells you what's dangerous — you decide whether to proceed. Many teams use it in CI to flag risky changes before merge."
 - "I'm just looking around" → "Take your time! Try the playground at https://readtheplan.dev/playground — it has sample plans you can analyze instantly. Or ask me anything specific."`;
 
-// ── Rate limiting (in-memory, resets on cold start) ────────────
-// NOTE: This is a best-effort limiter. Cloudflare may recycle the
-// isolate at any time, resetting all counters. For production-grade
-// rate limiting, bind a KV namespace or Durable Object and check
-// that instead. See: https://developers.cloudflare.com/pages/functions/bindings/
-const rateLimitMap = new Map();
-const RATE_LIMIT = 15;            // max requests per window
-const RATE_WINDOW_MS = 60_000;    // 1 minute
-const MAX_MAP_SIZE = 10_000;      // prevent unbounded growth
 const MAX_BODY_SIZE = 65_536;     // 64 KB
+const DEEPSEEK_TIMEOUT_MS = 15_000;
+const RATE_LIMITER_TIMEOUT_MS = 2_000;
 const CANONICAL_ORIGIN = 'https://readtheplan.dev';
 const ALLOWED_ORIGINS = new Set([CANONICAL_ORIGIN, 'https://www.readtheplan.dev']);
+
+class PayloadTooLargeError extends Error {}
+class ProviderTimeoutError extends Error {}
+class ClientDisconnectedError extends Error {}
+
+function boundedTimeout(value, fallback, maximum) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= maximum
+    ? parsed
+    : fallback;
+}
+
+async function readJsonWithLimit(request, maxBytes) {
+  const reader = request.body?.getReader();
+  if (!reader) return JSON.parse('');
+
+  const chunks = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      total += value.byteLength;
+      if (total > maxBytes) {
+        void reader.cancel('payload too large').catch(() => {});
+        throw new PayloadTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+async function opaqueClientKey(clientIP) {
+  const input = new TextEncoder().encode(`readtheplan-chat-v1:${clientIP}`);
+  const digest = await crypto.subtle.digest('SHA-256', input);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function checkChatRateLimit(env, clientIP) {
+  const namespace = env.CHAT_RATE_LIMITER;
+  if (!namespace || typeof namespace.idFromName !== 'function' || typeof namespace.get !== 'function') {
+    throw new Error('CHAT_RATE_LIMITER binding unavailable');
+  }
+
+  const objectId = namespace.idFromName(await opaqueClientKey(clientIP));
+  const stub = namespace.get(objectId);
+  if (!stub || typeof stub.fetch !== 'function') {
+    throw new Error('CHAT_RATE_LIMITER binding invalid');
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = boundedTimeout(
+    env.CHAT_RATE_LIMITER_TIMEOUT_MS,
+    RATE_LIMITER_TIMEOUT_MS,
+    10_000,
+  );
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error('CHAT_RATE_LIMITER deadline exceeded');
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+  });
+
+  let response;
+  let decision;
+  try {
+    response = await Promise.race([
+      stub.fetch('https://chat-rate-limit.internal/check', {
+        method: 'POST',
+        signal: controller.signal,
+      }),
+      timeout,
+    ]);
+    if (!response?.ok) throw new Error('CHAT_RATE_LIMITER request failed');
+    decision = await Promise.race([response.json(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (typeof decision?.allowed !== 'boolean' ||
+      !Number.isSafeInteger(decision.retryAfterSeconds) ||
+      decision.retryAfterSeconds < 0) {
+    throw new Error('CHAT_RATE_LIMITER response invalid');
+  }
+  return decision;
+}
+
+function createProviderDeadline(requestSignal, timeoutMs) {
+  const controller = new AbortController();
+  let rejectBoundary;
+  let closed = false;
+  const boundary = new Promise((_, reject) => {
+    rejectBoundary = reject;
+  });
+  // The same boundary is raced against fetch and body consumption. Attach a
+  // permanent rejection observer for the short gap between those two awaits.
+  boundary.catch(() => {});
+
+  const abort = (error) => {
+    if (closed) return;
+    // Settle our typed boundary first so runtimes that translate an aborted
+    // fetch into a generic AbortError still return the intended 499/504.
+    rejectBoundary(error);
+    controller.abort(error);
+  };
+  const abortOnDisconnect = () => abort(new ClientDisconnectedError('Client disconnected'));
+
+  if (requestSignal?.aborted) {
+    abortOnDisconnect();
+  } else {
+    requestSignal?.addEventListener('abort', abortOnDisconnect, { once: true });
+  }
+
+  const timer = setTimeout(() => {
+    abort(new ProviderTimeoutError('DeepSeek deadline exceeded'));
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    race(promise) {
+      return Promise.race([promise, boundary]);
+    },
+    close() {
+      closed = true;
+      clearTimeout(timer);
+      requestSignal?.removeEventListener('abort', abortOnDisconnect);
+    },
+  };
+}
 
 function securityHeaders(extra = {}) {
   return {
@@ -156,32 +294,15 @@ export async function onRequest(context) {
   }
 
   // ── Body size limit (reject payloads > 64 KB) ─────────────────
-  const contentLength = parseInt(request.headers.get('Content-Length') || '0', 10);
-  if (contentLength > MAX_BODY_SIZE) {
-    return jsonResponse(request, { error: 'Payload too large' }, 413);
-  }
-
-  // ── Rate limiting (15 req/min per IP) ─────────────────────────
-  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const now = Date.now();
-  let entry = rateLimitMap.get(clientIP);
-  if (!entry || now - entry.windowStart > RATE_WINDOW_MS) {
-    entry = { windowStart: now, count: 1 };
-    rateLimitMap.set(clientIP, entry);
-  } else {
-    entry.count++;
-  }
-  if (entry.count > RATE_LIMIT) {
-    const retryAfter = Math.ceil((entry.windowStart + RATE_WINDOW_MS - now) / 1000);
-    return jsonResponse(request, { error: 'Too many requests' }, 429, {
-      'Retry-After': String(retryAfter),
-    });
-  }
-
-  // Prune stale entries to prevent unbounded Map growth
-  if (rateLimitMap.size > MAX_MAP_SIZE) {
-    for (const [ip, ent] of rateLimitMap) {
-      if (now - ent.windowStart > RATE_WINDOW_MS) rateLimitMap.delete(ip);
+  // A declared length is an early reject only. The bounded stream read below
+  // remains authoritative for headerless, chunked, and understated bodies.
+  const rawContentLength = request.headers.get('Content-Length');
+  if (rawContentLength !== null) {
+    const contentLength = Number(rawContentLength);
+    if (!/^\d+$/.test(rawContentLength) ||
+        !Number.isSafeInteger(contentLength) ||
+        contentLength > MAX_BODY_SIZE) {
+      return jsonResponse(request, { error: 'Payload too large' }, 413);
     }
   }
 
@@ -192,14 +313,14 @@ export async function onRequest(context) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonWithLimit(request, MAX_BODY_SIZE);
     const rawMessages = Array.isArray(body.messages) ? body.messages : [];
 
     // Missing messages is a client error
     if (rawMessages.length === 0) {
       return jsonResponse(request, { error: 'Missing messages' }, 400);
     }
-    
+
     // ── Input validation & sanitization ─────────────────────────
     // Only allow user + assistant roles. Block system role injection.
     const ALLOWED_ROLES = new Set(['user', 'assistant']);
@@ -239,24 +360,58 @@ export async function onRequest(context) {
       return jsonResponse(request, { error: 'API key not configured' }, 500);
     }
 
+    // Every provider-eligible request is admitted by shared Durable Object
+    // state. Missing or unhealthy protection fails closed before funded work.
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+    let decision;
+    try {
+      decision = await checkChatRateLimit(env, clientIP);
+    } catch (err) {
+      console.error('Chat rate limiter unavailable:', err.message);
+      return jsonResponse(request, { error: 'Chat temporarily unavailable' }, 503);
+    }
+    if (!decision.allowed) {
+      return jsonResponse(request, { error: 'Too many requests' }, 429, {
+        'Retry-After': String(decision.retryAfterSeconds),
+      });
+    }
+
     const apiMessages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...messages
     ];
 
-    const resp = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: apiMessages,
-        temperature: 0.3,
-        max_tokens: 800,
-      }),
-    });
+    const timeoutMs = boundedTimeout(
+      env.CHAT_PROVIDER_TIMEOUT_MS,
+      DEEPSEEK_TIMEOUT_MS,
+      60_000,
+    );
+    const deadline = createProviderDeadline(request.signal, timeoutMs);
+    let resp;
+    let data;
+
+    try {
+      resp = await deadline.race(fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: apiMessages,
+          temperature: 0.3,
+          max_tokens: 800,
+        }),
+        signal: deadline.signal,
+      }));
+
+      if (resp.ok) {
+        data = await deadline.race(resp.json());
+      }
+    } finally {
+      deadline.close();
+    }
 
     if (!resp.ok) {
       console.error('DeepSeek API error:', resp.status);
@@ -266,7 +421,6 @@ export async function onRequest(context) {
       }, 502);
     }
 
-    const data = await resp.json();
     let reply = data.choices?.[0]?.message?.content || "I couldn't generate a response. Could you rephrase?";
 
     // ── Response sanitization ──────────────────────────────────
@@ -284,6 +438,19 @@ export async function onRequest(context) {
     }, 200, { 'Cache-Control': 'no-store' });
 
   } catch (err) {
+    if (err instanceof PayloadTooLargeError) {
+      return jsonResponse(request, { error: 'Payload too large' }, 413);
+    }
+    if (err instanceof ProviderTimeoutError) {
+      console.error('DeepSeek request timed out');
+      return jsonResponse(request, {
+        error: 'AI service timed out',
+        reply: "I'm having trouble connecting right now. Please try again in a moment, or email info@readtheplan.dev for help."
+      }, 504);
+    }
+    if (err instanceof ClientDisconnectedError) {
+      return jsonResponse(request, { error: 'Client disconnected' }, 499);
+    }
     console.error('Chat error:', err.message);
     // Malformed JSON → 400, everything else → 500
     const status = err instanceof SyntaxError ? 400 : 500;

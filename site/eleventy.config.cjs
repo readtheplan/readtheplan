@@ -42,6 +42,7 @@ module.exports = function (eleventyConfig) {
     "styles.css", "matrix.css", "home.css", "modern.css", "site-motion.js", "matrix.js", "app.js",
     "favicon.svg", "og-image.png", "og-image-modern.png", "robots.txt", "llms.txt", "sitemap.xml", "_redirects",
     "fonts", "img", "data", "functions", "tools/tools.js", "playground/classifier.js",
+    "playground/risk-floors.js",
     "playground/compliance.json", "playground/floci-spike-create-plan.json",
     "playground/floci-spike-destroy-plan.json", "playground/floci-samples.meta.json"
   ]) {

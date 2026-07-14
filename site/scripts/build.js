@@ -13,11 +13,13 @@ function projectVersion() {
   return match[1];
 }
 
-console.log("Converting compliance catalogs...");
+console.log("Generating browser security artifacts...");
 try {
+  execSync("python3 site/scripts/build-classifier-risk-floors.py", { cwd: repoRoot, stdio: "inherit" });
+  execSync("python3 site/scripts/build-compliance-json.py", { cwd: repoRoot, stdio: "inherit" });
   execSync("python3 site/scripts/convert_data.py", { cwd: repoRoot, stdio: "inherit" });
 } catch (_error) {
-  console.error("ERROR: data conversion failed; refusing to build with stale data");
+  console.error("ERROR: browser security artifact generation failed; refusing to build with stale data");
   process.exit(1);
 }
 
