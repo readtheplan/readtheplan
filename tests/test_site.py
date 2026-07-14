@@ -125,9 +125,11 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     workflow = (ROOT / ".github" / "workflows" / "site.yml").read_text(encoding="utf-8")
 
     assert package["scripts"]["build"] == (
-        "node scripts/build.js && node analysis/build-contract.test.mjs"
+        "node scripts/build.js && node analysis/build-contract.test.mjs "
+        "&& node analysis/rendered-route-contract.test.mjs"
     )
     assert "analysis/interaction-contract.test.mjs" in package["scripts"]["test"]
+    assert "analysis/design-system-contract.test.mjs" in package["scripts"]["test"]
     assert "site/dist" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "X-Content-Type-Options: nosniff" in build_script
     assert "Content-Security-Policy" in build_script
@@ -153,6 +155,7 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert '"data"' in eleventy_config
     assert '"functions"' in eleventy_config
     assert '"modern.css"' in eleventy_config
+    assert '"site-motion.js"' in eleventy_config
     assert "npm --prefix site run build" in workflow
 
     for asset in [

@@ -13,13 +13,14 @@
   <meta property="og:title" content="readtheplan" />
   <meta property="og:description" content="One free local risk gate for infrastructure plans and configuration, with six built-in compliance catalogs." />
   <meta property="og:url" content="https://readtheplan.dev/" />
-  <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
+  <meta property="og:image" content="https://readtheplan.dev/og-image-modern.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="readtheplan" />
   <meta name="twitter:description" content="One free local risk gate for infrastructure plans and configuration, with six built-in compliance catalogs." />
-  <meta name="twitter:image" content="https://readtheplan.dev/og-image.png" />
+  <meta name="twitter:image" content="https://readtheplan.dev/og-image-modern.png" />
   <script defer data-domain="readtheplan.dev" src="https://plausible.io/js/script.js"></script>
   <link rel="stylesheet" href="./matrix.css" />
+  <link rel="stylesheet" href="/modern.css" />
   <link rel="stylesheet" href="./home.css" />
 </head>
 <body class="home-page">
@@ -75,34 +76,41 @@
         <div class="hero-proof signal-console" aria-label="Sample infrastructure analysis">
           <div class="signal-console__head">
             <div><span class="status-dot" aria-hidden="true"></span><strong>Sample analysis</strong></div>
-            <span>static product preview · no uploaded data</span>
+            <div class="console-meta"><span>static product preview · no uploaded data</span><button class="demo-pause" id="demo-pause" type="button" aria-pressed="false">Pause</button></div>
+          </div>
+          <div class="scan-tabs" aria-label="Choose a sample analysis">
+            <button class="scan-tab active" type="button" data-demo="repository" aria-pressed="true"><span>01</span>Repository</button>
+            <button class="scan-tab" type="button" data-demo="terraform" aria-pressed="false"><span>02</span>Terraform</button>
+            <button class="scan-tab" type="button" data-demo="kubernetes" aria-pressed="false"><span>03</span>Kubernetes</button>
+            <button class="scan-tab" type="button" data-demo="pipeline" aria-pressed="false"><span>04</span>CI/CD</button>
           </div>
           <div class="signal-console__summary">
             <div class="risk-orbit" aria-label="34 sample changes">
-              <div><strong>34</strong><span>changes</span></div>
+              <div><strong id="demo-total">34</strong><span>changes</span></div>
             </div>
             <div class="risk-legend">
-              <span><i class="tier-safe"></i><b>23</b> Safe</span>
-              <span><i class="tier-review"></i><b>7</b> Review</span>
-              <span><i class="tier-danger"></i><b>3</b> Dangerous</span>
-              <span><i class="tier-irrev"></i><b>1</b> Irreversible</span>
+              <span><i class="tier-safe"></i><b id="demo-safe">23</b> Safe</span>
+              <span><i class="tier-review"></i><b id="demo-review">7</b> Review</span>
+              <span><i class="tier-danger"></i><b id="demo-danger">3</b> Dangerous</span>
+              <span><i class="tier-irrev"></i><b id="demo-irrev">1</b> Irreversible</span>
             </div>
-            <div class="gate-state"><span>CI gate</span><strong>BLOCK</strong><small>4 findings need review</small></div>
+            <div class="gate-state" id="demo-gate"><span>CI gate</span><strong id="demo-decision">BLOCK</strong><small id="demo-gate-note">4 findings need review</small></div>
           </div>
           <div class="signal-console__body">
             <div class="resource-map" aria-label="Sample resource relationship map">
               <span class="map-label">Blast radius · 6 resources</span>
-              <div class="map-node map-node--core">aws_s3_bucket.logs</div>
-              <div class="map-node map-node--one">aws_iam_role.app</div>
-              <div class="map-node map-node--two">aws_kms_key.primary</div>
-              <div class="map-node map-node--three">aws_cloudwatch_log_group.app</div>
+              <div class="map-node map-node--core" id="demo-node-core">aws_s3_bucket.logs</div>
+              <div class="map-node map-node--one" id="demo-node-one">aws_iam_role.app</div>
+              <div class="map-node map-node--two" id="demo-node-two">aws_kms_key.primary</div>
+              <div class="map-node map-node--three" id="demo-node-three">aws_cloudwatch_log_group.app</div>
               <svg viewBox="0 0 500 220" role="presentation" aria-hidden="true"><path d="M250 110 L95 55 M250 110 L405 55 M250 110 L250 190" /></svg>
+              <div class="cursor-probe" aria-hidden="true"><span></span><small>risk trace</small></div>
             </div>
             <div class="finding-stack">
               <span class="map-label">Top findings</span>
-              <div><i class="tier-irrev"></i><span><b>KMS deletion scheduled</b><small>CC6.1 · permanent impact</small></span><strong>01</strong></div>
-              <div><i class="tier-danger"></i><span><b>IAM policy replaced</b><small>CC6.3 · privilege change</small></span><strong>02</strong></div>
-              <div><i class="tier-review"></i><span><b>Public ingress changed</b><small>CC6.6 · network exposure</small></span><strong>03</strong></div>
+              <div><i class="tier-irrev" id="demo-risk-one"></i><span><b id="demo-finding-one">KMS deletion scheduled</b><small id="demo-detail-one">CC6.1 · permanent impact</small></span><strong>01</strong></div>
+              <div><i class="tier-danger" id="demo-risk-two"></i><span><b id="demo-finding-two">IAM policy replaced</b><small id="demo-detail-two">CC6.3 · privilege change</small></span><strong>02</strong></div>
+              <div><i class="tier-review" id="demo-risk-three"></i><span><b id="demo-finding-three">Public ingress changed</b><small id="demo-detail-three">CC6.6 · network exposure</small></span><strong>03</strong></div>
             </div>
           </div>
           <div class="signal-console__foot">
@@ -693,8 +701,205 @@
       }, 1200);
     }
 
+    function startInteractiveDemo() {
+      var tabs = Array.from(document.querySelectorAll('.scan-tab'));
+      if (!tabs.length) return;
+
+      var scenarios = {
+        repository: {
+          counts: [34, 23, 7, 3, 1], decision: 'BLOCK', note: '4 findings need review',
+          nodes: ['aws_s3_bucket.logs', 'aws_iam_role.app', 'aws_kms_key.primary', 'aws_cloudwatch_log_group.app'],
+          findings: [
+            ['tier-irrev', 'KMS deletion scheduled', 'CC6.1 · permanent impact'],
+            ['tier-danger', 'IAM policy replaced', 'CC6.3 · privilege change'],
+            ['tier-review', 'Public ingress changed', 'CC6.6 · network exposure']
+          ]
+        },
+        terraform: {
+          counts: [18, 11, 4, 2, 1], decision: 'BLOCK', note: '3 changes cross the threshold',
+          nodes: ['aws_db_instance.primary', 'aws_security_group.app', 'aws_iam_role.deploy', 'aws_kms_alias.data'],
+          findings: [
+            ['tier-irrev', 'Database replacement planned', 'A1.2 · data persistence'],
+            ['tier-danger', 'Security group opened', 'CC6.6 · public exposure'],
+            ['tier-review', 'Deploy role expanded', 'CC6.3 · permission scope']
+          ]
+        },
+        kubernetes: {
+          counts: [27, 20, 5, 2, 0], decision: 'BLOCK', note: '2 workload changes need review',
+          nodes: ['deployment/api', 'service/api', 'networkpolicy/egress', 'secret/database'],
+          findings: [
+            ['tier-danger', 'Privileged container enabled', 'K8S-PSP · host access'],
+            ['tier-danger', 'Network policy removed', 'CC6.6 · unrestricted egress'],
+            ['tier-review', 'Service account changed', 'CC6.3 · workload identity']
+          ]
+        },
+        pipeline: {
+          counts: [12, 9, 3, 0, 0], decision: 'WARN', note: '3 changes need a human look',
+          nodes: ['workflow/release', 'permissions/contents', 'environment/production', 'secrets/oidc'],
+          findings: [
+            ['tier-review', 'Workflow permissions expanded', 'CC6.3 · token scope'],
+            ['tier-review', 'Fork trigger changed', 'CI-04 · credential boundary'],
+            ['tier-review', 'Protection rule updated', 'CC8.1 · release control']
+          ]
+        }
+      };
+
+      var order = ['repository', 'terraform', 'kubernetes', 'pipeline'];
+      var currentIndex = 0;
+      var paused = false;
+      var timer = null;
+
+      function setText(id, value) {
+        var element = document.getElementById(id);
+        if (element) element.textContent = value;
+      }
+
+      function showScenario(key) {
+        var scenario = scenarios[key];
+        if (!scenario) return;
+        currentIndex = order.indexOf(key);
+
+        tabs.forEach(function(tab) {
+          var active = tab.getAttribute('data-demo') === key;
+          tab.classList.toggle('active', active);
+          tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        ['demo-total', 'demo-safe', 'demo-review', 'demo-danger', 'demo-irrev'].forEach(function(id, index) {
+          setText(id, scenario.counts[index]);
+        });
+        var orbit = document.querySelector('.risk-orbit');
+        if (orbit) {
+          var safeEnd = (scenario.counts[1] / scenario.counts[0]) * 100;
+          var reviewEnd = safeEnd + (scenario.counts[2] / scenario.counts[0]) * 100;
+          var dangerEnd = reviewEnd + (scenario.counts[3] / scenario.counts[0]) * 100;
+          orbit.style.setProperty('--safe-end', safeEnd + '%');
+          orbit.style.setProperty('--review-end', reviewEnd + '%');
+          orbit.style.setProperty('--danger-end', dangerEnd + '%');
+          orbit.setAttribute('aria-label', scenario.counts[0] + ' sample changes');
+        }
+        setText('demo-decision', scenario.decision);
+        setText('demo-gate-note', scenario.note);
+        ['demo-node-core', 'demo-node-one', 'demo-node-two', 'demo-node-three'].forEach(function(id, index) {
+          setText(id, scenario.nodes[index]);
+        });
+
+        scenario.findings.forEach(function(finding, index) {
+          var suffix = ['one', 'two', 'three'][index];
+          var risk = document.getElementById('demo-risk-' + suffix);
+          if (risk) risk.className = finding[0];
+          setText('demo-finding-' + suffix, finding[1]);
+          setText('demo-detail-' + suffix, finding[2]);
+        });
+
+        var gate = document.getElementById('demo-gate');
+        if (gate) gate.setAttribute('data-decision', scenario.decision.toLowerCase());
+        var console = document.querySelector('.signal-console');
+        if (console) {
+          console.classList.remove('demo-updated');
+          window.requestAnimationFrame(function() { console.classList.add('demo-updated'); });
+        }
+      }
+
+      function restartTimer() {
+        if (timer) window.clearInterval(timer);
+        if (paused) return;
+        timer = window.setInterval(function() {
+          showScenario(order[(currentIndex + 1) % order.length]);
+        }, 4600);
+      }
+
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          showScenario(tab.getAttribute('data-demo'));
+          restartTimer();
+        });
+      });
+
+      var pause = document.getElementById('demo-pause');
+      if (pause) {
+        pause.addEventListener('click', function() {
+          paused = !paused;
+          pause.textContent = paused ? 'Play' : 'Pause';
+          pause.setAttribute('aria-pressed', paused ? 'true' : 'false');
+          restartTimer();
+        });
+      }
+
+      var map = document.querySelector('.resource-map');
+      if (map) {
+        map.addEventListener('pointermove', function(event) {
+          var rect = map.getBoundingClientRect();
+          map.style.setProperty('--probe-x', (event.clientX - rect.left) + 'px');
+          map.style.setProperty('--probe-y', (event.clientY - rect.top) + 'px');
+          map.classList.add('is-exploring');
+        });
+        map.addEventListener('pointerleave', function() { map.classList.remove('is-exploring'); });
+      }
+
+      var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reducedMotion) restartTimer();
+    }
+
+    function startHomepageMotion() {
+      var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var revealTargets = document.querySelectorAll('.section-shell, .closing-cta');
+      var staggerTargets = document.querySelectorAll('.tiers, .panel-grid, .tools-grid');
+      var progress = document.getElementById('progress-bar');
+      var productSurface = document.querySelector('.signal-console');
+
+      revealTargets.forEach(function(target) { target.classList.add('reveal'); });
+      staggerTargets.forEach(function(target) { target.classList.add('stagger'); });
+
+      if (reducedMotion || !('IntersectionObserver' in window)) {
+        revealTargets.forEach(function(target) { target.classList.add('is-visible'); });
+        staggerTargets.forEach(function(target) { target.classList.add('is-visible'); });
+        return;
+      }
+
+      document.documentElement.classList.add('motion-ready');
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -7% 0px' });
+
+      revealTargets.forEach(function(target) { observer.observe(target); });
+      staggerTargets.forEach(function(target) { observer.observe(target); });
+
+      document.querySelectorAll('.tier, .card, .tool-link').forEach(function(card) {
+        card.classList.add('interactive-card');
+        card.addEventListener('pointermove', function(event) {
+          var rect = card.getBoundingClientRect();
+          card.style.setProperty('--spot-x', (event.clientX - rect.left) + 'px');
+          card.style.setProperty('--spot-y', (event.clientY - rect.top) + 'px');
+        });
+      });
+
+      function updateScrollEffects() {
+        var scrollable = document.documentElement.scrollHeight - window.innerHeight;
+        var ratio = scrollable > 0 ? window.scrollY / scrollable : 0;
+        if (progress) progress.style.width = Math.min(100, ratio * 100) + '%';
+
+        if (productSurface) {
+          var rect = productSurface.getBoundingClientRect();
+          var surfaceProgress = Math.max(-1, Math.min(1, (window.innerHeight * 0.64 - rect.top) / window.innerHeight));
+          productSurface.style.setProperty('--hero-tilt', (1.5 - surfaceProgress * 1.5) + 'deg');
+          productSurface.style.setProperty('--hero-shift', (surfaceProgress * -8) + 'px');
+        }
+      }
+
+      updateScrollEffects();
+      window.addEventListener('scroll', updateScrollEffects, { passive: true });
+      window.addEventListener('resize', updateScrollEffects, { passive: true });
+    }
+
     updateGen();
     updateCLIPreview();
+    startInteractiveDemo();
+    startHomepageMotion();
   </script>
 </body>
 </html>
