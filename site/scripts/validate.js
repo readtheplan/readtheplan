@@ -22,6 +22,7 @@ function forbidIncludes(source, token, label) {
 const html = read("index.html");
 const css = read("matrix.css");
 const modernCss = read("modern.css");
+const homeCss = read("home.css");
 const buildScript = read("scripts/build.js");
 const eleventyConfig = read("eleventy.config.cjs");
 const packageJson = read("package.json");
@@ -116,20 +117,23 @@ if (/<form[^>]+action=/i.test(html)) {
 
 // Shared visual contract: routes use the graphite signal workspace system.
 for (const token of [
-  "--signal-bg: #071018;",
-  "--signal-panel: #0b1620;",
-  "--signal-green: #5eea9b;",
-  "--signal-cyan: #48c8ed;",
+  "--signal-bg: #07090d;",
+  "--signal-panel: rgba(16, 20, 27, 0.88);",
+  "--signal-green: #72e6b1;",
+  "--signal-cyan: #75a7ff;",
   ".site-nav__inner",
   ".site-footer__inner",
-  ".signal-console",
-  ".risk-orbit",
-  ".resource-map",
-  ".playground-page",
+  ".route-playground",
+  ".chat-container",
+  ".pricing-card",
   ".evidence-paper",
   "@media print",
 ]) {
   requireIncludes(modernCss, token, "modern design system token");
+}
+
+for (const token of [".signal-console", ".risk-orbit", ".resource-map", ".scan-tabs"]) {
+  requireIncludes(homeCss, token, "homepage product-demo token");
 }
 
 if (!modernCss.includes("@media (max-width: 720px)")) {
