@@ -65,7 +65,7 @@
           </div>
           <div class="hero-trust">
             <span>pip install readtheplan</span>
-            <span>CLI + GitHub Action</span>
+            <span>Native GitHub Action + any CI</span>
             <span>Terraform + the broader infra stack</span>
             <span>No plan upload</span>
             <span>MIT licensed</span>
@@ -163,6 +163,10 @@
                   <button class="seg-btn active" data-group="ci" aria-pressed="true" onclick="pick(this,'ci')">GitHub Actions</button>
                   <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">GitLab CI</button>
                   <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">CircleCI</button>
+                  <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">Jenkins</button>
+                  <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">Azure DevOps</button>
+                  <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">Buildkite</button>
+                  <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">Bitbucket</button>
                   <button class="seg-btn" data-group="ci" aria-pressed="false" onclick="pick(this,'ci')">Local only</button>
                 </div>
               </div>
@@ -213,7 +217,7 @@
             </div>
 
             <div class="gen-panel">
-              <div class="gen-label">Generated GitHub Actions workflow</div>
+              <div class="gen-label" id="gen-label">Generated GitHub Actions workflow</div>
               <pre class="gen-block" id="gen-output"></pre>
             </div>
 
@@ -558,6 +562,55 @@
         ].join('\n');
       }
 
+      if (ci === 'Jenkins') {
+        return [
+          "stage('Infrastructure risk gate') {",
+          '  steps {',
+          "    sh '''",
+          '      ' + install,
+          '      ' + gate,
+          "    '''",
+          '  }',
+          '}'
+        ].join('\n');
+      }
+
+      if (ci === 'Azure DevOps') {
+        return [
+          '# azure-pipelines.yml',
+          'steps:',
+          '  - script: |',
+          '      ' + install,
+          '      ' + gate,
+          '    displayName: Gate infrastructure risk'
+        ].join('\n');
+      }
+
+      if (ci === 'Buildkite') {
+        return [
+          '# .buildkite/pipeline.yml',
+          'steps:',
+          '  - label: ":shield: Infrastructure risk gate"',
+          '    commands:',
+          '      - ' + install,
+          '      - ' + gate
+        ].join('\n');
+      }
+
+      if (ci === 'Bitbucket') {
+        return [
+          '# bitbucket-pipelines.yml',
+          'pipelines:',
+          '  default:',
+          '    - step:',
+          '        name: Infrastructure risk gate',
+          '        image: python:3.13-slim',
+          '        script:',
+          '          - ' + install,
+          '          - ' + gate
+        ].join('\n');
+      }
+
       var lines = [
         '# .github/workflows/terraform-review.yml',
         '- name: Analyze Terraform plan',
@@ -596,6 +649,19 @@
     }
 
     function updateGen() {
+      var ci = activeVal('ci');
+      var labels = {
+        'GitHub Actions': 'Generated GitHub Actions workflow',
+        'GitLab CI': 'Generated GitLab CI job',
+        'CircleCI': 'Generated CircleCI config',
+        'Jenkins': 'Generated Jenkins stage',
+        'Azure DevOps': 'Generated Azure DevOps steps',
+        'Buildkite': 'Generated Buildkite step',
+        'Bitbucket': 'Generated Bitbucket Pipelines step',
+        'Local only': 'Generated local commands'
+      };
+      var label = document.getElementById('gen-label');
+      if (label) label.textContent = labels[ci] || 'Generated CI configuration';
       document.getElementById('gen-output').textContent = workflowText();
     }
 

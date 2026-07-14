@@ -1,0 +1,13 @@
+# Add these commands to the step that creates plan.json, or pass it from a
+# protected earlier step with a short-lived artifact.
+pipelines:
+  default:
+    - step:
+        name: Infrastructure risk gate
+        image: python:3.13-slim
+        script:
+          - python -m pip install "readtheplan==0.4.0"
+          - readtheplan analyze --format json --framework soc2 --evidence readtheplan-evidence.json --fail-on dangerous plan.json > readtheplan-summary.json
+        artifacts:
+          - readtheplan-summary.json
+          - readtheplan-evidence.json

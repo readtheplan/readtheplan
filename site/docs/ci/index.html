@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Run readtheplan as a portable infrastructure risk gate in GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket Pipelines, or any shell-capable runner." />
+    <title>CI/CD integrations — readtheplan</title>
+    <link rel="canonical" href="https://readtheplan.dev/docs/ci/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="readtheplan — CI/CD integrations" />
+    <meta property="og:description" content="One versioned CLI gate for GitHub Actions, GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other CI systems." />
+    <meta property="og:url" content="https://readtheplan.dev/docs/ci/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/matrix.css" />
+  </head>
+  <body>
+    <div class="progress-bar" id="progress-bar"></div>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar g" aria-label="Primary">
+      <a class="brand gc" href="/" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span></a>
+      <nav class="navlinks gc" aria-label="Project links"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></nav>
+      <nav class="navlinks gc" aria-label="Page links"><a href="/docs/">Docs</a><a href="/#setup">Setup</a></nav>
+      <div class="version-cell gc">v0.4.0</div>
+    </header>
+
+    <main class="workspace">
+      <section class="hero g utility-hero" aria-labelledby="title">
+        <div class="gc hero-spacer" aria-hidden="true"></div>
+        <div class="gc hero-content">
+          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / CI/CD integrations</p>
+          <h1 id="title">One local gate for any CI system.</h1>
+          <p class="intro-copy">The GitHub Action is a native wrapper. The versioned CLI contract works in GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket Pipelines, and any shell-capable runner.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="contract-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="contract-title">Portable gate contract</h2>
+          <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>terraform plan -out=tfplan -input=false
+terraform show -json tfplan &gt; plan.json
+python -m pip install "readtheplan==0.4.0"
+readtheplan analyze --fail-on dangerous plan.json</code></pre>
+          <p style="color:var(--muted);margin-top:16px"><code>0</code> continues, <code>2</code> means the configured risk threshold was reached, and <code>1</code> means a hard input or execution error. The normal report is printed before the process exits.</p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="providers-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="providers-title">Copy-ready provider examples</h2>
+          <div class="card-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:20px">
+            <div class="card" style="padding:20px"><h3>GitHub Actions</h3><p style="color:var(--muted)">Native composite action with typed outputs and threshold inputs.</p></div>
+            <div class="card" style="padding:20px"><h3>GitLab CI</h3><p style="color:var(--muted)">Pinned Python image, derived evidence artifacts, and fail-on threshold.</p></div>
+            <div class="card" style="padding:20px"><h3>Jenkins</h3><p style="color:var(--muted)">Pipeline stage with an isolated virtual environment and archived reports.</p></div>
+            <div class="card" style="padding:20px"><h3>Azure DevOps</h3><p style="color:var(--muted)">Script gate plus always-published summary and evidence artifacts.</p></div>
+            <div class="card" style="padding:20px"><h3>CircleCI</h3><p style="color:var(--muted)">Python executor job using the same versioned CLI command.</p></div>
+            <div class="card" style="padding:20px"><h3>Buildkite</h3><p style="color:var(--muted)">Shell step with a pinned release and derived artifact paths.</p></div>
+            <div class="card" style="padding:20px"><h3>Bitbucket Pipelines</h3><p style="color:var(--muted)">Portable container step with reports retained as artifacts.</p></div>
+          </div>
+          <p style="margin-top:20px"><a href="https://github.com/readtheplan/readtheplan/tree/main/ci">Open every copy-ready example on GitHub -&gt;</a></p>
+        </div>
+      </section>
+
+      <section class="g" aria-labelledby="safety-title">
+        <div class="gc utility-panel-wide">
+          <h2 id="safety-title">Keep raw plans private</h2>
+          <p style="color:var(--muted)">Terraform plan JSON can contain sensitive values. Run readtheplan in the same job that creates the plan whenever possible. Archive only the derived summary and evidence files. If a plan must cross job boundaries, use protected artifacts, least-privilege access, encryption, and short retention.</p>
+          <p style="color:var(--muted);margin-top:12px">No hosted analyzer is involved. Readtheplan processes the file inside your existing runner.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

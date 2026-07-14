@@ -92,7 +92,16 @@ const homeHtml = await read("index.html");
 const homeInline = htmlScript(homeHtml);
 new Function(homeInline);
 const stateGroups = {
-  ci: ["GitHub Actions", "GitLab CI", "CircleCI", "Local only"],
+  ci: [
+    "GitHub Actions",
+    "GitLab CI",
+    "CircleCI",
+    "Jenkins",
+    "Azure DevOps",
+    "Buildkite",
+    "Bitbucket",
+    "Local only",
+  ],
   fw: ["SOC 2", "ISO 27001", "HIPAA", "None"],
   thresh: ["Irreversible only", "Dangerous", "Review", "Don't block"],
   ev: ["JSON envelope", "Signed (OIDC)", "Checklist only"],
@@ -146,6 +155,18 @@ assert.doesNotMatch(homeApi.workflowText(), /uses: readtheplan/);
 activate("ci", "CircleCI");
 assert.match(homeApi.workflowText(), /version: 2\.1/);
 assert.match(homeApi.workflowText(), /cimg\/python:3\.13/);
+activate("ci", "Jenkins");
+assert.match(homeApi.workflowText(), /stage\('Infrastructure risk gate'\)/);
+assert.match(homeApi.workflowText(), /--fail-on dangerous/);
+activate("ci", "Azure DevOps");
+assert.match(homeApi.workflowText(), /azure-pipelines\.yml/);
+assert.match(homeApi.workflowText(), /displayName: Gate infrastructure risk/);
+activate("ci", "Buildkite");
+assert.match(homeApi.workflowText(), /\.buildkite\/pipeline\.yml/);
+assert.match(homeApi.workflowText(), /commands:/);
+activate("ci", "Bitbucket");
+assert.match(homeApi.workflowText(), /bitbucket-pipelines\.yml/);
+assert.match(homeApi.workflowText(), /image: python:3\.13-slim/);
 activate("ci", "Local only");
 assert.match(homeApi.workflowText(), /terraform show -json tfplan > plan\.json/);
 assert.match(homeApi.workflowText(), /--fail-on dangerous/);
@@ -171,6 +192,7 @@ assert.match(homeApi.workflowText(), /--fail-on review/);
 homeApi.updateGen();
 homeApi.updateCLIPreview();
 assert.match(fakeElements["gen-output"].textContent, /version: 2\.1/);
+assert.equal(fakeElements["gen-label"].textContent, "Generated CircleCI config");
 assert.match(fakeElements["cli-preview-cmd"].textContent, /--fail-on review/);
 
 const matrixCss = await read("matrix.css");
@@ -214,4 +236,4 @@ assert.doesNotMatch(pricingHtml, /SOC 2, ISO 27001, and HIPAA are built-in/);
 assert.match(pricingHtml, /Everything is free/);
 assert.doesNotMatch(pricingHtml, /\$499|Managed platform|Enterprise adds/);
 
-console.log("Interaction contracts: 85 assertions passed.");
+console.log("Interaction contracts: CI-neutral setup assertions passed.");

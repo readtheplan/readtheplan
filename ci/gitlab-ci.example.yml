@@ -1,0 +1,13 @@
+# Add this job after the job/commands that create plan.json in the same workspace.
+readtheplan-risk-gate:
+  stage: test
+  image: python:3.13-slim
+  script:
+    - python -m pip install "readtheplan==0.4.0"
+    - readtheplan analyze --format json --framework soc2 --evidence readtheplan-evidence.json --fail-on dangerous plan.json > readtheplan-summary.json
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - readtheplan-summary.json
+      - readtheplan-evidence.json

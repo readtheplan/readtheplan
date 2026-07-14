@@ -1,0 +1,15 @@
+# Add these steps after the step that creates plan.json in the same job.
+steps:
+  - script: |
+      python -m pip install "readtheplan==0.4.0"
+      readtheplan analyze --format json --framework soc2 \
+        --evidence readtheplan-evidence.json \
+        --fail-on dangerous plan.json > readtheplan-summary.json
+    displayName: Gate infrastructure risk
+
+  - publish: readtheplan-summary.json
+    artifact: readtheplan-summary
+    condition: always()
+  - publish: readtheplan-evidence.json
+    artifact: readtheplan-evidence
+    condition: always()

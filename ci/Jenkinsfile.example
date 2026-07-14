@@ -1,0 +1,19 @@
+// Add this stage after the stage that creates plan.json in the same workspace.
+stage('Infrastructure risk gate') {
+    steps {
+        sh '''
+            python3 -m venv .readtheplan-venv
+            . .readtheplan-venv/bin/activate
+            python -m pip install "readtheplan==0.4.0"
+            readtheplan analyze --format json --framework soc2 \
+              --evidence readtheplan-evidence.json \
+              --fail-on dangerous plan.json > readtheplan-summary.json
+        '''
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'readtheplan-summary.json,readtheplan-evidence.json',
+                allowEmptyArchive: true
+        }
+    }
+}

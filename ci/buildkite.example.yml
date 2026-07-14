@@ -1,0 +1,11 @@
+# Add this step after the command that creates plan.json in the same checkout.
+steps:
+  - label: ":shield: Infrastructure risk gate"
+    commands:
+      - python3 -m venv .readtheplan-venv
+      - . .readtheplan-venv/bin/activate
+      - python -m pip install "readtheplan==0.4.0"
+      - readtheplan analyze --format json --framework soc2 --evidence readtheplan-evidence.json --fail-on dangerous plan.json > readtheplan-summary.json
+    artifact_paths:
+      - readtheplan-summary.json
+      - readtheplan-evidence.json
