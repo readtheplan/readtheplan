@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# readtheplan-gate.sh — portable CI gate for readtheplan v0.3.x
-# Works around the CLI's lack of --fail-on by mapping agent-gate decisions to exit codes.
+# readtheplan-gate.sh — portable CI gate for the agent-gate contract.
+# Maps agent-gate decisions to process exit codes for CI systems.
 #   exit 0 = proceed, exit 1 = block (or hard error), exit 2 = warn
 # Usage: readtheplan-gate.sh <plan.json> [framework] [--warn-ok]
-#   framework: soc2 | iso27001 | hipaa (optional)
+#   framework: any framework identifier supported by the installed release (optional)
 #   --warn-ok: treat warn as success (exit 0) for non-prod pipelines
 # Outputs: gate.json (full contract), gate-comment.md (ready-to-post PR comment)
 set -euo pipefail
@@ -15,7 +15,7 @@ for a in "$@"; do [ "$a" = "--warn-ok" ] && WARN_OK="true"; done
 [ "$FRAMEWORK" = "--warn-ok" ] && FRAMEWORK=""
 
 if [ ! -f "$PLAN_FILE" ]; then echo "gate: plan file not found: $PLAN_FILE" >&2; exit 1; fi
-# Guard against the binary-plan footgun (v0.3.0 stack-traces on non-UTF-8 input)
+# Fail early when a binary Terraform plan is supplied instead of exported JSON.
 if ! head -c 1 "$PLAN_FILE" | grep -q '{'; then
   echo "gate: $PLAN_FILE does not look like plan JSON." >&2
   echo "gate: generate it with: terraform plan -out=tfplan && terraform show -json tfplan > plan.json" >&2

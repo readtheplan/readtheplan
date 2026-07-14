@@ -1,6 +1,5 @@
-# Example: end-to-end Terraform gate using readtheplan v0.3.0 (as published on PyPI)
-# Validated 2026-06-11 by replaying the action.yml analyze-step logic locally against
-# the released wheel. Two gating styles shown — pick one.
+# Example: end-to-end Terraform gate using readtheplan v0.4.0.
+# Two gating styles are shown; pick one.
 #
 # Style A uses the official composite action (report-only by default, threshold gate).
 # Style B uses ci/readtheplan-gate.sh — the agent-gate contract with exit codes
@@ -34,7 +33,7 @@ jobs:
 
       # ---- Style A: official action, threshold gate -------------------------
       - name: readtheplan (threshold gate)
-        uses: readtheplan/readtheplan@v0.3.0   # no v1 tag exists — pin the release tag or a SHA
+        uses: readtheplan/readtheplan@v0.4.0   # pin the release tag or a full commit SHA
         with:
           plan-file: infra/plan.json
           fail-on-threshold: dangerous
@@ -79,11 +78,3 @@ jobs:
           path: |
             infra/evidence.json
             infra/gate.json
-
-# Notes from the field test (see FIELD_TEST-2026-06-11.md):
-# - v0.3.0 ships only soc2 / iso27001 / hipaa catalogs. pci_dss, hitrust,
-#   fedramp_moderate exist on main but are NOT in the published wheel.
-# - Don't pass the binary tfplan file: v0.3.0 stack-traces on non-UTF-8 input.
-#   The gate script pre-checks this. Always `terraform show -json` first.
-# - `readtheplan verify` on v0.3.0 does NOT support --certificate-identity /
-#   --certificate-oidc-issuer (docs describe unreleased main).

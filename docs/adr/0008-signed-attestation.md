@@ -64,9 +64,8 @@ Use the **`sigstore` Python package** (PyPI: `sigstore`, maintained by
 the Sigstore project). It's the upstream-blessed Python implementation
 with parity for the keyless flow that `cosign sign-blob`/`verify-blob`
 offers. **Pin to `sigstore>=4.0,<5`** — current major release on PyPI
-is 4.x as of this ADR. (The earlier 3.x pin was a typo from my draft;
-Codex caught it before implementation. Documented here so the next
-ADR review knows why this number exists.)
+is 4.x as of this ADR. (An earlier draft's 3.x pin was corrected during
+review before implementation; this note records why the version bound exists.)
 
 The v4 public API uses `SigningContext` + `Signer.sign_artifact()` for
 signing and `Verifier.verify_artifact(input_, bundle, policy)` for

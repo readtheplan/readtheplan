@@ -99,13 +99,13 @@ not constrained by `default-src 'self'`. We are.
 Yes, materially.
 
 - Phase 1 of any rebuild: scaffold + content parity (~2 weeks of
-  Codex's time at the brief-driven pace we've been running).
+  engineering time at the delivery pace used for the existing site).
 - Phase 2: feature parity — copy buttons, demo toggles, framework
   picker, signed-evidence preview, all the JS interactions in
   `app.js`.
 - Phase 3: visual polish to match what we have today.
 
-That's 4–6 weeks of Codex's time on something that does not move the
+That's 4–6 weeks of engineering time on something that does not move the
 core product. As of the post-MVP reconciliation on 2026-05-05, customer
 rule overlays, examples, benchmarks, live demo work, site polish, ADR 0011,
 and the PR #18 rule additions have shipped. The remaining higher-leverage
