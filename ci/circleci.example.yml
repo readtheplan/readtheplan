@@ -1,0 +1,28 @@
+# Add the commands to the job that creates plan.json, or adapt this job to attach
+# a protected workspace containing it.
+version: 2.1
+
+jobs:
+  readtheplan-risk-gate:
+    docker:
+      - image: cimg/python:3.13
+    steps:
+      - checkout
+      - run:
+          name: Install readtheplan
+          command: python -m pip install "readtheplan==0.4.0"
+      - run:
+          name: Gate infrastructure risk
+          command: |
+            readtheplan analyze --format json --framework soc2 \
+              --evidence readtheplan-evidence.json \
+              --fail-on dangerous plan.json > readtheplan-summary.json
+      - store_artifacts:
+          path: readtheplan-summary.json
+      - store_artifacts:
+          path: readtheplan-evidence.json
+
+workflows:
+  infrastructure-review:
+    jobs:
+      - readtheplan-risk-gate

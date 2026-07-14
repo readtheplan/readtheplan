@@ -55,6 +55,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://readtheplan.dev/docs/ci/</loc>
+    <lastmod>2026-07-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://readtheplan.dev/demo/</loc>
     <lastmod>2026-05-11</lastmod>
     <changefreq>monthly</changefreq>

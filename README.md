@@ -45,7 +45,9 @@ Requires Python 3.10+.
 
 - **Infrastructure authors** — see the blast radius of a plan, manifest, playbook, recipe, or pipeline before it runs.
 - **Platform / DevOps teams** — standardize risk tiers and org-specific escalations across repos with rule overlays (no forks, no code changes).
-- **CI maintainers** — drop the GitHub Action into any pipeline to gate pull requests on `dangerous` / `irreversible` changes.
+- **CI maintainers** — use the native GitHub Action or the portable CLI in GitLab,
+  Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other pipelines to
+  gate changes on `dangerous` / `irreversible` risk.
 - **Security & compliance reviewers** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST control mappings plus signed, auditable evidence envelopes for every change.
 - **AI-agent workflows** — a deterministic `proceed` / `warn` / `block` gate that stops an agent from auto-applying unsafe infrastructure.
 
@@ -428,6 +430,23 @@ Downstream steps can consume compact outputs directly:
 
 [Full GitHub Actions workflow →](https://readtheplan.dev)
 
+### Any CI/CD system — use the portable CLI gate
+
+The GitHub Action is a convenience wrapper, not a platform requirement. After
+your pipeline creates `plan.json`, the same versioned command works in any runner
+with Python 3.10+:
+
+```bash
+python -m pip install "readtheplan==0.4.0"
+readtheplan analyze --fail-on dangerous plan.json
+```
+
+The report is printed before the process returns. Exit `0` continues the pipeline,
+exit `2` means the configured risk threshold was reached, and exit `1` indicates a
+hard input or execution error. See the [CI/CD integration guide](docs/ci-integrations.md)
+and copy-ready examples for [GitLab, Jenkins, Azure DevOps, CircleCI, Buildkite,
+Bitbucket, and generic Bash runners](ci/README.md).
+
 ### AI agent gate — block unsafe auto-approvals
 
 ```bash
@@ -486,7 +505,8 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
 ## Features
 
 - **CLI-first** — single `pip install`, runs anywhere Python runs
-- **GitHub Action** — copy-paste into any workflow
+- **CI-neutral delivery** — native GitHub Action plus a versioned CLI contract for
+  GitLab, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other runners
 - **Resource-aware rules** — first-party AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE semantics for identity, data, compute, networking, edge security, incident response, source governance, CI/CD trust, traffic, secrets, security, and observability
 - **Plan-integrity gates** — Terraform/OpenTofu plan format compatibility, errored/not-applyable/incomplete plans, deferrals, out-of-band drift, root-output sensitivity, failed or unknown checks, state detachment, and Terraform provider actions are first-class findings even when the resource diff is empty
 - **Compliance evidence** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mappings with signed JSON envelopes
@@ -535,6 +555,7 @@ evaluation/demo material, not runtime code.
 - [`examples/`](examples/) — sample plans with rendered output
 - [Authoring rules & overlays](docs/authoring-rules.md) — add resource rules, control mappings, overlays, and adapters
 - [Infrastructure support matrix](docs/support-matrix.md) — input formats, maturity, limitations, and shared CI outputs
+- [CI/CD integrations](docs/ci-integrations.md) — portable exit-code contract and provider-specific examples
 - [Cross-tool GitHub Actions example](ci/multi-tool-gates.example.yml) — one gate contract across supported ecosystems
 - [`docs/adr/`](docs/adr/) — architecture decision records
 - [Corpus feedback loop](docs/corpus/README.md) — scan real plans, improve rules
@@ -560,7 +581,12 @@ Good first issues are tagged [`good first issue`](https://github.com/readtheplan
 
 ## Status
 
-**v0.3 — stable CLI + GitHub Action.** The PyPI package ships the Python CLI and composite GitHub Action. Current development includes resource-aware AWS risk rules, compliance framework annotations, evidence envelopes, signed attestation verification, customer rule overlays, infrastructure adapters, MCP preview, examples, benchmarks, and the static onboarding site.
+**v0.4 — stable CI-neutral CLI + native GitHub Action.** The PyPI package ships
+the portable Python CLI and the repository ships a composite GitHub Action.
+Current development includes resource-aware cloud rules, compliance framework
+annotations, evidence envelopes, signed attestation verification, customer rule
+overlays, infrastructure adapters, MCP preview, examples, benchmarks, and the
+static onboarding site.
 
 What's shipping next: deeper adapter coverage, cloud-native delivery workflows,
 PCI-DSS and NIST 800-53 catalogs, and expanded cloud resource rules.

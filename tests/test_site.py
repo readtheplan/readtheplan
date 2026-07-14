@@ -93,6 +93,9 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="compare"' in html
     assert 'id="gen-output"' in html
     assert "One free local risk gate for Terraform, Kubernetes, CI/CD" in html
+    assert "Native GitHub Action + any CI" in html
+    for ci_name in ["GitLab CI", "CircleCI", "Jenkins", "Azure DevOps", "Buildkite", "Bitbucket"]:
+        assert ci_name in html
     assert (
         "Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, "
         "FedRAMP Moderate, and HITRUST"
@@ -372,6 +375,7 @@ def test_docs_routes_are_sitemap_listed_and_landing_aligned() -> None:
         "docs/index.html",
         "docs/quickstart/index.html",
         "docs/cli/index.html",
+        "docs/ci/index.html",
         "docs/github-action/index.html",
     ]
 
