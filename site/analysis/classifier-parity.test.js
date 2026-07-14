@@ -7,13 +7,16 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 const {
   parsePlan,
+  matchCompliance,
   classifyChange,
   baselineRisk,
   baselineExplanation,
 } = require("../playground/classifier.js");
+const generatedRiskFloors = require("../playground/risk-floors.js");
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -75,6 +78,99 @@ function policy(statements) {
   return JSON.stringify({ Version: "2012-10-17", Statement: statements });
 }
 
+function runPythonJson(script, payload) {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const pythonPath = [path.join(repoRoot, "src"), process.env.PYTHONPATH]
+    .filter(Boolean)
+    .join(path.delimiter);
+  const binaries = process.platform === "win32" ? ["python", "python3"] : ["python3", "python"];
+  let lastFailure = "Python executable not found";
+  for (const binary of binaries) {
+    const result = spawnSync(binary, ["-c", script], {
+      cwd: repoRoot,
+      env: { ...process.env, PYTHONPATH: pythonPath, PYTHONDONTWRITEBYTECODE: "1" },
+      input: payload === undefined ? undefined : JSON.stringify(payload),
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    if (result.error?.code === "ENOENT") continue;
+    if (result.status !== 0) {
+      lastFailure = `${binary} exited ${result.status}: ${result.stderr || result.error?.message || "unknown error"}`;
+      continue;
+    }
+    return JSON.parse(result.stdout);
+  }
+  throw new Error(lastFailure);
+}
+
+function classifyWithPython(cases) {
+  return runPythonJson(`
+import json
+import sys
+
+from readtheplan.plan import analyze_plan_file
+
+results = []
+for index, case in enumerate(json.load(sys.stdin)):
+    change = {
+        "address": f"{case['resourceType']}.parity_{index}",
+        "type": case["resourceType"],
+        "name": f"parity_{index}",
+        "change": {"actions": case["actions"]},
+    }
+    if "before" in case:
+        change["change"]["before"] = case["before"]
+    if "after" in case:
+        change["change"]["after"] = case["after"]
+    result = analyze_plan_file({
+        "format_version": "1.2",
+        "terraform_version": "1.11.4",
+        "resource_changes": [change],
+    }).resource_changes[0]
+    results.append({"risk": result.risk, "explanation": result.explanation})
+json.dump(results, sys.stdout)
+`, cases);
+}
+
+function canonicalRiskCensus() {
+  return runPythonJson(`
+import json
+import sys
+
+from readtheplan.plan import analyze_plan_file
+from readtheplan.rules import _shared
+
+action_sets = [
+    ("create",),
+    ("update",),
+    ("delete",),
+    ("delete", "create"),
+    ("create", "delete"),
+    ("forget",),
+]
+resource_types = sorted(str(key) for key in _shared._RULE_REGISTRY)
+cases = []
+for resource_type in resource_types:
+    for actions in action_sets:
+        change = {
+            "address": f"{resource_type}.census",
+            "type": resource_type,
+            "name": "census",
+            "change": {"actions": list(actions), "before": {}, "after": {}},
+        }
+        result = analyze_plan_file({
+            "format_version": "1.2",
+            "resource_changes": [change],
+        }).resource_changes[0]
+        cases.append({
+            "resourceType": resource_type,
+            "actions": list(actions),
+            "pythonRisk": result.risk,
+        })
+json.dump({"resourceTypes": resource_types, "cases": cases}, sys.stdout)
+`);
+}
+
 // ── Baseline Risk Tests ─────────────────────────────────────────────────
 
 console.log("--- Baseline Risk Tests ---");
@@ -87,6 +183,7 @@ assert("create + no-op → safe", () => eq(baselineRisk(["create", "no-op"]), "s
 assert("delete → irreversible", () => eq(baselineRisk(["delete"]), "irreversible"));
 assert("delete + create → dangerous", () => eq(baselineRisk(["delete", "create"]), "dangerous"));
 assert("update → review", () => eq(baselineRisk(["update"]), "review"));
+assert("forget → dangerous", () => eq(baselineRisk(["forget"]), "dangerous"));
 assert("no-op → safe", () => eq(baselineRisk(["no-op"]), "safe"));
 assert("read → safe", () => eq(baselineRisk(["read"]), "safe"));
 assert("create + update → review", () => eq(baselineRisk(["create", "update"]), "review"));
@@ -98,6 +195,7 @@ console.log("--- Baseline Explanation Tests ---");
 assert("create explanation", () => contains(baselineExplanation(["create"]), "create a new resource"));
 assert("delete explanation", () => contains(baselineExplanation(["delete"]), "delete this resource"));
 assert("update explanation", () => contains(baselineExplanation(["update"]), "update this resource in place"));
+assert("forget explanation", () => contains(baselineExplanation(["forget"]), "remove this resource from state"));
 assert("replace explanation", () => contains(baselineExplanation(["create", "delete"]), "replace"));
 assert("unknown explanation", () => contains(baselineExplanation(["bogus"]), "missing or unknown"));
 
@@ -743,6 +841,164 @@ assert("EventBridge rule pattern change → review", () => {
 
 // ── Fixture Plan Tests ─────────────────────────────────────────────────
 
+console.log("--- Cloudflare Cross-Runtime Tests ---");
+
+assert("generated floors prevent underclassification across the canonical registry", () => {
+  const census = canonicalRiskCensus();
+  eq(generatedRiskFloors.schemaVersion, 2, "risk-floor schema");
+  eq(
+    JSON.stringify(generatedRiskFloors.actionTuples),
+    JSON.stringify([
+      ["create"],
+      ["update"],
+      ["delete"],
+      ["delete", "create"],
+      ["create", "delete"],
+      ["forget"],
+    ]),
+    "ordered action-tuple census",
+  );
+  eq(
+    generatedRiskFloors.resourceTypeCount,
+    census.resourceTypes.length,
+    "registered resource-type count",
+  );
+  eq(
+    JSON.stringify(Object.keys(generatedRiskFloors.floors)),
+    JSON.stringify(census.resourceTypes),
+    "generated resource-type census",
+  );
+
+  const rank = { safe: 0, review: 1, dangerous: 2, irreversible: 3 };
+  const underclassified = [];
+  for (const testCase of census.cases) {
+    const actionIndex = generatedRiskFloors.actionTuples.findIndex(
+      (candidate) => JSON.stringify(candidate) === JSON.stringify(testCase.actions),
+    );
+    const actionLabel = testCase.actions.join("+");
+    if (actionIndex < 0) {
+      throw new Error(`missing generated action tuple: ${actionLabel}`);
+    }
+    eq(
+      generatedRiskFloors.floors[testCase.resourceType][actionIndex],
+      testCase.pythonRisk,
+      `${testCase.resourceType}:${actionLabel} generated floor`,
+    );
+    const browserRisk = classify(testCase.resourceType, testCase.actions, {
+      before: {},
+      after: {},
+    }).risk;
+    if (rank[browserRisk] < rank[testCase.pythonRisk]) {
+      underclassified.push(
+        `${testCase.resourceType}:${actionLabel} Python=${testCase.pythonRisk} browser=${browserRisk}`,
+      );
+    }
+  }
+  if (underclassified.length > 0) {
+    throw new Error(
+      `${underclassified.length} browser underclassifications; first: ${underclassified.slice(0, 10).join(", ")}`,
+    );
+  }
+  console.log(
+    `  Canonical census: ${census.resourceTypes.length} types, ${census.cases.length} cases, 0 underclassifications`,
+  );
+});
+
+assert("Cloudflare identity and audited baseline-only cases match canonical Python", () => {
+  const cases = [
+    { resourceType: "aws_dynamodb_table", actions: ["create"], before: null, after: {} },
+  ];
+  for (const resourceType of ["cloudflare_api_token", "cloudflare_account_member"]) {
+    for (const actions of [["create"], ["update"]]) {
+      cases.push({ resourceType, actions, before: {}, after: {} });
+    }
+  }
+  const pythonResults = classifyWithPython(cases);
+  for (const [index, testCase] of cases.entries()) {
+    const browser = classify(testCase.resourceType, testCase.actions, testCase);
+    eq(browser.risk, pythonResults[index].risk, `${testCase.resourceType} risk`);
+    eq(browser.explanation, pythonResults[index].explanation, `${testCase.resourceType} explanation`);
+  }
+});
+
+assert("unsupported provider creates fail closed to dangerous", () => {
+  for (const resourceType of ["cloudflare_future_security_control", "google_project_iam_member"]) {
+    const r = classify(resourceType, ["create"], { after: {} });
+    eq(r.risk, "dangerous", `${resourceType} risk`);
+    contains(r.explanation, "Python analyzer", `${resourceType} explanation`);
+  }
+});
+
+assert("unsupported registered updates fail closed above attribute-sensitive Python rules", () => {
+  const testCase = {
+    resourceType: "azurerm_network_security_rule",
+    actions: ["update"],
+    before: {
+      properties: {
+        access: "Allow",
+        direction: "Inbound",
+        source_address_prefix: "10.0.0.0/8",
+        destination_port_range: "22",
+      },
+    },
+    after: {
+      properties: {
+        access: "Allow",
+        direction: "Inbound",
+        source_address_prefix: "0.0.0.0/0",
+        destination_port_range: "22",
+      },
+    },
+  };
+  const python = classifyWithPython([testCase])[0];
+  eq(python.risk, "dangerous", "Python Azure open-SSH risk");
+  const browser = classify(testCase.resourceType, testCase.actions, testCase);
+  eq(browser.risk, python.risk, "browser Azure open-SSH risk");
+  contains(browser.explanation, "Python analyzer", "browser conservative explanation");
+});
+
+assert("forget actions match canonical Python and remain dangerous for unknown types", () => {
+  const testCase = {
+    resourceType: "unknown_provider_resource",
+    actions: ["forget"],
+    before: {},
+    after: {},
+  };
+  const python = classifyWithPython([testCase])[0];
+  const browser = classify(testCase.resourceType, testCase.actions, testCase);
+  eq(python.risk, "dangerous", "Python forget risk");
+  eq(browser.risk, python.risk, "browser forget risk");
+  contains(browser.explanation, "Python analyzer");
+});
+
+console.log("--- Compliance Matcher Parity Tests ---");
+
+assert("SOC 2 exact and wildcard controls match the canonical catalog", () => {
+  const compliance = loadPlan("compliance.json");
+  const changes = [
+    { type: "aws_ecs_service", actions: ["update"] },
+    { type: "custom_resource", actions: ["update"] },
+  ];
+  matchCompliance(changes, "soc2", compliance);
+  eq(JSON.stringify(changes[0].controls.map(control => control.id)), JSON.stringify(["CC7.1", "CC8.1", "A1.2"]));
+  eq(JSON.stringify(changes[1].controls.map(control => control.id)), JSON.stringify(["CC8.1"]));
+});
+
+assert("compliance matching canonicalizes action tuples and deduplicates IDs", () => {
+  const changes = [{ type: "example_resource", actions: ["update", "create"] }];
+  const compliance = {
+    test: {
+      mappings: [
+        { resource_type: "example_resource", actions: ["create"], controls: [{ id: "CREATE", title: "Create only" }] },
+        { resource_type: "example_resource", actions: ["create/update"], controls: [{ id: "SHARED", title: "Exact" }] },
+        { resource_type: "*", actions: ["*"], controls: [{ id: "SHARED", title: "Wildcard duplicate" }, { id: "BASE", title: "Baseline" }] },
+      ],
+    },
+  };
+  matchCompliance(changes, "test", compliance);
+  eq(JSON.stringify(changes[0].controls.map(control => control.id)), JSON.stringify(["SHARED", "BASE"]));
+});
+
 console.log("--- Fixture Plan Tests ---");
 
 function loadPlan(filename) {
@@ -812,10 +1068,10 @@ assert("fixture: floci-spike-destroy-plan matches Python", () => {
 
 console.log("--- Edge Cases ---");
 
-assert("unknown resource type falls back to baseline", () => {
+assert("unknown resource type fails closed to dangerous", () => {
   const r = classify("aws_unknown_type", ["update"]);
-  eq(r.risk, "review");
-  contains(r.explanation, "update this resource");
+  eq(r.risk, "dangerous");
+  contains(r.explanation, "audited browser-specific rules");
 });
 assert("no crash on empty change object", () => {
   const r = classify("aws_db_instance", ["update"], {});

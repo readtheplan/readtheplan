@@ -50,9 +50,55 @@ for (const asset of [
   "_headers",
   "_routes.json",
   "functions/api/chat.js",
+  "playground/compliance.json",
+  "playground/risk-floors.js",
 ]) {
   await fs.access(new URL(asset, dist));
 }
+
+const sourceRiskFloors = await fs.readFile(
+  new URL("../playground/risk-floors.js", import.meta.url),
+  "utf8",
+);
+const builtRiskFloors = await fs.readFile(new URL("playground/risk-floors.js", dist), "utf8");
+assert.equal(builtRiskFloors, sourceRiskFloors, "built classifier risk floors");
+const playgroundHtml = await fs.readFile(new URL("playground/index.html", dist), "utf8");
+assert.ok(
+  playgroundHtml.indexOf('/playground/risk-floors.js') <
+    playgroundHtml.indexOf('/playground/classifier.js'),
+  "playground must load generated risk floors before the classifier",
+);
+
+const browserCompliance = JSON.parse(
+  await fs.readFile(new URL("playground/compliance.json", dist), "utf8"),
+);
+const dataIndex = JSON.parse(await fs.readFile(new URL("data/index.json", dist), "utf8"));
+const comparedFrameworks = new Set();
+for (const { file } of Object.values(dataIndex.frameworks)) {
+  const canonicalCatalog = JSON.parse(
+    await fs.readFile(new URL(`data/${file}`, dist), "utf8"),
+  );
+  const framework = canonicalCatalog.framework;
+  const browserCatalog = browserCompliance[framework];
+  assert.ok(browserCatalog, `${framework} browser catalog`);
+  comparedFrameworks.add(framework);
+  assert.equal(browserCatalog.framework, canonicalCatalog.framework, `${framework} framework`);
+  assert.equal(
+    browserCatalog.version,
+    canonicalCatalog.framework_version || "",
+    `${framework} version`,
+  );
+  assert.deepEqual(
+    browserCatalog.mappings,
+    canonicalCatalog.mappings,
+    `${framework} browser catalog must match canonical mappings`,
+  );
+}
+assert.deepEqual(
+  [...comparedFrameworks].sort(),
+  Object.keys(browserCompliance).sort(),
+  "browser and canonical framework sets",
+);
 
 const sitemap = await fs.readFile(new URL("sitemap.xml", dist), "utf8");
 for (const route of [
