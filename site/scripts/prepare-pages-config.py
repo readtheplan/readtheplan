@@ -17,6 +17,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
     import tomli as tomllib
 
 PROJECT_NAME = "readtheplan"
+PAGES_BUILD_OUTPUT_DIR = "dist"
 REQUEST_SIGNAL_FLAG = "enable_request_signal"
 RATE_LIMITER_BINDING = {
     "name": "CHAT_RATE_LIMITER",
@@ -93,6 +94,9 @@ def merge_pages_config(config: Mapping[str, Any]) -> dict[str, Any]:
         )
 
     merged = copy.deepcopy(dict(config))
+    # Wrangler ignores a Pages configuration file without this field. Keep it
+    # authoritative even when `pages download config` omits the value.
+    merged["pages_build_output_dir"] = PAGES_BUILD_OUTPUT_DIR
     _merge_request_signal_flag(merged, "compatibility_flags")
     _merge_rate_limiter_binding(merged, "")
 
@@ -105,6 +109,7 @@ def merge_pages_config(config: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(raw_environment, Mapping):
                 raise ConfigurationError(f"env.{environment_name} must be a table")
             environment = copy.deepcopy(dict(raw_environment))
+            environment["pages_build_output_dir"] = PAGES_BUILD_OUTPUT_DIR
             field = f"env.{environment_name}."
             if "compatibility_flags" in environment:
                 _merge_request_signal_flag(environment, f"{field}compatibility_flags")

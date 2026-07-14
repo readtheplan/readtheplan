@@ -32,6 +32,7 @@ def test_pages_config_merge_is_preserving_and_idempotent() -> None:
         "kv_namespaces": [{"binding": "CACHE", "id": "abc123"}],
         "env": {
             "production": {
+                "pages_build_output_dir": "stale-output",
                 "compatibility_flags": ["production-flag"],
                 "vars": {"PRODUCTION_SETTING": "preserved"},
                 "durable_objects": {
@@ -44,7 +45,10 @@ def test_pages_config_merge_is_preserving_and_idempotent() -> None:
                     ]
                 },
             },
-            "preview": {"limits": {"cpu_ms": 25}},
+            "preview": {
+                "pages_build_output_dir": "",
+                "limits": {"cpu_ms": 25},
+            },
         },
         "durable_objects": {
             "bindings": [
@@ -65,6 +69,7 @@ def test_pages_config_merge_is_preserving_and_idempotent() -> None:
     merged = module.merge_pages_config(original)
 
     assert original == snapshot
+    assert merged["pages_build_output_dir"] == "dist"
     assert merged["vars"] == original["vars"]
     assert merged["kv_namespaces"] == original["kv_namespaces"]
     assert merged["durable_objects"]["other_setting"] == "preserved"
@@ -73,6 +78,8 @@ def test_pages_config_merge_is_preserving_and_idempotent() -> None:
         "production-flag",
         "enable_request_signal",
     ]
+    assert merged["env"]["production"]["pages_build_output_dir"] == "dist"
+    assert merged["env"]["preview"]["pages_build_output_dir"] == "dist"
     assert merged["env"]["production"]["vars"] == {
         "PRODUCTION_SETTING": "preserved"
     }
@@ -98,6 +105,23 @@ def test_pages_config_merge_is_preserving_and_idempotent() -> None:
         "script_name": "readtheplan-chat-rate-limiter",
     }
     assert module.merge_pages_config(merged) == merged
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"name": "readtheplan"},
+        {"name": "readtheplan", "pages_build_output_dir": ""},
+    ],
+)
+def test_pages_config_merge_adds_required_build_output_directory(
+    config: dict[str, object],
+) -> None:
+    module = _load_script()
+
+    merged = module.merge_pages_config(config)
+
+    assert merged["pages_build_output_dir"] == "dist"
 
 
 def test_pages_config_round_trip_writes_wrangler_json(tmp_path: Path) -> None:
@@ -192,7 +216,7 @@ def test_cloudflare_production_workflow_contract() -> None:
         "workers/chat-rate-limiter/wrangler.toml",
         "wrangler@4.110.0 pages download config readtheplan --force",
         "scripts/prepare-pages-config.py wrangler.toml wrangler.json",
-        "wrangler@4.110.0 pages deploy dist",
+        "wrangler@4.110.0 pages deploy",
         '--commit-hash="${GITHUB_SHA}"',
         "src/readtheplan/data/controls/**",
         "src/readtheplan/plan.py",
@@ -204,8 +228,9 @@ def test_cloudflare_production_workflow_contract() -> None:
     assert workflow.index("npm test") < workflow.index("npm run build")
     assert workflow.index("classifier-parity.test.js") < workflow.index("npm run build")
     assert workflow.index("workers/chat-rate-limiter/wrangler.toml") < workflow.index(
-        "pages deploy dist"
+        "pages deploy"
     )
     assert workflow.index("pages download config readtheplan") < workflow.index(
         "prepare-pages-config.py"
     )
+    assert "pages deploy dist" not in workflow
