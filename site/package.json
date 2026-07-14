@@ -7,6 +7,9 @@
     "test": "node scripts/validate.js && node analysis/chat-contract.test.mjs && node analysis/interaction-contract.test.mjs",
     "build": "node scripts/build.js && node analysis/build-contract.test.mjs"
   },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.6"
+  },
   "engines": {
     "node": ">=18"
   }

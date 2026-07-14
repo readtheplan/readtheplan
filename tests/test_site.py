@@ -81,8 +81,10 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "ISO 27001" in html
     assert "HIPAA" in html
     assert 'id="top"' in html
-    assert 'id="matrix-rain"' in html
-    assert 'id="webgl-canvas"' in html
+    assert 'class="hero-proof signal-console"' in html
+    assert "static product preview · no uploaded data" in html
+    assert 'class="risk-orbit"' in html
+    assert 'class="resource-map"' in html
     assert 'id="how-it-works"' in html
     assert 'id="setup"' in html
     assert 'id="agent"' in html
@@ -109,6 +111,14 @@ def test_site_has_client_onboarding_surface() -> None:
 def test_site_build_contract_for_cloudflare_pages() -> None:
     package = json.loads((SITE / "package.json").read_text(encoding="utf-8"))
     build_script = (SITE / "scripts" / "build.js").read_text(encoding="utf-8")
+    eleventy_config = (SITE / "eleventy.config.cjs").read_text(encoding="utf-8")
+    shared_chrome = "\n".join(
+        [
+            (SITE / "_includes" / "site-header.njk").read_text(encoding="utf-8"),
+            (SITE / "_includes" / "site-footer.njk").read_text(encoding="utf-8"),
+            eleventy_config,
+        ]
+    )
     workflow = (ROOT / ".github" / "workflows" / "site.yml").read_text(encoding="utf-8")
 
     assert package["scripts"]["build"] == (
@@ -127,19 +137,19 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert "demo-evidence.json" in build_script
     assert "browsing-topics=()" in build_script
     assert "Cross-Origin-Opener-Policy" in build_script
-    assert "assetDirs" in build_script
-    assert "projectVersion" in build_script
-    assert "canonicalHeader" in build_script
-    assert "canonicalFooter" in build_script
-    assert "site-header:start" in build_script
-    assert "site-footer:start" in build_script
-    assert "__READTHEPLAN_VERSION__" in build_script
-    assert '"fonts"' in build_script
-    assert '"img"' in build_script
-    assert '"tools"' in build_script
-    assert '"resources"' in build_script
-    assert '"mcp"' in build_script
-    assert '"brief"' in build_script
+    assert package["devDependencies"]["@11ty/eleventy"] == "3.1.6"
+    assert "npx eleventy --config=eleventy.config.cjs" in build_script
+    assert "projectVersion" in shared_chrome
+    assert "canonicalHeader" in shared_chrome
+    assert "canonicalFooter" in shared_chrome
+    assert "site-header:start" in shared_chrome
+    assert "site-footer:start" in shared_chrome
+    assert "__READTHEPLAN_VERSION__" in shared_chrome
+    assert '"fonts"' in eleventy_config
+    assert '"img"' in eleventy_config
+    assert '"data"' in eleventy_config
+    assert '"functions"' in eleventy_config
+    assert '"modern.css"' in eleventy_config
     assert "npm --prefix site run build" in workflow
 
     for asset in [
@@ -151,7 +161,6 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
         "sitemap.xml",
     ]:
         assert (SITE / asset).exists()
-        assert asset in build_script
 
 
 def test_static_seo_tools_preserve_local_first_privacy() -> None:

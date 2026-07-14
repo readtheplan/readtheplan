@@ -7,7 +7,7 @@
   <title>readtheplan</title>
   <link rel="canonical" href="https://readtheplan.dev/" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#071018" />
   <meta name="color-scheme" content="dark" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="readtheplan" />
@@ -23,10 +23,8 @@
   <link rel="stylesheet" href="./home.css" />
 </head>
 <body class="home-page">
-  <canvas id="matrix-rain"></canvas>
-  <canvas id="webgl-canvas"></canvas>
   <div class="progress-bar" id="progress-bar"></div>
-  <div class="matrix-vignette" aria-hidden="true"></div>
+  <div class="signal-backdrop" aria-hidden="true"></div>
 
   <nav class="navbar">
     <div class="container nav-shell">
@@ -52,12 +50,12 @@
       <section class="hero-grid" id="top">
         <div class="hero-copy">
           <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Local-first infrastructure review</div>
-          <h1>See what your infrastructure change does <span class="accent-word">before</span> it runs.</h1>
+          <h1>Know what changes <span class="accent-word">before</span> it runs.</h1>
           <p class="hero-lead">Auto-discovers plans, manifests, pipelines, playbooks, and configuration across a repository, then classifies them as safe, review, dangerous, or irreversible. Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST. Runs locally with no accounts, no backend, and <span class="gradient-text">No plan upload</span>.</p>
           <div class="hero-actions">
             <div class="cta-row">
-              <a class="cta-btn" href="#setup">Generate your setup</a>
-              <a class="cta-btn outline" href="https://readtheplan.dev/playground/">Try the playground &rarr;</a>
+              <a class="cta-btn" href="https://readtheplan.dev/playground/">Try the playground <span aria-hidden="true">→</span></a>
+              <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan">View on GitHub <span aria-hidden="true">↗</span></a>
             </div>
             <div class="install-wrap">
               <span class="prompt-mark" aria-hidden="true">&gt;</span>
@@ -74,35 +72,42 @@
           </div>
         </div>
 
-        <div class="hero-proof">
-          <div class="terminal-box hero-terminal">
-            <div class="terminal-head">
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
-              <span class="terminal-title">readtheplan analyze --framework soc2 plan.json</span>
-              <button class="copy-mini" type="button" onclick="copyBlock(this)">Copy</button>
+        <div class="hero-proof signal-console" aria-label="Sample infrastructure analysis">
+          <div class="signal-console__head">
+            <div><span class="status-dot" aria-hidden="true"></span><strong>Sample analysis</strong></div>
+            <span>static product preview · no uploaded data</span>
+          </div>
+          <div class="signal-console__summary">
+            <div class="risk-orbit" aria-label="34 sample changes">
+              <div><strong>34</strong><span>changes</span></div>
             </div>
-            <div class="terminal-body">
-              <div><span class="t-prompt">$</span> <span class="t-cmd">readtheplan analyze --framework soc2 plan.json</span></div>
-              <div class="spacer"></div>
-              <div class="cli-line"><span class="t-safe">safe</span> <span class="t-addr">aws_s3_bucket.logs</span> <span class="t-dim">tag update · CC6.1</span></div>
-              <div class="cli-line"><span class="t-review">review</span> <span class="t-addr">aws_security_group.web</span> <span class="t-dim">ingress rule change · CC6.6</span></div>
-              <div class="cli-line"><span class="t-danger">dangerous</span> <span class="t-addr">aws_iam_role_policy.app</span> <span class="t-dim">policy replaced · CC6.3</span></div>
-              <div class="cli-line"><span class="t-irrev">irreversible</span> <span class="t-addr">aws_kms_key.primary</span> <span class="t-dim">key deletion scheduled · CC6.7</span></div>
-              <div class="cli-line t-summary">4 changes · add --evidence to emit rtp-evidence-soc2.json</div>
+            <div class="risk-legend">
+              <span><i class="tier-safe"></i><b>23</b> Safe</span>
+              <span><i class="tier-review"></i><b>7</b> Review</span>
+              <span><i class="tier-danger"></i><b>3</b> Dangerous</span>
+              <span><i class="tier-irrev"></i><b>1</b> Irreversible</span>
+            </div>
+            <div class="gate-state"><span>CI gate</span><strong>BLOCK</strong><small>4 findings need review</small></div>
+          </div>
+          <div class="signal-console__body">
+            <div class="resource-map" aria-label="Sample resource relationship map">
+              <span class="map-label">Blast radius · 6 resources</span>
+              <div class="map-node map-node--core">aws_s3_bucket.logs</div>
+              <div class="map-node map-node--one">aws_iam_role.app</div>
+              <div class="map-node map-node--two">aws_kms_key.primary</div>
+              <div class="map-node map-node--three">aws_cloudwatch_log_group.app</div>
+              <svg viewBox="0 0 500 220" role="presentation" aria-hidden="true"><path d="M250 110 L95 55 M250 110 L405 55 M250 110 L250 190" /></svg>
+            </div>
+            <div class="finding-stack">
+              <span class="map-label">Top findings</span>
+              <div><i class="tier-irrev"></i><span><b>KMS deletion scheduled</b><small>CC6.1 · permanent impact</small></span><strong>01</strong></div>
+              <div><i class="tier-danger"></i><span><b>IAM policy replaced</b><small>CC6.3 · privilege change</small></span><strong>02</strong></div>
+              <div><i class="tier-review"></i><span><b>Public ingress changed</b><small>CC6.6 · network exposure</small></span><strong>03</strong></div>
             </div>
           </div>
-
-          <div class="hero-aside">
-            <div class="aside-card">
-              <div class="aside-label">Pipeline contract</div>
-              <div class="aside-copy">Deterministic proceed / warn / block output for humans, CI, and coding agents.</div>
-            </div>
-            <div class="aside-card">
-              <div class="aside-label">Why it matters</div>
-              <div class="aside-copy">Terraform’s plan/apply split only works if the risky changes are easy to see before approval.</div>
-            </div>
+          <div class="signal-console__foot">
+            <code><span class="t-prompt">$</span> readtheplan analyze --framework soc2 plan.json</code>
+            <span>rtp-evidence-soc2.json · local output</span>
           </div>
         </div>
       </section>
@@ -625,7 +630,5 @@
     updateGen();
     updateCLIPreview();
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="./matrix.js"></script>
 </body>
 </html>

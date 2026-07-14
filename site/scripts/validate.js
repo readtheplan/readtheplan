@@ -21,7 +21,11 @@ function forbidIncludes(source, token, label) {
 
 const html = read("index.html");
 const css = read("matrix.css");
+const modernCss = read("modern.css");
 const buildScript = read("scripts/build.js");
+const eleventyConfig = read("eleventy.config.cjs");
+const packageJson = read("package.json");
+const sharedChrome = `${read("_includes/site-header.njk")}\n${read("_includes/site-footer.njk")}\n${eleventyConfig}`;
 const mcpHtml = read("mcp/index.html");
 const briefHtml = read("brief/index.html");
 const sampleBriefHtml = read("brief/sample-001/index.html");
@@ -33,8 +37,10 @@ const llms = read("llms.txt");
 // Index page contract: single linear landing page, local-first setup, community-driven.
 for (const token of [
   'id="top"',
-  'id="matrix-rain"',
-  'id="webgl-canvas"',
+  'class="hero-proof signal-console"',
+  "static product preview · no uploaded data",
+  'class="risk-orbit"',
+  'class="resource-map"',
   'id="how-it-works"',
   'id="install-cmd"',
   'id="copy-install"',
@@ -108,31 +114,25 @@ if (/<form[^>]+action=/i.test(html)) {
   throw new Error("Client intake form must not submit to a backend.");
 }
 
-// Shared visual contract: routed pages should match the Matrix theme.
+// Shared visual contract: routes use the graphite signal workspace system.
 for (const token of [
-  "JetBrains Mono",
-  "url('/fonts/JetBrainsMono-Regular.woff2')",
-  "--matrix-bg: #000000;",
-  "--matrix-green: #00FF41;",
-  "--matrix-fg: #00CC33;",
-  "--matrix-glow:",
-  "--matrix-text-glow:",
-  "font-family: var(--font-mono);",
-  ".gradient-text {",
-  ".navbar {",
-  ".cta-btn",
-  ".terminal-box {",
-  "Matrix Theme for readtheplan",
-  "Scanline overlay",
-  "Digital rain",
-  "phosp",
-  "background: var(--matrix-bg);",
-  "border: 1px solid rgba(0, 255, 65,",
+  "--signal-bg: #071018;",
+  "--signal-panel: #0b1620;",
+  "--signal-green: #5eea9b;",
+  "--signal-cyan: #48c8ed;",
+  ".site-nav__inner",
+  ".site-footer__inner",
+  ".signal-console",
+  ".risk-orbit",
+  ".resource-map",
+  ".playground-page",
+  ".evidence-paper",
+  "@media print",
 ]) {
-  requireIncludes(css, token, "Matrix CSS token");
+  requireIncludes(modernCss, token, "modern design system token");
 }
 
-if (!css.includes("@media (max-width: 768px)") && !css.includes("@media (max-width: 720px)")) {
+if (!modernCss.includes("@media (max-width: 720px)")) {
   throw new Error("Responsive mobile styles are required.");
 }
 
@@ -156,19 +156,23 @@ for (const token of [
 
 for (const token of [
   "projectVersion",
-  "canonicalHeader",
-  "canonicalFooter",
   "site-header:start",
   "site-footer:start",
   "__READTHEPLAN_VERSION__",
   "pyproject.toml",
+  "canonical-site-shell",
+  "site-header.njk",
+  "site-footer.njk",
 ]) {
-  requireIncludes(buildScript, token, "canonical build chrome");
+  requireIncludes(sharedChrome, token, "Eleventy canonical build chrome");
 }
 
-for (const token of ["assetDirs", '"fonts"', '"img"', '"tools"', '"resources"', '"mcp"', '"brief"']) {
-  requireIncludes(buildScript, token, "build script asset/route copy token");
+for (const token of ['"fonts"', '"img"', '"data"', '"functions"', '"modern.css"']) {
+  requireIncludes(eleventyConfig, token, "Eleventy passthrough token");
 }
+
+requireIncludes(packageJson, '"@11ty/eleventy": "3.1.6"', "pinned Eleventy dependency");
+requireIncludes(buildScript, "npx eleventy --config=eleventy.config.cjs", "Eleventy build invocation");
 
 for (const file of [
   "404.html",
@@ -182,7 +186,6 @@ for (const file of [
   if (!fs.existsSync(path.join(root, file))) {
     throw new Error(`Missing static site asset: ${file}`);
   }
-  requireIncludes(buildScript, file, "static site asset copy token");
 }
 
 for (const token of [

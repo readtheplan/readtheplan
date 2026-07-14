@@ -33,9 +33,10 @@ for (const route of routes) {
   const html = await fs.readFile(new URL(route, dist), "utf8");
   assert.equal((html.match(/site-header:start/g) || []).length, 1, `${route} header`);
   assert.equal((html.match(/site-footer:start/g) || []).length, 1, `${route} footer`);
-  assert.match(html, /class="navbar site-nav"/);
+  assert.match(html, /class="site-nav"/);
   assert.match(html, /class="site-footer"/);
-  assert.match(html, /class="nav-version">v0\.4\.0</);
+  assert.match(html, /class="site-brand__version">v0\.4\.0</);
+  assert.match(html, /href="\/modern\.css"/);
   assert.doesNotMatch(html, /__READTHEPLAN_VERSION__/);
 }
 
@@ -44,6 +45,7 @@ for (const asset of [
   "robots.txt",
   "sitemap.xml",
   "matrix.css",
+  "modern.css",
   "_headers",
   "_routes.json",
   "functions/api/chat.js",

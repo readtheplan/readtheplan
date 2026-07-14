@@ -31,6 +31,9 @@ jobs:
       - name: Install Python deps
         run: python -m pip install pyyaml
 
+      - name: Install site dependencies
+        run: npm ci --prefix site
+
       - name: Generate compliance data JSON
         run: python site/scripts/convert_data.py
 

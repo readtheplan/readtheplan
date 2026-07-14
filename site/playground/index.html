@@ -18,7 +18,7 @@
     <meta name="twitter:description" content="Drag your Terraform plan.json to see instant risk analysis." />
     <link rel="stylesheet" href="/matrix.css" />
   </head>
-  <body>
+  <body class="playground-page">
     <div class="progress-bar" id="progress-bar"></div>
     <div class="noise" aria-hidden="true"></div>
     <header class="topbar g" aria-label="Primary">
@@ -64,11 +64,13 @@
             <p style="color:var(--muted);font-size:13px;margin-top:8px">Generated from <code>terraform show -json tfplan</code></p>
           </div>
           <input type="file" id="fileInput" accept=".json" style="display:none" />
-          <div style="text-align:center;margin-top:16px">
-            <p style="color:var(--muted);font-size:13px;margin-bottom:8px">No plan handy? Load a sample generated against real emulated AWS (Floci):</p>
-            <button id="loadCreate" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">📦 Create plan (7 resources)</button>
-            <button id="loadDestroy" style="background:var(--surface);color:#ef4444;border:1px solid #ef4444;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;margin:4px">💣 Destroy plan (7 resources)</button>
-            <p id="sampleMeta" style="color:var(--muted);font-size:12px;margin-top:8px">Sample source: Floci emulated AWS</p>
+          <div class="sample-picker">
+            <p class="sample-note">No plan handy? Load a sample generated against real emulated AWS (Floci):</p>
+            <div class="sample-actions">
+              <button class="sample-button" id="loadCreate">Create plan (7 resources)</button>
+              <button class="sample-button sample-button--destroy" id="loadDestroy">Destroy plan (7 resources)</button>
+            </div>
+            <p id="sampleMeta" class="sample-note">Sample source: Floci emulated AWS</p>
           </div>
           <div style="text-align:center;margin-top:8px">
             <a href="/demo/" style="color:var(--muted);font-size:12px">Or see the interactive demo →</a>
