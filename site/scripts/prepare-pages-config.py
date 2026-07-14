@@ -24,19 +24,6 @@ RATE_LIMITER_BINDING = {
     "class_name": "ChatRateLimiter",
     "script_name": "readtheplan-chat-rate-limiter",
 }
-NON_INHERITABLE_KEYS = {
-    "ai",
-    "analytics_engine_datasets",
-    "d1_databases",
-    "durable_objects",
-    "hyperdrive",
-    "kv_namespaces",
-    "queues",
-    "r2_buckets",
-    "services",
-    "vars",
-    "vectorize",
-}
 
 
 class ConfigurationError(ValueError):
@@ -109,12 +96,12 @@ def merge_pages_config(config: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(raw_environment, Mapping):
                 raise ConfigurationError(f"env.{environment_name} must be a table")
             environment = copy.deepcopy(dict(raw_environment))
-            environment["pages_build_output_dir"] = PAGES_BUILD_OUTPUT_DIR
+            # Pages accepts this field only at the root; discard stale overrides.
+            environment.pop("pages_build_output_dir", None)
             field = f"env.{environment_name}."
             if "compatibility_flags" in environment:
                 _merge_request_signal_flag(environment, f"{field}compatibility_flags")
-            if NON_INHERITABLE_KEYS.intersection(environment):
-                _merge_rate_limiter_binding(environment, field)
+            _merge_rate_limiter_binding(environment, field)
             environments[environment_name] = environment
         merged["env"] = environments
 

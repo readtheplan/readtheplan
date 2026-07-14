@@ -78,12 +78,18 @@ def test_pages_config_merge_is_preserving_and_idempotent() -> None:
         "production-flag",
         "enable_request_signal",
     ]
-    assert merged["env"]["production"]["pages_build_output_dir"] == "dist"
-    assert merged["env"]["preview"]["pages_build_output_dir"] == "dist"
+    assert "pages_build_output_dir" not in merged["env"]["production"]
+    assert "pages_build_output_dir" not in merged["env"]["preview"]
     assert merged["env"]["production"]["vars"] == {
         "PRODUCTION_SETTING": "preserved"
     }
-    assert "durable_objects" not in merged["env"]["preview"]
+    assert merged["env"]["preview"]["durable_objects"]["bindings"] == [
+        {
+            "name": "CHAT_RATE_LIMITER",
+            "class_name": "ChatRateLimiter",
+            "script_name": "readtheplan-chat-rate-limiter",
+        }
+    ]
 
     bindings = merged["durable_objects"]["bindings"]
     assert bindings[0] == original["durable_objects"]["bindings"][0]
@@ -105,6 +111,26 @@ def test_pages_config_merge_is_preserving_and_idempotent() -> None:
         "script_name": "readtheplan-chat-rate-limiter",
     }
     assert module.merge_pages_config(merged) == merged
+
+
+def test_pages_config_adds_binding_to_environment_without_other_bindings() -> None:
+    module = _load_script()
+
+    merged = module.merge_pages_config(
+        {
+            "name": "readtheplan",
+            "env": {"production": {"compatibility_flags": ["nodejs_compat"]}},
+        }
+    )
+
+    production = merged["env"]["production"]
+    assert production["compatibility_flags"] == [
+        "nodejs_compat",
+        "enable_request_signal",
+    ]
+    assert production["durable_objects"]["bindings"] == [
+        module.RATE_LIMITER_BINDING,
+    ]
 
 
 @pytest.mark.parametrize(
