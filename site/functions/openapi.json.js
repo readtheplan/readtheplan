@@ -14,7 +14,7 @@ export async function onRequest(context) {
     openapi: "3.0.3",
     info: {
       title: "readtheplan API",
-      version: "0.3.0",
+      version: "0.4.0",
       description: "Static data API serving compliance catalogs, demo plans, and version info."
     },
     servers: [{ url: "https://readtheplan.dev" }],

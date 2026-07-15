@@ -48,8 +48,38 @@
     window.addEventListener("scroll", updatePageState, { passive: true });
     window.addEventListener("resize", updatePageState, { passive: true });
 
-    document.querySelectorAll("pre.code-output, pre.gen-block, .copyable-code pre").forEach(function (block) {
-      if (block.parentElement && block.parentElement.classList.contains("code-shell")) return;
+    /* Shared copy behavior — single owner for every copy affordance.
+       (Replaces the copy handlers formerly duplicated in app.js.) */
+    function flashCopied(button) {
+      var original = button.textContent;
+      button.textContent = "Copied";
+      window.setTimeout(function () { button.textContent = original; }, 1400);
+    }
+
+    document.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-copy-block], [data-copy]");
+      if (!button) return;
+      var text = "";
+      if (button.hasAttribute("data-copy")) {
+        var target = document.getElementById(button.getAttribute("data-copy"));
+        if (!target) return;
+        text = target.textContent || "";
+      } else {
+        var block = button.closest(".mini-terminal, .terminal-box, .terminal-frame, .code-shell, .evidence-paper");
+        if (!block) return;
+        var clone = block.cloneNode(true);
+        clone.querySelectorAll("button").forEach(function (b) { b.remove(); });
+        text = (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+      }
+      navigator.clipboard.writeText(text).then(function () { flashCopied(button); });
+    });
+
+    /* Every code block gets a copy affordance (bare <pre> included —
+       docs pages rely on this; formerly app.js enhanceCodeCopy). */
+    document.querySelectorAll("pre, .code-output").forEach(function (block) {
+      if (block.dataset.copyEnhanced === "true") return;
+      if (block.closest(".code-shell, .mini-terminal, .terminal-body, .msg")) return;
+      block.dataset.copyEnhanced = "true";
       var shell = document.createElement("div");
       shell.className = "code-shell";
       block.parentNode.insertBefore(shell, block);

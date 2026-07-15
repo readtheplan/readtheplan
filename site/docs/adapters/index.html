@@ -1,49 +1,15 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Built-in infrastructure adapters and developer guide for extending readtheplan with additional plan formats." />
-    <title>Adapters — readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/docs/adapters/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="readtheplan — IaC adapters developer guide" />
-    <meta property="og:description" content="How to write a new IaC adapter for Pulumi, CDK, or any other infrastructure-as-code tool." />
-    <meta property="og:url" content="https://readtheplan.dev/docs/adapters/" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="readtheplan — adapters developer guide" />
-    <meta name="twitter:description" content="Write a new IaC adapter for readtheplan. Covers BaseAdapter, detection, testing, and PR submission." />
-    <link rel="stylesheet" href="/matrix.css" />
-  </head>
-  <body>
-    <div class="progress-bar" id="progress-bar"></div>
-    <div class="noise" aria-hidden="true"></div>
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="/" aria-label="readtheplan home">
-        <span class="brand-mark" aria-hidden="true">rtp</span>
-        <span>readtheplan</span>
-      </a>
-      <nav class="navlinks gc" aria-label="Project links">
-        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
-      </nav>
-      <nav class="navlinks gc" aria-label="Page links">
-        <a href="/#resources">Tools</a>
-        <a href="/docs/">Docs</a>
-        <a href="/demo/">Demo</a>
-        <a href="/playground/">Playground</a>
-        <a href="/#setup">Setup</a>
-      </nav>
-      <div class="version-cell gc">v0.4.0</div>
-    </header>
-
-    <main class="workspace">
+---
+title: "Adapters \u2014 readtheplan"
+description: "Built-in infrastructure adapters and developer guide for extending readtheplan with additional plan formats."
+canonical: "https://readtheplan.dev/docs/adapters/"
+ogTitle: "readtheplan \u2014 IaC adapters developer guide"
+ogDescription: "How to write a new IaC adapter for Pulumi, CDK, or any other infrastructure-as-code tool."
+---
+<main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="title">
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
-          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / Adapters</p>
+          <nav class="eyebrow breadcrumb" aria-label="Breadcrumb"><a href="/docs/">Docs</a> <span aria-hidden="true">/</span> Adapters</nav>
           <h1 id="title">One risk gate for every infrastructure tool.</h1>
           <p class="intro-copy">
             readtheplan ships cross-tool infrastructure gates and a public adapter system for adding
@@ -702,6 +668,3 @@ Lists the resource types currently mapped in the adapter.</code></pre>
         </div>
       </section>
     </main>
-    <script src="/app.js" type="module"></script>
-  </body>
-</html>

@@ -26,6 +26,29 @@ for (const component of [
 assert.match(modern, /@media \(max-width: 720px\)/);
 assert.match(modern, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(modern, /:focus-visible/);
+
+// Control-map rows carry three fields (label / purpose / detail) on the MCP,
+// brief, and control-mapper routes. Pin the exact three-track grid and its
+// single-column mobile collapse — and assert these are the ONLY
+// grid-template-columns declarations that can ever apply to the row, so an
+// overriding rule elsewhere cannot silently change the layout.
+const controlMapDeclarations = [...modern.matchAll(/\.control-map-row[^{]*\{[^}]*?grid-template-columns:\s*([^;]+);/g)]
+  .map((match) => match[1].trim());
+assert.deepEqual(
+  controlMapDeclarations,
+  ["minmax(150px, 0.7fr) minmax(0, 1.1fr) minmax(0, 1.2fr)", "minmax(0, 1fr)"],
+  "control-map rows must have exactly two grid declarations: the three-track desktop grid and the one-column mobile collapse",
+);
+assert.match(
+  modern,
+  /@media \(max-width: 720px\) \{\s*\n\s*\.control-map-row \{ grid-template-columns: minmax\(0, 1fr\); \}/,
+  "the one-column declaration must live in the mobile media query",
+);
+// No other selector may set grid-template-columns on control-map rows.
+const foreignOverrides = [...modern.matchAll(/^([^@{}]+)\{[^}]*grid-template-columns/gm)]
+  .map((m) => m[1].trim())
+  .filter((sel) => sel.includes("control-map") && !sel.startsWith(".control-map-row"));
+assert.deepEqual(foreignOverrides, [], "no foreign selector may override control-map row columns");
 assert.match(motion, /IntersectionObserver/);
 assert.match(motion, /aria-current/);
 assert.match(motion, /pointermove/);

@@ -1,49 +1,15 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="readtheplan CLI reference — local risk gates for cloud plans, Kubernetes, CI pipelines, Docker Compose, Nomad, and configuration management." />
-    <title>CLI Reference — readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/docs/cli/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="readtheplan — CLI reference" />
-    <meta property="og:description" content="Complete CLI reference for infrastructure plans, manifests, playbooks, recipes, and pipelines." />
-    <meta property="og:url" content="https://readtheplan.dev/docs/cli/" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="readtheplan — CLI reference" />
-    <meta name="twitter:description" content="Complete CLI reference for readtheplan." />
-    <link rel="stylesheet" href="/matrix.css" />
-  </head>
-  <body>
-    <div class="progress-bar" id="progress-bar"></div>
-    <div class="noise" aria-hidden="true"></div>
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="/" aria-label="readtheplan home">
-        <span class="brand-mark" aria-hidden="true">rtp</span>
-        <span>readtheplan</span>
-      </a>
-      <nav class="navlinks gc" aria-label="Project links">
-        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
-      </nav>
-      <nav class="navlinks gc" aria-label="Page links">
-        <a href="/#resources">Tools</a>
-        <a href="/docs/">Docs</a>
-        <a href="/demo/">Demo</a>
-        <a href="/playground/">Playground</a>
-        <a href="/#setup">Setup</a>
-      </nav>
-      <div class="version-cell gc">v0.4.0</div>
-    </header>
-
-    <main class="workspace">
+---
+title: "CLI Reference \u2014 readtheplan"
+description: "readtheplan CLI reference \u2014 local risk gates for cloud plans, Kubernetes, CI pipelines, Docker Compose, Nomad, and configuration management."
+canonical: "https://readtheplan.dev/docs/cli/"
+ogTitle: "readtheplan \u2014 CLI reference"
+ogDescription: "Complete CLI reference for infrastructure plans, manifests, playbooks, recipes, and pipelines."
+---
+<main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="title">
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
-          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / CLI Reference</p>
+          <nav class="eyebrow breadcrumb" aria-label="Breadcrumb"><a href="/docs/">Docs</a> <span aria-hidden="true">/</span> CLI Reference</nav>
           <h1 id="title">Every command. Every flag.</h1>
           <p class="intro-copy">readtheplan ships as one local CLI for infrastructure plans, manifests, playbooks, recipes, and pipelines. Your change data never leaves your machine.</p>
         </div>
@@ -64,7 +30,7 @@
           <p style="color:var(--muted);margin:8px 0 16px">Recursively discover supported infrastructure files, run the matching local analyzers, and emit one aggregate project gate. Dependency/build directories and symlinks are skipped by default.</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan scan --framework soc2 .</code></pre>
           <h3 style="margin-top:24px;color:var(--accent)">Flags</h3>
-          <table style="width:100%;border-collapse:collapse;margin-top:12px">
+          <div class="table-wrap"><table>
             <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px 12px;color:var(--muted)">Flag</th><th style="padding:8px 12px;color:var(--muted)">Description</th></tr></thead>
             <tbody>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--framework NAME</td><td style="padding:8px 12px;color:var(--muted)">Include framework checks in every per-file gate.</td></tr>
@@ -72,7 +38,7 @@
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--max-files N</td><td style="padding:8px 12px;color:var(--muted)">Fail closed after discovering more than N supported inputs. Default: 500.</td></tr>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--max-file-bytes N</td><td style="padding:8px 12px;color:var(--muted)">Record oversized inputs as validation errors. Default: 10 MiB.</td></tr>
             </tbody>
-          </table>
+          </table></div>
           <p style="color:var(--muted);margin-top:16px">Output uses <code>rtp-agent-gate-v1</code> with <code>adapter: project-scan</code>, aggregate risk counts, per-file summaries, and redacted validation errors. Exit codes are <code>0</code> proceed, <code>1</code> warn, and <code>2</code> block.</p>
         </div>
       </section>
@@ -83,7 +49,7 @@
           <p style="color:var(--muted);margin:8px 0 16px">Analyze a Terraform plan JSON file and classify every change by risk tier.</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan analyze [flags] plan.json</code></pre>
           <h3 style="margin-top:24px;color:var(--accent)">Flags</h3>
-          <table style="width:100%;border-collapse:collapse;margin-top:12px">
+          <div class="table-wrap"><table>
             <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px 12px;color:var(--muted)">Flag</th><th style="padding:8px 12px;color:var(--muted)">Description</th></tr></thead>
             <tbody>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--format text|json</td><td style="padding:8px 12px;color:var(--muted)">Output format. Default: text.</td></tr>
@@ -97,7 +63,7 @@
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--reviewer-id ID</td><td style="padding:8px 12px;color:var(--muted)">Reviewer identifier for evidence output.</td></tr>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--reviewer-kind human|agent</td><td style="padding:8px 12px;color:var(--muted)">Reviewer kind. Default: human.</td></tr>
             </tbody>
-          </table>
+          </table></div>
           <h3 style="margin-top:24px;color:var(--accent)">Exit codes</h3>
           <p style="color:var(--muted);margin-top:12px"><code>0</code> means analysis succeeded without tripping <code>--fail-on</code>; <code>1</code> means a hard error such as invalid input or an I/O failure; <code>2</code> means analysis succeeded and one or more changes met or exceeded the configured threshold.</p>
         </div>
@@ -109,12 +75,12 @@
           <p style="color:var(--muted);margin:8px 0 16px">Emit a proceed/warn/block decision for CI pipelines and AI coding agents.</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan agent-gate [flags] plan.json</code></pre>
           <h3 style="margin-top:24px;color:var(--accent)">Flags</h3>
-          <table style="width:100%;border-collapse:collapse;margin-top:12px">
+          <div class="table-wrap"><table>
             <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:8px 12px;color:var(--muted)">Flag</th><th style="padding:8px 12px;color:var(--muted)">Description</th></tr></thead>
             <tbody>
               <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-family:monospace;font-size:13px">--framework soc2|iso27001|hipaa|pci_dss|fedramp_moderate|hitrust</td><td style="padding:8px 12px;color:var(--muted)">Include required check IDs from a built-in framework.</td></tr>
             </tbody>
-          </table>
+          </table></div>
           <h3 style="margin-top:24px;color:var(--accent)">Output</h3>
           <p style="color:var(--muted)">JSON with <code>schema</code>, <code>decision</code> (proceed/warn/block), <code>risk</code>, <code>required_checks</code>, <code>allowed_next_actions</code>, <code>prohibited_next_actions</code>, <code>pr_comment</code>, <code>evidence_checklist</code>, <code>auditor_summary</code>, and <code>risk_counts</code>.</p>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>readtheplan agent-gate plan.json
@@ -232,6 +198,3 @@ readtheplan kapp kapp-config.yml</code></pre>
         </div>
       </section>
     </main>
-    <script src="/app.js" type="module"></script>
-  </body>
-</html>
