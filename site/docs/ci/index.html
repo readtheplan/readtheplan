@@ -1,36 +1,15 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Run readtheplan as a portable infrastructure risk gate in GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket Pipelines, or any shell-capable runner." />
-    <title>CI/CD integrations — readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/docs/ci/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="readtheplan — CI/CD integrations" />
-    <meta property="og:description" content="One versioned CLI gate for GitHub Actions, GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other CI systems." />
-    <meta property="og:url" content="https://readtheplan.dev/docs/ci/" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="/matrix.css" />
-  </head>
-  <body>
-    <div class="progress-bar" id="progress-bar"></div>
-    <div class="noise" aria-hidden="true"></div>
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="/" aria-label="readtheplan home"><span class="brand-mark" aria-hidden="true">rtp</span><span>readtheplan</span></a>
-      <nav class="navlinks gc" aria-label="Project links"><a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a></nav>
-      <nav class="navlinks gc" aria-label="Page links"><a href="/docs/">Docs</a><a href="/#setup">Setup</a></nav>
-      <div class="version-cell gc">v0.4.0</div>
-    </header>
-
-    <main class="workspace">
+---
+title: "CI/CD integrations \u2014 readtheplan"
+description: "Run readtheplan as a portable infrastructure risk gate in GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket Pipelines, or any shell-capable runner."
+canonical: "https://readtheplan.dev/docs/ci/"
+ogTitle: "readtheplan \u2014 CI/CD integrations"
+ogDescription: "One versioned CLI gate for GitHub Actions, GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other CI systems."
+---
+<main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="title">
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
-          <p class="eyebrow"><a href="/docs/" style="color:var(--muted);text-decoration:none">Docs</a> / CI/CD integrations</p>
+          <nav class="eyebrow breadcrumb" aria-label="Breadcrumb"><a href="/docs/">Docs</a> <span aria-hidden="true">/</span> CI/CD integrations</nav>
           <h1 id="title">One local gate for any CI system.</h1>
           <p class="intro-copy">The GitHub Action is a native wrapper. The versioned CLI contract works in GitLab CI, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket Pipelines, and any shell-capable runner.</p>
         </div>
@@ -41,7 +20,7 @@
           <h2 id="contract-title">Portable gate contract</h2>
           <pre style="background:var(--surface);padding:16px 20px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;font-size:14px"><code>terraform plan -out=tfplan -input=false
 terraform show -json tfplan &gt; plan.json
-python -m pip install "readtheplan==0.4.0"
+python -m pip install "readtheplan==__READTHEPLAN_VERSION__"
 readtheplan analyze --fail-on dangerous plan.json</code></pre>
           <p style="color:var(--muted);margin-top:16px"><code>0</code> continues, <code>2</code> means the configured risk threshold was reached, and <code>1</code> means a hard input or execution error. The normal report is printed before the process exits.</p>
         </div>
@@ -71,5 +50,3 @@ readtheplan analyze --fail-on dangerous plan.json</code></pre>
         </div>
       </section>
     </main>
-  </body>
-</html>

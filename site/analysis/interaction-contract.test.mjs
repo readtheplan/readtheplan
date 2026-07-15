@@ -7,43 +7,54 @@ const read = async (path) => fs.readFile(new URL(path, root), "utf8");
 const htmlScript = (html) => [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join("\n");
 
 const chatHtml = await read("chat/index.html");
-const chatInline = htmlScript(chatHtml);
-new Function(chatInline);
-const renderers = new Function(chatInline + "\nreturn { escapeHtml, renderSafeMarkdown };")();
+assert.equal(htmlScript(chatHtml), "", "chat page must not ship inline scripts (CSP)");
+const chatModule = await read("chat/chat.js");
+new Function(chatModule);
+const renderers = new Function(chatModule + "\nreturn { escapeHtml, renderSafeMarkdown };")();
 const hostile = renderers.renderSafeMarkdown('<img src=x onerror=alert(1)> [bad](javascript:alert(1)) [ok](https://example.com)');
 assert.match(hostile, /&lt;img/);
 assert.doesNotMatch(hostile, /<img/);
 assert.doesNotMatch(hostile, /href="javascript:/);
 assert.match(hostile, /href="https:\/\/example\.com\/"/);
 assert.match(hostile, /rel="noopener noreferrer"/);
-assert.match(chatInline, /div\.textContent = text/);
+assert.match(chatModule, /div\.textContent = text/);
 assert.match(chatHtml, /Messages are processed by DeepSeek/);
 assert.match(chatHtml, /id="privacyNoticeText"/);
 assert.match(chatHtml, /role="status" aria-live="polite"/);
+assert.match(chatHtml, /<button[^>]+class="suggestion"/, "suggestion chips must be keyboard-accessible buttons");
+assert.match(chatHtml, /<label[^>]+for="userInput"/, "chat input must be labeled");
 
 const privacy = await read("privacy/index.html");
 assert.match(privacy, /AI chat:/);
 assert.match(privacy, /third-party processor/);
 
-const playground = await read("playground/index.html");
-new Function(htmlScript(playground));
+const playgroundHtml = await read("playground/index.html");
+assert.equal(htmlScript(playgroundHtml), "", "playground page must not ship inline scripts (CSP)");
+const playground = await read("playground/playground.js");
+new Function(playground);
 const createPlan = JSON.parse(await read("playground/floci-spike-create-plan.json"));
 const destroyPlan = JSON.parse(await read("playground/floci-spike-destroy-plan.json"));
 assert.equal(createPlan.resource_changes.length, 7);
 assert.equal(destroyPlan.resource_changes.length, 7);
-assert.match(playground, /Create plan \(7 resources\)/);
-assert.match(playground, /Destroy plan \(7 resources\)/);
+assert.match(playgroundHtml, /Create plan \(7 resources\)/);
+assert.match(playgroundHtml, /Destroy plan \(7 resources\)/);
 assert.match(playground, /Create plan - 7 resources \(Floci\)/);
 assert.match(playground, /Destroy plan - 7 resources \(Floci\)/);
 assert.match(playground, /file\.name\.toLowerCase\(\)\.endsWith\("\.json"\)/);
 assert.match(playground, /const hasControls = changes\.some/);
 assert.match(playground, /const controls = hasControls/);
 assert.match(playground, /\(c\.controls \|\| \[\]\)\.map/);
+// All six compliance catalogs are selectable in the playground.
+for (const framework of ["soc2", "iso27001", "hipaa", "pci-dss", "fedramp-moderate", "hitrust"]) {
+  assert.match(playgroundHtml, new RegExp(`<option value="${framework}"`), `playground offers ${framework}`);
+}
 
 const prompt = await read("functions/api/chat.js");
 new Function(prompt.replace("export async function onRequest", "async function onRequest"));
 assert.match(prompt, /readtheplan analyze plan\.json/);
-assert.match(prompt, /readtheplan\/readtheplan@v0\.4\.0/);
+assert.ok(prompt.includes(`readtheplan/readtheplan@v${(await read("../pyproject.toml")).match(/^version\s*=\s*"([^"]+)"/m)[1]}`),
+  "chat prompt version must match pyproject");
+assert.doesNotMatch(prompt, /__READTHEPLAN_VERSION__/);
 assert.match(prompt, /input-file: plan\.json/);
 assert.doesNotMatch(prompt, /plan_file:/);
 assert.doesNotMatch(prompt, /terraform plan -out=\/dev\/stdout \| readtheplan/);
@@ -98,8 +109,12 @@ assert.equal(success.reply, "ok alert(1)");
 assert.match(success.privacy_notice, /DeepSeek/);
 
 const homeHtml = await read("index.html");
-const homeInline = htmlScript(homeHtml);
+assert.equal(htmlScript(homeHtml), "", "homepage must not ship inline scripts (CSP)");
+assert.doesNotMatch(homeHtml, /\son(?:click|keydown|submit|change)=/i, "homepage must not ship inline handlers");
+const homeInline = await read("js/home.js");
 new Function(homeInline);
+const pyprojectToml = await read("../pyproject.toml");
+const projectVersion = pyprojectToml.match(/^version\s*=\s*"([^"]+)"/m)[1];
 const stateGroups = {
   ci: [
     "GitHub Actions",
@@ -137,6 +152,7 @@ const fakeElements = {
 };
 const fakeDocument = {
   querySelector(selector) {
+    if (selector === ".site-brand__version") return { textContent: `v${projectVersion}` };
     const match = selector.match(/^\[data-group="([^"]+)"\]\.active$/);
     if (!match) return null;
     return fakeButtons[match[1]].find((button) => button.textContent === activeState[match[1]]) || null;
@@ -153,7 +169,7 @@ const homeApi = new Function(
   homeInline + "\nreturn { activeVal, activeFramework, activeThreshold, activeEvidence, cliCommand, workflowText, updateGen, updateCLIPreview };",
 )(fakeDocument, { clipboard: { writeText: async () => {} } }, { getSelection: () => ({ removeAllRanges() {}, addRange() {} }) }, () => {});
 const activate = (group, label) => { activeState[group] = label; };
-assert.match(homeApi.workflowText(), /uses: readtheplan\/readtheplan@v0\.4\.0/);
+assert.ok(homeApi.workflowText().includes(`uses: readtheplan/readtheplan@v${projectVersion}`), "workflow pins the pyproject version");
 assert.match(homeApi.workflowText(), /input-file: plan\.json/);
 assert.match(homeApi.workflowText(), /fail-on-threshold: dangerous/);
 assert.match(homeApi.workflowText(), /--framework soc2 --format json --evidence readtheplan-evidence\.json/);
@@ -204,22 +220,17 @@ assert.match(fakeElements["gen-output"].textContent, /version: 2\.1/);
 assert.equal(fakeElements["gen-label"].textContent, "Generated CircleCI config");
 assert.match(fakeElements["cli-preview-cmd"].textContent, /--fail-on review/);
 
-const matrixCss = await read("matrix.css");
-assert.match(matrixCss, /@media \(max-width: 768px\)[\s\S]*?\.g\s*\{[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/);
-assert.match(matrixCss, /\.gc,\s*\.gc:last-child\s*\{[\s\S]*?grid-column: 1 \/ -1/);
-assert.match(matrixCss, /\.utility-panel,[\s\S]*?\.trust-strip\s*\{[\s\S]*?grid-column: 1 \/ -1/);
-assert.match(matrixCss, /\.utility-panel-wide\s*\{[\s\S]*?width: 100%/);
-assert.match(matrixCss, /\.copyable-code\s*\{[\s\S]*?overflow: hidden/);
-assert.match(matrixCss, /table\s*\{[\s\S]*?min-width: 0;[\s\S]*?table-layout: fixed/);
+const systemCss = await read("modern.css");
+assert.match(systemCss, /@media \(max-width: 720px\)/);
+assert.match(systemCss, /\.table-wrap \{ overflow-x: auto/);
+assert.match(systemCss, /\.plan-table-body \[role="row"\], \.demo-table \[role="row"\][\s\S]*?grid-template-columns: 110px minmax\(130px, 0\.42fr\)/);
+assert.match(systemCss, /\.risk-tag\.dangerous[\s\S]*?color: var\(--danger\)/);
+assert.match(systemCss, /\.plan-table-body \[role="row"\], \.demo-table \[role="row"\] \{\s*\n\s*grid-template-columns: minmax\(0, 1fr\)/);
+assert.match(systemCss, /prefers-reduced-motion/);
 
-assert.match(matrixCss, /\.plan-table \[role="row"\][\s\S]*?grid-template-columns: 110px/);
-assert.match(matrixCss, /\.demo-table \[role="row"\][\s\S]*?minmax\(130px, 0\.42fr\)/);
-assert.match(matrixCss, /\.risk-tag\.dangerous \{ color: var\(--danger\); \}/);
-assert.match(matrixCss, /\.demo-table \[role="row"\]\s*\{[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/);
-
-const appJs = await read("app.js");
-assert.match(appJs, /Demo evidence could not be loaded\. You can still run the sample locally\./);
-assert.doesNotMatch(appJs, /The setup generator still works/);
+const demoJs = await read("js/demo.js");
+assert.match(demoJs, /Demo evidence could not be loaded\. You can still run the sample locally\./);
+assert.doesNotMatch(demoJs, /The setup generator still works/);
 
 const cliDocs = await read("docs/cli/index.html");
 assert.match(cliDocs, /one local CLI/);

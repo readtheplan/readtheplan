@@ -8,7 +8,8 @@ const htmlScript = (html) => [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\
   .map((match) => match[1]).join("\n");
 
 const html = await read("chat/index.html");
-const inline = htmlScript(html);
+assert.equal(htmlScript(html), "", "chat page must not ship inline scripts (CSP)");
+const inline = await read("chat/chat.js");
 new Function(inline);
 const { renderSafeMarkdown } = new Function(`${inline}\nreturn { renderSafeMarkdown };`)();
 const hostile = renderSafeMarkdown(
@@ -28,7 +29,11 @@ assert.match(html, /role="status" aria-live="polite"/);
 
 const source = await read("functions/api/chat.js");
 assert.match(source, /readtheplan analyze plan\.json/);
-assert.match(source, /readtheplan\/readtheplan@v0\.4\.0/);
+const chatPyproject = await read("../pyproject.toml");
+const chatProjectVersion = chatPyproject.match(/^version\s*=\s*"([^"]+)"/m)[1];
+assert.ok(source.includes(`readtheplan/readtheplan@v${chatProjectVersion}`),
+  "chat prompt version literal must match pyproject (Pages deploys source functions verbatim)");
+assert.doesNotMatch(source, /__READTHEPLAN_VERSION__/, "functions must not contain unresolved placeholders");
 assert.match(source, /input-file: plan\.json/);
 assert.match(source, /more than 300 control mappings/);
 assert.doesNotMatch(source, /Access-Control-Allow-Origin': '\*'/);

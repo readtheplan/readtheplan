@@ -35,15 +35,17 @@ for (const file of files) {
 
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, `${route} contains duplicate IDs`);
+  // A single tag must never carry two id attributes (double-id regression).
+  assert.doesNotMatch(html, /<[a-z][^>]*\bid="[^"]*"[^>]*\bid="/i, `${route} contains a tag with two id attributes`);
 }
 
 const critical = new Map([
-  ["index.html", ["scan-tabs", "startInteractiveDemo"]],
+  ["index.html", ["scan-tabs", 'src="/js/home.js"', 'id="gen-output"']],
   ["docs/index.html", ["card-grid", "Documentation"]],
-  ["playground/index.html", ["playground-drop-zone", "riskMeter"]],
+  ["playground/index.html", ["playground-drop-zone", "riskMeter", 'src="/playground/playground.js"']],
   ["pricing/index.html", ["pricing-card", "$0"]],
-  ["chat/index.html", ["chat-container", "chat-input-area"]],
-  ["demo/index.html", ["terminal-frame", "risk-meter"]],
+  ["chat/index.html", ["chat-container", "chat-input-area", 'src="/chat/chat.js"']],
+  ["demo/index.html", ["terminal-frame", "risk-meter", 'src="/js/demo.js"']],
   ["mcp/index.html", ["control-map", "code-output"]],
   ["tools/terraform-risk-calculator/index.html", ["riskCalculator", "result-card"]],
 ]);
@@ -51,6 +53,25 @@ const critical = new Map([
 for (const [route, markers] of critical) {
   const html = await readFile(path.join(dist, route), "utf8");
   for (const marker of markers) assert.ok(html.includes(marker), `${route} lost ${marker}`);
+}
+
+// Control-map rows are exactly three flat <span> fields on every route that
+// renders them — nested elements or extra cells would silently break the
+// pinned three-track grid.
+for (const route of ["mcp/index.html", "brief/index.html", "tools/soc2-cloud-control-mapper/index.html"]) {
+  const html = await readFile(path.join(dist, route), "utf8");
+  const rows = [...html.matchAll(/<div class="control-map-row[^"]*"[^>]*>([\s\S]*?)<\/div>/g)];
+  assert.ok(rows.length > 0, `${route} must render control-map rows`);
+  for (const row of rows) {
+    const body = row[1];
+    const opens = (body.match(/<span\b/g) || []).length;
+    const closes = (body.match(/<\/span>/g) || []).length;
+    assert.equal(opens, 3, `${route}: control-map row must open exactly 3 spans, found ${opens}`);
+    assert.equal(closes, 3, `${route}: control-map row must close exactly 3 spans, found ${closes}`);
+    // Only inline code/formatting may nest inside a cell — never another
+    // span (would fool cell counting) or a block element (would break the grid).
+    assert.doesNotMatch(body, /<(?!\/?(?:span|code|b|strong)\b)[a-z]/i, `${route}: control-map cells may only nest inline code/emphasis`);
+  }
 }
 
 console.log("Rendered-route contract: 25 routes and critical components passed.");

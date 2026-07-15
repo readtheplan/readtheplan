@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  {%- if description %}
+  <meta name="description" content="{{ description }}" />
+  {%- endif %}
+  {%- if canonical %}
+  <link rel="canonical" href="{{ canonical }}" />
+  {%- endif %}
+  {%- if noindex %}
+  <meta name="robots" content="noindex" />
+  {%- endif %}
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#faf9f7" />
+  <meta name="color-scheme" content="light" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="{{ ogTitle or title }}" />
+  <meta property="og:description" content="{{ ogDescription or description }}" />
+  {%- if canonical %}
+  <meta property="og:url" content="{{ canonical }}" />
+  {%- endif %}
+  <meta property="og:image" content="https://readtheplan.dev/og-image-modern.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ ogTitle or title }}" />
+  <meta name="twitter:description" content="{{ ogDescription or description }}" />
+  <meta name="twitter:image" content="https://readtheplan.dev/og-image-modern.png" />
+  <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/modern.css" />
+  {%- for href in extraCss %}
+  <link rel="stylesheet" href="{{ href }}" />
+  {%- endfor %}
+  <script defer data-domain="readtheplan.dev" src="https://plausible.io/js/script.js"></script>
+</head>
+<body class="{{ routeClass }}">
+  {% include "site-header.njk" %}
+  <div class="progress-bar" id="progress-bar" aria-hidden="true"></div>
+{{ content | safe }}
+  {% include "site-footer.njk" %}
+  <script defer src="/site-motion.js"></script>
+  {%- for src in extraJs %}
+  <script defer src="{{ src }}"></script>
+  {%- endfor %}
+</body>
+</html>

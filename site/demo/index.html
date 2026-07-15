@@ -1,57 +1,13 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="Example output from readtheplan analyzing a Terraform plan with risk tiers, control mappings, and evidence output."
-    />
-    <title>Demo — readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/demo/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="readtheplan — example output" />
-    <meta
-      property="og:description"
-      content="See example readtheplan output with risk tiers and SOC 2 control mapping."
-    />
-    <meta property="og:url" content="https://readtheplan.dev/demo/" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="readtheplan — example output" />
-    <meta
-      name="twitter:description"
-      content="See example readtheplan output with risk tiers and SOC 2 control mapping."
-    />
-    <link rel="stylesheet" href="/matrix.css" />
-  </head>
-  <body>
-    <div class="progress-bar" id="progress-bar"></div>
-    <div class="noise" aria-hidden="true"></div>
-
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="/" aria-label="readtheplan home">
-        <span class="brand-mark" aria-hidden="true">rtp</span>
-        <span>readtheplan</span>
-      </a>
-      <nav class="navlinks gc" aria-label="Project links">
-        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
-      </nav>
-      <nav class="navlinks gc" aria-label="Page links">
-        <a href="/#resources">Tools</a>
-        <a href="/brief/">Brief</a>
-        <a href="/docs/">Docs</a>
-        <a href="/demo/">Demo</a>
-        <a href="/playground/">Playground</a>
-        <a href="/#setup">Setup</a>
-        <a href="/#community">Community</a>
-      </nav>
-      <div class="version-cell gc">v0.4.0</div>
-    </header>
-
-    <main class="workspace">
+---
+title: "Demo \u2014 readtheplan"
+description: "Example output from readtheplan analyzing a Terraform plan with risk tiers, control mappings, and evidence output."
+canonical: "https://readtheplan.dev/demo/"
+ogTitle: "readtheplan \u2014 example output"
+ogDescription: "See example readtheplan output with risk tiers and SOC 2 control mapping."
+extraJs:
+  - "/js/demo.js"
+---
+<main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="demo-title">
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
@@ -84,8 +40,8 @@
               <span class="terminal-title" id="terminal-title">readtheplan analyze — example preview</span>
             </div>
             <div class="terminal-body" id="terminalBody" aria-live="polite" aria-label="Terminal animation showing readtheplan analysis output" style="min-height:280px; font-family:JetBrains Mono,ui-monospace,monospace; font-size:13px; line-height:1.7; overflow:hidden">
-              <div class="terminal-line" style="color:var(--muted)">booting readtheplan v0.4.0 — local only, no plan upload</div>
-              <div class="terminal-line" style="color:var(--soft)">[matrix] tracing terraform change graph · decoding blast radius</div>
+              <div class="terminal-line" style="color:var(--muted)">booting readtheplan v__READTHEPLAN_VERSION__ — local only, no plan upload</div>
+              <div class="terminal-line" style="color:var(--soft)">[scan] tracing terraform change graph · decoding blast radius</div>
               <div class="terminal-line" id="typingLine" style="color:var(--accent)">λ <span id="typingCmd"></span><span class="blink-cursor" id="cursor">▊</span></div>
             </div>
           </div>
@@ -150,14 +106,4 @@ readtheplan analyze readtheplan/examples/02-dangerous-replacement/plan.json --fr
         </div>
       </section>
 
-      <footer class="g footer-grid">
-        <div class="gc">MIT License</div>
-        <div class="gc">No plan upload</div>
-        <div class="gc">Terraform JSON in, review evidence out</div>
-        <div class="gc"><a href="https://github.com/readtheplan/readtheplan">GitHub -></a></div>
-      </footer>
-    </main>
-
-    <script src="/app.js" type="module"></script>
-  </body>
-</html>
+      </main>

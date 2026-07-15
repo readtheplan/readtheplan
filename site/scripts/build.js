@@ -14,10 +14,11 @@ function projectVersion() {
 }
 
 console.log("Generating browser security artifacts...");
+const python = process.platform === "win32" ? "python" : "python3";
 try {
-  execSync("python3 site/scripts/build-classifier-risk-floors.py", { cwd: repoRoot, stdio: "inherit" });
-  execSync("python3 site/scripts/build-compliance-json.py", { cwd: repoRoot, stdio: "inherit" });
-  execSync("python3 site/scripts/convert_data.py", { cwd: repoRoot, stdio: "inherit" });
+  execSync(`${python} site/scripts/build-classifier-risk-floors.py`, { cwd: repoRoot, stdio: "inherit" });
+  execSync(`${python} site/scripts/build-compliance-json.py`, { cwd: repoRoot, stdio: "inherit" });
+  execSync(`${python} site/scripts/convert_data.py`, { cwd: repoRoot, stdio: "inherit" });
 } catch (_error) {
   console.error("ERROR: browser security artifact generation failed; refusing to build with stale data");
   process.exit(1);
@@ -40,17 +41,39 @@ for (const [generated, stable] of [
 const demoSource = path.join(repoRoot, "examples", "02-dangerous-replacement", "evidence.json");
 fs.copyFileSync(demoSource, path.join(dist, "demo-evidence.json"));
 
+// Cloudflare Pages compiles Functions from the PROJECT-ROOT functions/
+// directory, not from the build output — so source functions must carry a
+// real version literal (build-time substitution in dist/functions would
+// never reach production). Enforce that the literal matches pyproject here
+// and in the contract tests; a release bump fails the build until the
+// functions are updated.
+const version = projectVersion();
+for (const fn of ["api/chat.js", "openapi.json.js"]) {
+  const source = fs.readFileSync(path.join(root, "functions", fn), "utf8");
+  if (source.includes("__READTHEPLAN_VERSION__")) {
+    throw new Error(`functions/${fn} must not use the version placeholder — Pages deploys source functions verbatim.`);
+  }
+  if (!source.includes(version)) {
+    throw new Error(`functions/${fn} version literal is stale (expected ${version}).`);
+  }
+}
+
+// Generate _routes.json — only API/health routes go to Functions
 fs.writeFileSync(
   path.join(dist, "_routes.json"),
   JSON.stringify({ version: 1, include: ["/api/*", "/health", "/openapi.json"], exclude: [] }, null, 2),
   "utf8",
 );
 
+// Single source of truth for the shipped security headers. Inline event
+// handlers and <script> blocks were removed site-wide, so scripts execute
+// only from same-origin files plus plausible.io (analytics works under
+// this CSP; no inline allowance for scripts).
 fs.writeFileSync(
   path.join(dist, "_headers"),
   [
     "/*",
-    "  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+    "  Content-Security-Policy: default-src 'self'; script-src 'self' https://plausible.io; style-src 'self' 'unsafe-inline'; connect-src 'self' https://plausible.io; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
     "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
     "  Access-Control-Allow-Origin: https://readtheplan.dev",
     "  Cross-Origin-Opener-Policy: same-origin",
@@ -75,7 +98,6 @@ function collectHtml(dir) {
 }
 collectHtml(dist);
 
-const version = projectVersion();
 for (const file of htmlFiles) {
   const content = fs.readFileSync(file, "utf8");
   if ((content.match(/site-header:start/g) || []).length !== 1) {
@@ -89,6 +111,23 @@ for (const file of htmlFiles) {
   }
   if (content.includes("__READTHEPLAN_VERSION__")) {
     throw new Error(`Unresolved version placeholder in ${file}`);
+  }
+  // Version strings must come from pyproject via the placeholder — never a
+  // literal. Covers v-prefixed strings and pip pins (readtheplan==X.Y.Z).
+  for (const match of content.matchAll(/\bv(\d+\.\d+\.\d+)\b|readtheplan==(\d+\.\d+\.\d+)/g)) {
+    const found = match[1] || match[2];
+    if (found !== version) {
+      throw new Error(`Stale hardcoded version ${found} in ${file}`);
+    }
+  }
+  // CSP compatibility: no inline script blocks or handlers may ship.
+  if (/<script(?:\s[^>]*)?>(?!\s*<\/script>)[\s\S]*?<\/script>/.test(content.replace(/<script[^>]*\ssrc="[^"]*"[^>]*>\s*<\/script>/g, ""))) {
+    throw new Error(`Inline <script> block shipped in ${file} (CSP forbids it)`);
+  }
+  // Any on*-attribute (onclick, onmouseover, onpointerdown, …), with or
+  // without whitespace around '='.
+  if (/\son[a-z]+\s*=/i.test(content)) {
+    throw new Error(`Inline event handler shipped in ${file} (CSP forbids it)`);
   }
 }
 

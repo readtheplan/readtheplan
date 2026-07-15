@@ -1,44 +1,15 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Analyze your Terraform plan in-browser — drag a plan.json to see risk tiers, compliance controls, and evidence. Zero install." />
-    <title>Playground — readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/playground/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="readtheplan — in-browser playground" />
-    <meta property="og:description" content="Drag your Terraform plan.json to see instant risk analysis — no install, no upload." />
-    <meta property="og:url" content="https://readtheplan.dev/playground/" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="readtheplan — in-browser playground" />
-    <meta name="twitter:description" content="Drag your Terraform plan.json to see instant risk analysis." />
-    <link rel="stylesheet" href="/matrix.css" />
-  </head>
-  <body class="playground-page">
-    <div class="progress-bar" id="progress-bar"></div>
-    <div class="noise" aria-hidden="true"></div>
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="/" aria-label="readtheplan home">
-        <span class="brand-mark" aria-hidden="true">rtp</span>
-        <span>readtheplan</span>
-      </a>
-      <nav class="navlinks gc" aria-label="Project links">
-        <a href="https://github.com/readtheplan/readtheplan">GitHub -></a>
-      </nav>
-      <nav class="navlinks gc" aria-label="Page links">
-        <a href="/#resources">Tools</a>
-        <a href="/docs/">Docs</a>
-        <a href="/demo/">Demo</a>
-        <a href="/playground/">Playground</a>
-      </nav>
-      <div class="version-cell gc">v0.4.0</div>
-    </header>
-
-    <main class="workspace">
+---
+title: "Playground \u2014 readtheplan"
+description: "Analyze your Terraform plan in-browser \u2014 drag a plan.json to see risk tiers, compliance controls, and evidence. Zero install."
+canonical: "https://readtheplan.dev/playground/"
+ogTitle: "readtheplan \u2014 in-browser playground"
+ogDescription: "Drag your Terraform plan.json to see instant risk analysis \u2014 no install, no upload."
+extraJs:
+  - "/playground/risk-floors.js"
+  - "/playground/classifier.js"
+  - "/playground/playground.js"
+---
+<main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="title">
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
@@ -61,7 +32,7 @@
           <div id="dropZone" class="playground-drop-zone" tabindex="0">
             <div class="drop-icon">📂</div>
             <p class="drop-text"><strong>Drop your plan.json here</strong> or click to browse</p>
-            <p style="color:var(--muted);font-size:13px;margin-top:8px">Generated from <code>terraform show -json tfplan</code></p>
+            <p class="sample-note">Generated from <code>terraform show -json tfplan</code></p>
           </div>
           <input type="file" id="fileInput" accept=".json" style="display:none" />
           <div class="sample-picker">
@@ -72,8 +43,8 @@
             </div>
             <p id="sampleMeta" class="sample-note">Sample source: Floci emulated AWS</p>
           </div>
-          <div style="text-align:center;margin-top:8px">
-            <a href="/demo/" style="color:var(--muted);font-size:12px">Or see the interactive demo →</a>
+          <div class="sample-picker">
+            <a href="/demo/" class="back-link">Or see the interactive demo →</a>
           </div>
         </div>
       </section>
@@ -81,22 +52,25 @@
       <section id="resultsSection" style="display:none">
         <section class="g" aria-labelledby="summary-title">
           <div class="gc utility-panel-wide">
-            <h2 id="summary-title" style="margin-bottom:16px">Risk Summary</h2>
+            <h2 id="summary-title">Risk Summary</h2>
             <div class="risk-meter" id="riskMeter"></div>
-            <div id="frameworkSelect" style="margin-top:16px">
-              <label style="color:var(--muted);font-size:13px;margin-right:8px">Compliance framework:</label>
-              <select id="framework" style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:13px">
+            <div id="frameworkSelect" class="framework-picker">
+              <label for="framework">Compliance framework:</label>
+              <select id="framework">
                 <option value="">None</option>
                 <option value="soc2">SOC 2</option>
                 <option value="iso27001">ISO 27001</option>
                 <option value="hipaa">HIPAA</option>
+                <option value="pci-dss">PCI DSS</option>
+                <option value="fedramp-moderate">FedRAMP Moderate</option>
+                <option value="hitrust">HITRUST</option>
               </select>
-              <button id="reanalyze" style="background:var(--surface);color:var(--accent);border:1px solid var(--border);padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer;margin-left:12px">Re-analyze</button>
+              <button id="reanalyze" type="button" class="btn btn-outline">Re-analyze</button>
             </div>
           </div>
         </section>
 
-        <section class="g" aria-labelledby="table-title" style="padding-bottom:80px">
+        <section class="g" aria-labelledby="table-title">
           <div class="gc utility-panel-wide">
             <div id="tableContainer"></div>
           </div>
@@ -111,194 +85,3 @@
         </div>
       </section>
     </main>
-
-    <script src="/playground/risk-floors.js"></script>
-    <script src="/playground/classifier.js"></script>
-    <script>
-      // ── State ──
-      let planData = null;
-      let complianceData = null;
-      let currentChanges = null;
-
-      // ── DOM refs ──
-      const dropZone = document.getElementById("dropZone");
-      const fileInput = document.getElementById("fileInput");
-      const resultsSection = document.getElementById("resultsSection");
-      const errorSection = document.getElementById("errorSection");
-      const errorMsg = document.getElementById("errorMsg");
-      const riskMeter = document.getElementById("riskMeter");
-      const tableContainer = document.getElementById("tableContainer");
-      const frameworkSelect = document.getElementById("framework");
-      const reanalyzeBtn = document.getElementById("reanalyze");
-
-      // ── Load compliance data ──
-      async function loadCompliance() {
-        try {
-          const resp = await fetch("/playground/compliance.json");
-          if (resp.ok) complianceData = await resp.json();
-        } catch (e) {
-          console.log("Compliance data not available (offline or build step skipped)");
-        }
-      }
-      loadCompliance();
-
-      // ── Drag and drop ──
-      dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
-      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
-      dropZone.addEventListener("drop", e => {
-        e.preventDefault();
-        dropZone.classList.remove("dragover");
-        const file = e.dataTransfer.files[0];
-        if (file) handleFile(file);
-      });
-      dropZone.addEventListener("click", () => fileInput.click());
-      dropZone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { fileInput.click(); e.preventDefault(); } });
-      fileInput.addEventListener("change", e => {
-        const file = e.target.files[0];
-        if (file) handleFile(file);
-      });
-
-      // ── Framework change ──
-      frameworkSelect.addEventListener("change", () => analyze());
-      reanalyzeBtn.addEventListener("click", () => analyze());
-
-      // ── File handling ──
-      function handleFile(file) {
-        if (!file.name.toLowerCase().endsWith(".json")) {
-          showError("Please drop a .json file (Terraform plan JSON).");
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = e => {
-          try {
-            planData = JSON.parse(e.target.result);
-            if (!planData.resource_changes && !planData.planned_values) {
-              showError("This doesn't look like a Terraform plan JSON. Expected 'resource_changes' or 'planned_values'.");
-              return;
-            }
-            clearError();
-            dropZone.classList.add("has-file");
-            dropZone.querySelector(".drop-text").innerHTML = `<strong>${esc(file.name)}</strong> (${(file.size / 1024).toFixed(1)} KB)`;
-            analyze();
-          } catch (err) {
-            showError("Invalid JSON: " + err.message);
-          }
-        };
-        reader.readAsText(file);
-      }
-
-      // ── Analysis ──
-      function analyze() {
-        if (!planData) return;
-        try {
-          const framework = frameworkSelect.value || null;
-          let changes = parsePlan(planData);
-          if (framework && complianceData) {
-            changes = matchCompliance(changes, framework, complianceData);
-          }
-          currentChanges = changes;
-          render(changes);
-        } catch (err) {
-          showError("Analysis error: " + err.message);
-        }
-      }
-
-      // ── Render ──
-      function render(changes) {
-        clearError();
-        resultsSection.style.display = "block";
-
-        // Risk meter
-        const summary = summarize(changes);
-        riskMeter.innerHTML = `
-          <div class="risk-badge safe"><span class="count">${summary.counts.safe}</span><span class="label">Safe</span></div>
-          <div class="risk-badge review"><span class="count">${summary.counts.review}</span><span class="label">Review</span></div>
-          <div class="risk-badge dangerous"><span class="count">${summary.counts.dangerous}</span><span class="label">Dangerous</span></div>
-          <div class="risk-badge irreversible"><span class="count">${summary.counts.irreversible}</span><span class="label">Irreversible</span></div>
-        `;
-
-        // Table
-        if (changes.length === 0) {
-          tableContainer.innerHTML = '<div class="empty-state"><h3>No resource changes found</h3><p>This plan doesn\'t contain any resource changes to analyze.</p></div>';
-          return;
-        }
-
-        const hasControls = changes.some(change => (change.controls || []).length > 0);
-        let html = `<table class="plan-table"><thead><tr>
-          <th>Resource</th><th>Type</th><th>Actions</th><th>Risk</th><th>Explanation</th>
-          ${hasControls ? '<th>Controls</th>' : ''}
-        </tr></thead><tbody>`;
-
-        for (const c of changes) {
-          const actions = c.actions.map(a => `<span class="action-tag">${esc(a)}</span>`).join(" ");
-          const controlBadges = (c.controls || []).map(ctrl => `<span title="${esc(ctrl.title)}">${esc(ctrl.id)}</span>`).join(" ");
-          const controls = hasControls
-            ? `<td><div class="controls-list">${controlBadges || '<span>—</span>'}</div></td>`
-            : "";
-          html += `<tr>
-            <td><code style="color:var(--text)">${esc(c.address)}</code></td>
-            <td style="color:var(--muted)">${esc(c.type)}</td>
-            <td>${actions}</td>
-            <td><span class="risk-pill ${c.risk}">${c.risk}</span></td>
-            <td style="color:var(--muted);max-width:400px">${esc(c.explanation)}</td>
-            ${controls}
-          </tr>`;
-        }
-        html += "</tbody></table>";
-        tableContainer.innerHTML = html;
-      }
-
-      function showError(msg) {
-        errorMsg.textContent = msg;
-        errorSection.style.display = "block";
-        resultsSection.style.display = "none";
-      }
-
-      function clearError() {
-        errorSection.style.display = "none";
-      }
-
-      function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
-
-      // ── Sample plan loading (Floci-generated) ──
-      async function loadSamplePlan(url, label) {
-        try {
-          const resp = await fetch(url);
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          planData = await resp.json();
-          if (!planData.resource_changes && !planData.planned_values) {
-            showError("This doesn't look like a Terraform plan JSON. Expected 'resource_changes' or 'planned_values'.");
-            return;
-          }
-          clearError();
-          dropZone.classList.add("has-file");
-          dropZone.querySelector(".drop-text").innerHTML = `<strong>${esc(label)}</strong> (Floci emulated AWS)`;
-          analyze();
-        } catch (err) {
-          showError("Failed to load sample plan: " + err.message);
-        }
-      }
-      document.getElementById("loadCreate").addEventListener("click", () =>
-        loadSamplePlan("floci-spike-create-plan.json", "Create plan - 7 resources (Floci)")
-      );
-      document.getElementById("loadDestroy").addEventListener("click", () =>
-        loadSamplePlan("floci-spike-destroy-plan.json", "Destroy plan - 7 resources (Floci)")
-      );
-
-      // Surface sample freshness metadata when available.
-      (async function renderSampleMeta() {
-        const el = document.getElementById("sampleMeta");
-        if (!el) return;
-        try {
-          const resp = await fetch("floci-samples.meta.json");
-          if (!resp.ok) return;
-          const meta = await resp.json();
-          const stamp = meta.generated_at_utc ? new Date(meta.generated_at_utc).toLocaleString() : "unknown";
-          el.textContent = `Sample source: Floci emulated AWS · generated: ${stamp} UTC`;
-        } catch (_) {
-          // keep default text
-        }
-      })();
-    </script>
-  </body>
-</html>

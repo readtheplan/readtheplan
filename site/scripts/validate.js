@@ -20,12 +20,12 @@ function forbidIncludes(source, token, label) {
 }
 
 const html = read("index.html");
-const css = read("matrix.css");
+const homeJs = read("js/home.js");
 const modernCss = read("modern.css");
-const homeCss = read("home.css");
 const buildScript = read("scripts/build.js");
 const eleventyConfig = read("eleventy.config.cjs");
 const packageJson = read("package.json");
+const baseLayout = read("_includes/layouts/base.njk");
 const sharedChrome = `${read("_includes/site-header.njk")}\n${read("_includes/site-footer.njk")}\n${eleventyConfig}`;
 const mcpHtml = read("mcp/index.html");
 const briefHtml = read("brief/index.html");
@@ -50,9 +50,6 @@ for (const token of [
   'id="community"',
   'id="resources"',
   'id="gen-output"',
-  'rel="canonical"',
-  "og:image",
-  "twitter:card",
   "No plan upload",
   "No uploads. Runs entirely in your CI.",
   "Terraform + the broader infra stack",
@@ -64,7 +61,6 @@ for (const token of [
   "Good first issues tagged",
   "pip install readtheplan",
   "readtheplan scan .",
-  "fail-on-threshold",
   "readtheplan-evidence.json",
   "readtheplan[sign]",
   "/tools/terraform-risk-calculator/",
@@ -74,11 +70,11 @@ for (const token of [
   "/demo/",
   "/brief/",
   "/playground/",
-  "v0.4.0",
 ]) {
   requireIncludes(html, token, "expected landing page token");
 }
 
+// The setup generator lives in a CSP-safe external module.
 for (const token of [
   "function workflowText()",
   "function cliCommand(",
@@ -86,16 +82,18 @@ for (const token of [
   '"readtheplan[sign]"',
   "python -m pip install",
   "readtheplan-summary.json",
-  "readtheplan analyze --framework",
+  "fail-on-threshold",
   "Generate evidence artifact",
   "if: always()",
   "cliCommand(true, false)",
   "--format",
+  "readtheplan/readtheplan@v", // version resolved from the rendered nav badge
+  "site-brand__version",
 ]) {
-  requireIncludes(html, token, "setup generator behavior token");
+  requireIncludes(homeJs, token, "setup generator behavior token");
 }
 
-if (!html.includes("plan.json")) {
+if (!homeJs.includes("plan.json")) {
   throw new Error("Generated setup must reference plan.json.");
 }
 
@@ -106,7 +104,7 @@ for (const token of [
   "\n    evidence:",
   "pilot-contact@example.com",
 ]) {
-  if (html.includes(token)) {
+  if (html.includes(token) || homeJs.includes(token)) {
     throw new Error(`Landing page must not include stale or unsupported token: ${token}`);
   }
 }
@@ -115,34 +113,79 @@ if (/<form[^>]+action=/i.test(html)) {
   throw new Error("Client intake form must not submit to a backend.");
 }
 
-// Shared visual contract: routes use the graphite signal workspace system.
+// Layout owns document chrome: metadata, canonical, social cards, styles, scripts.
 for (const token of [
-  "--signal-bg: #07090d;",
-  "--signal-panel: rgba(16, 20, 27, 0.88);",
-  "--signal-green: #72e6b1;",
-  "--signal-cyan: #75a7ff;",
+  'rel="canonical"',
+  "og:image",
+  "twitter:card",
+  'href="/modern.css"',
+  'src="/site-motion.js"',
+  "plausible.io/js/script.js",
+  'name="viewport"',
+]) {
+  requireIncludes(baseLayout, token, "base layout chrome token");
+}
+
+// Every source route is a layout-owned template: front matter, no chrome, no inline scripts.
+const sourceRoutes = [];
+(function collect(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (["dist", "node_modules", "_includes"].includes(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) collect(full);
+    else if (entry.name.endsWith(".html")) sourceRoutes.push(path.relative(root, full));
+  }
+})(root);
+
+for (const route of sourceRoutes) {
+  const source = read(route);
+  if (!source.startsWith("---")) {
+    throw new Error(`${route} must start with front matter (layout-owned chrome).`);
+  }
+  for (const forbidden of ["<head>", "</html>", "<!doctype", "topbar", 'class="navbar"', "<script>"]) {
+    forbidIncludes(source, forbidden, `${route} (layout-owned template)`);
+  }
+  // Any on*-attribute is a CSP violation, whatever the event name or spacing.
+  if (/\son[a-z]+\s*=/i.test(source)) {
+    throw new Error(`${route} contains an inline event handler (CSP forbids it).`);
+  }
+}
+
+// Shared visual contract: light-first editorial system, one accent, dark proof surfaces.
+for (const token of [
+  "--paper: #faf9f7;",
+  "--ink: #191b20;",
+  "--accent: #4438ca;",
+  "--proof-bg: #12151b;",
   ".site-nav__inner",
   ".site-footer__inner",
   ".route-playground",
   ".chat-container",
   ".pricing-card",
   ".evidence-paper",
+  ".skip-link",
+  ".signal-console",
+  ".risk-orbit",
+  ".resource-map",
+  ".scan-tabs",
+  ":focus-visible",
   "@media print",
 ]) {
   requireIncludes(modernCss, token, "modern design system token");
 }
 
-for (const token of [".signal-console", ".risk-orbit", ".resource-map", ".scan-tabs"]) {
-  requireIncludes(homeCss, token, "homepage product-demo token");
-}
-
 if (!modernCss.includes("@media (max-width: 720px)")) {
   throw new Error("Responsive mobile styles are required.");
 }
+if (!modernCss.includes("prefers-reduced-motion")) {
+  throw new Error("Reduced-motion support is required.");
+}
 
-// Build script contract.
+// Build script contract: one CSP source, no inline-script allowance, Plausible allowed.
 for (const token of [
   "Content-Security-Policy",
+  "script-src 'self' https://plausible.io",
+  "connect-src 'self' https://plausible.io",
   "font-src 'self'",
   "img-src 'self' data:",
   "Strict-Transport-Security",
@@ -157,22 +200,36 @@ for (const token of [
 ]) {
   requireIncludes(buildScript, token, "security header");
 }
+if (/script-src[^;]*'unsafe-inline'/.test(buildScript)) {
+  throw new Error("script-src must not allow 'unsafe-inline'.");
+}
+if (buildScript.includes("cdnjs.cloudflare.com")) {
+  throw new Error("No third-party CDN scripts are permitted.");
+}
 
+const chromePipeline = `${sharedChrome}\n${baseLayout}\n${buildScript}`;
 for (const token of [
   "projectVersion",
   "site-header:start",
   "site-footer:start",
   "__READTHEPLAN_VERSION__",
   "pyproject.toml",
-  "canonical-site-shell",
+  "version-token",
   "site-header.njk",
   "site-footer.njk",
+  "layouts/base.njk",
 ]) {
-  requireIncludes(sharedChrome, token, "Eleventy canonical build chrome");
+  requireIncludes(chromePipeline, token, "Eleventy canonical build chrome");
 }
 
-for (const token of ['"fonts"', '"img"', '"data"', '"functions"', '"modern.css"']) {
+for (const token of ['"fonts"', '"img"', '"data"', '"modern.css"', '"js"', '"chat/chat.js"', '"playground/playground.js"']) {
   requireIncludes(eleventyConfig, token, "Eleventy passthrough token");
+}
+// functions/ must never be passthrough-copied: Pages compiles the source
+// tree, and a dist copy would be an inert decoy.
+forbidIncludes(eleventyConfig, 'addPassthroughCopy("functions")', "Eleventy config");
+if (/"functions"/.test(eleventyConfig)) {
+  throw new Error('Eleventy config must not passthrough-copy "functions".');
 }
 
 requireIncludes(packageJson, '"@11ty/eleventy": "3.1.6"', "pinned Eleventy dependency");
@@ -183,12 +240,72 @@ for (const file of [
   "_redirects",
   "favicon.svg",
   "og-image.png",
+  "og-image-modern.png",
   "robots.txt",
   "llms.txt",
   "sitemap.xml",
+  "js/home.js",
+  "js/demo.js",
+  "chat/chat.js",
+  "playground/playground.js",
+  "site-motion.js",
+  "modern.css",
 ]) {
   if (!fs.existsSync(path.join(root, file))) {
     throw new Error(`Missing static site asset: ${file}`);
+  }
+}
+
+// Retired assets must stay retired. site/_headers is retired because the
+// deployed policy is generated into dist/_headers by build.js — a second
+// source file would silently diverge again.
+for (const file of ["app.js", "matrix.css", "home.css", "styles.css", "matrix.js", "_headers"]) {
+  if (fs.existsSync(path.join(root, file))) {
+    throw new Error(`Legacy asset must not return: ${file}`);
+  }
+}
+
+// Shared interaction module owns copy affordances for ALL code blocks,
+// including bare <pre> in docs.
+const siteMotion = read("site-motion.js");
+requireIncludes(siteMotion, 'document.querySelectorAll("pre, .code-output")', "bare-pre copy enhancement");
+requireIncludes(siteMotion, "data-copy-block", "delegated block copy handler");
+
+// Pages Functions deploy from the source tree verbatim: no placeholders,
+// and version literals must match pyproject.
+const pyprojectSource = fs.readFileSync(path.join(root, "..", "pyproject.toml"), "utf8");
+const pyprojectVersion = pyprojectSource.match(/^version\s*=\s*"([^"]+)"/m)[1];
+for (const fn of ["functions/api/chat.js", "functions/openapi.json.js"]) {
+  const fnSource = read(fn);
+  forbidIncludes(fnSource, "__READTHEPLAN_VERSION__", fn);
+  if (!fnSource.includes(pyprojectVersion)) {
+    throw new Error(`${fn} version literal is stale (expected ${pyprojectVersion}).`);
+  }
+}
+
+// Exhaustive version sweep: NO source file may carry a product-version
+// literal other than pyproject's. Templates use the placeholder; only
+// functions/ may hold the (matching) literal.
+const versionSweep = [];
+(function sweep(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (["dist", "node_modules", ".git"].includes(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) sweep(full);
+    else if (/\.(html|js|njk|mjs|json|xml|txt)$/.test(entry.name)) versionSweep.push(full);
+  }
+})(root);
+for (const file of versionSweep) {
+  const rel = path.relative(root, file).replaceAll("\\", "/");
+  const source = fs.readFileSync(file, "utf8");
+  for (const match of source.matchAll(/\bv(\d+\.\d+\.\d+)\b|readtheplan@v?(\d+\.\d+\.\d+)|readtheplan==(\d+\.\d+\.\d+)/g)) {
+    const found = match[1] || match[2] || match[3];
+    if (found !== pyprojectVersion) {
+      throw new Error(`${rel}: stale version literal v${found} (pyproject is ${pyprojectVersion}).`);
+    }
+    if (!rel.startsWith("functions/") && !rel.startsWith("analysis/") && !rel.startsWith("scripts/")) {
+      throw new Error(`${rel}: version literal v${found} outside functions/ — use __READTHEPLAN_VERSION__.`);
+    }
   }
 }
 
@@ -209,14 +326,11 @@ for (const token of [
 }
 
 for (const file of [
-  "fonts/DepartureMono-Regular.woff2",
   "fonts/JetBrainsMono-Regular.woff2",
-  "fonts/LICENSE-DepartureMono.txt",
   "fonts/LICENSE-JetBrainsMono.txt",
-  "img/noise.svg",
 ]) {
   if (!fs.existsSync(path.join(root, file))) {
-    throw new Error(`Missing redesign asset: ${file}`);
+    throw new Error(`Missing font asset: ${file}`);
   }
 }
 
@@ -235,6 +349,7 @@ const docsRoutes = [
   "docs/adapters/index.html",
   "docs/quickstart/index.html",
   "docs/cli/index.html",
+  "docs/ci/index.html",
   "docs/github-action/index.html",
 ];
 const experientialRoutes = ["demo/index.html", "playground/index.html", "chat/index.html"];
@@ -262,8 +377,11 @@ for (const token of [
   "/playground/",
   "/chat/",
 ]) {
-  if (!html.includes(token) || !sitemap.includes(token)) {
-    throw new Error(`Missing linked and sitemap-listed primary route: ${token}`);
+  if (!html.includes(token) && !sharedChrome.includes(token)) {
+    throw new Error(`Missing linked primary route: ${token}`);
+  }
+  if (!sitemap.includes(token)) {
+    throw new Error(`Missing sitemap-listed primary route: ${token}`);
   }
 }
 
@@ -297,8 +415,7 @@ for (const token of [
   "Quickstart",
   "CLI Reference",
   "GitHub Action",
-  "v0.4.0",
-  "topbar g",
+  "__READTHEPLAN_VERSION__",
   "utility-panel-wide",
   "readtheplan agent-gate",
   'pip install "readtheplan[sign]"',

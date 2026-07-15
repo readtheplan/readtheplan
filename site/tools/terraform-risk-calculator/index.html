@@ -1,48 +1,12 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="Estimate Terraform plan risk from manual counts for replacements, deletes, IAM, network, data, and logging changes. Raw Terraform plans stay local."
-    />
-    <title>Terraform Risk Calculator | readtheplan</title>
-    <link rel="canonical" href="https://readtheplan.dev/tools/terraform-risk-calculator/" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="color-scheme" content="dark" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Terraform Risk Calculator | readtheplan" />
-    <meta
-      property="og:description"
-      content="A static Terraform risk estimator for manual counts. No raw plan file is needed."
-    />
-    <meta property="og:url" content="https://readtheplan.dev/tools/terraform-risk-calculator/" />
-    <meta property="og:image" content="https://readtheplan.dev/og-image.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="../../matrix.css" />
-    <link rel="stylesheet" href="../../styles.css" />
-  </head>
-  <body>
-    <div class="noise" aria-hidden="true"></div>
-
-    <header class="topbar g" aria-label="Primary">
-      <a class="brand gc" href="/#workspace" aria-label="readtheplan home">
-        <span class="brand-mark" aria-hidden="true">rtp</span>
-        <span>readtheplan</span>
-      </a>
-      <nav class="navlinks gc" aria-label="Project links">
-        <a href="https://github.com/readtheplan/readtheplan">GitHub -&gt;</a>
-      </nav>
-      <nav class="navlinks gc" aria-label="Page links">
-        <a href="/tools/soc2-cloud-control-mapper/">SOC 2 mapper</a>
-        <a href="/#community">Community</a>
-      </nav>
-      <div class="version-cell gc">static tool</div>
-    </header>
-
-    <main id="workspace" class="workspace">
+---
+title: "Terraform Risk Calculator | readtheplan"
+description: "Estimate Terraform plan risk from manual counts for replacements, deletes, IAM, network, data, and logging changes. Raw Terraform plans stay local."
+canonical: "https://readtheplan.dev/tools/terraform-risk-calculator/"
+ogDescription: "A static Terraform risk estimator for manual counts. No raw plan file is needed."
+extraJs:
+  - "/tools/tools.js"
+---
+<main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="tool-title">
         <div class="gc hero-content">
           <p class="eyebrow">Terraform risk calculator</p>
@@ -209,5 +173,3 @@
     </main>
 
     <script src="../tools.js" type="module"></script>
-  </body>
-</html>
