@@ -35,7 +35,8 @@ assert.ok(source.includes(`readtheplan/readtheplan@v${chatProjectVersion}`),
   "chat prompt version literal must match pyproject (Pages deploys source functions verbatim)");
 assert.doesNotMatch(source, /__READTHEPLAN_VERSION__/, "functions must not contain unresolved placeholders");
 assert.match(source, /input-file: plan\.json/);
-assert.match(source, /more than 300 control mappings/);
+assert.match(source, /more than 300 resource\/action mapping entries/);
+assert.match(source, /not distinct controls or certified coverage/);
 assert.doesNotMatch(source, /Access-Control-Allow-Origin': '\*'/);
 assert.doesNotMatch(source, /console\.error\('DeepSeek API error:', resp\.status, /);
 
@@ -438,5 +439,24 @@ const conversion = await read("scripts/convert_data.py");
 assert.match(health, /version = idx\.version \|\| null/);
 assert.equal(dataIndex.version, "0.4.0");
 assert.match(conversion, /"version": project_version\(\)/);
+let mappingTotal = 0;
+let uniqueControlTotal = 0;
+for (const framework of Object.values(dataIndex.frameworks)) {
+  const catalog = JSON.parse(await read(`data/${framework.file}`));
+  const mappingCount = catalog.mappings.length;
+  const uniqueControlCount = new Set(
+    catalog.mappings.flatMap((mapping) => mapping.controls.map((control) => control.id)),
+  ).size;
+  assert.equal(framework.control_mapping_count, mappingCount);
+  assert.equal(framework.unique_control_count, uniqueControlCount);
+  assert.equal(framework.control_count, mappingCount, "legacy alias is mapping-row count");
+  mappingTotal += mappingCount;
+  uniqueControlTotal += uniqueControlCount;
+}
+assert.equal(mappingTotal, 314);
+assert.equal(uniqueControlTotal, 99);
+assert.match(health, /control_mappings_total: controlMappingsTotal/);
+assert.match(health, /unique_controls_total: uniqueControlsTotal/);
+assert.match(conversion, /def catalog_counts/);
 
 console.log("Chat and site runtime contracts passed.");

@@ -29,7 +29,7 @@ readtheplan reads Terraform plan JSON and classifies every change into four risk
 - **dangerous** — may cause downtime (e.g., modifying security groups, replacing databases)
 - **irreversible** — permanent data loss (e.g., deleting S3 buckets, destroying KMS keys)
 
-It also maps changes to compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, HITRUST — more than 300 control mappings).
+It also maps changes to compliance frameworks (SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, HITRUST) through more than 300 resource/action mapping entries. Those entries are not distinct controls or certified coverage; generic baseline mappings are heuristic review signals.
 Its broad built-in adapter catalog also analyzes cloud deployment outputs, Kubernetes and GitOps manifests, CI/CD pipelines, policy/configuration systems, and observability tooling without executing user configuration.
 
 ### Free surfaces

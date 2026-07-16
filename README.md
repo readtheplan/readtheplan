@@ -48,7 +48,7 @@ Requires Python 3.10+.
 - **CI maintainers** — use the native GitHub Action or the portable CLI in GitLab,
   Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other pipelines to
   gate changes on `dangerous` / `irreversible` risk.
-- **Security & compliance reviewers** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST control mappings plus signed, auditable evidence envelopes for every change.
+- **Security & compliance reviewers** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mapping inventory plus signed analysis envelopes. Resource-specific mappings and generic heuristic signals are reported separately; neither alone establishes control satisfaction.
 - **AI-agent workflows** — a deterministic `proceed` / `warn` / `block` gate that stops an agent from auto-applying unsafe infrastructure.
 
 ---
@@ -73,9 +73,11 @@ readtheplan analyzes structured Terraform/OpenTofu plans and infrastructure-tool
 Terraform/OpenTofu analysis applies **resource-aware rules** across AWS, GCP,
 Azure, the complete HashiCorp Kubernetes and Helm provider catalogs, Cloudflare,
 Datadog, Grafana, New Relic, PagerDuty, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE. Every adapter feeds the same six **compliance
-framework mappings** with an exact-first change-management baseline and
-deterministic agent-gate schema; native plan analysis can also produce
-**auditable evidence envelopes** with sigstore-backed signed attestations.
+framework catalogs** and deterministic agent-gate schema. Exact resource/action
+mappings are coverage-eligible annotations; generic change-management baselines
+are heuristic review signals. Native plan analysis can also produce signed
+**analysis evidence envelopes** whose attestations protect artifact integrity,
+not certify compliance.
 
 ### Supported infrastructure tools
 
@@ -483,14 +485,22 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
   "summary": {
     "resource_change_count": 3,
     "risks": {"safe": 1, "review": 1, "dangerous": 1},
-    "controls_touched": ["CC6.1", "CC6.6", "CC8.1"]
+    "controls_touched": ["CC6.1", "CC6.6", "CC8.1"],
+    "coverage_eligible_controls_touched": ["CC6.1", "CC6.6", "CC8.1"],
+    "heuristic_control_signals": []
   },
   "agent_attestation": {
-    "agent": "readtheplan@0.3.0",
+    "agent": "readtheplan@0.4.0",
     "plan_sha256": "..."
   }
 }
 ```
+
+`controls_touched` remains the complete control-annotation union for v1
+compatibility. Use `coverage_eligible_controls_touched` for the resource-specific
+inventory. When a generic framework baseline matches, the envelope also records it
+under `heuristic_control_signals`; it is a review prompt, not evidence that the
+control is implemented or satisfied.
 
 ## Troubleshooting
 
@@ -509,7 +519,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
   GitLab, Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other runners
 - **Resource-aware rules** — first-party AWS, GCP, Azure, complete HashiCorp Kubernetes/Helm, New Relic, and PagerDuty catalogs, Cloudflare, Datadog, Grafana, GitHub, GitLab, HashiCorp Vault, and HCP Terraform/TFE semantics for identity, data, compute, networking, edge security, incident response, source governance, CI/CD trust, traffic, secrets, security, and observability
 - **Plan-integrity gates** — Terraform/OpenTofu plan format compatibility, errored/not-applyable/incomplete plans, deferrals, out-of-band drift, root-output sensitivity, failed or unknown checks, state detachment, and Terraform provider actions are first-class findings even when the resource diff is empty
-- **Compliance evidence** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mappings with signed JSON envelopes
+- **Compliance evidence** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mapping inventory with signed JSON analysis envelopes and explicit heuristic-signal separation
 - **Agent gate** — deterministic proceed/warn/block decisions for CI and AI agents
 - **Customer rule overlays** — org-specific risk escalations via YAML, no code changes needed
 - **MCP preview** — local stdio tools for agent and IDE integrations

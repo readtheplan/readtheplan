@@ -48,7 +48,7 @@ ADRs 0004 / 0005 / 0006:
 
 | ID | Title | Why it shows up at change time |
 |---|---|---|
-| `164.308(a)(1)` | Security Management Process | Universal change-management evidence |
+| `164.308(a)(1)` | Security Management Process | Generic change-management review signal |
 | `164.308(a)(4)` | Information Access Management | IAM, role/policy lifecycle |
 | `164.308(a)(7)` | Contingency Plan | RDS, KMS, EKS — recovery posture |
 | `164.310(d)` | Device and Media Controls | S3 / RDS deletion, KMS destruction |

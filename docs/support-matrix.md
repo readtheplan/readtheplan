@@ -138,10 +138,12 @@ when intentionally selecting the latest PyPI release instead.
 
 Every built-in adapter accepts the same six packaged compliance catalogs: SOC 2,
 ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST. Exact resource mappings
-provide detailed controls where available; an exact-first framework baseline ensures
-new providers, pipeline steps, and custom resources still receive change-management
-evidence instead of an empty control set. Every file-backed built-in gate exposes
-the same optional `framework` parameter through its MCP tool.
+provide detailed control annotations where available. An exact-first framework
+baseline gives new providers, pipeline steps, and custom resources a heuristic
+change-management review signal instead of an empty annotation set. Baseline signals
+are excluded from evidence coverage and do not assert control satisfaction. Every
+file-backed built-in gate exposes the same optional `framework` parameter through
+its MCP tool.
 
 ## Deliberate boundaries
 

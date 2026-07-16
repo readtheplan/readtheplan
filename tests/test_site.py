@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
+
+
+def test_security_supported_version_matches_project_version() -> None:
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'^version\s*=\s*"(?P<version>\d+\.\d+)\.\d+"', pyproject, re.MULTILINE)
+    assert match is not None
+
+    minor_line = match.group("version")
+    security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    assert f"| {minor_line}.x" in security
+    assert f"| < {minor_line}" in security
 
 
 def test_site_has_client_onboarding_surface() -> None:

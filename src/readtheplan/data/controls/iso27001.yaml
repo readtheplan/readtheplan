@@ -4,6 +4,8 @@ schema_version: 1
 mappings:
 - resource_type: "*"
   actions: ["*"]
+  mapping_kind: framework_baseline
+  coverage_eligible: false
   controls:
   - id: A.8.32
     title: Change management

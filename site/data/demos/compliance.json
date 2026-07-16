@@ -8,6 +8,8 @@
         "actions": [
           "*"
         ],
+        "mapping_kind": "framework_baseline",
+        "coverage_eligible": false,
         "controls": [
           {
             "id": "CM-2",
@@ -1063,6 +1065,8 @@
         "actions": [
           "*"
         ],
+        "mapping_kind": "framework_baseline",
+        "coverage_eligible": false,
         "controls": [
           {
             "id": "164.308(a)(1)",
@@ -2401,6 +2405,8 @@
         "actions": [
           "*"
         ],
+        "mapping_kind": "framework_baseline",
+        "coverage_eligible": false,
         "controls": [
           {
             "id": "11.a",
@@ -3260,6 +3266,8 @@
         "actions": [
           "*"
         ],
+        "mapping_kind": "framework_baseline",
+        "coverage_eligible": false,
         "controls": [
           {
             "id": "A.8.32",
@@ -4724,6 +4732,8 @@
         "actions": [
           "*"
         ],
+        "mapping_kind": "framework_baseline",
+        "coverage_eligible": false,
         "controls": [
           {
             "id": "Req-2.2.1",
@@ -5627,6 +5637,8 @@
         "actions": [
           "*"
         ],
+        "mapping_kind": "framework_baseline",
+        "coverage_eligible": false,
         "controls": [
           {
             "id": "CC8.1",

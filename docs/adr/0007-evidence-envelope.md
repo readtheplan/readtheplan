@@ -79,7 +79,9 @@ existing surface.
     "resource_change_count": 3,
     "actions": {"create": 1, "delete/create": 1, "update": 1},
     "risks": {"safe": 1, "review": 1, "dangerous": 1},
-    "controls_touched": ["A1.2", "C1.1", "CC6.1", "CC6.7", "CC8.1"]
+    "controls_touched": ["A1.2", "C1.1", "CC6.1", "CC6.7", "CC8.1"],
+    "coverage_eligible_controls_touched": ["A1.2", "C1.1", "CC6.1", "CC6.7", "CC8.1"],
+    "heuristic_control_signals": []
   },
   "changes": [
     {
@@ -90,8 +92,8 @@ existing surface.
       "explanation": "...",
       "rule_id": "kms-replace",
       "controls": [
-        {"id": "CC6.1", "title": "...", "rationale": "..."},
-        {"id": "CC6.7", "title": "...", "rationale": "..."}
+        {"id": "CC6.1", "title": "...", "rationale": "...", "mapping_kind": "resource_specific", "coverage_eligible": true},
+        {"id": "CC6.7", "title": "...", "rationale": "...", "mapping_kind": "resource_specific", "coverage_eligible": true}
       ]
     }
   ]
@@ -115,12 +117,23 @@ Schema rules:
   of `"human"` or `"agent"`. Empty string is not allowed; either omit
   the object or set the id.
 - **`summary.controls_touched`** is the sorted, deduplicated union of
-  every control ID across `changes[*].controls`. Provided for fast
+  every control annotation across `changes[*].controls`. Provided for fast
   "which controls did this change touch" lookups without re-walking
-  the full change list.
-- **`changes[]`** keeps the same shape as the existing JSON output of
-  `analyze --format json --framework <name>`, deduplicated to stay
-  consistent with that surface.
+  the full change list. This field retains its original v1 semantics and may include
+  generic baseline annotations.
+- **`summary.coverage_eligible_controls_touched`** is the sorted, deduplicated
+  union of resource-specific annotations eligible for coverage-oriented inventory.
+  It excludes generic framework baselines and does not itself prove control
+  implementation or satisfaction.
+- **`summary.heuristic_control_signals`** is the sorted, deduplicated union of
+  non-eligible baseline control IDs. Per-change details appear in
+  `changes[*].heuristic_control_signals`. These are review prompts, not evidence
+  that a control is implemented or satisfied.
+- **`changes[]`** keeps the analysis fields from the existing JSON output and adds
+  mapping provenance and eligibility to evidence control objects. Exact mappings win
+  before generic baselines so a duplicated control ID retains the resource-specific
+  rationale and eligibility. Generic annotations remain in `controls` for v1
+  compatibility and are also identified under `heuristic_control_signals`.
 
 ### CLI surface
 
@@ -172,6 +185,7 @@ Behavior:
   control output — no duplication, no parallel data structures.
 - `controls_touched` summary field lets a dashboard render
   "10 changes, touched CC6.1 and CC8.1" without parsing every change.
+- Generic baselines remain useful review signals without inflating evidence coverage.
 
 ### Negative
 
@@ -191,6 +205,9 @@ Behavior:
   schema and a deprecation window for v1.
 - New optional fields can be added to v1 without bumping. Downstream
   consumers should ignore unknown fields.
+- `controls` and `controls_touched` retain their complete annotation semantics
+  in v1. Coverage-oriented consumers should use
+  `coverage_eligible_controls_touched` and eligibility metadata.
 - The `agent_attestation` field is contractually the serialized form of
   `PlanReadAttestation`; if that dataclass changes, this ADR's
   consequences need a re-read.

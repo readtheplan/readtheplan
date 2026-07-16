@@ -156,7 +156,7 @@ jobs:
   run: |
     python -m pip install "readtheplan[sign]"
     readtheplan analyze --framework soc2 --evidence evidence.json --sign plan.json</code></pre>
-          <p style="color:var(--muted);margin-top:8px">The envelope follows <code>rtp-evidence-v1</code> schema — timestamped, signed, with full change-to-control mappings. Upload it as a CI artifact for your auditor.</p>
+          <p style="color:var(--muted);margin-top:8px">The envelope follows <code>rtp-evidence-v1</code> schema — timestamped and signed, with resource-specific control annotations separated from generic heuristic signals. The signature protects artifact integrity; the mappings do not by themselves establish control satisfaction.</p>
         </div>
       </section>
 
