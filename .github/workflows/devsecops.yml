@@ -27,8 +27,35 @@ permissions:
   contents: read
 
 jobs:
-  devsecops:
-    name: DevSecOps gates
+  pull-request:
+    name: Pull request DevSecOps (secretless)
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_reusable-devsecops.yml
+    with:
+      enable_sonarqube: ${{ vars.ENABLE_SONARQUBE == 'true' }}
+      sonar_host_url: ${{ vars.SONAR_HOST_URL }}
+      sonar_project_key: ${{ vars.SONAR_PROJECT_KEY }}
+      enable_checkmarx: ${{ vars.ENABLE_CHECKMARX == 'true' }}
+      cx_base_uri: ${{ vars.CX_BASE_URI }}
+      cx_tenant: ${{ vars.CX_TENANT }}
+      cx_project_name: ${{ vars.CX_PROJECT_NAME }}
+      enable_nexus_iq: ${{ vars.ENABLE_NEXUS_IQ == 'true' }}
+      nexus_iq_url: ${{ vars.NEXUS_IQ_URL }}
+      nexus_iq_application_id: ${{ vars.NEXUS_IQ_APPLICATION_ID }}
+      nexus_iq_scan_targets: ${{ vars.NEXUS_IQ_SCAN_TARGETS || 'pyproject.toml dist/*.whl' }}
+      enable_prisma_appsec: ${{ vars.ENABLE_PRISMA_APPSEC == 'true' }}
+      prisma_api_url: ${{ vars.PRISMA_API_URL }}
+      enable_prisma_compute: ${{ vars.ENABLE_PRISMA_COMPUTE == 'true' }}
+      pcc_console_url: ${{ vars.PCC_CONSOLE_URL }}
+      pcc_user: ${{ vars.PCC_USER }}
+      prisma_compute_image: ""
+      strict_enterprise_gates: ${{ inputs.strict_enterprise_gates || vars.STRICT_ENTERPRISE_GATES == 'true' }}
+
+  trusted:
+    name: Trusted DevSecOps gates
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
     uses: ./.github/workflows/_reusable-devsecops.yml
@@ -50,14 +77,4 @@ jobs:
       pcc_console_url: ${{ vars.PCC_CONSOLE_URL }}
       pcc_user: ${{ vars.PCC_USER }}
       prisma_compute_image: ${{ inputs.prisma_compute_image || '' }}
-      allow_commercial_pr_scans: ${{ vars.ALLOW_COMMERCIAL_PR_SCANS == 'true' }}
       strict_enterprise_gates: ${{ inputs.strict_enterprise_gates || vars.STRICT_ENTERPRISE_GATES == 'true' }}
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      CX_CLIENT_ID: ${{ secrets.CX_CLIENT_ID }}
-      CX_CLIENT_SECRET: ${{ secrets.CX_CLIENT_SECRET }}
-      NEXUS_IQ_USERNAME: ${{ secrets.NEXUS_IQ_USERNAME }}
-      NEXUS_IQ_PASSWORD: ${{ secrets.NEXUS_IQ_PASSWORD }}
-      PRISMA_ACCESS_KEY_ID: ${{ secrets.PRISMA_ACCESS_KEY_ID }}
-      PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }}
-      PCC_PASS: ${{ secrets.PCC_PASS }}

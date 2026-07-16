@@ -88,37 +88,11 @@ on:
         required: false
         type: string
         default: ""
-      allow_commercial_pr_scans:
-        description: Permit credentials on same-repository PRs; fork PRs always skip commercial scans.
-        required: false
-        type: boolean
-        default: false
       strict_enterprise_gates:
         description: Fail enabled commercial jobs when required configuration is missing.
         required: false
         type: boolean
         default: false
-    secrets:
-      SONAR_TOKEN:
-        required: false
-      CX_CLIENT_ID:
-        required: false
-      CX_CLIENT_SECRET:
-        required: false
-      NEXUS_IQ_USERNAME:
-        required: false
-      NEXUS_IQ_PASSWORD:
-        required: false
-      PRISMA_ACCESS_KEY_ID:
-        required: false
-      PRISMA_SECRET_KEY:
-        required: false
-      PCC_PASS:
-        required: false
-
-permissions:
-  contents: read
-
 jobs:
   gitleaks:
     name: OSS / Gitleaks
@@ -126,7 +100,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out complete history
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -155,7 +129,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -176,7 +150,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -198,7 +172,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -230,7 +204,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -287,6 +261,8 @@ jobs:
 
   sonarqube:
     name: Enterprise / SonarQube quality
+    if: github.event_name != 'pull_request'
+    environment: security-scanning
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -296,10 +272,7 @@ jobs:
         env:
           ENABLED: ${{ inputs.enable_sonarqube }}
           STRICT: ${{ inputs.strict_enterprise_gates }}
-          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
           EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPOSITORY: ${{ github.repository }}
           SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
           SONAR_PROJECT_KEY: ${{ inputs.sonar_project_key }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -308,10 +281,8 @@ jobs:
           run=false
           reason="disabled by ENABLE_SONARQUBE (default)"
           if [[ "$ENABLED" == "true" ]]; then
-            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
-              reason="fork pull requests never receive commercial credentials"
-            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
-              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              reason="pull request workflows never receive commercial credentials"
             elif [[ -z "$SONAR_HOST_URL" || -z "$SONAR_PROJECT_KEY" || -z "$SONAR_TOKEN" ]]; then
               reason="missing SONAR_HOST_URL, SONAR_PROJECT_KEY, or SONAR_TOKEN"
               if [[ "$STRICT" == "true" ]]; then
@@ -328,7 +299,7 @@ jobs:
 
       - name: Check out repository
         if: steps.decision.outputs.run == 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -364,6 +335,8 @@ jobs:
 
   checkmarx:
     name: Enterprise / Checkmarx One SAST
+    if: github.event_name != 'pull_request'
+    environment: security-scanning
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -373,10 +346,7 @@ jobs:
         env:
           ENABLED: ${{ inputs.enable_checkmarx }}
           STRICT: ${{ inputs.strict_enterprise_gates }}
-          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
           EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPOSITORY: ${{ github.repository }}
           CX_BASE_URI: ${{ inputs.cx_base_uri }}
           CX_TENANT: ${{ inputs.cx_tenant }}
           CX_PROJECT_NAME: ${{ inputs.cx_project_name }}
@@ -387,10 +357,8 @@ jobs:
           run=false
           reason="disabled by ENABLE_CHECKMARX (default)"
           if [[ "$ENABLED" == "true" ]]; then
-            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
-              reason="fork pull requests never receive commercial credentials"
-            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
-              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              reason="pull request workflows never receive commercial credentials"
             elif [[ -z "$CX_BASE_URI" || -z "$CX_TENANT" || -z "$CX_PROJECT_NAME" || -z "$CX_CLIENT_ID" || -z "$CX_CLIENT_SECRET" ]]; then
               reason="missing CX_BASE_URI, CX_TENANT, CX_PROJECT_NAME, CX_CLIENT_ID, or CX_CLIENT_SECRET"
               if [[ "$STRICT" == "true" ]]; then
@@ -407,7 +375,7 @@ jobs:
 
       - name: Check out repository
         if: steps.decision.outputs.run == 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -429,6 +397,8 @@ jobs:
 
   nexus-iq:
     name: Enterprise / Nexus IQ SCA and license
+    if: github.event_name != 'pull_request'
+    environment: security-scanning
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -438,10 +408,7 @@ jobs:
         env:
           ENABLED: ${{ inputs.enable_nexus_iq }}
           STRICT: ${{ inputs.strict_enterprise_gates }}
-          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
           EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPOSITORY: ${{ github.repository }}
           NEXUS_IQ_URL: ${{ inputs.nexus_iq_url }}
           NEXUS_IQ_APPLICATION_ID: ${{ inputs.nexus_iq_application_id }}
           NEXUS_IQ_SCAN_TARGETS: ${{ inputs.nexus_iq_scan_targets }}
@@ -452,10 +419,8 @@ jobs:
           run=false
           reason="disabled by ENABLE_NEXUS_IQ (default)"
           if [[ "$ENABLED" == "true" ]]; then
-            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
-              reason="fork pull requests never receive commercial credentials"
-            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
-              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              reason="pull request workflows never receive commercial credentials"
             elif [[ -z "$NEXUS_IQ_URL" || -z "$NEXUS_IQ_APPLICATION_ID" || -z "$NEXUS_IQ_SCAN_TARGETS" || -z "$NEXUS_IQ_USERNAME" || -z "$NEXUS_IQ_PASSWORD" ]]; then
               reason="missing NEXUS_IQ_URL, NEXUS_IQ_APPLICATION_ID, NEXUS_IQ_SCAN_TARGETS, NEXUS_IQ_USERNAME, or NEXUS_IQ_PASSWORD"
               if [[ "$STRICT" == "true" ]]; then
@@ -472,7 +437,7 @@ jobs:
 
       - name: Check out repository
         if: steps.decision.outputs.run == 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -508,6 +473,8 @@ jobs:
 
   prisma-appsec:
     name: Enterprise / Prisma AppSec Checkov
+    if: github.event_name != 'pull_request'
+    environment: security-scanning
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -517,10 +484,7 @@ jobs:
         env:
           ENABLED: ${{ inputs.enable_prisma_appsec }}
           STRICT: ${{ inputs.strict_enterprise_gates }}
-          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
           EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPOSITORY: ${{ github.repository }}
           PRISMA_API_URL: ${{ inputs.prisma_api_url }}
           PRISMA_ACCESS_KEY_ID: ${{ secrets.PRISMA_ACCESS_KEY_ID }}
           PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }}
@@ -529,10 +493,8 @@ jobs:
           run=false
           reason="disabled by ENABLE_PRISMA_APPSEC (default)"
           if [[ "$ENABLED" == "true" ]]; then
-            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
-              reason="fork pull requests never receive commercial credentials"
-            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
-              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              reason="pull request workflows never receive commercial credentials"
             elif [[ -z "$PRISMA_API_URL" || -z "$PRISMA_ACCESS_KEY_ID" || -z "$PRISMA_SECRET_KEY" ]]; then
               reason="missing PRISMA_API_URL, PRISMA_ACCESS_KEY_ID, or PRISMA_SECRET_KEY"
               if [[ "$STRICT" == "true" ]]; then
@@ -549,7 +511,7 @@ jobs:
 
       - name: Check out repository
         if: steps.decision.outputs.run == 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
 
@@ -625,8 +587,9 @@ jobs:
 
   prisma-compute:
     needs: trivy-image
-    if: ${{ always() }}
+    if: ${{ always() && github.event_name != 'pull_request' }}
     name: Enterprise / Prisma Compute immutable image
+    environment: security-scanning
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -636,10 +599,7 @@ jobs:
         env:
           ENABLED: ${{ inputs.enable_prisma_compute }}
           STRICT: ${{ inputs.strict_enterprise_gates }}
-          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
           EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPOSITORY: ${{ github.repository }}
           PCC_CONSOLE_URL: ${{ inputs.pcc_console_url }}
           TRIVY_RESULT: ${{ needs.trivy-image.result }}
           PCC_USER: ${{ inputs.pcc_user }}
@@ -650,14 +610,12 @@ jobs:
           run=false
           reason="disabled by ENABLE_PRISMA_COMPUTE (default)"
           if [[ "$ENABLED" == "true" ]]; then
-            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
-              reason="fork pull requests never receive commercial credentials"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              reason="pull request workflows never receive commercial credentials"
             elif [[ -n "$IMAGE" && "$TRIVY_RESULT" != "success" ]]; then
               reason="the OSS Trivy candidate-image gate did not pass"
               echo "::error::$reason"
               exit 1
-            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
-              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
             elif [[ -z "$PCC_CONSOLE_URL" || -z "$PCC_USER" || -z "$PCC_PASS" || -z "$IMAGE" ]]; then
               reason="missing PCC_CONSOLE_URL, PCC_USER, PCC_PASS, or an immutable image input"
               if [[ "$STRICT" == "true" ]]; then
