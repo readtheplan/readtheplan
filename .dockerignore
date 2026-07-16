@@ -1,0 +1,9 @@
+# This image is built exclusively from package metadata and src/. Keep local
+# plans, credentials, Git history, caches, test fixtures, and generated output
+# out of the Docker daemon's build context.
+**
+!pyproject.toml
+!README.md
+!LICENSE
+!src/
+!src/**
