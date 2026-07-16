@@ -1,37 +1,10 @@
-name: Promote immutable Nexus artifact
+name: Promote signed Nexus release
 
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        description: Nexus CE verifies a reference only; Nexus Pro may move the existing component.
-        required: true
-        type: choice
-        default: nexus-ce-reference
-        options:
-          - nexus-ce-reference
-          - nexus-pro-move
-      source_repository:
-        description: Source hosted repository; defaults to the repository in NEXUS_PYPI_REPOSITORY_URL.
-        required: false
-        type: string
-        default: ""
-      destination_repository:
-        description: Nexus Pro destination; defaults to NEXUS_STAGING_PROMOTION_TARGET.
-        required: false
-        type: string
-        default: ""
-      component_tag:
-        description: Optional Nexus Pro component tag; when empty, the exact SHA-256 is the move selector.
-        required: false
-        type: string
-        default: ""
-      component_path:
-        description: Exact repository-relative immutable asset path to verify before and after promotion.
-        required: true
-        type: string
-      sha256:
-        description: Expected lowercase 64-character SHA-256 digest for component_path.
+      release_tag:
+        description: Protected v* GitHub Release whose signed evidence authorizes promotion.
         required: true
         type: string
 
@@ -39,174 +12,101 @@ permissions:
   contents: read
 
 concurrency:
-  group: nexus-promotion-${{ inputs.destination_repository || vars.NEXUS_STAGING_PROMOTION_TARGET || 'verify-only' }}
+  group: nexus-promotion-${{ inputs.release_tag }}
   cancel-in-progress: false
 
 jobs:
   promote:
-    name: Verify and promote existing Nexus component
+    name: Verify durable evidence and promote exact Nexus inventory
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: artifact-publish
     permissions:
       contents: read
     steps:
-      - name: Validate immutable reference and Nexus configuration
-        id: nexus
+      - name: Check out trusted promotion verifier
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Validate protected release tag input
         shell: bash
         env:
-          MODE: ${{ inputs.mode }}
-          INPUT_SOURCE: ${{ inputs.source_repository }}
-          INPUT_DESTINATION: ${{ inputs.destination_repository }}
-          COMPONENT_TAG: ${{ inputs.component_tag }}
-          COMPONENT_PATH: ${{ inputs.component_path }}
-          COMPONENT_SHA256: ${{ inputs.sha256 }}
-          NEXUS_STAGING_BASE_URL: ${{ vars.NEXUS_STAGING_BASE_URL }}
-          NEXUS_STAGING_SOURCE_REPOSITORY: ${{ vars.NEXUS_STAGING_SOURCE_REPOSITORY }}
-          NEXUS_STAGING_PROMOTION_TARGET: ${{ vars.NEXUS_STAGING_PROMOTION_TARGET }}
-          NEXUS_PYPI_REPOSITORY_URL: ${{ vars.NEXUS_PYPI_REPOSITORY_URL }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+            echo "::error::release_tag must be a protected v* release tag"
+            exit 1
+          fi
+      - name: Download durable evidence from the GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir release-assets
+          test -f release-assets/nexus-release-manifest.json
+          test -f release-assets/nexus-release-manifest.sigstore.json
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: v3.0.6
+      - name: Verify tag-bound Nexus promotion authority
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          expected_identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/publish.yml@refs/tags/$RELEASE_TAG"
+          manifest_verify_args=(
+            verify-blob
+            --bundle release-assets/nexus-release-manifest.sigstore.json
+            --certificate-identity "$expected_identity"
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+            release-assets/nexus-release-manifest.json
+          )
+          cosign "${manifest_verify_args[@]}"
+
+          checksum_bundle="$(jq -r '.release_evidence.checksum_signature.asset // empty' release-assets/nexus-release-manifest.json)"
+          if [[ -n "$checksum_bundle" ]]; then
+            if [[ "$checksum_bundle" != "SHA256SUMS.sigstore.json" ]]; then
+              echo "::error::Signed manifest contains an unexpected checksum bundle name"
+              exit 1
+            fi
+            checksum_verify_args=(
+              verify-blob
+              --bundle "release-assets/$checksum_bundle"
+              --certificate-identity "$expected_identity"
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com
+              release-assets/SHA256SUMS
+            )
+            cosign "${checksum_verify_args[@]}"
+          fi
+      - name: Verify signed source inventory and promote without rebuilding
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          NEXUS_BASE_URL: ${{ vars.NEXUS_STAGING_BASE_URL }}
+          NEXUS_EXPECTED_HOST: ${{ vars.NEXUS_EXPECTED_HOST }}
+          NEXUS_EXPECTED_PATH_PREFIX: ${{ vars.NEXUS_EXPECTED_PATH_PREFIX }}
+          NEXUS_SOURCE_REPOSITORY: ${{ vars.NEXUS_STAGING_SOURCE_REPOSITORY }}
+          NEXUS_DESTINATION_REPOSITORY: ${{ vars.NEXUS_STAGING_PROMOTION_TARGET }}
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
           set -euo pipefail
-          if [[ -z "$NEXUS_USERNAME" || -z "$NEXUS_PASSWORD" ]]; then
-            echo "::error::NEXUS_USERNAME and NEXUS_PASSWORD are required"
-            exit 1
-          fi
-
-          publish_url="${NEXUS_PYPI_REPOSITORY_URL%/}"
-          parsed_source=""
-          parsed_base=""
-          if [[ "$publish_url" =~ ^https://.+/repository/[A-Za-z0-9._-]+$ ]]; then
-            parsed_source="${publish_url##*/}"
-            parsed_base="${publish_url%/repository/$parsed_source}"
-          fi
-
-          base_url="${NEXUS_STAGING_BASE_URL%/}"
-          source_repository="$INPUT_SOURCE"
-          destination_repository="$INPUT_DESTINATION"
-          [[ -n "$base_url" ]] || base_url="$parsed_base"
-          [[ -n "$source_repository" ]] || source_repository="${NEXUS_STAGING_SOURCE_REPOSITORY:-$parsed_source}"
-          [[ -n "$destination_repository" ]] || destination_repository="$NEXUS_STAGING_PROMOTION_TARGET"
-
-          if [[ ! "$base_url" =~ ^https://[^[:space:]]+$ ]]; then
-            echo "::error::Set NEXUS_STAGING_BASE_URL (or a parseable NEXUS_PYPI_REPOSITORY_URL) to an HTTPS Nexus base URL"
-            exit 1
-          fi
-          if [[ ! "$source_repository" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "::error::source_repository must be a Nexus repository name"
-            exit 1
-          fi
-          if [[ "$MODE" == "nexus-pro-move" && ! "$destination_repository" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "::error::Nexus Pro move requires destination_repository or NEXUS_STAGING_PROMOTION_TARGET"
-            exit 1
-          fi
-          if [[ -n "$COMPONENT_TAG" && ! "$COMPONENT_TAG" =~ ^[A-Za-z0-9._:+-]+$ ]]; then
-            echo "::error::component_tag contains unsupported characters"
-            exit 1
-          fi
-          if [[ ! "$COMPONENT_PATH" =~ ^[A-Za-z0-9][A-Za-z0-9._/+~-]*$ || "$COMPONENT_PATH" == *"../"* || "$COMPONENT_PATH" == *"/.."* ]]; then
-            echo "::error::component_path must be a safe repository-relative path without traversal, query, or fragment syntax"
-            exit 1
-          fi
-          if [[ ! "$COMPONENT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "::error::sha256 must be exactly 64 lowercase hexadecimal characters"
-            exit 1
-          fi
-
-          echo "base-url=$base_url" >> "$GITHUB_OUTPUT"
-          echo "source=$source_repository" >> "$GITHUB_OUTPUT"
-          echo "destination=$destination_repository" >> "$GITHUB_OUTPUT"
-      - name: Download and verify the source asset digest
-        shell: bash
-        env:
-          NEXUS_BASE_URL: ${{ steps.nexus.outputs.base-url }}
-          SOURCE_REPOSITORY: ${{ steps.nexus.outputs.source }}
-          COMPONENT_PATH: ${{ inputs.component_path }}
-          EXPECTED_SHA256: ${{ inputs.sha256 }}
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          set -euo pipefail
-          source_asset="$RUNNER_TEMP/nexus-source-asset"
-          curl --fail --silent --show-error --location \
-            --user "$NEXUS_USERNAME:$NEXUS_PASSWORD" \
-            "$NEXUS_BASE_URL/repository/$SOURCE_REPOSITORY/$COMPONENT_PATH" \
-            --output "$source_asset"
-          actual="$(sha256sum "$source_asset" | cut -d ' ' -f 1)"
-          if [[ "$actual" != "$EXPECTED_SHA256" ]]; then
-            echo "::error::Source digest mismatch: expected $EXPECTED_SHA256, received $actual"
-            exit 1
-          fi
-          echo "Verified source path and digest before any mutation." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Move the existing component with Nexus Repository 3 Pro
-        if: inputs.mode == 'nexus-pro-move'
-        shell: bash
-        env:
-          NEXUS_BASE_URL: ${{ steps.nexus.outputs.base-url }}
-          SOURCE_REPOSITORY: ${{ steps.nexus.outputs.source }}
-          DESTINATION_REPOSITORY: ${{ steps.nexus.outputs.destination }}
-          COMPONENT_TAG: ${{ inputs.component_tag }}
-          COMPONENT_SHA256: ${{ inputs.sha256 }}
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          set -euo pipefail
-          response="$RUNNER_TEMP/nexus-move-response.json"
-          selector=(--data-urlencode "repository=$SOURCE_REPOSITORY")
-          if [[ -n "$COMPONENT_TAG" ]]; then
-            selector+=(--data-urlencode "tag=$COMPONENT_TAG")
-          else
-            selector+=(--data-urlencode "sha256=$COMPONENT_SHA256")
-          fi
-          curl --fail --silent --show-error \
-            --request POST \
-            --get \
-            --user "$NEXUS_USERNAME:$NEXUS_PASSWORD" \
-            "${selector[@]}" \
-            "$NEXUS_BASE_URL/service/rest/v1/staging/move/$DESTINATION_REPOSITORY" \
-            --output "$response"
-          jq . "$response" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Verify the promoted asset has the identical digest
-        if: inputs.mode == 'nexus-pro-move'
-        shell: bash
-        env:
-          NEXUS_BASE_URL: ${{ steps.nexus.outputs.base-url }}
-          DESTINATION_REPOSITORY: ${{ steps.nexus.outputs.destination }}
-          COMPONENT_PATH: ${{ inputs.component_path }}
-          EXPECTED_SHA256: ${{ inputs.sha256 }}
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          set -euo pipefail
-          destination_asset="$RUNNER_TEMP/nexus-destination-asset"
-          curl --fail --silent --show-error --location \
-            --user "$NEXUS_USERNAME:$NEXUS_PASSWORD" \
-            "$NEXUS_BASE_URL/repository/$DESTINATION_REPOSITORY/$COMPONENT_PATH" \
-            --output "$destination_asset"
-          actual="$(sha256sum "$destination_asset" | cut -d ' ' -f 1)"
-          if [[ "$actual" != "$EXPECTED_SHA256" ]]; then
-            echo "::error::Promoted digest mismatch: expected $EXPECTED_SHA256, received $actual"
-            exit 1
-          fi
-          echo "Verified build-once/promote semantics: destination digest is unchanged." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Record Nexus CE reference-only result
-        if: inputs.mode == 'nexus-ce-reference'
-        shell: bash
-        env:
-          SOURCE_REPOSITORY: ${{ steps.nexus.outputs.source }}
-          COMPONENT_PATH: ${{ inputs.component_path }}
-          COMPONENT_SHA256: ${{ inputs.sha256 }}
-        run: |
-          {
-            echo "### Nexus Repository CE reference verification"
-            echo
-            echo "Nexus Repository CE does not provide the Pro staging-move operation."
-            echo "The existing immutable reference was verified and was **not copied, uploaded, or rebuilt**:"
-            echo "\`$SOURCE_REPOSITORY/$COMPONENT_PATH@sha256:$COMPONENT_SHA256\`"
-            echo
-            echo "Promote this reference by updating the consuming environment/GitOps configuration after its protected approval."
-          } >> "$GITHUB_STEP_SUMMARY"
+          promote_args=(
+            --manifest release-assets/nexus-release-manifest.json
+            --release-assets-dir release-assets
+            --expected-repository "$GITHUB_REPOSITORY"
+            --expected-tag "$RELEASE_TAG"
+            --expected-base-url "$NEXUS_BASE_URL"
+            --expected-host "$NEXUS_EXPECTED_HOST"
+            --expected-path-prefix "$NEXUS_EXPECTED_PATH_PREFIX"
+            --expected-source-repository "$NEXUS_SOURCE_REPOSITORY"
+            --expected-destination-repository "$NEXUS_DESTINATION_REPOSITORY"
+          )
+          python tools/nexus_release_evidence.py promote "${promote_args[@]}"

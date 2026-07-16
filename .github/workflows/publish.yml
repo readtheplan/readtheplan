@@ -8,17 +8,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
-    outputs:
-      artifact-name: ${{ steps.artifact.outputs.name }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
@@ -51,8 +53,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd dist && sha256sum *.whl *.tar.gz) > release-evidence/SHA256SUMS
-          (cd dist && sha256sum --check ../release-evidence/SHA256SUMS)
+          sha256sum dist/*.whl dist/*.tar.gz release-evidence/readtheplan.spdx.json > release-evidence/SHA256SUMS
+          sha256sum --check release-evidence/SHA256SUMS
 
       - name: Upload release evidence separately from PyPI files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -63,17 +65,63 @@ jobs:
           retention-days: 30
 
       - name: Upload build artifact
-        id: artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: dist
           path: dist/
           if-no-files-found: error
 
-  publish:
+  artifact-signing:
+    name: Sign immutable release evidence
+    if: ${{ vars.ENABLE_ARTIFACT_SIGNING == 'true' }}
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: artifact-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download exact build files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - name: Download exact release evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-evidence
+          path: release-evidence/
+      - name: Verify package bytes before signing
+        shell: bash
+        run: sha256sum --check release-evidence/SHA256SUMS
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: v3.0.6
+      - name: Keylessly sign the immutable checksum manifest
+        shell: bash
+        run: cosign sign-blob --yes --bundle release-evidence/SHA256SUMS.sigstore.json release-evidence/SHA256SUMS
+      - name: Upload signing evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: release-signatures-${{ github.ref_name }}
+          path: release-evidence/SHA256SUMS.sigstore.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish exact build to PyPI
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      (vars.ENABLE_ARTIFACT_SIGNING != 'true' ||
+      needs.artifact-signing.result == 'success')
+    needs: [build, artifact-signing]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment:
+      name: pypi
+      url: https://pypi.org/p/readtheplan
     permissions:
       contents: read
       id-token: write
@@ -83,29 +131,220 @@ jobs:
         with:
           name: dist
           path: dist/
+      - name: Download release evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-evidence
+          path: release-evidence/
+      - name: Verify exact release bytes before PyPI
+        shell: bash
+        run: sha256sum --check release-evidence/SHA256SUMS
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
 
-  github-release:
-    needs: publish
+  nexus-publish:
+    name: Publish exact Python artifacts to Nexus Repository
+    if: >-
+      always() &&
+      vars.ENABLE_NEXUS_PUBLISH == 'true' &&
+      needs.build.result == 'success' &&
+      (vars.ENABLE_ARTIFACT_SIGNING != 'true' ||
+      needs.artifact-signing.result == 'success')
+    needs: [build, artifact-signing]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    environment: artifact-publish
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Download exact build files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - name: Download exact release evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-evidence
+          path: release-evidence/
+      - name: Download checksum signature when signing is enabled
+        if: ${{ vars.ENABLE_ARTIFACT_SIGNING == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-signatures-${{ github.ref_name }}
+          path: release-evidence/
+      - name: Validate immutable Nexus configuration and preflight coordinates
+        shell: bash
+        env:
+          NEXUS_REPOSITORY_URL: ${{ vars.NEXUS_PYPI_REPOSITORY_URL }}
+          NEXUS_BASE_URL: ${{ vars.NEXUS_STAGING_BASE_URL }}
+          NEXUS_EXPECTED_HOST: ${{ vars.NEXUS_EXPECTED_HOST }}
+          NEXUS_EXPECTED_PATH_PREFIX: ${{ vars.NEXUS_EXPECTED_PATH_PREFIX }}
+          NEXUS_SOURCE_REPOSITORY: ${{ vars.NEXUS_STAGING_SOURCE_REPOSITORY }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          preflight_args=(
+            --repository-url "$NEXUS_REPOSITORY_URL"
+            --expected-base-url "$NEXUS_BASE_URL"
+            --expected-host "$NEXUS_EXPECTED_HOST"
+            --expected-path-prefix "$NEXUS_EXPECTED_PATH_PREFIX"
+            --expected-source-repository "$NEXUS_SOURCE_REPOSITORY"
+            --checksums release-evidence/SHA256SUMS
+            --root .
+            --dist-dir dist
+          )
+          python tools/nexus_release_evidence.py preflight "${preflight_args[@]}"
+      - name: Publish exact package bytes without rebuilding
+        shell: bash
+        env:
+          TWINE_REPOSITORY_URL: ${{ vars.NEXUS_PYPI_REPOSITORY_URL }}
+          TWINE_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sha256sum --check release-evidence/SHA256SUMS
+          python -m pip install --disable-pip-version-check "twine==6.2.0"
+          python -m twine upload --non-interactive --disable-progress-bar dist/*.whl dist/*.tar.gz
+      - name: Capture exact Nexus component and asset inventory
+        shell: bash
+        env:
+          NEXUS_REPOSITORY_URL: ${{ vars.NEXUS_PYPI_REPOSITORY_URL }}
+          NEXUS_BASE_URL: ${{ vars.NEXUS_STAGING_BASE_URL }}
+          NEXUS_EXPECTED_HOST: ${{ vars.NEXUS_EXPECTED_HOST }}
+          NEXUS_EXPECTED_PATH_PREFIX: ${{ vars.NEXUS_EXPECTED_PATH_PREFIX }}
+          NEXUS_SOURCE_REPOSITORY: ${{ vars.NEXUS_STAGING_SOURCE_REPOSITORY }}
+          NEXUS_DESTINATION_REPOSITORY: ${{ vars.NEXUS_STAGING_PROMOTION_TARGET }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          SIGN_CHECKSUMS: ${{ vars.ENABLE_ARTIFACT_SIGNING }}
+        run: |
+          set -euo pipefail
+          signature_args=()
+          if [[ "$SIGN_CHECKSUMS" == "true" ]]; then
+            signature_args=(--checksum-bundle release-evidence/SHA256SUMS.sigstore.json)
+          fi
+          capture_args=(
+            --repository-url "$NEXUS_REPOSITORY_URL"
+            --expected-base-url "$NEXUS_BASE_URL"
+            --expected-host "$NEXUS_EXPECTED_HOST"
+            --expected-path-prefix "$NEXUS_EXPECTED_PATH_PREFIX"
+            --expected-source-repository "$NEXUS_SOURCE_REPOSITORY"
+            --destination-repository "$NEXUS_DESTINATION_REPOSITORY"
+            --checksums release-evidence/SHA256SUMS
+            --root .
+            --dist-dir dist
+            --github-repository "$GITHUB_REPOSITORY"
+            --github-tag "$GITHUB_REF_NAME"
+            --github-sha "$GITHUB_SHA"
+            --github-run-id "$GITHUB_RUN_ID"
+            --github-workflow-ref "$GITHUB_WORKFLOW_REF"
+            --output release-evidence/nexus-release-manifest.json
+          )
+          python tools/nexus_release_evidence.py capture \
+            "${capture_args[@]}" "${signature_args[@]}"
+      - name: Upload unsigned Nexus inventory for the signing job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: nexus-release-manifest-unsigned-${{ github.ref_name }}
+          path: release-evidence/nexus-release-manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  nexus-promotion-evidence:
+    name: Sign Nexus promotion authority
+    if: ${{ vars.ENABLE_NEXUS_PUBLISH == 'true' }}
+    needs: nexus-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: artifact-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download exact Nexus inventory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: nexus-release-manifest-unsigned-${{ github.ref_name }}
+          path: nexus-release-evidence/
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: v3.0.6
+      - name: Keylessly sign exact source coordinates and full inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign sign-blob --yes \
+            --bundle nexus-release-evidence/nexus-release-manifest.sigstore.json \
+            nexus-release-evidence/nexus-release-manifest.json
+      - name: Upload signed Nexus promotion evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: nexus-promotion-evidence-${{ github.ref_name }}
+          path: nexus-release-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  github-release:
+    name: Publish durable release evidence
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      needs.publish.result == 'success' &&
+      (vars.ENABLE_ARTIFACT_SIGNING != 'true' ||
+      needs.artifact-signing.result == 'success') &&
+      (vars.ENABLE_NEXUS_PUBLISH != 'true' ||
+      needs.nexus-promotion-evidence.result == 'success')
+    needs: [build, artifact-signing, publish, nexus-promotion-evidence]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: artifact-publish
     permissions:
       contents: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
-
-      - name: Create GitHub Release
+      - name: Download exact package files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - name: Download checksums and SPDX SBOM
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-evidence
+          path: release-evidence/
+      - name: Download checksum signature when signing is enabled
+        if: ${{ vars.ENABLE_ARTIFACT_SIGNING == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-signatures-${{ github.ref_name }}
+          path: release-evidence/
+      - name: Download signed Nexus inventory when Nexus is enabled
+        if: ${{ vars.ENABLE_NEXUS_PUBLISH == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: nexus-promotion-evidence-${{ github.ref_name }}
+          path: nexus-release-evidence/
+      - name: Create protected GitHub Release with durable evidence
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          SIGN_CHECKSUMS: ${{ vars.ENABLE_ARTIFACT_SIGNING }}
+          NEXUS_ENABLED: ${{ vars.ENABLE_NEXUS_PUBLISH }}
         run: |
           set -euo pipefail
+          sha256sum --check release-evidence/SHA256SUMS
 
           notes_file="$(mktemp)"
           trap 'rm -f "$notes_file"' EXIT
@@ -162,94 +401,29 @@ jobs:
 
           Path(os.environ["NOTES_FILE"]).write_bytes(section.encode("utf-8"))
           PY
-
           then
             notes_args=(--notes-file "$notes_file")
           else
             echo "::warning::Could not extract CHANGELOG section for $GITHUB_REF_NAME; using generated notes"
           fi
 
-          gh release create "$GITHUB_REF_NAME" \
+          assets=(
+            dist/*.whl
+            dist/*.tar.gz
+            release-evidence/SHA256SUMS
+            release-evidence/readtheplan.spdx.json
+          )
+          if [[ "$SIGN_CHECKSUMS" == "true" ]]; then
+            assets+=(release-evidence/SHA256SUMS.sigstore.json)
+          fi
+          if [[ "$NEXUS_ENABLED" == "true" ]]; then
+            assets+=(
+              nexus-release-evidence/nexus-release-manifest.json
+              nexus-release-evidence/nexus-release-manifest.sigstore.json
+            )
+          fi
+
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
             "${notes_args[@]}"
-  artifact-signing:
-    name: Sign immutable release evidence
-    if: ${{ vars.ENABLE_ARTIFACT_SIGNING == 'true' }}
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: artifact-publish
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Download exact build files
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: dist
-          path: dist/
-      - name: Download exact release evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: release-evidence
-          path: release-evidence/
-      - name: Verify package bytes before signing
-        shell: bash
-        run: (cd dist && sha256sum --check ../release-evidence/SHA256SUMS)
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
-        with:
-          cosign-release: v3.0.6
-      - name: Keylessly sign the immutable checksum manifest
-        shell: bash
-        run: cosign sign-blob --yes --bundle release-evidence/SHA256SUMS.sigstore.json release-evidence/SHA256SUMS
-      - name: Upload signing evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: release-signatures-${{ github.ref_name }}
-          path: release-evidence/SHA256SUMS.sigstore.json
-          if-no-files-found: error
-
-  nexus-publish:
-    name: Publish exact Python artifacts to Nexus Repository
-    if: ${{ vars.ENABLE_NEXUS_PUBLISH == 'true' }}
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: artifact-publish
-    permissions:
-      contents: read
-    steps:
-      - name: Validate Nexus publishing configuration
-        shell: bash
-        env:
-          NEXUS_URL: ${{ vars.NEXUS_PYPI_REPOSITORY_URL }}
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          set -euo pipefail
-          [[ "$NEXUS_URL" =~ ^https://.+/repository/[A-Za-z0-9._-]+/?$ ]] || { echo "::error::NEXUS_PYPI_REPOSITORY_URL must be an HTTPS /repository/<name> endpoint"; exit 1; }
-          [[ -n "$NEXUS_USERNAME" && -n "$NEXUS_PASSWORD" ]] || { echo "::error::NEXUS_USERNAME and NEXUS_PASSWORD are required"; exit 1; }
-      - name: Download exact build files
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: dist
-          path: dist/
-      - name: Download and verify exact release evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: release-evidence
-          path: release-evidence/
-      - name: Verify package bytes and publish without rebuilding
-        shell: bash
-        env:
-          TWINE_REPOSITORY_URL: ${{ vars.NEXUS_PYPI_REPOSITORY_URL }}
-          TWINE_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          set -euo pipefail
-          (cd dist && sha256sum --check ../release-evidence/SHA256SUMS)
-          python -m pip install --disable-pip-version-check "twine==6.2.0"
-          python -m twine upload --non-interactive --disable-progress-bar dist/*.whl dist/*.tar.gz
-          echo "Published the exact build artifact; Nexus must be configured with redeploy disabled." >> "$GITHUB_STEP_SUMMARY"

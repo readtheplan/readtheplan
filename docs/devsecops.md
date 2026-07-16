@@ -20,8 +20,8 @@ additional telemetry, but should not create duplicate release gates.
 | IaC and repository posture | Prisma Cloud AppSec | Checkov and Trivy configuration scan |
 | Container and runtime risk | Prisma Cloud Compute | Trivy when an exact candidate image is available |
 | SBOM | Enterprise inventory ingestion | CycloneDX for Python and Syft for images |
-| Artifact integrity | Sigstore/Cosign and GitHub OIDC | Checksums and build provenance |
-| Artifact storage and promotion | Nexus Repository | GitHub run artifacts for short-lived handoff |
+| Artifact integrity | Sigstore/Cosign and GitHub OIDC | Checksums and keyless signatures |
+| Artifact storage and promotion | Nexus Repository | Protected GitHub Release assets for durable evidence; run artifacts only for short-lived handoff |
 | Orchestration | GitHub Actions | The same Makefile commands run locally |
 
 SonarQube is the quality authority, Checkmarx is the SAST authority, Nexus IQ is
@@ -78,8 +78,7 @@ commercial integration runs only when its `ENABLE_*` variable is exactly
 | `ENABLE_PRISMA_APPSEC` | Run Prisma Cloud AppSec/Checkov repository and IaC scanning. |
 | `ENABLE_PRISMA_COMPUTE` | Scan the built image with Prisma Cloud Compute. |
 | `ENABLE_NEXUS_PUBLISH` | Publish trusted main/tag artifacts to Nexus Repository. |
-| `ENABLE_ARTIFACT_SIGNING` | Request job-scoped OIDC and sign/attest immutable artifacts. |
-| `ALLOW_COMMERCIAL_PR_SCANS` | Permit enabled commercial scans on same-repository PRs. Never applies to forks. |
+| `ENABLE_ARTIFACT_SIGNING` | Keylessly sign `SHA256SUMS`; PyPI and GitHub Release publication then require signing success. |
 | `STRICT_ENTERPRISE_GATES` | Fail when an enabled integration is misconfigured instead of explicitly skipping it during rollout. |
 
 An enabled job that is missing required configuration must report that fact
@@ -91,7 +90,9 @@ or finding exit is always a gate regardless of `STRICT_ENTERPRISE_GATES`.
 ### Integration configuration
 
 Store endpoints, project identifiers, and repository names as GitHub variables.
-Store credentials only as GitHub secrets, preferably scoped to an environment.
+Store commercial scanner credentials only as environment secrets in the
+`security-scanning` environment; never duplicate them as repository or
+organization secrets.
 
 | Integration | Variables | Secrets | Manual prerequisite |
 | --- | --- | --- | --- |
@@ -100,8 +101,8 @@ Store credentials only as GitHub secrets, preferably scoped to an environment.
 | Nexus IQ | `NEXUS_IQ_URL`, `NEXUS_IQ_APPLICATION_ID`, optional `NEXUS_IQ_SCAN_TARGETS` | `NEXUS_IQ_USERNAME`, `NEXUS_IQ_PASSWORD` | Create the application and map build, stage-release, and release policy stages. |
 | Prisma AppSec | `PRISMA_API_URL` | `PRISMA_ACCESS_KEY_ID`, `PRISMA_SECRET_KEY` | Create a least-privilege AppSec access key and Checkov policy assignment. |
 | Prisma Compute | `PCC_CONSOLE_URL`, `PCC_USER` | `PCC_PASS` | Create a CI image-scan user and allow access to the Compute API/CLI. |
-| Nexus Repository | `NEXUS_PYPI_REPOSITORY_URL` and optional staging variables below | `NEXUS_USERNAME`, `NEXUS_PASSWORD` | Create hosted repositories, a deployment role, TLS, and immutable release policy. |
-| Keyless signing | no secret; optional identity policy variables | no long-lived signing key | Allow `id-token: write` only on the signing job and configure the verifier's expected repository identity. |
+| Nexus Repository | `NEXUS_PYPI_REPOSITORY_URL`, `NEXUS_EXPECTED_HOST`, `NEXUS_EXPECTED_PATH_PREFIX`, and optional staging variables below | `NEXUS_USERNAME`, `NEXUS_PASSWORD` | Pin the exact approved host[:port] and Nexus context path, then create hosted repositories, a deployment role, TLS, and immutable release policy. Redirects are rejected so Basic credentials cannot be forwarded. |
+| Keyless signing | no secret; optional identity policy variables | no long-lived signing key | Allow `id-token: write` only on the signing job, configure the verifier's expected repository identity, and require successful signing before Nexus publication when enabled. |
 
 Commercial products can change their authentication fields between editions.
 Map these repository-level names to the vendor action or CLI in one workflow;
@@ -109,12 +110,17 @@ do not spread vendor-specific names through application code.
 
 ### Forks and untrusted pull requests
 
-- Fork pull requests run open-source checks with read-only repository
-  permissions and receive no repository or environment secrets.
-- Commercial jobs skip fork pull requests even if
-  `ALLOW_COMMERCIAL_PR_SCANS=true`.
+- Every pull request, including one from the same repository, runs open-source
+  checks with read-only repository permissions and receives no repository or
+  environment secrets. Commercial scans run only on protected-branch pushes,
+  schedules, or manual events.
+- The separate PR/trusted callers and workflow `if` conditions are defense in
+  depth, not the secret boundary: a same-repository PR can edit them. The actual
+  boundary is the `security-scanning` environment restricted to protected
+  main/tag refs, with an independent required reviewer and **prevent self-review**
+  enabled, and scanner credentials stored only as environment secrets.
 - Publishing, signing, cloud authentication, and Prisma Compute image upload
-  run only on trusted push, tag, schedule, or manually approved events.
+  run only on trusted push, protected tag, schedule, or manually approved events.
 - Do not use `pull_request_target` to check out and execute untrusted pull
   request code. A skipped commercial job is not evidence that a scan passed.
 
@@ -122,9 +128,9 @@ do not spread vendor-specific names through application code.
 
 | Event | Required/default work | Optional enterprise work |
 | --- | --- | --- |
-| Pull request | Lint, unit tests, site tests, CodeQL/Bandit, Gitleaks, pip-audit, IaC/config scan, AI/demo smoke tests | Incremental SonarQube, Checkmarx, Nexus IQ, and Prisma AppSec only for same-repository PRs when explicitly allowed |
+| Pull request | Lint, unit tests, site tests, CodeQL/Bandit, Gitleaks, pip-audit, IaC/config scan, AI/demo smoke tests | Commercial jobs always skip; no scanner secrets are mapped into PR workflow code |
 | Main | Repeat required checks; build wheel/sdist and image once; generate checksums and SBOMs; scan the exact artifacts | Full enterprise scans, keyless signing, immutable Nexus snapshot publication |
-| Version tag | Build once, publish that `dist` artifact to PyPI, and create the GitHub Release | Sign the same artifact; publish/promote it through Nexus; enforce enterprise release policy |
+| Protected version tag | Build once and pass that `dist` artifact to the protected `pypi` environment | Sign the same evidence when enabled; publish the same bytes to Nexus; attach wheel, sdist, checksums, SPDX SBOM, and Sigstore bundles to the protected GitHub Release |
 | Nightly/weekly | CodeQL, dependency refresh, full secret/history and image/base-image scans | Full Checkmarx, Nexus IQ re-evaluation, Prisma AppSec/Compute, and drift/posture reports |
 
 PR checks should stay responsive. Deep scans belong on main or a schedule unless
@@ -147,42 +153,60 @@ A release pipeline should:
    results, and signing identity in the release evidence.
 
 Version tags are labels for an artifact digest, not instructions to compile a
-new artifact per environment. Nexus hosted release repositories should disable
-redeploy. Use commit-SHA names for snapshots and immutable semantic-version
-paths for releases.
+new artifact per environment. Both the Nexus source hosted repository and the
+destination release repository must have server-side redeploy disabled. Source
+immutability prevents replacement after the inventory is signed; destination
+immutability prevents replacement after promotion. Client preflight checks do
+not remove this server-side requirement. Use commit-SHA names for snapshots and
+immutable semantic-version paths for releases.
 
-The existing PyPI trusted-publishing workflow already passes one `dist`
-artifact from build to publish. Nexus publication and signing must consume that
-same artifact rather than invoke `python -m build` again.
+The PyPI trusted-publishing workflow passes one `dist` artifact from build to
+the protected `pypi` environment. Configure the PyPI trusted publisher with the
+environment claim exactly `pypi`. Nexus publication and signing consume that
+same artifact rather than invoke `python -m build` again. When signing is
+enabled, both PyPI and GitHub Release jobs require signing success.
 
 ## Nexus Repository setup
 
 At minimum, create:
 
 - a PyPI proxy and group for dependency downloads;
-- a hosted PyPI snapshot repository with a cleanup policy;
-- a hosted PyPI release repository with redeploy disabled;
-- a hosted raw repository for checksums, SBOMs, attestations, and scan reports;
+- a hosted PyPI staging/source repository with cleanup as appropriate and
+  **redeploy disabled**;
+- a hosted PyPI release/destination repository with **redeploy disabled**;
+- a hosted raw repository for checksums, SBOMs, signatures, and scan reports;
 - an OCI/Docker hosted repository if images are stored in Nexus.
 
 Use separate read and deploy roles. The CI deploy identity should be unable to
 delete or overwrite release components. Enforce TLS, back up blob stores and
 metadata, and test restore procedures.
 
-`NEXUS_PYPI_REPOSITORY_URL` is the direct upload endpoint used by the default
-opt-in publisher. Nexus Repository Pro staging can additionally use:
-
-- `NEXUS_STAGING_BASE_URL` for the staging API;
-- `NEXUS_STAGING_SOURCE_REPOSITORY` for the repository holding the verified
-  component;
-- `NEXUS_STAGING_PROMOTION_TARGET` for the immutable hosted release target.
+`NEXUS_PYPI_REPOSITORY_URL` is the direct upload endpoint. Set
+`NEXUS_STAGING_BASE_URL` and `NEXUS_STAGING_SOURCE_REPOSITORY` for both CE
+reference verification and Pro promotion. Set `NEXUS_STAGING_PROMOTION_TARGET`
+only when Pro should move the signed component set into an immutable hosted
+release repository. `NEXUS_EXPECTED_HOST` is the exact approved host or
+host:port; `NEXUS_EXPECTED_PATH_PREFIX` is `/` for a root installation or the
+exact Nexus context path such as `/nexus`.
 
 Staging is not enabled merely by setting a URL. An administrator must create the
-source and destination repositories, policy rules, move permissions, and target
-repository. Nexus Repository 3 Pro moves a tagged component with
-`POST /service/rest/v1/staging/move/{destination}?repository={source}&tag=...`.
+source and destination repositories, disable redeploy on both, and configure
+policy rules, exact tag/move permissions, and the target repository. A PyPI
+wheel and sdist can be separate Nexus components; the publisher therefore
+captures and signs the exact component set and every asset path, SHA-256, and
+size for the logical release. It associates the Pro tag with each exact
+component by asset digest rather than broadly tagging a name/version.
+
+The signed Nexus manifest, its Sigstore bundle, `SHA256SUMS`, SPDX SBOM, and
+package files are attached to the protected GitHub Release. `promote.yml` takes
+only that protected release tag, verifies the publish-workflow Sigstore identity,
+checks the durable evidence and current source inventory, then either verifies
+the CE reference or moves the signed Pro tag. After a Pro move it requires the
+complete destination inventory to be byte-identical and the tagged source set to
+be empty. Operator-supplied paths, digests, repository names, or component tags
+never authorize promotion. Nexus Repository 3 Pro uses
+`POST /service/rest/v1/staging/move/{destination}?repository={source}&tag=...`;
 Nexus Repository 2 staging profile IDs do not drive this NXRM3 operation.
-Verify that promotion preserves package checksums.
 
 Checkmarx One, Nexus Lifecycle/IQ, and Prisma Cloud normally require commercial
 licenses. SonarQube quality-gate and security features depend on the installed
@@ -193,17 +217,23 @@ posture features.
 
 ## GitHub environments and OIDC
 
-Create `development`, `staging`, `production`, and `artifact-publish`
-environments in repository settings. Git cannot configure required reviewers
-for those environments.
+Create `development`, `staging`, `production`, `security-scanning`,
+`artifact-publish`, and `pypi` environments in repository settings. Git cannot
+configure required reviewers for those environments.
 
-- Restrict production and artifact publication to protected branches and tags.
-- Require approval for production and the `artifact-publish` environment.
+- Protect `main` and `v*` tags with GitHub rulesets: block deletion and force
+  updates, require the release checks, and restrict tag creation.
+- Restrict `security-scanning`, `artifact-publish`, `pypi`, and production to
+  protected branches/tags. Require an independent reviewer and enable **prevent
+  self-review**. These settings—not the two-caller layout—are the actual
+  same-repository-PR secret and publication boundary.
+- Configure the PyPI trusted publisher for this repository, `publish.yml`, and
+  the environment claim `pypi`; do not use a long-lived PyPI token.
 - Put Nexus publishing and deployment credentials in the narrowest
   environment, not at repository scope.
-- Give `id-token: write` only to the job that exchanges an OIDC token.
-- Keep all other jobs at `contents: read` unless a documented operation needs
-  another permission.
+- Give `id-token: write` only to PyPI trusted publishing and keyless signing
+  jobs. Keep all other jobs at `contents: read` unless a documented operation
+  needs another permission.
 
 Cloud authentication placeholders should be non-secret identifiers: for
 example `AWS_ROLE_TO_ASSUME` and `AWS_REGION`,
@@ -248,9 +278,14 @@ release evidence.
 ## Manual enablement checklist
 
 1. Obtain licenses and create vendor projects/applications.
-2. Create GitHub environments, protection rules, variables, and scoped secrets.
-3. Configure Nexus hosted/proxy/group repositories, deployment policy, roles,
-   cleanup, backups, and optional Pro staging.
+2. Protect `main` and `v*` tags. Create `security-scanning`,
+   `artifact-publish`, and `pypi` environments restricted to protected refs,
+   require an independent reviewer, enable prevent self-review, and keep
+   credentials only in their environment. Configure the PyPI trusted publisher
+   with environment claim `pypi`.
+3. Configure Nexus hosted/proxy/group repositories, redeploy-disabled source
+   and destination repositories, deployment policy, roles, cleanup, backups,
+   and optional Pro staging.
 4. Set one `ENABLE_*` variable at a time and validate a manual run.
 5. Keep `STRICT_ENTERPRISE_GATES=false` while wiring credentials so an
    incomplete enabled integration is reported and skipped. Any scan that
