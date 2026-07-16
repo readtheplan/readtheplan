@@ -1,1 +1,27 @@
 * @texasich
+
+# Delivery and repository policy
+/.github/workflows/ @texasich
+/.github/CODEOWNERS @texasich
+/.github/dependabot.yml @texasich
+/action.yml @texasich
+/Makefile @texasich
+
+# Deployment and hosted runtime boundaries
+/.github/workflows/deploy.yml @texasich
+/site/functions/ @texasich
+/site/workers/ @texasich
+
+# Package and container supply chain
+/pyproject.toml @texasich
+/src/readtheplan/ @texasich
+/Dockerfile @texasich
+/.dockerignore @texasich
+/sonar-project.properties @texasich
+/.pre-commit-config.yaml @texasich
+/.gitleaks.toml @texasich
+
+# Security and operational documentation
+/SECURITY.md @texasich
+/RELEASING.md @texasich
+/docs/ @texasich

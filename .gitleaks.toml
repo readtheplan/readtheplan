@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+# These fixtures intentionally contain fake private-key markers so analyzers
+# can prove that they detect embedded credentials. Scope the exception to the
+# private-key rule and to these exact synthetic files only.
+[[allowlists]]
+description = "Synthetic private-key fixtures only"
+targetRules = ["private-key"]
+paths = [
+  '''^tests/fixtures/cloud_init_risky\.yml$''',
+  '''^tests/fixtures/ansible_inventory_risky\.yml$''',
+  '''^tests/fixtures/tfe_provider_plan_risky\.json$''',
+]

@@ -20,17 +20,19 @@ You should receive a response within 48 hours. We will work with you to understa
 
 | Version | Supported |
 |---------|-----------|
-| 0.4.x   | ✅ Active |
-| < 0.4   | ❌ No longer supported |
+| 0.4.x   | âœ… Active |
+| < 0.4   | âŒ No longer supported |
 
 ## Security Model
 
 readtheplan is designed to run locally. Terraform plan JSON is never uploaded, transmitted, or stored by the tool. The security model relies on:
 
-- **Local execution only** — no network calls, no telemetry, no backend
-- **No plan data exfiltration** — plan JSON stays on your machine
-- **Evidence envelopes** — optional signed attestations use sigstore (local or CI OIDC)
-- **CI isolation** — GitHub Action workflow uses `workflow_run` to avoid credential exposure to forked PRs
+- **Local execution only** â€” no network calls, no telemetry, no backend
+- **No plan data exfiltration** â€” plan JSON stays on your machine
+- **Evidence envelopes** â€” optional signed attestations use sigstore (local or CI OIDC)
+- **CI isolation** â€” Pull-request workflows use `pull_request`, not
+  `pull_request_target`; forks receive no repository or environment secrets.
+  Privileged scans, signing, and publishing are restricted to trusted events.
 
 If you discover a way for readtheplan to exfiltrate plan data, make network calls without user intent, or bypass the local-only constraint, please report it immediately.
 
@@ -40,8 +42,18 @@ Hosted analyzer work is currently blocked by ADR 0013 (`docs/adr/0013-hosted-ana
 
 - GitHub workflows declare least-privilege `permissions:` blocks and job timeouts.
 - GitHub Actions dependencies are monitored weekly with Dependabot.
+- Docker ecosystem updates are requested weekly with Dependabot.
 - Release publishing uses PyPI Trusted Publishing via GitHub OIDC (`id-token: write`), not a stored PyPI API token.
 - Third-party action SHA pinning is the target hardening posture. Until every workflow is SHA-pinned, action version bumps must come through reviewed Dependabot PRs or maintainer-authored PRs.
+- The runtime container installs the wheel built from the checked-out source,
+  runs as UID/GID 10001, and does not install readtheplan independently from
+  PyPI.
+
+Enterprise scanners and artifact publication are explicit opt-ins. Missing
+commercial licenses never produce a false successful scan, and fork pull
+requests use open-source checks without privileged credentials. See
+[`docs/devsecops.md`](docs/devsecops.md) for ownership, enablement, fallback,
+artifact-promotion, and container policies.
 
 ## Responsible Disclosure
 

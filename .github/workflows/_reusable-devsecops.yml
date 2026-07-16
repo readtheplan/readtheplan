@@ -1,0 +1,712 @@
+﻿name: Reusable DevSecOps
+
+on:
+  workflow_call:
+    inputs:
+      enable_sonarqube:
+        description: Run the SonarQube quality gate when its configuration is complete.
+        required: false
+        type: boolean
+        default: false
+      sonar_host_url:
+        description: SonarQube server URL.
+        required: false
+        type: string
+        default: ""
+      sonar_project_key:
+        description: SonarQube project key.
+        required: false
+        type: string
+        default: ""
+      enable_checkmarx:
+        description: Run Checkmarx One SAST only.
+        required: false
+        type: boolean
+        default: false
+      cx_base_uri:
+        description: Checkmarx One tenant base URI.
+        required: false
+        type: string
+        default: ""
+      cx_tenant:
+        description: Checkmarx One tenant name.
+        required: false
+        type: string
+        default: ""
+      cx_project_name:
+        description: Checkmarx One project name.
+        required: false
+        type: string
+        default: ""
+      enable_nexus_iq:
+        description: Run Sonatype Lifecycle (IQ) SCA and license policy evaluation.
+        required: false
+        type: boolean
+        default: false
+      nexus_iq_url:
+        description: Sonatype Lifecycle (IQ Server) URL.
+        required: false
+        type: string
+        default: ""
+      nexus_iq_application_id:
+        description: Sonatype Lifecycle application ID.
+        required: false
+        type: string
+        default: ""
+      nexus_iq_scan_targets:
+        description: Space-separated IQ CLI scan targets.
+        required: false
+        type: string
+        default: "pyproject.toml dist/*.whl"
+      enable_prisma_appsec:
+        description: Run Checkov connected to Prisma Cloud Application Security.
+        required: false
+        type: boolean
+        default: false
+      prisma_api_url:
+        description: Prisma Cloud Application Security API URL.
+        required: false
+        type: string
+        default: ""
+      enable_prisma_compute:
+        description: Scan an already-built immutable image with Prisma Cloud Compute.
+        required: false
+        type: boolean
+        default: false
+      pcc_console_url:
+        description: Prisma Cloud Compute Console URL.
+        required: false
+        type: string
+        default: ""
+      pcc_user:
+        description: Prisma Cloud Compute CI user.
+        required: false
+        type: string
+        default: ""
+      prisma_compute_image:
+        description: Prebuilt image pinned as registry/name@sha256:<digest>; this workflow never builds it.
+        required: false
+        type: string
+        default: ""
+      allow_commercial_pr_scans:
+        description: Permit credentials on same-repository PRs; fork PRs always skip commercial scans.
+        required: false
+        type: boolean
+        default: false
+      strict_enterprise_gates:
+        description: Fail enabled commercial jobs when required configuration is missing.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      CX_CLIENT_ID:
+        required: false
+      CX_CLIENT_SECRET:
+        required: false
+      NEXUS_IQ_USERNAME:
+        required: false
+      NEXUS_IQ_PASSWORD:
+        required: false
+      PRISMA_ACCESS_KEY_ID:
+        required: false
+      PRISMA_SECRET_KEY:
+        required: false
+      PCC_PASS:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: OSS / Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install checksum-verified Gitleaks CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="gitleaks_8.30.1_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/${archive}"
+          curl --fail --location --retry 3 --silent --show-error "$url" --output "$RUNNER_TEMP/$archive"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/gitleaks-bin"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks-bin" gitleaks
+          echo "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
+
+      - name: Scan Git history for secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          gitleaks git --config .gitleaks.toml --no-banner --redact --verbose .
+
+  bandit:
+    name: OSS / Bandit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Run Bandit against first-party Python
+        run: |
+          python -m pip install --disable-pip-version-check "bandit==1.9.4"
+          bandit --recursive src/readtheplan --severity-level medium --confidence-level medium
+
+  pip-audit:
+    name: OSS / pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Audit the resolved local project
+        run: |
+          python -m pip install --disable-pip-version-check "pip-audit==2.10.1"
+          python -m pip_audit --strict --progress-spinner off .
+
+  checkov:
+    name: OSS / Checkov
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Stage only first-party CI and container surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .devsecops-scan/.github/workflows
+          cp .github/workflows/*.yml .devsecops-scan/.github/workflows/
+          if compgen -G ".github/workflows/*.yaml" > /dev/null; then
+            cp .github/workflows/*.yaml .devsecops-scan/.github/workflows/
+          fi
+          cp Dockerfile .devsecops-scan/Dockerfile
+
+      - name: Run Checkov without scanning intentional fixtures
+        run: |
+          python -m pip install --disable-pip-version-check "checkov==3.3.8"
+          checkov --directory .devsecops-scan --framework github_actions dockerfile --quiet --compact
+
+  package-sbom:
+    name: OSS / Package and Syft SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Build wheel and source distribution once for this scan
+        run: |
+          python -m pip install --disable-pip-version-check "build==1.3.0"
+          python -m build
+
+      - name: Generate SPDX JSON with Syft
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+        with:
+          path: dist
+          format: spdx-json
+          output-file: dist/readtheplan.spdx.json
+          syft-version: v1.48.0
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Create immutable checksum manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' \
+            | sort --zero-terminated \
+            | xargs --null sha256sum > SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+
+      - name: Upload scan package evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: devsecops-dist-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Explain cloud OIDC boundary
+        shell: bash
+        run: |
+          {
+            echo "### OIDC-ready cloud publishing boundary"
+            echo
+            echo "This reusable scan workflow intentionally has no \`id-token: write\` permission."
+            echo "Add a provider's official OIDC login only in a protected publish/deploy job,"
+            echo "grant \`id-token: write\` to that job alone, and publish this immutable artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  sonarqube:
+    name: Enterprise / SonarQube quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Decide whether SonarQube may run
+        id: decision
+        shell: bash
+        env:
+          ENABLED: ${{ inputs.enable_sonarqube }}
+          STRICT: ${{ inputs.strict_enterprise_gates }}
+          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+          SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+          SONAR_PROJECT_KEY: ${{ inputs.sonar_project_key }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          set -euo pipefail
+          run=false
+          reason="disabled by ENABLE_SONARQUBE (default)"
+          if [[ "$ENABLED" == "true" ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
+              reason="fork pull requests never receive commercial credentials"
+            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
+              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            elif [[ -z "$SONAR_HOST_URL" || -z "$SONAR_PROJECT_KEY" || -z "$SONAR_TOKEN" ]]; then
+              reason="missing SONAR_HOST_URL, SONAR_PROJECT_KEY, or SONAR_TOKEN"
+              if [[ "$STRICT" == "true" ]]; then
+                echo "::error::$reason"
+                exit 1
+              fi
+            else
+              run=true
+              reason="configuration complete"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          printf '### SonarQube quality\n\nDecision: **%s** â€” %s.\n' "$run" "$reason" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out repository
+        if: steps.decision.outputs.run == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python for coverage
+        if: steps.decision.outputs.run == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Generate the coverage report consumed by SonarQube
+        if: steps.decision.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -e ".[test]"
+          python -m pytest --cov-report=xml
+
+
+      - name: Run SonarQube and wait for the quality gate
+        if: steps.decision.outputs.run == 'true'
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f  # v8.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+        with:
+          args: >-
+            -Dsonar.projectKey=${{ inputs.sonar_project_key }}
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+
+  checkmarx:
+    name: Enterprise / Checkmarx One SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Decide whether Checkmarx may run
+        id: decision
+        shell: bash
+        env:
+          ENABLED: ${{ inputs.enable_checkmarx }}
+          STRICT: ${{ inputs.strict_enterprise_gates }}
+          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+          CX_BASE_URI: ${{ inputs.cx_base_uri }}
+          CX_TENANT: ${{ inputs.cx_tenant }}
+          CX_PROJECT_NAME: ${{ inputs.cx_project_name }}
+          CX_CLIENT_ID: ${{ secrets.CX_CLIENT_ID }}
+          CX_CLIENT_SECRET: ${{ secrets.CX_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          run=false
+          reason="disabled by ENABLE_CHECKMARX (default)"
+          if [[ "$ENABLED" == "true" ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
+              reason="fork pull requests never receive commercial credentials"
+            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
+              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            elif [[ -z "$CX_BASE_URI" || -z "$CX_TENANT" || -z "$CX_PROJECT_NAME" || -z "$CX_CLIENT_ID" || -z "$CX_CLIENT_SECRET" ]]; then
+              reason="missing CX_BASE_URI, CX_TENANT, CX_PROJECT_NAME, CX_CLIENT_ID, or CX_CLIENT_SECRET"
+              if [[ "$STRICT" == "true" ]]; then
+                echo "::error::$reason"
+                exit 1
+              fi
+            else
+              run=true
+              reason="configuration complete"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          printf '### Checkmarx One SAST\n\nDecision: **%s** â€” %s.\n' "$run" "$reason" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out repository
+        if: steps.decision.outputs.run == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run SAST only and gate every severity
+        if: steps.decision.outputs.run == 'true'
+        uses: Checkmarx/ast-github-action@32e25e324c3aa65045ee11412414abb8493a05db  # 2.3.38
+        with:
+          base_uri: ${{ inputs.cx_base_uri }}
+          cx_tenant: ${{ inputs.cx_tenant }}
+          cx_client_id: ${{ secrets.CX_CLIENT_ID }}
+          cx_client_secret: ${{ secrets.CX_CLIENT_SECRET }}
+          project_name: ${{ inputs.cx_project_name }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          scan_params: >-
+            --scan-types sast
+            --threshold "sast-critical=0;sast-high=0;sast-medium=0;sast-low=0;"
+            --report-format summaryJSON
+
+  nexus-iq:
+    name: Enterprise / Nexus IQ SCA and license
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Decide whether Nexus IQ may run
+        id: decision
+        shell: bash
+        env:
+          ENABLED: ${{ inputs.enable_nexus_iq }}
+          STRICT: ${{ inputs.strict_enterprise_gates }}
+          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+          NEXUS_IQ_URL: ${{ inputs.nexus_iq_url }}
+          NEXUS_IQ_APPLICATION_ID: ${{ inputs.nexus_iq_application_id }}
+          NEXUS_IQ_SCAN_TARGETS: ${{ inputs.nexus_iq_scan_targets }}
+          NEXUS_IQ_USERNAME: ${{ secrets.NEXUS_IQ_USERNAME }}
+          NEXUS_IQ_PASSWORD: ${{ secrets.NEXUS_IQ_PASSWORD }}
+        run: |
+          set -euo pipefail
+          run=false
+          reason="disabled by ENABLE_NEXUS_IQ (default)"
+          if [[ "$ENABLED" == "true" ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
+              reason="fork pull requests never receive commercial credentials"
+            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
+              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            elif [[ -z "$NEXUS_IQ_URL" || -z "$NEXUS_IQ_APPLICATION_ID" || -z "$NEXUS_IQ_SCAN_TARGETS" || -z "$NEXUS_IQ_USERNAME" || -z "$NEXUS_IQ_PASSWORD" ]]; then
+              reason="missing NEXUS_IQ_URL, NEXUS_IQ_APPLICATION_ID, NEXUS_IQ_SCAN_TARGETS, NEXUS_IQ_USERNAME, or NEXUS_IQ_PASSWORD"
+              if [[ "$STRICT" == "true" ]]; then
+                echo "::error::$reason"
+                exit 1
+              fi
+            else
+              run=true
+              reason="configuration complete"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          printf '### Nexus IQ SCA and license\n\nDecision: **%s** â€” %s.\n' "$run" "$reason" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out repository
+        if: steps.decision.outputs.run == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        if: steps.decision.outputs.run == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Build IQ scan target without publishing it
+        if: steps.decision.outputs.run == 'true'
+        run: |
+          python -m pip install --disable-pip-version-check "build==1.3.0"
+          python -m build
+
+      - name: Evaluate dependency and license policy
+        if: steps.decision.outputs.run == 'true'
+        uses: sonatype/actions/evaluate@207984d4ff92b2f2aee69821a233fa086080794e  # v1.13.0
+        with:
+          iq-server-url: ${{ inputs.nexus_iq_url }}
+          username: ${{ secrets.NEXUS_IQ_USERNAME }}
+          password: ${{ secrets.NEXUS_IQ_PASSWORD }}
+          application-id: ${{ inputs.nexus_iq_application_id }}
+          scan-targets: ${{ inputs.nexus_iq_scan_targets }}
+          stage: build
+          fail-on-policy-warnings: true
+          ignore-system-errors: false
+          ignore-scanning-errors: false
+          include-sha-256: true
+          result-file: nexus-iq-result
+
+  prisma-appsec:
+    name: Enterprise / Prisma AppSec Checkov
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Decide whether Prisma AppSec may run
+        id: decision
+        shell: bash
+        env:
+          ENABLED: ${{ inputs.enable_prisma_appsec }}
+          STRICT: ${{ inputs.strict_enterprise_gates }}
+          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+          PRISMA_API_URL: ${{ inputs.prisma_api_url }}
+          PRISMA_ACCESS_KEY_ID: ${{ secrets.PRISMA_ACCESS_KEY_ID }}
+          PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          run=false
+          reason="disabled by ENABLE_PRISMA_APPSEC (default)"
+          if [[ "$ENABLED" == "true" ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
+              reason="fork pull requests never receive commercial credentials"
+            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
+              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            elif [[ -z "$PRISMA_API_URL" || -z "$PRISMA_ACCESS_KEY_ID" || -z "$PRISMA_SECRET_KEY" ]]; then
+              reason="missing PRISMA_API_URL, PRISMA_ACCESS_KEY_ID, or PRISMA_SECRET_KEY"
+              if [[ "$STRICT" == "true" ]]; then
+                echo "::error::$reason"
+                exit 1
+              fi
+            else
+              run=true
+              reason="configuration complete"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          printf '### Prisma AppSec Checkov\n\nDecision: **%s** â€” %s.\n' "$run" "$reason" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out repository
+        if: steps.decision.outputs.run == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        if: steps.decision.outputs.run == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Stage only first-party CI and container surfaces
+        if: steps.decision.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .prisma-scan/.github/workflows
+          cp .github/workflows/*.yml .prisma-scan/.github/workflows/
+          if compgen -G ".github/workflows/*.yaml" > /dev/null; then
+            cp .github/workflows/*.yaml .prisma-scan/.github/workflows/
+          fi
+          cp Dockerfile .prisma-scan/Dockerfile
+
+      - name: Run Prisma enforcement policy with Checkov
+        if: steps.decision.outputs.run == 'true'
+        shell: bash
+        env:
+          PRISMA_API_URL: ${{ inputs.prisma_api_url }}
+          PRISMA_ACCESS_KEY_ID: ${{ secrets.PRISMA_ACCESS_KEY_ID }}
+          PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }}
+          SCAN_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check "checkov==3.3.8"
+          export BC_API_KEY="${PRISMA_ACCESS_KEY_ID}::${PRISMA_SECRET_KEY}"
+          checkov \
+            --directory .prisma-scan \
+            --framework github_actions dockerfile \
+            --repo-id "$GITHUB_REPOSITORY" \
+            --branch "$SCAN_BRANCH" \
+            --use-enforcement-rules \
+            --quiet \
+            --compact
+
+  trivy-image:
+    name: OSS / Trivy immutable candidate image
+    if: ${{ inputs.prisma_compute_image != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Require an exact image digest
+        shell: bash
+        env:
+          IMAGE: ${{ inputs.prisma_compute_image }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::Candidate image must be registry/name@sha256:<64-hex-digest>"
+            exit 1
+          fi
+
+      - name: Gate the candidate with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ inputs.prisma_compute_image }}
+          version: v0.72.0
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: 1
+          format: table
+
+  prisma-compute:
+    needs: trivy-image
+    if: ${{ always() }}
+    name: Enterprise / Prisma Compute immutable image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Decide whether Prisma Compute may run
+        id: decision
+        shell: bash
+        env:
+          ENABLED: ${{ inputs.enable_prisma_compute }}
+          STRICT: ${{ inputs.strict_enterprise_gates }}
+          ALLOW_PR: ${{ inputs.allow_commercial_pr_scans }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+          PCC_CONSOLE_URL: ${{ inputs.pcc_console_url }}
+          TRIVY_RESULT: ${{ needs.trivy-image.result }}
+          PCC_USER: ${{ inputs.pcc_user }}
+          PCC_PASS: ${{ secrets.PCC_PASS }}
+          IMAGE: ${{ inputs.prisma_compute_image }}
+        run: |
+          set -euo pipefail
+          run=false
+          reason="disabled by ENABLE_PRISMA_COMPUTE (default)"
+          if [[ "$ENABLED" == "true" ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]]; then
+              reason="fork pull requests never receive commercial credentials"
+            elif [[ -n "$IMAGE" && "$TRIVY_RESULT" != "success" ]]; then
+              reason="the OSS Trivy candidate-image gate did not pass"
+              echo "::error::$reason"
+              exit 1
+            elif [[ "$EVENT_NAME" == "pull_request" && "$ALLOW_PR" != "true" ]]; then
+              reason="same-repository PR scans require ALLOW_COMMERCIAL_PR_SCANS=true"
+            elif [[ -z "$PCC_CONSOLE_URL" || -z "$PCC_USER" || -z "$PCC_PASS" || -z "$IMAGE" ]]; then
+              reason="missing PCC_CONSOLE_URL, PCC_USER, PCC_PASS, or an immutable image input"
+              if [[ "$STRICT" == "true" ]]; then
+                echo "::error::$reason"
+                exit 1
+              fi
+            elif [[ ! "$IMAGE" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
+              reason="image must be an exact registry/name@sha256:<64-hex-digest> reference"
+              if [[ "$STRICT" == "true" ]]; then
+                echo "::error::$reason"
+                exit 1
+              fi
+            else
+              run=true
+              reason="configuration complete; the prebuilt digest will be pulled without rebuilding"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          printf '### Prisma Compute immutable image\n\nDecision: **%s** â€” %s.\n' "$run" "$reason" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pull the exact prebuilt image
+        if: steps.decision.outputs.run == 'true'
+        shell: bash
+        env:
+          IMAGE: ${{ inputs.prisma_compute_image }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          resolved="$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}')"
+          echo "Scanning prebuilt image: $resolved" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Scan the exact prebuilt image with Prisma Compute
+        id: prisma-compute-scan
+        if: steps.decision.outputs.run == 'true'
+        uses: PaloAltoNetworks/prisma-cloud-scan@411e7888936bb6fcce6fb0f94abb13d45b6f2674  # v1.9.0
+        with:
+          pcc_console_url: ${{ inputs.pcc_console_url }}
+          pcc_user: ${{ inputs.pcc_user }}
+          pcc_pass: ${{ secrets.PCC_PASS }}
+          image_name: ${{ inputs.prisma_compute_image }}
+          twistcli_publish: true
+
+      - name: Upload Prisma Compute evidence
+        if: always() && steps.decision.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: prisma-compute-${{ github.sha }}
+          path: |
+            pcc_scan_results.json
+            pcc_scan_results.sarif.json
+          if-no-files-found: warn
+          retention-days: 14
