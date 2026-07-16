@@ -25,9 +25,20 @@ class ControlEntry:
 
 
 @dataclass(frozen=True)
+class ControlMatch:
+    """A control plus the catalog mapping that produced it."""
+
+    control: ControlEntry
+    mapping_kind: str
+    coverage_eligible: bool
+
+
+@dataclass(frozen=True)
 class _ControlMapping:
     actions: tuple[str, ...]
     controls: tuple[ControlEntry, ...]
+    mapping_kind: str
+    coverage_eligible: bool
 
 
 @dataclass(frozen=True)
@@ -40,15 +51,15 @@ class ControlCatalog:
         compare=False,
     )
 
-    def controls_for(
+    def control_matches_for(
         self, *, resource_type: str, actions: Sequence[str]
-    ) -> tuple[ControlEntry, ...]:
+    ) -> tuple[ControlMatch, ...]:
         action = _canonical_action(actions)
         seen: set[str] = set()
-        out: list[ControlEntry] = []
+        out: list[ControlMatch] = []
         # Resource-specific mappings win so their detailed rationale is preserved.
-        # A catalog-wide wildcard supplies a framework baseline for adapters and
-        # providers that do not have a bespoke resource mapping yet.
+        # A catalog-wide wildcard supplies a heuristic framework baseline for
+        # adapters and providers that do not have a bespoke resource mapping yet.
         for resource_key in (resource_type, "*"):
             for mapping in self._mappings.get(resource_key, ()):
                 if action not in mapping.actions and "*" not in mapping.actions:
@@ -57,8 +68,27 @@ class ControlCatalog:
                     if control.id in seen:
                         continue
                     seen.add(control.id)
-                    out.append(control)
+                    out.append(
+                        ControlMatch(
+                            control=control,
+                            mapping_kind=mapping.mapping_kind,
+                            coverage_eligible=mapping.coverage_eligible,
+                        )
+                    )
         return tuple(out)
+
+    def controls_for(
+        self, *, resource_type: str, actions: Sequence[str]
+    ) -> tuple[ControlEntry, ...]:
+        """Return all control annotations, including framework baselines."""
+
+        return tuple(
+            match.control
+            for match in self.control_matches_for(
+                resource_type=resource_type,
+                actions=actions,
+            )
+        )
 
 
 def _canonical_action(actions: Sequence[str]) -> str:
@@ -130,8 +160,44 @@ def _load_from_path(path: Any) -> ControlCatalog:
                 _required_list(mapping, "controls", path, mapping_path)
             )
         )
+        is_framework_baseline = resource_type == "*" and "*" in actions
+        inferred_kind = (
+            "framework_baseline" if is_framework_baseline else "resource_specific"
+        )
+        mapping_kind = _expect_str(
+            mapping.get("mapping_kind", inferred_kind),
+            path,
+            f"{mapping_path}.mapping_kind",
+        )
+        if mapping_kind not in {"resource_specific", "framework_baseline"}:
+            raise CatalogSchemaError(
+                f"{path}: invalid mapping kind at {mapping_path}.mapping_kind"
+            )
+        if is_framework_baseline and mapping_kind != "framework_baseline":
+            raise CatalogSchemaError(
+                f"{path}: */* mappings must use framework_baseline at "
+                f"{mapping_path}.mapping_kind"
+            )
+        coverage_eligible = mapping.get(
+            "coverage_eligible",
+            mapping_kind != "framework_baseline",
+        )
+        if not isinstance(coverage_eligible, bool):
+            raise CatalogSchemaError(
+                f"{path}: expected boolean at {mapping_path}.coverage_eligible"
+            )
+        if mapping_kind == "framework_baseline" and coverage_eligible:
+            raise CatalogSchemaError(
+                f"{path}: framework baselines cannot be coverage eligible at "
+                f"{mapping_path}.coverage_eligible"
+            )
         mappings[resource_type].append(
-            _ControlMapping(actions=actions, controls=controls)
+            _ControlMapping(
+                actions=actions,
+                controls=controls,
+                mapping_kind=mapping_kind,
+                coverage_eligible=coverage_eligible,
+            )
         )
 
     return ControlCatalog(

@@ -25,6 +25,29 @@ async function fetchData(request, path) {
   return resp.json();
 }
 
+function frameworkCounts(framework) {
+  const controlMappingCount =
+    framework.control_mapping_count ?? framework.control_count ?? 0;
+  return {
+    control_mapping_count: controlMappingCount,
+    unique_control_count: framework.unique_control_count ?? 0,
+    // Deprecated compatibility alias; this has always counted mapping rows.
+    control_count: controlMappingCount,
+  };
+}
+
+function aggregateCounts(frameworks) {
+  return Object.values(frameworks || {}).reduce(
+    (totals, framework) => {
+      const counts = frameworkCounts(framework);
+      totals.control_mappings_total += counts.control_mapping_count;
+      totals.unique_controls_total += counts.unique_control_count;
+      return totals;
+    },
+    { control_mappings_total: 0, unique_controls_total: 0 },
+  );
+}
+
 export async function onRequest(context) {
   const { request } = context;
   if (request.method === "OPTIONS") {
@@ -47,7 +70,7 @@ export async function onRequest(context) {
     if (!idx) return json({ error: "data not available" }, 503);
     const list = Object.keys(idx.frameworks).map(name => ({
       id: name,
-      control_count: idx.frameworks[name].control_count,
+      ...frameworkCounts(idx.frameworks[name]),
       url: `/api/v1/controls/${name}`,
     }));
     return json({ frameworks: list, total: list.length });
@@ -72,11 +95,13 @@ export async function onRequest(context) {
     if (!idx) {
       return json({ version: null, service: "readtheplan", data_available: false });
     }
+    const counts = aggregateCounts(idx.frameworks);
     return json({
       version: idx.version || null,
       frameworks: Object.keys(idx.frameworks || {}).length,
-      controls_total: Object.values(idx.frameworks || {})
-        .reduce((sum, f) => sum + (f.control_count || 0), 0),
+      ...counts,
+      // Deprecated compatibility alias; this has always counted mapping rows.
+      controls_total: counts.control_mappings_total,
       service: "readtheplan",
     });
   }

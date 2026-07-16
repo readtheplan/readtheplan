@@ -9,7 +9,7 @@ from readtheplan.attestation import (
     PlanReadAttestation,
     build_plan_read_attestation,
 )
-from readtheplan.controls import ControlCatalog, ControlEntry
+from readtheplan.controls import ControlCatalog, ControlEntry, ControlMatch
 from readtheplan.plan import PlanSummary, ResourceChange
 
 EVIDENCE_SCHEMA = "rtp-evidence-v1"
@@ -109,6 +109,23 @@ def build_evidence(
             if isinstance(control["id"], str)
         }
     )
+    coverage_eligible_controls_touched = sorted(
+        {
+            control["id"]
+            for change in changes
+            for control in change["controls"]
+            if control.get("coverage_eligible") is True
+            and isinstance(control["id"], str)
+        }
+    )
+    heuristic_control_signals = sorted(
+        {
+            control["id"]
+            for change in changes
+            for control in change.get("heuristic_control_signals", ())
+            if isinstance(control["id"], str)
+        }
+    )
 
     return EvidenceEnvelope(
         schema=EVIDENCE_SCHEMA,
@@ -128,6 +145,10 @@ def build_evidence(
             "actions": dict(sorted(plan_summary.action_counts.items())),
             "risks": dict(sorted(plan_summary.risk_counts.items())),
             "controls_touched": controls_touched,
+            "coverage_eligible_controls_touched": (
+                coverage_eligible_controls_touched
+            ),
+            "heuristic_control_signals": heuristic_control_signals,
         },
         changes=changes,
     )
@@ -166,6 +187,10 @@ def _change_to_dict(
     change: ResourceChange,
     catalog: ControlCatalog,
 ) -> dict[str, Any]:
+    matches = catalog.control_matches_for(
+        resource_type=change.resource_type,
+        actions=change.actions,
+    )
     payload: dict[str, Any] = {
         "address": change.address,
         "type": change.resource_type,
@@ -173,15 +198,26 @@ def _change_to_dict(
         "risk": change.risk,
         "explanation": change.explanation,
         "controls": [
-            _control_to_dict(control)
-            for control in catalog.controls_for(
-                resource_type=change.resource_type,
-                actions=change.actions,
-            )
+            _control_match_to_dict(match)
+            for match in matches
         ],
     }
+    heuristic_control_signals = [
+        _control_match_to_dict(match)
+        for match in matches
+        if not match.coverage_eligible
+    ]
+    if heuristic_control_signals:
+        payload["heuristic_control_signals"] = heuristic_control_signals
     if getattr(change, "source", "builtin") not in ("", "builtin"):
         payload["provenance"] = {"source": change.source}
+    return payload
+
+
+def _control_match_to_dict(match: ControlMatch) -> dict[str, Any]:
+    payload: dict[str, Any] = _control_to_dict(match.control)
+    payload["mapping_kind"] = match.mapping_kind
+    payload["coverage_eligible"] = match.coverage_eligible
     return payload
 
 

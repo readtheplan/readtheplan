@@ -20,8 +20,8 @@ You should receive a response within 48 hours. We will work with you to understa
 
 | Version | Supported |
 |---------|-----------|
-| 0.3.x   | ✅ Active |
-| < 0.3   | ❌ No longer supported |
+| 0.4.x   | ✅ Active |
+| < 0.4   | ❌ No longer supported |
 
 ## Security Model
 

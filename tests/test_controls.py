@@ -120,12 +120,20 @@ def test_controls_for_unmapped_resource_returns_framework_baseline(
     framework: str, expected_id: str
 ) -> None:
     cat = controls.load_catalog(framework)
+    matches = cat.control_matches_for(
+        resource_type="ansible_template",
+        actions=["execute"],
+    )
     out = cat.controls_for(
         resource_type="ansible_template",
         actions=["execute"],
     )
 
     assert [control.id for control in out] == [expected_id]
+    assert [
+        (match.control.id, match.mapping_kind, match.coverage_eligible)
+        for match in matches
+    ] == [(expected_id, "framework_baseline", False)]
 
 
 def test_soc2_controls_for_platform_service_resource() -> None:
@@ -200,10 +208,23 @@ mappings:
 
     cat = controls._load_from_path(catalog)
     out = cat.controls_for(resource_type="aws_example", actions=["create"])
+    matches = cat.control_matches_for(
+        resource_type="aws_example",
+        actions=["create"],
+    )
 
     assert [control.id for control in out] == ["C1", "C2", "C3", "C4"]
     assert out[1].title == "Second"
     assert out[1].rationale == "Second match."
+    assert [
+        (match.control.id, match.mapping_kind, match.coverage_eligible)
+        for match in matches
+    ] == [
+        ("C1", "resource_specific", True),
+        ("C2", "resource_specific", True),
+        ("C3", "resource_specific", True),
+        ("C4", "framework_baseline", False),
+    ]
 
 
 def test_cli_markdown_includes_controls_column(
@@ -364,6 +385,48 @@ mappings: []
 
     assert str(catalog) in str(exc.value)
     assert "framework" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    ("metadata", "message"),
+    [
+        (
+            "    mapping_kind: resource_specific\n"
+            "    coverage_eligible: false",
+            r"\*/\* mappings must use framework_baseline",
+        ),
+        (
+            "    mapping_kind: framework_baseline\n"
+            "    coverage_eligible: true",
+            "framework baselines cannot be coverage eligible",
+        ),
+    ],
+)
+def test_catalog_rejects_contradictory_framework_baseline_metadata(
+    tmp_path: Path,
+    metadata: str,
+    message: str,
+) -> None:
+    catalog = tmp_path / "invalid-baseline.yaml"
+    catalog.write_text(
+        f"""
+framework: test
+framework_version: "1"
+schema_version: 1
+mappings:
+  - resource_type: "*"
+    actions: ["*"]
+{metadata}
+    controls:
+      - id: C1
+        title: Baseline
+        rationale: Generic baseline.
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(controls.CatalogSchemaError, match=message):
+        controls._load_from_path(catalog)
 
 
 def test_load_hipaa_catalog_smoke() -> None:

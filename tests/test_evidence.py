@@ -18,7 +18,7 @@ from readtheplan.evidence import (
     Reviewer,
     build_evidence,
 )
-from readtheplan.plan import PlanSummary, analyze_plan_file
+from readtheplan.plan import PlanSummary, ResourceChange, analyze_plan_file
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EVIDENCE_PLAN = FIXTURES / "evidence_plan.json"
@@ -66,6 +66,57 @@ def test_build_evidence_controls_touched_union_sorted() -> None:
     envelope = _build_fixture_evidence()
 
     assert envelope.to_dict()["summary"]["controls_touched"] == EXPECTED_CONTROLS
+    assert (
+        envelope.to_dict()["summary"]["coverage_eligible_controls_touched"]
+        == EXPECTED_CONTROLS
+    )
+
+
+def test_build_evidence_separates_generic_baseline_from_coverage() -> None:
+    summary = PlanSummary(
+        path=Path("custom-plan.json"),
+        terraform_version="1.6.6",
+        resource_changes=(
+            ResourceChange(
+                address="custom_widget.example",
+                resource_type="custom_widget",
+                actions=("create",),
+                risk="safe",
+                explanation="Creates a custom resource.",
+            ),
+        ),
+    )
+
+    envelope = build_evidence(
+        plan_summary=summary,
+        plan_json=b'{"format_version":"1.2"}',
+        catalog=controls.load_catalog("soc2"),
+        agent_id="readtheplan@test",
+        generated_at=FIXED_TIME,
+    )
+    payload = envelope.to_dict()
+    change = payload["changes"][0]
+
+    assert [control["id"] for control in change["controls"]] == ["CC8.1"]
+    assert change["controls"][0]["coverage_eligible"] is False
+    signals = change["heuristic_control_signals"]
+    assert len(signals) == 1
+    assert signals[0]["id"] == "CC8.1"
+    assert signals[0]["title"] == "Change Management"
+    assert signals[0]["mapping_kind"] == "framework_baseline"
+    assert signals[0]["coverage_eligible"] is False
+    assert payload["summary"]["controls_touched"] == ["CC8.1"]
+    assert payload["summary"]["coverage_eligible_controls_touched"] == []
+    assert payload["summary"]["heuristic_control_signals"] == ["CC8.1"]
+
+
+def test_build_evidence_marks_specific_mappings_coverage_eligible() -> None:
+    payload = _build_fixture_evidence().to_dict()
+    change = _change_by_address(payload, "aws_kms_key.customer_data")
+
+    assert change["controls"]
+    assert all(control["mapping_kind"] == "resource_specific" for control in change["controls"])
+    assert all(control["coverage_eligible"] is True for control in change["controls"])
 
 
 def test_build_evidence_empty_plan() -> None:
@@ -89,6 +140,8 @@ def test_build_evidence_empty_plan() -> None:
     assert payload["summary"]["resource_change_count"] == 0
     assert payload["summary"]["plan_finding_count"] == 0
     assert payload["summary"]["controls_touched"] == []
+    assert payload["summary"]["coverage_eligible_controls_touched"] == []
+    assert payload["summary"]["heuristic_control_signals"] == []
     assert payload["changes"] == []
 
 

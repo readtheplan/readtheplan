@@ -1,7 +1,8 @@
 export async function onRequest(context) {
   let version = null;
   let frameworks = 0;
-  let controlsTotal = 0;
+  let controlMappingsTotal = 0;
+  let uniqueControlsTotal = 0;
   try {
     const url = new URL("/data/index.json", context.request.url);
     const resp = await fetch(url);
@@ -9,8 +10,10 @@ export async function onRequest(context) {
       const idx = await resp.json();
       version = idx.version || null;
       frameworks = Object.keys(idx.frameworks || {}).length;
-      controlsTotal = Object.values(idx.frameworks || {})
-        .reduce((sum, f) => sum + (f.control_count || 0), 0);
+      controlMappingsTotal = Object.values(idx.frameworks || {})
+        .reduce((sum, f) => sum + (f.control_mapping_count ?? f.control_count ?? 0), 0);
+      uniqueControlsTotal = Object.values(idx.frameworks || {})
+        .reduce((sum, f) => sum + (f.unique_control_count ?? 0), 0);
     }
   } catch (_) { /* data not yet deployed */ }
 
@@ -19,7 +22,10 @@ export async function onRequest(context) {
     service: "readtheplan",
     version,
     frameworks,
-    controls_total: controlsTotal,
+    unique_controls_total: uniqueControlsTotal,
+    control_mappings_total: controlMappingsTotal,
+    // Deprecated compatibility alias; this has always counted mapping rows.
+    controls_total: controlMappingsTotal,
     timestamp: new Date().toISOString()
   }), {
     status: 200,

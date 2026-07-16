@@ -72,10 +72,50 @@ assert.equal(response.status, 405);
 assert.equal(response.headers.get("Allow"), "GET, HEAD, OPTIONS");
 response = await dataApi.onRequest({ request: new Request("https://local/api/v1/version", { method: "OPTIONS" }), params: { route: ["v1", "version"] } });
 assert.equal(response.status, 204);
-globalThis.fetch = async () => new Response(JSON.stringify({ version: "0.3.0", frameworks: { soc2: { control_count: 3 } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+const catalogIndex = {
+  version: "0.4.0",
+  frameworks: {
+    soc2: {
+      control_mapping_count: 3,
+      unique_control_count: 2,
+      control_count: 3,
+    },
+  },
+};
+globalThis.fetch = async () => new Response(JSON.stringify(catalogIndex), { status: 200, headers: { "Content-Type": "application/json" } });
 response = await dataApi.onRequest({ request: new Request("https://local/api/v1/version"), params: { route: ["v1", "version"] } });
 assert.equal(response.status, 200);
-assert.equal((await response.json()).controls_total, 3);
+const versionPayload = await response.json();
+assert.equal(versionPayload.unique_controls_total, 2);
+assert.equal(versionPayload.control_mappings_total, 3);
+assert.equal(versionPayload.controls_total, 3, "legacy alias remains mapping-row count");
+response = await dataApi.onRequest({ request: new Request("https://local/api/v1/controls"), params: { route: ["v1", "controls"] } });
+const frameworkPayload = await response.json();
+assert.deepEqual(frameworkPayload.frameworks[0], {
+  id: "soc2",
+  control_mapping_count: 3,
+  unique_control_count: 2,
+  control_count: 3,
+  url: "/api/v1/controls/soc2",
+});
+
+const healthApi = await importSource("functions/health.js");
+response = await healthApi.onRequest({ request: new Request("https://local/health") });
+const healthPayload = await response.json();
+assert.equal(healthPayload.unique_controls_total, 2);
+assert.equal(healthPayload.control_mappings_total, 3);
+assert.equal(healthPayload.controls_total, 3, "health legacy alias remains mapping-row count");
+
+const openapiApi = await importSource("functions/openapi.json.js");
+response = await openapiApi.onRequest({});
+const openapi = await response.json();
+assert.ok(openapi.paths["/health"]);
+assert.equal(openapi.components.schemas.FrameworkSummary.properties.control_count.deprecated, true);
+assert.equal(openapi.components.schemas.ServiceStats.properties.controls_total.deprecated, true);
+assert.match(
+  openapi.components.schemas.ServiceStats.properties.control_mappings_total.description,
+  /inventory, not certified coverage/,
+);
 
 const chatApi = await importSource("functions/api/chat.js");
 const chatReq = (body, headers = {}) => new Request("https://local/api/chat", { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": randomUUID(), ...headers }, body: JSON.stringify(body) });

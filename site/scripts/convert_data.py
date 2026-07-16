@@ -3,6 +3,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -26,6 +27,19 @@ def project_version() -> str:
             return line.split("=", 1)[1].strip().strip('"')
     raise RuntimeError("Unable to read [project].version from pyproject.toml")
 
+
+def catalog_counts(data: dict[str, Any]) -> tuple[int, int]:
+    """Return mapping-row and distinct framework-scoped control counts."""
+
+    mappings = data["mappings"]
+    unique_control_ids = {
+        control["id"]
+        for mapping in mappings
+        for control in mapping["controls"]
+    }
+    return len(mappings), len(unique_control_ids)
+
+
 # Convert each framework.
 frameworks = {}
 for yf in sorted(SRC.glob("*.yaml")):
@@ -35,12 +49,19 @@ for yf in sorted(SRC.glob("*.yaml")):
     out_file = OUT / f"{name}.json"
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(data, f)
+    control_mapping_count, unique_control_count = catalog_counts(data)
     frameworks[name] = {
         "id": name,
         "file": f"{name}.json",
-        "control_count": len(data.get("controls", data.get("mappings", []))),
+        "control_mapping_count": control_mapping_count,
+        "unique_control_count": unique_control_count,
+        # Compatibility alias: historically this field counted mapping rows.
+        "control_count": control_mapping_count,
     }
-    print(f"  {name}: {frameworks[name]['control_count']} mappings -> {out_file}")
+    print(
+        f"  {name}: {control_mapping_count} mappings, "
+        f"{unique_control_count} distinct control IDs -> {out_file}"
+    )
 
 # Write framework index.
 index = {
