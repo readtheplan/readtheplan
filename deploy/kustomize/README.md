@@ -4,6 +4,9 @@
 therefore runs it as an Argo CD `PostSync` smoke Job. The Job has no service
 account token, no permitted network traffic, a read-only root filesystem,
 dropped capabilities, bounded resources, and an in-memory temporary directory.
+The successful Job and logs remain available as the latest execution evidence;
+`BeforeHookCreation` replaces them only when a later sync creates the next
+smoke Job.
 
 For Docker Desktop Kubernetes validation, build the application source commit
 once and load that exact immutable tag without a registry round trip. The local
