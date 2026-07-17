@@ -4,8 +4,8 @@ resources:
   - ../../base
 images:
   - name: readtheplan
-    newName: readtheplan
-    newTag: sha-a3d44e128916
+    newName: nexus.devsecops.internal/docker-hosted/readtheplan
+    digest: sha256:e3af427b90d73f7116ab125dfb1c60a7a15ebc588a924910d96a7d0d766afd25
 patches:
   - target:
       kind: Job
@@ -13,5 +13,8 @@ patches:
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
-        value: Never
-
+        value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: nexus-registry

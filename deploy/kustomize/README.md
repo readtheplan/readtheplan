@@ -9,23 +9,24 @@ The successful Job and logs remain available as the latest execution evidence;
 smoke Job.
 
 For Docker Desktop Kubernetes validation, build the application source commit
-once and load that exact immutable tag without a registry round trip. The local
-overlay currently records source revision `a3d44e128916`; update the overlay and
-this command together when intentionally promoting another source revision:
+once, publish it to the local Nexus hosted Docker repository, sign the returned
+digest with Cosign, and promote only that digest. The local overlay currently
+records digest
+`sha256:e3af427b90d73f7116ab125dfb1c60a7a15ebc588a924910d96a7d0d766afd25`:
 
 ```powershell
 $sha = "a3d44e128916"
 docker build --tag "readtheplan:sha-$sha" .
-D:\Coding\devsecops-lab\tools\kind\v0.32.0\kind.exe load docker-image `
-  "readtheplan:sha-$sha" --name desktop
+docker tag "readtheplan:sha-$sha" `
+  "nexus.devsecops.internal/docker-hosted/readtheplan:sha-$sha"
+docker push "nexus.devsecops.internal/docker-hosted/readtheplan:sha-$sha"
 kubectl apply -k deploy/kustomize/overlays/local
 ```
 
-For shared environments, replace the local overlay image with the registry
-reference already built, scanned, signed, and published by the release workflow.
-Use an immutable `newName` plus `digest: sha256:<64-hex>` entry; never rebuild
+The `nexus-registry` image pull secret is cluster bootstrap state and is not
+committed. Sigstore policy-controller validates the colocated Cosign signature
+using the Pod's pull secret before the Job is admitted. Use an immutable
+`newName` plus `digest: sha256:<64-hex>` entry in every environment; never rebuild
 during promotion. Argo CD should track the Git commit containing only that digest
-change. The local workload uses `imagePullPolicy: Never`: a missing preloaded
-image is a hard failure rather than an accidental registry pull. The tag is
-derived from the source revision and is never reused for different bytes.
-
+change. The human-readable tag is derived from the source revision and is never
+reused for different bytes.
