@@ -5,5 +5,13 @@ resources:
 images:
   - name: readtheplan
     newName: readtheplan
-    newTag: local
+    newTag: sha-a3d44e128916
+patches:
+  - target:
+      kind: Job
+      name: readtheplan-smoke
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
 
