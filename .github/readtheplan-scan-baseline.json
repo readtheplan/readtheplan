@@ -2,7 +2,7 @@
   "schema": "readtheplan-scan-baseline-v1",
   "maximum_risk_counts": {
     "safe": 24,
-    "review": 238,
+    "review": 239,
     "dangerous": 209,
     "irreversible": 0
   },

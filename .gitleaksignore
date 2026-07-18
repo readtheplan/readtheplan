@@ -7,3 +7,12 @@ a46eb7c047fc64229558367b0ea1a450266f8df9:tests/fixtures/packer_template_risky.pk
 b3169d5bd71bac53ada46f2c4f330d3caec6800b:tests/test_rules.py:cloudflare-api-key:49
 b3169d5bd71bac53ada46f2c4f330d3caec6800b:tests/test_rules.py:cloudflare-api-key:50
 b3169d5bd71bac53ada46f2c4f330d3caec6800b:tests/test_rules.py:cloudflare-api-key:73
+a86d7a060f38d110d27a3f47a4789c5d04717c07:tests/fixtures/inspec_profile_risky/controls/main.rb:curl-auth-header:5
+df307dfe1cce2e1a5769fe943f53dcc48f73baa5:src/readtheplan/adapters/ansible_project.py:generic-api-key:669
+1e8fd145178f059962a3f6fccaa2c6a45e3336cf:src/readtheplan/adapters/carvel.py:generic-api-key:96
+0884322e031f5fa7f3e5ee938d8d6a103c6aa973:tests/fixtures/packer_template_risky.pkr.hcl:hashicorp-tf-password:43
+0884322e031f5fa7f3e5ee938d8d6a103c6aa973:tests/fixtures/packer_template_risky.pkr.hcl:hashicorp-tf-password:69
+ee962135ac3c3f61159e2282e768b209fe043afc:CHANGELOG.md:generic-api-key:12
+b2c18cc8cfbce10c43233c6cbe7c242737b8b82d:tests/test_rules.py:cloudflare-api-key:49
+b2c18cc8cfbce10c43233c6cbe7c242737b8b82d:tests/test_rules.py:cloudflare-api-key:50
+b2c18cc8cfbce10c43233c6cbe7c242737b8b82d:tests/test_rules.py:cloudflare-api-key:73
