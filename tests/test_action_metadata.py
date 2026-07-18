@@ -19,6 +19,9 @@ def test_action_uses_json_cli_contract() -> None:
     assert "parse_action_output.py" in action
     assert "fail-on-any-change" in action
     assert "fail-on-threshold" in action
+    assert "scan-excludes" in action
+    assert 'command+=(--exclude "$pattern")' in action
+    assert "scan-excludes is supported only when tool is scan" in action
     assert "input-file" in action
     assert "tool:" in action
     assert (
@@ -59,6 +62,8 @@ def test_action_workflow_covers_success_and_failure_paths() -> None:
     assert "tests/fixtures/valid_plan.json" in workflow
     assert "tool: scan" in workflow
     assert "input-file: tests/fixtures/project_scan" in workflow
+    assert "scan-excludes:" in workflow
+    assert "infra/**" in workflow
     provider_fixtures = (
         "cloudflare_plan_risky.json",
         "github_provider_plan_risky.json",
