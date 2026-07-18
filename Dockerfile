@@ -1,6 +1,4 @@
-ARG PYTHON_IMAGE=python:3.10-slim
-
-FROM ${PYTHON_IMAGE} AS builder
+FROM python:3.10-slim@sha256:c1e4e6c01eb489c422288b2de34b0761ca316f7a2d98e2c33f47659a73ed108a AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -15,7 +13,7 @@ COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 RUN python -m pip wheel --no-cache-dir --wheel-dir /wheels .
 
-FROM ${PYTHON_IMAGE} AS runtime
+FROM python:3.10-slim@sha256:c1e4e6c01eb489c422288b2de34b0761ca316f7a2d98e2c33f47659a73ed108a AS runtime
 
 LABEL org.opencontainers.image.title="readtheplan"
 LABEL org.opencontainers.image.description="Terraform plan risk analyzer — classifies changes as safe/review/dangerous/irreversible"
@@ -45,5 +43,6 @@ ENV HOME=/home/readtheplan
 
 USER 10001:10001
 
+# checkov:skip=CKV_DOCKER_2:This one-shot CLI has no long-running service endpoint to health-check.
 ENTRYPOINT ["readtheplan"]
 CMD ["--help"]

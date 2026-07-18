@@ -8,6 +8,7 @@ on:
     # Nightly Monday-Saturday; Sunday is the separately identifiable weekly run.
     - cron: "23 3 * * 1-6"
     - cron: "23 4 * * 0"
+  # checkov:skip=CKV_GHA_7:Trusted manual runs validate every input before use.
   workflow_dispatch:
     inputs:
       prisma_compute_image:

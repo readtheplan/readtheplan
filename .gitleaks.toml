@@ -1,6 +1,9 @@
 [extend]
 useDefault = true
 
+# Reviewed historical findings are suppressed by exact commit/path/rule/line
+# fingerprints in .gitleaksignore. Keep broad patterns out of this file.
+
 # These fixtures intentionally contain fake private-key markers so analyzers
 # can prove that they detect embedded credentials. Scope the exception to the
 # private-key rule and to these exact synthetic files only.

@@ -53,7 +53,7 @@ The targets have intentionally different contracts:
 - `make ci` runs `make check` and builds the Python distributions.
 - `make site` runs the existing locked Node site tests and build. Run
   `npm ci --prefix site` first in a fresh checkout.
-- `make security` runs pip-audit and Bandit and fails on tool errors or
+- `make security` runs pip-audit and Bandit and fails on tool errors or new
   reportable findings. It does not silently skip missing tools.
 - `make sbom` writes a CycloneDX inventory of the current Python environment
   to `build/sbom/readtheplan.cdx.json`. Release jobs separately inventory the
@@ -61,8 +61,12 @@ The targets have intentionally different contracts:
 - `make container` builds `readtheplan:local` from the checked-out source.
 
 The pre-commit configuration pins whitespace, EOF, YAML, Ruff, and Gitleaks
-hooks. `.gitleaks.toml` exempts only three exact synthetic private-key fixtures that
-contains a deliberately fake private-key marker.
+hooks. `.gitleaks.toml` exempts only three exact synthetic private-key fixtures
+that contain deliberately fake private-key markers. `.gitleaksignore` records
+exact fingerprints for reviewed historical findings, while
+`.bandit-baseline.json` records the reviewed first-party Python findings. Both
+files are non-regression baselines: additions require security review and an
+explicit baseline update.
 
 ## Opt-in policy
 

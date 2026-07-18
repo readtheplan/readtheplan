@@ -1,6 +1,7 @@
 name: Promote signed Nexus release
 
 on:
+  # checkov:skip=CKV_GHA_7:The protected release tag is required and validated before use.
   workflow_dispatch:
     inputs:
       release_tag:

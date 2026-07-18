@@ -30,7 +30,7 @@ build:
 # Install them with `make install-devsecops`; ordinary `make check` stays lean.
 security:
 	$(PYTHON) -m pip_audit --local
-	$(PYTHON) -m bandit -q -r src/readtheplan
+	$(PYTHON) -m bandit -q -r src/readtheplan -ll -ii -b .bandit-baseline.json
 
 sbom:
 	$(PYTHON) -c "from pathlib import Path; Path('$(SBOM)').parent.mkdir(parents=True, exist_ok=True)"

@@ -177,6 +177,7 @@ show_missing = true
 
 [tool.pytest.ini_options]
 addopts = "--cov=readtheplan --cov-report=term-missing"
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]
