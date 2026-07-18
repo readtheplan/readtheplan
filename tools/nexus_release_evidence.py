@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from email.parser import BytesParser
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, NoReturn
 
 SCHEMA = "https://readtheplan.dev/schemas/nexus-release-manifest-v1"
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -32,7 +32,7 @@ class EvidenceError(RuntimeError):
     """Raised when release evidence is incomplete or inconsistent."""
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise EvidenceError(message)
 
 
