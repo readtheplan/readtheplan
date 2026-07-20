@@ -147,7 +147,7 @@ vault = "readtheplan.rules.vault"
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0.0,<2.0.0; python_version >= '3.10'"]
-sign = ["sigstore>=4.0,<5"]
+sign = ["sigstore>=4.4.0,<5"]
 test = ["pytest>=7.0", "pytest-cov>=4.0"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.5"]
 
