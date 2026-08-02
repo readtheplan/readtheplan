@@ -91,7 +91,7 @@ def test_high_scoring_candidate_stays_pr_ready(tmp_path) -> None:
         "resource_type": "aws_iam_role",
         "risk": "dangerous",
         "incident_count": 12,
-        "pattern_hash": "cafebabecafebabe",
+        "pattern_hash": "aws_iam_role::dangerous::delete",
     }
     evolved = engine.analyze_with_agents([pattern])
     assert evolved, "expected a candidate to be produced"

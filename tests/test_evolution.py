@@ -5,12 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 import pytest
 
 from readtheplan.agent_gate import agent_gate_to_dict
-from readtheplan.evolution import EvolutionEngine, _sanitize_for_codegen
+from readtheplan.evolution import EvolutionEngine, _actions_from_pattern, _sanitize_for_codegen
 from readtheplan.plan import analyze_plan_file
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -44,10 +45,17 @@ def _generate_candidate(
     resource_type: str,
 ) -> dict:
     """Generate one verified candidate with the local analysis pipeline."""
+    pattern_hash = f"{resource_type}::dangerous::delete"
+    with sqlite3.connect(engine.db_path) as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO patterns "
+            "(resource_type, risk, pattern_hash, incident_count) VALUES (?, ?, ?, ?)",
+            (resource_type, "dangerous", pattern_hash, 12),
+        )
     [candidate] = engine.analyze_with_agents(
         [
             {
-                "pattern_hash": f"{resource_type}::dangerous",
+                "pattern_hash": pattern_hash,
                 "resource_type": resource_type,
                 "risk": "dangerous",
                 "incident_count": 12,
@@ -132,6 +140,193 @@ def test_record_and_detect_patterns(tmp_path: Path):
     assert len(patterns) == 1
     assert patterns[0]["resource_type"] == "aws_s3_bucket"
     assert patterns[0]["incident_count"] == 3
+
+
+def test_incident_pattern_groups_addresses_but_distinguishes_actions(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    run_id = engine.record_run("plan", "block", 30.0)
+    first = engine.record_incident(
+        run_id, "aws_s3_bucket", "dangerous", "aws_s3_bucket.one", ["update"]
+    )
+    second = engine.record_incident(
+        run_id, "aws_s3_bucket", "dangerous", "aws_s3_bucket.two", ["update"]
+    )
+    different = engine.record_incident(
+        run_id, "aws_s3_bucket", "dangerous", "aws_s3_bucket.two", ["create"]
+    )
+    assert first == second
+    assert different != first
+
+
+@pytest.mark.parametrize("actions", [[{}], [["delete"]], ["delete", "unknown"]])
+def test_structurally_malformed_action_collections_are_quarantined(actions):
+    assert _actions_from_pattern({"actions": actions}) == ()
+
+
+def test_record_incident_string_action_container_is_quarantined(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    run_id = engine.record_run("plan", "block", 30.0)
+    pattern_hash = engine.record_incident(
+        run_id, "aws_x", "review", "aws_x.one", "delete"
+    )
+    assert pattern_hash == "aws_x::review::<malformed-str>"
+    with sqlite3.connect(engine.db_path) as conn:
+        assert json.loads(conn.execute("SELECT actions FROM incidents").fetchone()[0]) == "delete"
+    assert engine.analyze_with_agents([{
+        "pattern_hash": pattern_hash,
+        "resource_type": "aws_x",
+        "risk": "review",
+        "incident_count": 10,
+    }]) == []
+
+
+@pytest.mark.parametrize("actions", [[{}], ["delete,create"]])
+def test_record_incident_malformed_action_list_does_not_crash_or_generate(
+    tmp_path: Path, actions,
+):
+    engine = _make_engine(tmp_path)
+    run_id = engine.record_run("plan", "block", 30.0)
+    pattern_hash = engine.record_incident(run_id, "aws_x", "review", "aws_x.one", actions)
+    assert engine.analyze_with_agents([{
+        "pattern_hash": pattern_hash,
+        "resource_type": "aws_x",
+        "risk": "review",
+        "incident_count": 10,
+    }]) == []
+
+
+def test_pattern_identity_metadata_mismatch_generates_no_candidate(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    pattern = {
+        "pattern_hash": "aws_s3_bucket::irreversible::delete",
+        "resource_type": "aws_iam_role",
+        "risk": "safe",
+        "actions": ["create"],
+        "incident_count": 12,
+    }
+    assert engine.analyze_with_agents([pattern]) == []
+    assert not engine.candidates_dir.exists()
+
+
+def test_legacy_pattern_hashes_are_migrated_by_stored_actions(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    run_id = engine.record_run("legacy", "block", 10)
+    with sqlite3.connect(engine.db_path) as conn:
+        for action in ("create", "delete"):
+            conn.execute(
+                "INSERT INTO incidents "
+                "(run_id, resource_type, risk, address, actions, pattern_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (run_id, "aws_s3_bucket", "irreversible", f"bucket.{action}",
+                 json.dumps([action]), "aws_s3_bucket::irreversible"),
+            )
+        conn.execute(
+            "INSERT INTO patterns (resource_type, risk, pattern_hash, incident_count) "
+            "VALUES (?, ?, ?, ?)",
+            ("aws_s3_bucket", "irreversible", "aws_s3_bucket::irreversible", 2),
+        )
+
+    EvolutionEngine(engine.data_dir)
+
+    with sqlite3.connect(engine.db_path) as conn:
+        incident_hashes = {row[0] for row in conn.execute("SELECT pattern_hash FROM incidents")}
+        pattern_hashes = {row[0] for row in conn.execute("SELECT pattern_hash FROM patterns")}
+    expected = {
+        "aws_s3_bucket::irreversible::create",
+        "aws_s3_bucket::irreversible::delete",
+    }
+    assert incident_hashes == expected
+    assert pattern_hashes == expected
+
+
+def test_colon_bearing_resource_identity_parses_and_legacy_migrates(tmp_path: Path):
+    assert _actions_from_pattern({
+        "pattern_hash": "AWS::S3::Bucket::dangerous::delete"
+    }) == ("delete",)
+    engine = _make_engine(tmp_path)
+    run_id = engine.record_run("legacy", "block", 10)
+    with sqlite3.connect(engine.db_path) as conn:
+        conn.execute(
+            "INSERT INTO incidents (run_id, resource_type, risk, address, actions, pattern_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (run_id, "AWS::S3::Bucket", "dangerous", "bucket.one", json.dumps(["delete"]),
+             "AWS::S3::Bucket::dangerous"),
+        )
+        conn.execute(
+            "INSERT INTO patterns (resource_type, risk, pattern_hash, incident_count) "
+            "VALUES (?, ?, ?, ?)",
+            ("AWS::S3::Bucket", "dangerous", "AWS::S3::Bucket::dangerous", 1),
+        )
+    EvolutionEngine(engine.data_dir)
+    with sqlite3.connect(engine.db_path) as conn:
+        assert conn.execute("SELECT pattern_hash FROM incidents").fetchone()[0] == (
+            "AWS::S3::Bucket::dangerous::delete"
+        )
+        assert conn.execute("SELECT pattern_hash FROM patterns").fetchone()[0] == (
+            "AWS::S3::Bucket::dangerous::delete"
+        )
+
+
+def test_approved_broad_legacy_rule_is_quarantined_when_split(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    run_id = engine.record_run("legacy", "block", 10)
+    with sqlite3.connect(engine.db_path) as conn:
+        for action in ("create", "delete"):
+            conn.execute(
+                "INSERT INTO incidents "
+                "(run_id, resource_type, risk, address, actions, pattern_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (run_id, "aws_x", "dangerous", action, json.dumps([action]),
+                 "aws_x::dangerous"),
+            )
+        cursor = conn.execute(
+            "INSERT INTO patterns (resource_type, risk, pattern_hash, incident_count, "
+            "suggested_rule, rule_score, rule_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("aws_x", "dangerous", "aws_x::dangerous", 2, "LEGACY_BROAD_CODE", 99,
+             "approved"),
+        )
+        conn.execute(
+            "INSERT INTO rules_catalog (pattern_id, rule_code, score, status) VALUES (?, ?, ?, ?)",
+            (cursor.lastrowid, "LEGACY_BROAD_CODE", 99, "approved"),
+        )
+    EvolutionEngine(engine.data_dir)
+    with sqlite3.connect(engine.db_path) as conn:
+        patterns = conn.execute(
+            "SELECT suggested_rule, rule_score, rule_status FROM patterns ORDER BY pattern_hash"
+        ).fetchall()
+        catalog = conn.execute(
+            "SELECT status, COUNT(*) FROM rules_catalog GROUP BY status"
+        ).fetchall()
+    assert patterns == [(None, None, "pending"), (None, None, "pending")]
+    assert catalog == [("disabled", 1)]
+
+
+def test_unmigratable_approved_legacy_rule_remains_but_is_inactive(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    with sqlite3.connect(engine.db_path) as conn:
+        cursor = conn.execute(
+            "INSERT INTO patterns (resource_type, risk, pattern_hash, incident_count, "
+            "suggested_rule, rule_score, rule_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("aws_x", "dangerous", "aws_x::dangerous", 1, "LEGACY_BROAD_CODE", 99,
+             "approved"),
+        )
+        conn.execute(
+            "INSERT INTO rules_catalog (pattern_id, rule_code, score, status) VALUES (?, ?, ?, ?)",
+            (cursor.lastrowid, "LEGACY_BROAD_CODE", 99, "approved"),
+        )
+    EvolutionEngine(engine.data_dir)
+    with sqlite3.connect(engine.db_path) as conn:
+        pattern = conn.execute(
+            "SELECT pattern_hash, suggested_rule, rule_score, rule_status FROM patterns"
+        ).fetchone()
+        catalog = conn.execute(
+            "SELECT pattern_id, rule_code, score, status FROM rules_catalog"
+        ).fetchone()
+    assert pattern == (
+        "aws_x::dangerous", "LEGACY_BROAD_CODE", 99, "disabled",
+    )
+    assert catalog[0:3] == (1, "LEGACY_BROAD_CODE", 99)
+    assert catalog[3] == "disabled"
 
 
 def test_pattern_below_threshold_not_detected(tmp_path: Path):
@@ -420,7 +615,7 @@ def test_evolution_local_candidate_pipeline(tmp_path: Path):
     engine = _make_engine(tmp_path)
     
     patterns = [{
-        "pattern_hash": "aws_s3_bucket::irreversible",
+        "pattern_hash": "aws_s3_bucket::irreversible::delete",
         "resource_type": "aws_s3_bucket",
         "risk": "irreversible",
         "incident_count": 10,
@@ -455,6 +650,159 @@ def test_evolution_local_candidate_pipeline(tmp_path: Path):
     assert len(mcp_md_files) == 1
     
     del os.environ["AGENT_HANDOFF_ROOT"]
+
+
+def test_dispatch_rejects_unsafe_handoff_id(tmp_path: Path, monkeypatch):
+    engine = _make_engine(tmp_path)
+    handoffs = engine.data_dir / "handoffs"
+    handoffs.mkdir()
+    (handoffs / "malicious.json").write_text(
+        json.dumps({"handoff_id": "../escaped", "pattern_hash": "p"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("AGENT_HANDOFF_ROOT", str(tmp_path / "destination"))
+    assert engine.dispatch_handoffs() == []
+    assert not (tmp_path / "escaped.json").exists()
+
+
+def test_dispatch_replaces_destination_symlinks_without_following_them(
+    tmp_path: Path, monkeypatch,
+):
+    engine = _make_engine(tmp_path)
+    handoffs = engine.data_dir / "handoffs"
+    handoffs.mkdir()
+    (handoffs / "safe.json").write_text(
+        json.dumps({"handoff_id": "safe-id", "pattern_hash": "p"}), encoding="utf-8"
+    )
+    destination = tmp_path / "destination"
+    destination.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("do-not-overwrite", encoding="utf-8")
+    (destination / "safe-id.json").symlink_to(outside)
+    monkeypatch.setenv("AGENT_HANDOFF_ROOT", str(destination))
+    assert engine.dispatch_handoffs() == ["safe-id"]
+    assert outside.read_text(encoding="utf-8") == "do-not-overwrite"
+    assert not (destination / "safe-id.json").is_symlink()
+
+
+def test_generated_rules_are_quarantined_by_default(tmp_path: Path, monkeypatch):
+    engine = _make_engine(tmp_path)
+    monkeypatch.delenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", raising=False)
+    [candidate] = engine.analyze_with_agents([{
+        "pattern_hash": "aws_s3_bucket::irreversible::delete",
+        "resource_type": "aws_s3_bucket", "risk": "irreversible", "incident_count": 10,
+    }])
+    assert Path(candidate["candidate_dir"]).is_relative_to(engine.data_dir)
+    assert not engine.approved_rules_dir.exists()
+
+
+def test_action_specific_patterns_generate_distinct_candidates_and_handoffs(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    patterns = [{
+        "pattern_hash": f"aws_s3_bucket::irreversible::{action}",
+        "resource_type": "aws_s3_bucket", "risk": "irreversible", "incident_count": 10,
+    } for action in ("create", "delete")]
+    evolved = engine.analyze_with_agents(patterns)
+    assert len(evolved) == 2
+    assert len(list(engine.candidates_dir.glob("*/candidate.json"))) == 2
+    assert len(list((engine.data_dir / "handoffs").glob("*.json"))) == 2
+    generated = [item["suggested_rule"] for item in evolved]
+    assert '{"create"}.issubset(action_set)' in generated[0]
+    assert '{"delete"}.issubset(action_set)' in generated[1]
+
+
+def test_composite_action_rule_requires_the_complete_learned_action_set(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    [candidate] = engine.analyze_with_agents([{
+        "pattern_hash": "aws_s3_bucket::irreversible::create,delete",
+        "resource_type": "aws_s3_bucket", "risk": "irreversible", "incident_count": 10,
+    }])
+    generated = candidate["suggested_rule"]
+    assert '{"create", "delete"}.issubset(action_set)' in generated
+    assert "action_set.intersection" not in generated
+
+
+def _assert_pattern_is_quarantined(tmp_path: Path, pattern_hash: str) -> None:
+    engine = _make_engine(tmp_path)
+    evolved = engine.analyze_with_agents([{
+        "pattern_hash": pattern_hash, "resource_type": "aws_x",
+        "risk": "review", "incident_count": 10,
+    }])
+    assert evolved == []
+    assert list(engine.candidates_dir.glob("*/candidate.json")) == []
+
+
+def test_unsupported_action_pattern_is_quarantined_without_broad_rule(tmp_path: Path):
+    _assert_pattern_is_quarantined(tmp_path, "aws_x::review::unknown")
+
+
+def test_mixed_supported_and_unsupported_action_pattern_is_quarantined(tmp_path: Path):
+    _assert_pattern_is_quarantined(tmp_path, "aws_x::review::delete,unknown")
+
+
+def test_unmigrated_legacy_pattern_is_quarantined_without_broad_rule(tmp_path: Path):
+    _assert_pattern_is_quarantined(tmp_path, "aws_x::review")
+
+
+def test_verified_approved_rule_loading_does_not_require_write_opt_in(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import readtheplan.rules._shared as shared
+
+    monkeypatch.delenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", raising=False)
+    resource_type = "custom_widget_read_without_write_opt_in"
+    rule_id = f"rule_{resource_type}_dangerous"
+    source = (
+        "from readtheplan.rules._shared import RuleResult, register_rule\n"
+        f"@register_rule({resource_type!r})\n"
+        "def approved_rule(resource_type, action_set, change):\n"
+        "    return [RuleResult('dangerous', 'verified approved rule')]\n"
+    ).encode()
+    _write_approved_rule_store(tmp_path, rule_id, source)
+    monkeypatch.setitem(
+        shared._RULE_REGISTRY,
+        resource_type,
+        list(shared._RULE_REGISTRY.get(resource_type, [])),
+    )
+
+    assert shared._load_auto_rules(tmp_path) == [rule_id]
+
+
+def test_generated_rule_active_writes_require_explicit_opt_in(tmp_path: Path, monkeypatch):
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, "custom_widget_opt_in")
+    monkeypatch.delenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", raising=False)
+    with pytest.raises(PermissionError, match="READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES"):
+        engine.approve_rule(candidate["rule_id"])
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    engine.approve_rule(candidate["rule_id"])
+    assert (engine.approved_rules_dir / f'{candidate["rule_id"]}.py').is_file()
+
+
+def test_lazy_evolution_initializes_engine_once_across_threads(tmp_path: Path, monkeypatch):
+    import threading
+    import time
+
+    import readtheplan.evolution as evolution_module
+
+    created = []
+    original = evolution_module.EvolutionEngine
+
+    class FakeEngine(original):
+        def __init__(self, data_dir):
+            time.sleep(0.01)
+            created.append(self)
+            super().__init__(data_dir)
+
+    monkeypatch.setattr(evolution_module, "EvolutionEngine", FakeEngine)
+    monkeypatch.setattr(evolution_module, "_ENGINE_CACHE", {})
+    threads = [threading.Thread(target=evolution_module.get_engine, args=(tmp_path,))
+               for _ in range(20)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(created) == 1
 
 
 def test_candidate_artifacts_are_confined_and_validate_counterexamples(
@@ -590,7 +938,7 @@ def test_generation_rejects_symlinked_candidate_artifact(
 ):
     engine = _make_engine(tmp_path)
     resource_type = "custom_widget_symlink_generation"
-    rule_id = f"rule_{resource_type}_dangerous"
+    rule_id = f"rule_{resource_type}_dangerous_delete"
     candidate_dir = engine.candidates_dir / rule_id
     candidate_dir.mkdir(parents=True)
     outside = tmp_path / "outside-rule.py"
@@ -613,6 +961,7 @@ def test_approve_rule_hash_allowlists_and_loads_candidate(
     from readtheplan.rules._shared import _RULE_REGISTRY
 
     engine = _make_engine(tmp_path)
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
     resource_type = "custom_widget_approval"
     candidate = _generate_candidate(engine, resource_type)
     rule_id = candidate["rule_id"]
@@ -639,6 +988,9 @@ def test_approve_rule_hash_allowlists_and_loads_candidate(
     assert manifest["rules"][rule_id]["sha256"] == approved["sha256"]
     assert len(_RULE_REGISTRY.get(resource_type, [])) == before
 
+    # An already-published matching record is an idempotent approval success.
+    assert engine.approve_rule(rule_id) == approved
+
     assert engine.load_approved_rules() == [rule_id]
     assert len(_RULE_REGISTRY[resource_type]) == before + 1
     result = apply_resource_rules(
@@ -655,9 +1007,327 @@ def test_approve_rule_hash_allowlists_and_loads_candidate(
     assert len(_RULE_REGISTRY[resource_type]) == before + 1
 
 
-def test_approval_rejects_symlinked_approved_rule_output(
-    tmp_path: Path,
+def test_approval_rejects_mismatched_provenance_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, "custom_widget_provenance")
+    metadata_file = Path(candidate["candidate_dir"]) / "candidate.json"
+    metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+    metadata["pattern_hash"] = "aws_s3_bucket::irreversible::delete"
+    metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata"):
+        engine.approve_rule(candidate["rule_id"])
+    assert not (engine.approved_rules_dir / "manifest.json").exists()
+
+
+def test_database_lock_failure_never_publishes_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    engine = _make_engine(tmp_path)
+    candidate = _generate_candidate(engine, "custom_widget_db_lock")
+    blocker = sqlite3.connect(engine.db_path)
+    blocker.execute("BEGIN EXCLUSIVE")
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            engine.approve_rule(candidate["rule_id"])
+    finally:
+        blocker.rollback()
+        blocker.close()
+
+    assert not (engine.approved_rules_dir / "manifest.json").exists()
+    assert engine.load_approved_rules() == []
+
+
+def _approval_statuses(engine: EvolutionEngine, pattern_hash: str) -> tuple[str, str]:
+    with sqlite3.connect(engine.db_path) as conn:
+        pattern_status = conn.execute(
+            "SELECT rule_status FROM patterns WHERE pattern_hash = ?",
+            (pattern_hash,),
+        ).fetchone()[0]
+        catalog_status = conn.execute(
+            "SELECT rc.status FROM rules_catalog rc "
+            "JOIN patterns p ON p.id = rc.pattern_id "
+            "WHERE p.pattern_hash = ? ORDER BY rc.id DESC LIMIT 1",
+            (pattern_hash,),
+        ).fetchone()[0]
+    return pattern_status, catalog_status
+
+
+@pytest.fixture
+def preserve_rule_registry():
+    from readtheplan.rules._shared import _RULE_REGISTRY
+
+    original = {resource_type: list(rules) for resource_type, rules in _RULE_REGISTRY.items()}
+    try:
+        yield
+    finally:
+        _RULE_REGISTRY.clear()
+        _RULE_REGISTRY.update(original)
+
+
+def test_approved_rule_write_failure_restores_database_and_retry_succeeds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preserve_rule_registry,
+):
+    import readtheplan.evolution as evolution_module
+    from readtheplan.rules._shared import _RULE_REGISTRY
+
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    engine = _make_engine(tmp_path)
+    resource_type = "custom_widget_rule_write_retry"
+    candidate = _generate_candidate(engine, resource_type)
+    rule_id = candidate["rule_id"]
+    pattern_hash = f"{resource_type}::dangerous::delete"
+    real_atomic_write = evolution_module._atomic_write_in_directory
+
+    def fail_rule_write(path: Path, data: bytes, directory: Path) -> None:
+        if path.suffix == ".py":
+            raise OSError("approved rule write failed")
+        real_atomic_write(path, data, directory)
+
+    monkeypatch.setattr(evolution_module, "_atomic_write_in_directory", fail_rule_write)
+    with pytest.raises(OSError, match="approved rule write failed"):
+        engine.approve_rule(rule_id)
+
+    assert _approval_statuses(engine, pattern_hash) == ("pr-ready", "pr-ready")
+    assert not (engine.approved_rules_dir / "manifest.json").exists()
+
+    monkeypatch.setattr(evolution_module, "_atomic_write_in_directory", real_atomic_write)
+    before = len(_RULE_REGISTRY.get(resource_type, []))
+    engine.approve_rule(rule_id)
+    assert engine.load_approved_rules() == [rule_id]
+    assert len(_RULE_REGISTRY[resource_type]) == before + 1
+    assert engine.load_approved_rules() == [rule_id]
+    assert len(_RULE_REGISTRY[resource_type]) == before + 1
+
+
+def test_manifest_write_failure_restores_database_and_retry_succeeds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preserve_rule_registry,
+):
+    import readtheplan.evolution as evolution_module
+
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    engine = _make_engine(tmp_path)
+    resource_type = "custom_widget_manifest_write_retry"
+    candidate = _generate_candidate(engine, resource_type)
+    rule_id = candidate["rule_id"]
+    pattern_hash = f"{resource_type}::dangerous::delete"
+    real_atomic_write = evolution_module._atomic_write_in_directory
+
+    def fail_manifest_write(path: Path, data: bytes, directory: Path) -> None:
+        if path.name == "manifest.json":
+            raise OSError("manifest write failed")
+        real_atomic_write(path, data, directory)
+
+    monkeypatch.setattr(evolution_module, "_atomic_write_in_directory", fail_manifest_write)
+    with pytest.raises(OSError, match="manifest write failed"):
+        engine.approve_rule(rule_id)
+
+    assert _approval_statuses(engine, pattern_hash) == ("pr-ready", "pr-ready")
+    assert not (engine.approved_rules_dir / "manifest.json").exists()
+    assert (engine.approved_rules_dir / f"{rule_id}.py").is_file()
+
+    monkeypatch.setattr(evolution_module, "_atomic_write_in_directory", real_atomic_write)
+    engine.approve_rule(rule_id)
+    assert engine.load_approved_rules() == [rule_id]
+
+
+def test_approval_retry_repairs_matching_approved_database_crash_residue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preserve_rule_registry,
+):
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    engine = _make_engine(tmp_path)
+    resource_type = "custom_widget_crash_residue"
+    candidate = _generate_candidate(engine, resource_type)
+    rule_id = candidate["rule_id"]
+    pattern_hash = f"{resource_type}::dangerous::delete"
+    with sqlite3.connect(engine.db_path) as conn:
+        conn.execute(
+            "UPDATE patterns SET rule_status = 'approved' WHERE pattern_hash = ?",
+            (pattern_hash,),
+        )
+        conn.execute(
+            "UPDATE rules_catalog SET status = 'approved' "
+            "WHERE id = (SELECT MAX(rc.id) FROM rules_catalog rc "
+            "JOIN patterns p ON p.id = rc.pattern_id WHERE p.pattern_hash = ?)",
+            (pattern_hash,),
+        )
+
+    approved = engine.approve_rule(rule_id)
+
+    assert approved["rule_id"] == rule_id
+    assert _approval_statuses(engine, pattern_hash) == ("approved", "approved")
+    assert (engine.approved_rules_dir / f"{rule_id}.py").is_file()
+    manifest = json.loads(
+        (engine.approved_rules_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["rules"][rule_id]["pattern_hash"] == pattern_hash
+    assert engine.load_approved_rules() == [rule_id]
+
+
+def test_concurrent_approvals_from_distinct_engines_preserve_both_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    first = _make_engine(tmp_path)
+    second = EvolutionEngine(first.data_dir)
+    candidates = [
+        _generate_candidate(first, "custom_widget_concurrent_one"),
+        _generate_candidate(first, "custom_widget_concurrent_two"),
+    ]
+    barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+
+    def approve(engine: EvolutionEngine, rule_id: str) -> None:
+        try:
+            barrier.wait(timeout=3)
+            engine.approve_rule(rule_id)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=approve, args=(engine, candidate["rule_id"]))
+        for engine, candidate in zip((first, second), candidates, strict=True)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert not errors
+    assert not any(thread.is_alive() for thread in threads)
+    manifest = json.loads(
+        (first.approved_rules_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert set(manifest["rules"]) == {candidate["rule_id"] for candidate in candidates}
+
+
+def test_concurrent_approvals_from_distinct_processes_preserve_both_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import multiprocessing
+    import os
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("deterministic cross-process approval repro requires fork")
+    context = multiprocessing.get_context("fork")
+
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    engine = _make_engine(tmp_path)
+    candidates = [
+        _generate_candidate(engine, "custom_widget_process_one"),
+        _generate_candidate(engine, "custom_widget_process_two"),
+    ]
+    first_at_manifest = context.Event()
+    second_at_manifest = context.Event()
+    release_first = context.Event()
+    errors = context.Queue()
+
+    def approve_in_process(rule_id: str, reached_manifest, pause: bool) -> None:
+        import readtheplan.evolution as evolution_module
+
+        os.environ["READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES"] = "1"
+        process_engine = EvolutionEngine(engine.data_dir)
+        real_atomic_write = evolution_module._atomic_write_in_directory
+
+        def coordinated_write(path: Path, data: bytes, directory: Path) -> None:
+            if path.name == "manifest.json":
+                reached_manifest.set()
+                if pause and not release_first.wait(timeout=10):
+                    raise TimeoutError("approval race coordination timed out")
+            real_atomic_write(path, data, directory)
+
+        evolution_module._atomic_write_in_directory = coordinated_write
+        try:
+            process_engine.approve_rule(rule_id)
+        except BaseException as exc:
+            errors.put(repr(exc))
+
+    first = context.Process(
+        target=approve_in_process,
+        args=(candidates[0]["rule_id"], first_at_manifest, True),
+    )
+    second = context.Process(
+        target=approve_in_process,
+        args=(candidates[1]["rule_id"], second_at_manifest, False),
+    )
+    first.start()
+    assert first_at_manifest.wait(timeout=10)
+    second.start()
+    second_at_manifest.wait(timeout=2)
+    release_first.set()
+    first.join(timeout=10)
+    second.join(timeout=10)
+
+    assert first.exitcode == 0
+    assert second.exitcode == 0
+    assert errors.empty()
+    manifest = json.loads(
+        (engine.approved_rules_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert set(manifest["rules"]) == {candidate["rule_id"] for candidate in candidates}
+
+
+def test_windows_approval_lock_retries_contention_until_acquired(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import errno
+    import sys
+    from types import SimpleNamespace
+
+    import readtheplan.evolution as evolution_module
+
+    attempts = 0
+    unlocks = 0
+    blocking_mode_used = False
+
+    def locking(_descriptor: int, mode: int, _length: int) -> None:
+        nonlocal attempts, unlocks, blocking_mode_used
+        if mode == 1:
+            blocking_mode_used = True
+            raise AssertionError("bounded LK_LOCK mode must not be used")
+        if mode == 2:
+            attempts += 1
+            if attempts < 3:
+                raise OSError(errno.EACCES, "lock is held")
+            return
+        if mode == 3:
+            unlocks += 1
+            return
+        raise AssertionError(f"unexpected lock mode: {mode}")
+
+    fake_msvcrt = SimpleNamespace(
+        LK_LOCK=1,
+        LK_NBLCK=2,
+        LK_UNLCK=3,
+        locking=locking,
+    )
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+    monkeypatch.setattr(evolution_module.os, "name", "nt")
+
+    with evolution_module._approval_process_lock(tmp_path):
+        pass
+
+    assert blocking_mode_used is False
+    assert attempts == 3
+    assert unlocks == 1
+
+
+def test_approval_rejects_symlinked_approved_rule_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
     engine = _make_engine(tmp_path)
     candidate = _generate_candidate(engine, "custom_widget_symlink_approval")
     engine.approved_rules_dir.mkdir()
@@ -723,6 +1393,8 @@ def test_approved_loader_executes_verified_source_not_timestamp_valid_bytecode(
 
     from readtheplan.rules._shared import _RULE_REGISTRY, _load_auto_rules
 
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+
     data_dir = tmp_path / ".readtheplan"
     rule_id = "rule_custom_widget_bytecode_dangerous"
     good_resource = "custom_widget_bytecode_good"
@@ -771,6 +1443,56 @@ def test_approved_loader_executes_verified_source_not_timestamp_valid_bytecode(
     assert _load_auto_rules(data_dir) == [rule_id]
     assert len(_RULE_REGISTRY[good_resource]) == good_before + 1
     assert len(_RULE_REGISTRY[evil_resource]) == evil_before
+
+
+def test_approved_loader_is_idempotent_across_concurrent_calls(tmp_path: Path, monkeypatch):
+    import threading
+    import time
+
+    import readtheplan.rules._shared as shared
+
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
+    data_dir = tmp_path / ".readtheplan"
+    rule_id = "rule_custom_widget_concurrent_dangerous"
+    resource_type = "custom_widget_concurrent"
+    source = (
+        "from readtheplan.rules._shared import RuleResult, register_rule\n"
+        f"@register_rule({resource_type!r})\n"
+        "def approved_rule(resource_type, action_set, change):\n"
+        "    return [RuleResult('dangerous', 'loaded once')]\n"
+    ).encode()
+    _write_approved_rule_store(data_dir, rule_id, source)
+    monkeypatch.setitem(
+        shared._RULE_REGISTRY,
+        resource_type,
+        list(shared._RULE_REGISTRY.get(resource_type, [])),
+    )
+    before = len(shared._RULE_REGISTRY[resource_type])
+    original_execute = shared._execute_verified_rule_bytes
+    execute_count = 0
+    execute_count_lock = threading.Lock()
+
+    def synchronized_execute(*args, **kwargs):
+        nonlocal execute_count
+        with execute_count_lock:
+            execute_count += 1
+        time.sleep(0.05)
+        return original_execute(*args, **kwargs)
+
+    monkeypatch.setattr(shared, "_execute_verified_rule_bytes", synchronized_execute)
+    results: list[list[str]] = []
+    threads = [
+        threading.Thread(target=lambda: results.append(shared._load_auto_rules(data_dir)))
+        for _ in range(2)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=3)
+    assert not any(thread.is_alive() for thread in threads)
+    assert results == [[rule_id], [rule_id]]
+    assert execute_count == 1
+    assert len(shared._RULE_REGISTRY[resource_type]) == before + 1
 
 
 def test_approved_loader_rolls_back_partial_registry_mutations(tmp_path: Path):
@@ -824,8 +1546,9 @@ def test_approved_loader_rolls_back_partial_registry_mutations(tmp_path: Path):
 
 
 def test_approval_rejects_disabled_or_unverified_candidate(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
     engine = _make_engine(tmp_path)
     candidate = _generate_candidate(engine, "custom_widget_unverified")
     metadata_file = Path(candidate["candidate_dir"]) / "candidate.json"
@@ -854,6 +1577,7 @@ def test_cli_evolve_approve_uses_exact_top_level_command(
     engine = _make_engine(tmp_path)
     candidate = _generate_candidate(engine, "custom_widget_cli")
     monkeypatch.setattr(cli, "get_engine", lambda: engine)
+    monkeypatch.setenv("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES", "1")
 
     assert cli.main(["evolve", "approve", candidate["rule_id"]]) == 0
     captured = capsys.readouterr()

@@ -13,6 +13,7 @@ review is delegated to tooling outside this library.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import html as _html
 import json
@@ -23,7 +24,8 @@ import stat
 import sys
 import tempfile
 import threading
-from contextlib import redirect_stdout
+import time
+from contextlib import contextmanager, redirect_stdout
 from datetime import datetime
 from importlib.machinery import ModuleSpec
 from pathlib import Path
@@ -35,8 +37,61 @@ _VALID_RISKS = frozenset({"safe", "review", "dangerous", "irreversible"})
 # Resource type after normalisation must be an identifier-safe token
 _RESOURCE_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
 _RULE_ID_RE = re.compile(r"^rule_[a-z][a-z0-9_]{0,190}$")
+_HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_CODEGEN_ACTIONS = frozenset({"create", "update", "delete"})
 _CANDIDATE_SCHEMA = "readtheplan-evolution-candidate-v1"
 _APPROVAL_MANIFEST_SCHEMA = "readtheplan-approved-rules-v1"
+_APPROVAL_LOCK = threading.RLock()
+
+
+@contextmanager
+def _approval_process_lock(data_dir: Path):
+    """Serialize approval publication across processes sharing *data_dir*."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = data_dir / ".approval.lock"
+    if _is_link_or_reparse_point(lock_path):
+        raise ValueError("approval lock must be a regular in-store file")
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(lock_path, flags, 0o600)
+    locked = False
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError("approval lock must be a regular in-store file")
+        if os.name == "nt":
+            import msvcrt
+
+            if os.fstat(descriptor).st_size == 0:
+                os.write(descriptor, b"\0")
+                os.fsync(descriptor)
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            while True:
+                try:
+                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as exc:
+                    if exc.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                        raise
+                    time.sleep(0.05)
+        else:
+            import fcntl
+
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+        locked = True
+        yield
+    finally:
+        if locked:
+            if os.name == "nt":
+                import msvcrt
+
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def _sanitize_for_codegen(resource_type: str, risk: str) -> tuple[str, str]:
@@ -56,6 +111,63 @@ def _sanitize_for_codegen(resource_type: str, risk: str) -> tuple[str, str]:
             f"risk {risk!r} is not a known risk level (allowed: {sorted(_VALID_RISKS)})"
         )
     return rt_clean, risk
+
+
+def _parse_pattern_identity(identity: Any) -> tuple[str, str, tuple[str, ...]] | None:
+    """Parse an action-qualified identity without splitting resource types."""
+    if not isinstance(identity, str):
+        return None
+    prefix, separator, tail = identity.rpartition("::")
+    if not separator or not prefix:
+        return None
+    resource_type, separator, risk = prefix.rpartition("::")
+    if not separator or not resource_type or risk not in _VALID_RISKS or not tail:
+        return None
+    actions = tuple(tail.split(","))
+    if not all(actions):
+        return None
+    return resource_type, risk, actions
+
+
+def _is_legacy_pattern_identity(identity: Any) -> bool:
+    if not isinstance(identity, str):
+        return False
+    resource_type, separator, risk = identity.rpartition("::")
+    return bool(separator and resource_type and risk in _VALID_RISKS)
+
+
+def _actions_from_pattern(pattern: dict[str, Any]) -> tuple[str, ...]:
+    supplied = pattern.get("actions")
+    if supplied is not None:
+        if not isinstance(supplied, list) or not all(isinstance(a, str) for a in supplied):
+            return ()
+        actions = tuple(supplied)
+    else:
+        parsed = _parse_pattern_identity(pattern.get("pattern_hash"))
+        if parsed is None:
+            return ()
+        actions = parsed[2]
+    if not actions or any(action not in _CODEGEN_ACTIONS for action in actions):
+        return ()
+    return tuple(sorted(set(actions)))
+
+
+def _validated_pattern_actions(pattern: dict[str, Any]) -> tuple[str, ...]:
+    """Return canonical actions only when all provenance identity fields agree."""
+    parsed = _parse_pattern_identity(pattern.get("pattern_hash"))
+    if parsed is None:
+        return ()
+    resource_type, risk, parsed_actions = parsed
+    if resource_type != pattern.get("resource_type") or risk != pattern.get("risk"):
+        return ()
+    canonical_parsed = tuple(sorted(set(parsed_actions)))
+    if not canonical_parsed or any(action not in _CODEGEN_ACTIONS for action in canonical_parsed):
+        return ()
+    if "actions" in pattern:
+        supplied = _actions_from_pattern({"actions": pattern["actions"]})
+        if supplied != canonical_parsed:
+            return ()
+    return canonical_parsed
 
 
 def _atomic_write_in_directory(path: Path, data: bytes, directory: Path) -> None:
@@ -95,6 +207,20 @@ def _atomic_write_in_directory(path: Path, data: bytes, directory: Path) -> None
         raise
 
 
+def _atomic_replace_text(path: Path, content: str) -> None:
+    """Atomically replace a handoff file without following a destination symlink."""
+    descriptor, temporary_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_name, path)
+    except BaseException:
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
 def _is_link_or_reparse_point(path: Path) -> bool:
     """Return true for symlinks and Windows junction/reparse-point paths."""
     try:
@@ -115,6 +241,7 @@ def _verify_candidate_rule(
     function_name: str,
     resource_type: str,
     risk: str,
+    actions: tuple[str, ...] = ("delete",),
 ) -> tuple[bool, str | None]:
     """Execute and verify a generated rule without activating it.
 
@@ -164,11 +291,8 @@ def _verify_candidate_rule(
                 if not callable(rule):
                     raise ValueError(f"candidate did not define {function_name}")
 
-                mutating_results = rule(
-                    resource_type,
-                    {"delete"},
-                    {"actions": ["delete"]},
-                )
+                action_set = set(actions)
+                mutating_results = rule(resource_type, action_set, {"actions": list(actions)})
                 if not mutating_results or not any(
                     getattr(result, "risk", None) == risk
                     for result in mutating_results
@@ -292,6 +416,7 @@ class EvolutionEngine:
                 FOREIGN KEY (pattern_id) REFERENCES patterns(id)
             )
         """)
+        self._migrate_legacy_pattern_hashes(conn)
         conn.commit()
         conn.close()
 
@@ -337,10 +462,10 @@ class EvolutionEngine:
         resource_type: str,
         risk: str,
         address: str,
-        actions: list[str],
+        actions: Any,
     ) -> str:
         """Record an individual incident and return its pattern hash."""
-        pattern_hash = self._pattern_hash(resource_type, risk)
+        pattern_hash = self._pattern_hash(resource_type, risk, actions)
         conn = sqlite3.connect(self.db_path)
         conn.execute(
             "INSERT INTO incidents (run_id, resource_type, risk, "
@@ -354,8 +479,100 @@ class EvolutionEngine:
         return pattern_hash
 
     @staticmethod
-    def _pattern_hash(resource_type: str, risk: str) -> str:
-        return f"{resource_type}::{risk}"
+    def _pattern_hash(
+        resource_type: str, risk: str, actions: Any = None,
+    ) -> str:
+        if actions is None:
+            return f"{resource_type}::{risk}"
+        if isinstance(actions, list):
+            if not actions:
+                return f"{resource_type}::{risk}"
+            if all(
+                isinstance(action, str)
+                and "," not in action
+                and "::" not in action
+                for action in actions
+            ):
+                action_identity = ",".join(sorted(set(actions)))
+            else:
+                action_identity = "<malformed-list>"
+        else:
+            action_identity = f"<malformed-{type(actions).__name__}>"
+        return f"{resource_type}::{risk}::{action_identity}"
+
+    def _migrate_legacy_pattern_hashes(self, conn: sqlite3.Connection) -> None:
+        for incident_id, resource_type, risk, actions_json, pattern_hash in conn.execute(
+            "SELECT id, resource_type, risk, actions, pattern_hash FROM incidents"
+        ).fetchall():
+            parsed_identity = _parse_pattern_identity(pattern_hash)
+            if parsed_identity is not None:
+                continue
+            try:
+                actions = json.loads(actions_json or "[]")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(actions, list) or not all(isinstance(a, str) for a in actions):
+                continue
+            migrated = self._pattern_hash(resource_type, risk, actions)
+            if migrated != pattern_hash:
+                conn.execute(
+                    "UPDATE incidents SET pattern_hash = ? WHERE id = ?",
+                    (migrated, incident_id),
+                )
+
+        legacy_patterns = [row for row in conn.execute(
+            "SELECT id, resource_type, risk, pattern_hash, suggested_rule, "
+            "rule_score, rule_status FROM patterns"
+        ).fetchall() if _is_legacy_pattern_identity(row[3])]
+        for legacy in legacy_patterns:
+            legacy_id, resource_type, risk, legacy_hash, rule, score, status = legacy
+            conn.execute(
+                "UPDATE patterns SET rule_status = 'disabled' WHERE id = ?",
+                (legacy_id,),
+            )
+            conn.execute(
+                "UPDATE rules_catalog SET status = 'disabled' WHERE pattern_id = ?",
+                (legacy_id,),
+            )
+            groups = conn.execute(
+                "SELECT pattern_hash, COUNT(*), MIN(r.timestamp), MAX(r.timestamp) "
+                "FROM incidents i JOIN runs r ON r.id = i.run_id "
+                "WHERE i.resource_type = ? AND i.risk = ? GROUP BY pattern_hash",
+                (resource_type, risk),
+            ).fetchall()
+            migrated_groups = [group for group in groups if group[0] != legacy_hash]
+            if not migrated_groups:
+                continue
+            target_ids: list[int] = []
+            for index, (pattern_hash, count, first_seen, last_seen) in enumerate(migrated_groups):
+                existing = conn.execute(
+                    "SELECT id FROM patterns WHERE pattern_hash = ?", (pattern_hash,)
+                ).fetchone()
+                if existing:
+                    target_id = existing[0]
+                elif index == 0:
+                    target_id = legacy_id
+                    conn.execute(
+                        "UPDATE patterns SET pattern_hash = ?, incident_count = ?, "
+                        "first_seen = ?, last_seen = ?, suggested_rule = NULL, "
+                        "rule_score = NULL, rule_status = 'pending' WHERE id = ?",
+                        (pattern_hash, count, first_seen, last_seen, target_id),
+                    )
+                else:
+                    cursor = conn.execute(
+                        "INSERT INTO patterns (resource_type, risk, pattern_hash, incident_count, "
+                        "first_seen, last_seen, suggested_rule, rule_score, rule_status) "
+                        "VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 'pending')",
+                        (resource_type, risk, pattern_hash, count, first_seen, last_seen),
+                    )
+                    target_id = cursor.lastrowid
+                target_ids.append(target_id)
+            if target_ids and target_ids[0] != legacy_id:
+                conn.execute(
+                    "UPDATE rules_catalog SET pattern_id = ? WHERE pattern_id = ?",
+                    (target_ids[0], legacy_id),
+                )
+                conn.execute("DELETE FROM patterns WHERE id = ?", (legacy_id,))
 
     # ── Stage 3: Analyze ───────────────────────────────────────────────
 
@@ -456,6 +673,16 @@ class EvolutionEngine:
             except ValueError as exc:
                 print(f"Skipping pattern {pattern_hash!r}: {exc}", file=sys.stderr)
                 continue
+            actions = _validated_pattern_actions(pattern)
+            if not actions:
+                print(
+                    f"Skipping pattern {pattern_hash!r}: no supported mutation actions",
+                    file=sys.stderr,
+                )
+                continue
+            action_slug = "_".join(actions)
+            action_set_literal = "{" + ", ".join(f'"{a}"' for a in actions) + "}"
+            action_list_literal = "[" + ", ".join(f'"{a}"' for a in actions) + "]"
 
             # Keep generation local and deterministic. Spawning external model
             # tooling here could open an authentication flow or consume a
@@ -466,7 +693,7 @@ class EvolutionEngine:
             )
 
             # 1. Local template generation of candidate rule + validation code
-            rule_id = self._candidate_rule_id(rt_clean, risk)
+            rule_id = self._candidate_rule_id(rt_clean, risk, actions)
             self.candidates_dir.mkdir(parents=True, exist_ok=True)
             candidate_root = self.candidates_dir.resolve()
             if (
@@ -490,13 +717,13 @@ from typing import Any
 from readtheplan.rules._shared import RuleResult, register_rule
 
 @register_rule("{rt}")
-def _rule_{rt_clean}_{risk}(
+def _rule_{rt_clean}_{risk}_{action_slug}(
     resource_type: str, action_set: set[str],
     change: dict[str, Any],
 ) -> list[RuleResult]:
     candidates = []
     # Auto-generated check
-    if "delete" in action_set or "update" in action_set or "create" in action_set:
+    if {action_set_literal}.issubset(action_set):
         candidates.append(
             RuleResult("{risk}", "Auto-generated rule flagged {rt} for {risk}")
         )
@@ -511,16 +738,17 @@ _SPEC = spec_from_file_location("_readtheplan_candidate_{rule_id}", _CANDIDATE_F
 assert _SPEC is not None and _SPEC.loader is not None
 _MODULE = module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
-_RULE = _MODULE._rule_{rt_clean}_{risk}
+_RULE = _MODULE._rule_{rt_clean}_{risk}_{action_slug}
 
 
-def test_rule_{rt_clean}_{risk}_flags_mutating_change():
-    results = _RULE("{rt}", {{"delete"}}, {{"actions": ["delete"]}})
+def test_rule_{rt_clean}_{risk}_{action_slug}_flags_mutating_change():
+    actions = {action_set_literal}
+    results = _RULE("{rt}", actions, {{"actions": {action_list_literal}}})
     assert results
     assert any(result.risk == "{risk}" for result in results)
 
 
-def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
+def test_rule_{rt_clean}_{risk}_{action_slug}_ignores_noop_and_read_only_changes():
     for actions in ({{"no-op"}}, {{"read"}}):
         assert _RULE("{rt}", actions, {{"actions": sorted(actions)}}) == []
 """
@@ -536,9 +764,10 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                     f"_readtheplan_candidate_verify_{rule_id}_"
                     f"{hashlib.sha256(rule_code.encode()).hexdigest()[:12]}"
                 ),
-                function_name=f"_rule_{rt_clean}_{risk}",
+                function_name=f"_rule_{rt_clean}_{risk}_{action_slug}",
                 resource_type=rt,
                 risk=risk,
+                actions=actions,
             )
             if verification_error is not None:
                 print(
@@ -628,7 +857,7 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
                     or handoffs_dir.resolve().parent != self.data_dir.resolve()
                 ):
                     raise ValueError("handoffs path escapes the evolution data directory")
-                handoff_file = handoffs_dir / f"handoff_{rt_clean}_{risk}.json"
+                handoff_file = handoffs_dir / f"handoff_{rt_clean}_{risk}_{action_slug}.json"
                 
                 import uuid
                 handoff_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -718,9 +947,12 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
         return "disabled"
 
     @staticmethod
-    def _candidate_rule_id(resource_type: str, risk: str) -> str:
+    def _candidate_rule_id(
+        resource_type: str, risk: str, actions: tuple[str, ...] = (),
+    ) -> str:
         """Return the stable, path-safe ID used by generation and approval."""
-        rule_id = f"rule_{resource_type}_{risk}"
+        suffix = f"_{'_'.join(actions)}" if actions else ""
+        rule_id = f"rule_{resource_type}_{risk}{suffix}"
         if not _RULE_ID_RE.fullmatch(rule_id):
             raise ValueError(f"generated rule ID is not safe: {rule_id!r}")
         return rule_id
@@ -732,8 +964,17 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
         adds a SHA-256 allowlist record.  The loader ignores all files that are
         absent from this manifest or differ from the approved digest.
         """
+        with _APPROVAL_LOCK:
+            with _approval_process_lock(self.data_dir):
+                return self._approve_rule_locked(rule_id)
+
+    def _approve_rule_locked(self, rule_id: str) -> dict[str, Any]:
         if not _RULE_ID_RE.fullmatch(rule_id):
             raise ValueError(f"invalid rule ID: {rule_id!r}")
+        if os.environ.get("READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES") != "1":
+            raise PermissionError(
+                "active rule writes require READTHEPLAN_ALLOW_ACTIVE_RULE_WRITES=1"
+            )
 
         candidate_root = self.candidates_dir.resolve()
         if (
@@ -771,9 +1012,14 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
         if metadata.get("rule_id") != rule_id:
             raise ValueError(f"candidate metadata does not match rule ID: {rule_id}")
 
+        actions = _validated_pattern_actions(metadata)
+        if not actions:
+            raise ValueError(f"candidate metadata provenance is invalid: {rule_id}")
+
         try:
             expected_rule_id = self._candidate_rule_id(
-                *_sanitize_for_codegen(metadata["resource_type"], metadata["risk"])
+                *_sanitize_for_codegen(metadata["resource_type"], metadata["risk"]),
+                actions,
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"candidate metadata is invalid: {rule_id}") from exc
@@ -818,68 +1064,175 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
         ):
             raise ValueError(f"candidate artifacts changed after validation: {rule_id}")
 
-        self.approved_rules_dir.mkdir(parents=True, exist_ok=True)
-        approved_root = self.approved_rules_dir.resolve()
-        if (
-            _is_link_or_reparse_point(self.approved_rules_dir)
-            or approved_root.parent != self.data_dir.resolve()
-        ):
-            raise ValueError("approved-rules path escapes the evolution data directory")
-        manifest_file = approved_root / "manifest.json"
-        if _is_link_or_reparse_point(manifest_file):
-            raise ValueError("approved-rules manifest must be a regular in-store file")
-        if manifest_file.exists():
-            try:
-                resolved_manifest_file = manifest_file.resolve(strict=True)
-                if (
-                    resolved_manifest_file.parent != approved_root
-                    or not resolved_manifest_file.is_file()
-                ):
-                    raise ValueError("approved-rules manifest escapes its directory")
-                manifest = json.loads(resolved_manifest_file.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                raise ValueError("approved-rules manifest is invalid") from exc
+        transitioned = False
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self.approved_rules_dir.mkdir(parents=True, exist_ok=True)
+            approved_root = self.approved_rules_dir.resolve()
             if (
-                not isinstance(manifest, dict)
-                or manifest.get("schema") != _APPROVAL_MANIFEST_SCHEMA
-                or not isinstance(manifest.get("rules"), dict)
+                _is_link_or_reparse_point(self.approved_rules_dir)
+                or approved_root.parent != self.data_dir.resolve()
             ):
-                raise ValueError("approved-rules manifest is invalid")
-        else:
-            manifest = {"schema": _APPROVAL_MANIFEST_SCHEMA, "rules": {}}
+                raise ValueError("approved-rules path escapes the evolution data directory")
+            manifest_file = approved_root / "manifest.json"
+            if _is_link_or_reparse_point(manifest_file):
+                raise ValueError("approved-rules manifest must be a regular in-store file")
+            if manifest_file.exists():
+                try:
+                    resolved_manifest_file = manifest_file.resolve(strict=True)
+                    if (
+                        resolved_manifest_file.parent != approved_root
+                        or not resolved_manifest_file.is_file()
+                    ):
+                        raise ValueError("approved-rules manifest escapes its directory")
+                    manifest = json.loads(resolved_manifest_file.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ValueError("approved-rules manifest is invalid") from exc
+                if (
+                    not isinstance(manifest, dict)
+                    or manifest.get("schema") != _APPROVAL_MANIFEST_SCHEMA
+                    or not isinstance(manifest.get("rules"), dict)
+                ):
+                    raise ValueError("approved-rules manifest is invalid")
+            else:
+                manifest = {"schema": _APPROVAL_MANIFEST_SCHEMA, "rules": {}}
 
-        approved_file = approved_root / f"{rule_id}.py"
-        _atomic_write_in_directory(approved_file, rule_bytes, self.approved_rules_dir)
-        approved_at = datetime.now().isoformat()
+            approved_file = approved_root / f"{rule_id}.py"
+            existing_record = manifest["rules"].get(rule_id)
+            database_row = conn.execute(
+                "SELECT p.rule_status, rc.status, p.suggested_rule, p.rule_score, "
+                "rc.rule_code, rc.score FROM patterns p "
+                "JOIN rules_catalog rc ON rc.id = ("
+                "SELECT MAX(latest.id) FROM rules_catalog latest "
+                "WHERE latest.pattern_id = p.id) "
+                "WHERE p.pattern_hash = ?",
+                (metadata["pattern_hash"],),
+            ).fetchone()
+            if database_row is None:
+                raise ValueError(f"candidate database status transition failed: {rule_id}")
+
+            pattern_status, catalog_status = database_row[:2]
+            if existing_record is not None:
+                expected_record = {
+                    "file": approved_file.name,
+                    "sha256": rule_hash,
+                    "pattern_hash": metadata["pattern_hash"],
+                    "resource_type": metadata["resource_type"],
+                    "risk": metadata["risk"],
+                }
+                if (
+                    pattern_status != "approved"
+                    or catalog_status != "approved"
+                    or not isinstance(existing_record, dict)
+                    or any(existing_record.get(key) != value
+                           for key, value in expected_record.items())
+                    or not isinstance(existing_record.get("approved_at"), str)
+                ):
+                    raise ValueError(f"approved rule record conflicts: {rule_id}")
+                try:
+                    resolved_approved_file = approved_file.resolve(strict=True)
+                    if (
+                        _is_link_or_reparse_point(approved_file)
+                        or resolved_approved_file.parent != approved_root
+                        or not resolved_approved_file.is_file()
+                        or resolved_approved_file.read_bytes() != rule_bytes
+                    ):
+                        raise ValueError(f"approved rule record conflicts: {rule_id}")
+                except OSError as exc:
+                    raise ValueError(f"approved rule record conflicts: {rule_id}") from exc
+                result = {"rule_id": rule_id, **existing_record}
+                conn.commit()
+                return result
+
+            approved_at = datetime.now().isoformat()
+            if pattern_status == "pr-ready" and catalog_status == "pr-ready":
+                pattern_update = conn.execute(
+                    "UPDATE patterns SET rule_status = 'approved' "
+                    "WHERE pattern_hash = ? AND rule_status = 'pr-ready'",
+                    (metadata["pattern_hash"],),
+                )
+                catalog_update = conn.execute(
+                    "UPDATE rules_catalog SET status = 'approved', merged_at = ? "
+                    "WHERE id = (SELECT MAX(rc.id) FROM rules_catalog rc "
+                    "JOIN patterns p ON p.id = rc.pattern_id WHERE p.pattern_hash = ?) "
+                    "AND status = 'pr-ready'",
+                    (approved_at, metadata["pattern_hash"]),
+                )
+                if pattern_update.rowcount != 1 or catalog_update.rowcount != 1:
+                    raise ValueError(
+                        f"candidate database status transition failed: {rule_id}"
+                    )
+                transitioned = True
+            elif pattern_status == "approved" and catalog_status == "approved":
+                rule_text = rule_bytes.decode("utf-8")
+                if (
+                    database_row[2] != rule_text
+                    or database_row[3] != score
+                    or database_row[4] != rule_text
+                    or database_row[5] != score
+                ):
+                    raise ValueError(f"candidate database provenance mismatch: {rule_id}")
+            else:
+                raise ValueError(f"candidate database status transition failed: {rule_id}")
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
         record = {
             "file": approved_file.name,
             "sha256": rule_hash,
             "approved_at": approved_at,
-            "pattern_hash": metadata.get("pattern_hash"),
+            "pattern_hash": metadata["pattern_hash"],
             "resource_type": metadata["resource_type"],
             "risk": metadata["risk"],
         }
         manifest["rules"][rule_id] = record
-        _atomic_write_in_directory(
-            manifest_file,
-            json.dumps(manifest, indent=2).encode(),
-            self.approved_rules_dir,
-        )
-
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            "UPDATE patterns SET rule_status = 'approved' WHERE pattern_hash = ?",
-            (metadata.get("pattern_hash"),),
-        )
-        conn.execute(
-            "UPDATE rules_catalog SET status = 'approved', merged_at = ? "
-            "WHERE id = (SELECT MAX(rc.id) FROM rules_catalog rc "
-            "JOIN patterns p ON p.id = rc.pattern_id WHERE p.pattern_hash = ?)",
-            (approved_at, metadata.get("pattern_hash")),
-        )
-        conn.commit()
-        conn.close()
-        return {"rule_id": rule_id, **record}
+        manifest_bytes = json.dumps(manifest, indent=2).encode()
+        result = {"rule_id": rule_id, **record}
+        try:
+            _atomic_write_in_directory(approved_file, rule_bytes, self.approved_rules_dir)
+            _atomic_write_in_directory(
+                manifest_file,
+                manifest_bytes,
+                self.approved_rules_dir,
+            )
+        except BaseException:
+            if transitioned:
+                compensation = None
+                try:
+                    compensation = sqlite3.connect(self.db_path)
+                    compensation.execute("BEGIN IMMEDIATE")
+                    compensation.execute(
+                        "UPDATE patterns SET rule_status = 'pr-ready' "
+                        "WHERE pattern_hash = ? AND rule_status = 'approved'",
+                        (metadata["pattern_hash"],),
+                    )
+                    compensation.execute(
+                        "UPDATE rules_catalog SET status = 'pr-ready', merged_at = NULL "
+                        "WHERE id = (SELECT MAX(rc.id) FROM rules_catalog rc "
+                        "JOIN patterns p ON p.id = rc.pattern_id "
+                        "WHERE p.pattern_hash = ?) AND status = 'approved'",
+                        (metadata["pattern_hash"],),
+                    )
+                    compensation.commit()
+                except BaseException:
+                    if compensation is not None:
+                        try:
+                            compensation.rollback()
+                        except BaseException:
+                            pass
+                finally:
+                    if compensation is not None:
+                        try:
+                            compensation.close()
+                        except BaseException:
+                            pass
+            raise
+        return result
 
     def load_approved_rules(self) -> list[str]:
         """Load manifest-approved rules from this engine's data directory."""
@@ -933,7 +1286,8 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
                 hid = data.get("handoff_id")
-                if not hid:
+                if (not isinstance(hid, str) or not _HANDOFF_ID_RE.fullmatch(hid)
+                        or hid in {".", ".."}):
                     continue
 
                 # Generate the final handoff JSON for computer-use-mcp
@@ -965,7 +1319,7 @@ def test_rule_{rt_clean}_{risk}_ignores_noop_and_read_only_changes():
 
                 # Write JSON handoff
                 dest_json = dest_dir / f"{hid}.json"
-                dest_json.write_text(json.dumps(mcp_handoff_data, indent=2), encoding="utf-8")
+                _atomic_replace_text(dest_json, json.dumps(mcp_handoff_data, indent=2))
 
                 # Generate Obsidian-friendly Markdown handoff
                 dest_md = dest_dir / f"{hid}.md"
@@ -1004,7 +1358,7 @@ Rule details:
 Incident count: {data.get('incident_count')}
 Score: {data.get('score')}
 """
-                dest_md.write_text(md_content, encoding="utf-8")
+                _atomic_replace_text(dest_md, md_content)
 
                 # Delete original handoff file
                 f.unlink()

@@ -730,21 +730,22 @@ def _load_auto_rules(data_dir: str | Path | None = None) -> list[str]:
             continue
 
         load_key = (str(resolved_rule_file), expected_hash)
-        if load_key in _LOADED_APPROVED_RULES:
-            loaded.append(rule_id)
-            continue
-        path_hash = hashlib.sha256(str(resolved_rule_file).encode()).hexdigest()[:12]
-        module_name = (
-            f"_readtheplan_approved_{rule_id}_{expected_hash[:12]}_{path_hash}"
-        )
-        if not _execute_verified_rule_bytes(
-            rule_bytes,
-            source_path=resolved_rule_file,
-            module_name=module_name,
-            provenance=f"approved:{rule_id}",
-        ):
-            continue
-        _LOADED_APPROVED_RULES.add(load_key)
+        with _REGISTRY_LOCK:
+            if load_key in _LOADED_APPROVED_RULES:
+                loaded.append(rule_id)
+                continue
+            path_hash = hashlib.sha256(str(resolved_rule_file).encode()).hexdigest()[:12]
+            module_name = (
+                f"_readtheplan_approved_{rule_id}_{expected_hash[:12]}_{path_hash}"
+            )
+            if not _execute_verified_rule_bytes(
+                rule_bytes,
+                source_path=resolved_rule_file,
+                module_name=module_name,
+                provenance=f"approved:{rule_id}",
+            ):
+                continue
+            _LOADED_APPROVED_RULES.add(load_key)
         loaded.append(rule_id)
     return loaded
 
