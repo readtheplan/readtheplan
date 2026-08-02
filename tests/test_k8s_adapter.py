@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from readtheplan.adapters.kubernetes import KubernetesAdapter, analyze_kubernetes
+from readtheplan.adapters.kubernetes import (
+    KubernetesAdapter,
+    analyze_kubernetes,
+    parse_kubernetes_input,
+)
 
 # ---------------------------------------------------------------------------
 # Fixture data
@@ -360,6 +364,178 @@ def test_analyze_none_values():
     data = {"old_manifests": [None, SVC_OLD], "new_manifests": [SVC_NEW, None]}
     gate = analyze_kubernetes(data)
     assert gate["total_changes"] >= 1
+
+
+def test_scalar_resource_element_fails_closed_and_can_handle_does_not_crash():
+    adapter = KubernetesAdapter()
+    data = {"resources": [42]}
+    assert adapter.can_handle(data) is True
+    gate = analyze_kubernetes(data)
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+
+
+def test_mixed_valid_and_scalar_resources_quarantines_whole_input():
+    gate = analyze_kubernetes({"resources": [SVC_OLD, 42]})
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        json.dumps([SVC_OLD, 42]),
+        "- apiVersion: v1\n  kind: Service\n  metadata:\n    name: api\n- 42\n",
+        json.dumps({"apiVersion": "v1", "kind": "List", "items": [SVC_OLD, 42]}),
+        "apiVersion: v1\nkind: List\nitems:\n  - kind: Service\n    metadata:\n"
+        "      name: api\n  - 42\n",
+    ],
+)
+def test_parser_preserves_malformed_list_elements_for_analyzer_quarantine(source):
+    gate = analyze_kubernetes(parse_kubernetes_input(source))
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+
+
+def test_single_nonempty_list_with_no_valid_resource_fails_closed_once():
+    gate = analyze_kubernetes({"resources": [{"metadata": {"name": "missing-kind"}}]})
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+
+
+def test_whitespace_only_single_kind_is_unknown():
+    [change] = KubernetesAdapter().analyze(
+        {"resources": [{"kind": "   ", "metadata": {"name": "bad"}}]},
+        tool_name="Kubernetes",
+    )
+    assert change.resource_type == "unknown"
+    assert change.actions == ("unknown",)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ([SVC_OLD, {**SVC_OLD, "spec": {"type": "ExternalName"}}], [SVC_NEW]),
+        ([{**SVC_OLD, "metadata": {}}], [SVC_NEW]),
+        ([SVC_OLD], [{**SVC_NEW, "metadata": {}}]),
+        ([{**SVC_OLD, "kind": "   "}], [SVC_NEW]),
+        ([{**SVC_OLD, "metadata": {"name": "api", "namespace": 42}}], [SVC_NEW]),
+    ],
+)
+def test_paired_diff_invalid_or_duplicate_identity_fails_closed_once(old, new):
+    gate = analyze_kubernetes({"old_manifests": old, "new_manifests": new})
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+    assert gate["risk_counts"]["irreversible"] == 0
+
+
+@pytest.mark.parametrize(
+    ("old_manifests", "new_manifests"),
+    [([SVC_OLD], [42]), ([42], [SVC_OLD])],
+)
+def test_scalar_diff_element_fails_closed_without_fabricated_create_or_delete(
+    old_manifests, new_manifests,
+):
+    gate = analyze_kubernetes({
+        "old_manifests": old_manifests,
+        "new_manifests": new_manifests,
+    })
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+    assert gate["risk_counts"]["irreversible"] == 0
+
+
+@pytest.mark.parametrize("malformed_metadata", [None])
+@pytest.mark.parametrize("malformed_on_old", [False, True])
+def test_paired_diff_malformed_metadata_fails_closed_in_both_directions(
+    malformed_metadata, malformed_on_old,
+):
+    malformed = {**SVC_OLD, "metadata": malformed_metadata}
+    old, new = (malformed, SVC_OLD) if malformed_on_old else (SVC_OLD, malformed)
+    gate = analyze_kubernetes({"old_manifests": [old], "new_manifests": [new]})
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+    assert gate["risk_counts"]["irreversible"] == 0
+
+
+@pytest.mark.parametrize("malformed_kind", [None])
+@pytest.mark.parametrize("malformed_on_old", [False, True])
+def test_paired_diff_malformed_kind_fails_closed_in_both_directions(
+    malformed_kind, malformed_on_old,
+):
+    malformed = {**SVC_OLD, "kind": malformed_kind}
+    old, new = (malformed, SVC_OLD) if malformed_on_old else (SVC_OLD, malformed)
+    gate = analyze_kubernetes({"old_manifests": [old], "new_manifests": [new]})
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+    assert gate["risk_counts"]["irreversible"] == 0
+
+
+@pytest.mark.parametrize("metadata", [None, "not-a-mapping", ["name", "bad"]])
+def test_mixed_valid_and_malformed_metadata_quarantines_whole_input(metadata):
+    data = {
+        "resources": [
+            {"apiVersion": "v1", "kind": "Service", "metadata": metadata},
+            SVC_OLD,
+        ]
+    }
+    gate = analyze_kubernetes(data)
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+
+
+def test_mixed_valid_and_missing_kind_quarantines_whole_input():
+    gate = analyze_kubernetes({
+        "resources": [SVC_OLD, {"metadata": {"name": "missing-kind"}}],
+    })
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+
+
+@pytest.mark.parametrize("kind", [None, ["Service"], {"name": "Service"}, 42])
+def test_malformed_kind_is_normalized_without_crashing(kind):
+    changes = KubernetesAdapter().analyze(
+        {"resources": [{"apiVersion": "v1", "kind": kind,
+                        "metadata": {"name": "bad-kind"}}]},
+        tool_name="Kubernetes",
+    )
+    assert len(changes) == 1
+    assert changes[0].resource_type == "unknown"
+    assert changes[0].risk == "review"
+    assert changes[0].actions == ("unknown",)
+
+
+@pytest.mark.parametrize("resources", [None, 42, "bad", {"kind": "Service"}])
+def test_malformed_single_resource_containers_fail_closed_for_review(resources):
+    gate = analyze_kubernetes({"resources": resources})
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+
+
+@pytest.mark.parametrize(
+    ("old_manifests", "new_manifests"),
+    [([], 42), ("bad", []), (None, []), ([], {"kind": "Service"})],
+)
+def test_malformed_diff_containers_fail_closed_without_fabricating_create_or_delete(
+    old_manifests, new_manifests,
+):
+    gate = analyze_kubernetes({
+        "old_manifests": old_manifests,
+        "new_manifests": new_manifests,
+    })
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["irreversible"] == 0
+    assert gate["risk_counts"]["safe"] == 0
 
 
 def test_analyze_cluster_role_diff():

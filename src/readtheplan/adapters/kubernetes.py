@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from typing import Any
 
 import yaml
@@ -298,13 +299,13 @@ class KubernetesInputError(ValueError):
     """Raised when text is not a supported Kubernetes JSON or YAML artifact."""
 
 
-def _manifest_resources(value: Any) -> list[dict[str, Any]]:
+def _manifest_resources(value: Any) -> list[Any]:
     if isinstance(value, list):
-        return [item for item in value if isinstance(item, dict) and "kind" in item]
+        return list(value)
     if not isinstance(value, dict) or "kind" not in value:
         return []
     if value.get("kind") == "List" and isinstance(value.get("items"), list):
-        return [item for item in value["items"] if isinstance(item, dict) and "kind" in item]
+        return list(value["items"])
     return [value]
 
 
@@ -346,7 +347,8 @@ def _resource_identity(kind: str, name: str, namespace: str | None) -> tuple[str
 
 
 def _kind_from_resource(r: dict[str, Any]) -> str:
-    return r.get("kind", "Unknown")
+    kind = r.get("kind", "Unknown")
+    return kind.strip() if isinstance(kind, str) and kind.strip() else "Unknown"
 
 
 def _api_version_from_resource(r: dict[str, Any]) -> str:
@@ -354,7 +356,11 @@ def _api_version_from_resource(r: dict[str, Any]) -> str:
 
 
 def _name_from_resource(r: dict[str, Any]) -> str:
-    return r.get("metadata", {}).get("name", "<unnamed>")
+    metadata = r.get("metadata", {})
+    if not isinstance(metadata, Mapping):
+        return "<unnamed>"
+    name = metadata.get("name", "<unnamed>")
+    return name.strip() if isinstance(name, str) and name.strip() else "<unnamed>"
 
 
 def _namespace_from_resource(r: dict[str, Any]) -> str | None:
@@ -364,12 +370,18 @@ def _namespace_from_resource(r: dict[str, Any]) -> str | None:
         return None
     if kind in _CLUSTER_SCOPED_KINDS:
         return None
-    return r.get("metadata", {}).get("namespace", None)
+    metadata = r.get("metadata", {})
+    if not isinstance(metadata, Mapping):
+        return None
+    namespace = metadata.get("namespace")
+    return namespace.strip() if isinstance(namespace, str) and namespace.strip() else None
 
 
 def _get_properties_for_rules(r: dict[str, Any]) -> dict[str, Any]:
     """Extract the properties subset that the rules engine cares about."""
     meta = r.get("metadata", {})
+    if not isinstance(meta, Mapping):
+        meta = {}
     return {
         "metadata": {
             "labels": meta.get("labels", {}),
@@ -401,9 +413,7 @@ class KubernetesAdapter(BaseAdapter):
                 return True
         # Format 2: single resources array
         if "resources" in input_data and isinstance(input_data["resources"], list):
-            for r in input_data["resources"]:
-                if "kind" in r:
-                    return True
+            return True
         return False
 
     def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -414,13 +424,25 @@ class KubernetesAdapter(BaseAdapter):
         return []
 
     def _extract_from_diff(self, data: dict[str, Any]) -> list[dict[str, Any]]:
-        old_manifests = data.get("old_manifests", []) or []
-        new_manifests = data.get("new_manifests", []) or []
+        old_manifests = data.get("old_manifests", [])
+        new_manifests = data.get("new_manifests", [])
+        if not isinstance(old_manifests, list) or not isinstance(new_manifests, list):
+            return [self._malformed_input_change()]
+        if not all(isinstance(r, Mapping) for r in (*old_manifests, *new_manifests)):
+            return [self._malformed_input_change()]
+        if not all(self._has_valid_diff_identity(r) for r in (*old_manifests, *new_manifests)):
+            return [self._malformed_input_change()]
+
+        old_ids = [self._validated_identity(r) for r in old_manifests]
+        new_ids = [self._validated_identity(r) for r in new_manifests]
+        if len(set(old_ids)) != len(old_ids) or len(set(new_ids)) != len(new_ids):
+            return [self._malformed_input_change()]
 
         # Build identity maps
         old_by_id: dict[tuple[str, str, str], dict[str, Any]] = {}
         for r in old_manifests:
-            if not isinstance(r, dict) or "kind" not in r:
+            if (not isinstance(r, Mapping) or "kind" not in r
+                    or not isinstance(r.get("metadata", {}), Mapping)):
                 continue
             kid = _kind_from_resource(r)
             name = _name_from_resource(r)
@@ -430,7 +452,8 @@ class KubernetesAdapter(BaseAdapter):
 
         new_by_id: dict[tuple[str, str, str], dict[str, Any]] = {}
         for r in new_manifests:
-            if not isinstance(r, dict) or "kind" not in r:
+            if (not isinstance(r, Mapping) or "kind" not in r
+                    or not isinstance(r.get("metadata", {}), Mapping)):
                 continue
             kid = _kind_from_resource(r)
             name = _name_from_resource(r)
@@ -518,9 +541,18 @@ class KubernetesAdapter(BaseAdapter):
 
     def _extract_from_single(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         changes = []
-        for r in data.get("resources", []):
-            if not isinstance(r, dict) or "kind" not in r:
-                continue
+        resources = data.get("resources", [])
+        if not isinstance(resources, list):
+            return [self._malformed_input_change()]
+        if not all(
+            isinstance(r, Mapping)
+            and isinstance(r.get("kind"), str)
+            and bool(r["kind"].strip())
+            and isinstance(r.get("metadata", {}), Mapping)
+            for r in resources
+        ):
+            return [self._malformed_input_change()]
+        for r in resources:
             properties = _get_properties_for_rules(r)
             changes.append(
                 {
@@ -540,7 +572,40 @@ class KubernetesAdapter(BaseAdapter):
                     },
                 }
             )
+        if resources and not changes:
+            return [self._malformed_input_change()]
         return changes
+
+    @staticmethod
+    def _has_valid_diff_identity(resource: Mapping[str, Any]) -> bool:
+        kind = resource.get("kind")
+        metadata = resource.get("metadata")
+        if not isinstance(kind, str) or not kind.strip() or not isinstance(metadata, Mapping):
+            return False
+        name = metadata.get("name")
+        if not isinstance(name, str) or not name.strip():
+            return False
+        namespace = metadata.get("namespace")
+        return namespace is None or isinstance(namespace, str)
+
+    @staticmethod
+    def _validated_identity(resource: Mapping[str, Any]) -> tuple[str, str, str]:
+        return _resource_identity(
+            _kind_from_resource(resource),
+            _name_from_resource(resource),
+            _namespace_from_resource(resource),
+        )
+
+    @staticmethod
+    def _malformed_input_change() -> dict[str, Any]:
+        return {
+            "Action": "Unknown",
+            "Kind": "Unknown",
+            "ResourceType": "Unknown",
+            "LogicalResourceId": "<malformed-input>",
+            "Namespace": None,
+            "Replacement": "False",
+        }
 
     def normalize_change(self, raw: dict[str, Any]) -> ResourceChange:
         action = raw.get("Action", "Unknown")
@@ -555,7 +620,12 @@ class KubernetesAdapter(BaseAdapter):
         actions = ("unknown",)
         explanation = f"Kubernetes action '{action}' on {kind} requires review."
 
-        if action == "Add":
+        malformed_identity = kind == "Unknown" or logical_id in {
+            "<unnamed>", "<unknown>", "<malformed-input>",
+        }
+        if malformed_identity:
+            explanation = "Malformed Kubernetes resource input requires review."
+        elif action == "Add":
             actions = ("create",)
             if kind in _SENSITIVE_CONTROL_PLANE_KINDS:
                 risk = "dangerous"
@@ -609,6 +679,8 @@ class KubernetesAdapter(BaseAdapter):
         )
 
     def _normalize_resource_type(self, kind: str, api_version: str = "") -> str:
+        if not isinstance(kind, str) or not kind or kind == "Unknown":
+            return "unknown"
         api_group, separator, _version = api_version.partition("/")
         if separator and api_group == "argoproj.io" and kind in _ARGO_KIND_MAP:
             return _ARGO_KIND_MAP[kind]
@@ -672,8 +744,6 @@ class KubernetesAdapter(BaseAdapter):
         mapped = _K8S_KIND_MAP.get(kind)
         if mapped:
             return mapped
-        if not kind or not isinstance(kind, str):
-            return "unknown"
         return f"kubernetes_{kind.lower()}"
 
 

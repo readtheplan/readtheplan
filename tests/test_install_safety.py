@@ -111,7 +111,7 @@ _PATTERN = {
     "resource_type": "aws_s3_bucket",
     "risk": "dangerous",
     "incident_count": 12,
-    "pattern_hash": "feedfacefeedface",
+    "pattern_hash": "aws_s3_bucket::dangerous::delete",
 }
 
 
