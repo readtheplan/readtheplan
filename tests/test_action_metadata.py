@@ -20,7 +20,8 @@ def test_action_uses_json_cli_contract() -> None:
     assert "fail-on-any-change" in action
     assert "fail-on-threshold" in action
     assert "scan-excludes" in action
-    assert 'command+=(--exclude "$pattern")' in action
+    assert 'command+=("--exclude=$pattern")' in action
+    assert 'command+=(--exclude "$pattern")' not in action
     assert "scan-excludes is supported only when tool is scan" in action
     assert (
         "uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0"

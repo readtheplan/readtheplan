@@ -183,7 +183,7 @@ runs:
           while IFS= read -r pattern; do
             pattern="${pattern%$'\r'}"
             if [ -n "$pattern" ]; then
-              command+=(--exclude "$pattern")
+              command+=("--exclude=$pattern")
             fi
           done <<< "$SCAN_EXCLUDES"
         else
