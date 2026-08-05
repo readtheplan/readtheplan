@@ -20,6 +20,11 @@ inputs:
     description: Optional packaged compliance framework name, such as soc2, iso27001, or hipaa.
     required: false
     default: ""
+  scan-excludes:
+    description: Newline-delimited repository-relative globs to exclude when tool is scan.
+    required: false
+    default: ""
+
   fail-on-any-change:
     description: "Fail when the plan contains ANY resource changes (including safe ones like tag updates). Use only for strict zero-diff policies. Ignored when fail-on-threshold is set."
     required: false
@@ -69,6 +74,7 @@ runs:
         INPUT_FILE: ${{ inputs.input-file }}
         PLAN_FILE: ${{ inputs.plan-file }}
         FRAMEWORK: ${{ inputs.framework }}
+        SCAN_EXCLUDES: ${{ inputs.scan-excludes }}
         FAIL_ON_ANY_CHANGE: ${{ inputs.fail-on-any-change }}
         FAIL_ON_CHANGES: ${{ inputs.fail-on-changes }}
         FAIL_ON_THRESHOLD: ${{ inputs.fail-on-threshold }}
@@ -88,6 +94,11 @@ runs:
         INPUT_FILE="${INPUT_FILE:-$PLAN_FILE}"
         if [ -z "$INPUT_FILE" ]; then
           echo "::error::input-file is required (plan-file remains a deprecated alias)"
+          exit 1
+        fi
+
+        if [ -n "$SCAN_EXCLUDES" ] && [ "$TOOL" != "scan" ]; then
+          echo "::error::scan-excludes is supported only when tool is scan"
           exit 1
         fi
 
@@ -128,7 +139,7 @@ runs:
         fi
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
       with:
         python-version: ${{ inputs.python-version }}
 
@@ -156,6 +167,7 @@ runs:
         INPUT_FILE: ${{ env.RESOLVED_INPUT_FILE }}
         FRAMEWORK: ${{ env.RESOLVED_FRAMEWORK }}
         FAIL_ON_ANY_CHANGE: ${{ env.RESOLVED_FAIL_ON_ANY_CHANGE }}
+        SCAN_EXCLUDES: ${{ inputs.scan-excludes }}
         FAIL_ON_THRESHOLD: ${{ env.RESOLVED_FAIL_ON_THRESHOLD }}
       run: |
         set -euo pipefail
@@ -166,6 +178,14 @@ runs:
 
         if [ "$TOOL" = "terraform" ]; then
           command=(readtheplan analyze --format json)
+        elif [ "$TOOL" = "scan" ]; then
+          command=(readtheplan scan)
+          while IFS= read -r pattern; do
+            pattern="${pattern%$'\r'}"
+            if [ -n "$pattern" ]; then
+              command+=("--exclude=$pattern")
+            fi
+          done <<< "$SCAN_EXCLUDES"
         else
           command=(readtheplan "$TOOL")
         fi

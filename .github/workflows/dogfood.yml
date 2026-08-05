@@ -1,0 +1,74 @@
+name: readtheplan dogfood
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: readtheplan-dogfood-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  project-scan:
+    name: Project scan non-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Scan first-party delivery configuration
+        id: scan
+        uses: ./
+        with:
+          tool: scan
+          input-file: .
+          scan-excludes: |
+            tests/**
+            examples/**
+            benchmarks/**
+            demo/**
+            docs/**
+            site/**
+            playground/**
+            ci/**
+            .worktrees/**
+            .local/**
+            reports/**
+
+      - name: Preserve scan report
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.scan.outputs['summary-json'] }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SUMMARY_JSON" ]]; then
+            echo "::error::readtheplan summary-json output is empty"
+            exit 1
+          fi
+          printf '%s\n' "$SUMMARY_JSON" > "$RUNNER_TEMP/readtheplan-dogfood.json"
+
+      - name: Enforce reviewed non-regression baseline
+        shell: bash
+        env:
+          SUMMARY_JSON: ${{ steps.scan.outputs['summary-json'] }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SUMMARY_JSON" \
+            | python scripts/check_scan_baseline.py .github/readtheplan-scan-baseline.json
+
+      - name: Upload scan evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: readtheplan-dogfood-${{ github.sha }}
+          path: ${{ runner.temp }}/readtheplan-dogfood.json
+          if-no-files-found: error
+          retention-days: 14
