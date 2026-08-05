@@ -40,13 +40,29 @@ jobs:
             exit 1
           fi
 
-          if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/health.json; then
-            echo "❌ health content check failed: missing ok status" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+          if ! python3 - /tmp/health.json /tmp/version.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
 
-          if ! grep -Eq '"version"[[:space:]]*:[[:space:]]*"[^"]+"' /tmp/version.json; then
-            echo "❌ version content check failed: version data unavailable" | tee -a "$GITHUB_STEP_SUMMARY"
+          try:
+              health = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+              version = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+              print(f"invalid function JSON: {exc}", file=sys.stderr)
+              raise SystemExit(1)
+
+          if not isinstance(health, dict) or health.get("status") != "ok":
+              print("health response is not a top-level ok object", file=sys.stderr)
+              raise SystemExit(1)
+
+          value = version.get("version") if isinstance(version, dict) else None
+          if not isinstance(value, str) or not value.strip():
+              print("version response lacks a top-level non-empty version string", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          then
+            echo "❌ function JSON validation failed" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
