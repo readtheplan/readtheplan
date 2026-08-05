@@ -32,9 +32,32 @@ jobs:
 
           probe "apex" "https://readtheplan.dev" "/tmp/apex.html"
           probe "www" "https://www.readtheplan.dev" "/tmp/www.html"
+          probe "health" "https://readtheplan.dev/health" "/tmp/health.json"
+          probe "version" "https://readtheplan.dev/api/v1/version" "/tmp/version.json"
 
           if ! grep -qi "readtheplan" /tmp/apex.html; then
             echo "❌ apex content check failed: missing 'readtheplan' marker" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/health.json; then
+            echo "❌ health content check failed: missing ok status" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if ! grep -Eq '"version"[[:space:]]*:' /tmp/version.json; then
+            echo "❌ version content check failed: missing version field" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          chat_code=$(curl -sS -L --max-time 20 -o /tmp/chat.json -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data '{"messages":[]}' \
+            "https://readtheplan.dev/api/chat")
+          echo "chat-validation status=$chat_code url=https://readtheplan.dev/api/chat"
+          if [ "$chat_code" != "400" ] || ! grep -q "Missing messages" /tmp/chat.json; then
+            echo "❌ chat function check failed: expected 400 Missing messages" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
@@ -42,5 +65,8 @@ jobs:
             echo "✅ Site health check passed"
             echo "- apex: 200"
             echo "- www: 200"
+            echo "- health function: 200 with ok status"
+            echo "- version function: 200 with version field"
+            echo "- chat function: 400 Missing messages"
             echo "- content marker: present"
           } >> "$GITHUB_STEP_SUMMARY"

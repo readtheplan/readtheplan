@@ -407,3 +407,14 @@ def test_site_redesign_visual_contract() -> None:
         "fonts/DepartureMono-Regular.woff2",
     ]:
         assert not (SITE / retired).exists(), f"retired asset returned: {retired}"
+
+
+def test_site_health_workflow_probes_production_functions() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "site-health.yml").read_text(encoding="utf-8")
+
+    assert 'probe "health" "https://readtheplan.dev/health"' in workflow
+    assert 'probe "version" "https://readtheplan.dev/api/v1/version"' in workflow
+    assert '"https://readtheplan.dev/api/chat"' in workflow
+    assert "--data '{\"messages\":[]}'" in workflow
+    assert '[ "$chat_code" != "400" ]' in workflow
+    assert "Missing messages" in workflow
