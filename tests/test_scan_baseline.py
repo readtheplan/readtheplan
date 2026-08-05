@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
+from runpy import run_path
 
 import pytest
 
-from scripts.check_scan_baseline import evaluate
+ROOT = Path(__file__).resolve().parents[1]
+evaluate = run_path(str(ROOT / "scripts" / "check_scan_baseline.py"))["evaluate"]
 
 
 @pytest.fixture
