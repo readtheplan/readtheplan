@@ -414,6 +414,7 @@ def test_site_health_workflow_probes_production_functions() -> None:
 
     assert 'probe "health" "https://readtheplan.dev/health"' in workflow
     assert 'probe "version" "https://readtheplan.dev/api/v1/version"' in workflow
+    assert '"version"[[:space:]]*:[[:space:]]*"[^"]+"' in workflow
     assert '"https://readtheplan.dev/api/chat"' in workflow
     assert "--data '{\"messages\":[]}'" in workflow
     assert '[ "$chat_code" != "400" ]' in workflow

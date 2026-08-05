@@ -45,8 +45,8 @@ jobs:
             exit 1
           fi
 
-          if ! grep -Eq '"version"[[:space:]]*:' /tmp/version.json; then
-            echo "❌ version content check failed: missing version field" | tee -a "$GITHUB_STEP_SUMMARY"
+          if ! grep -Eq '"version"[[:space:]]*:[[:space:]]*"[^"]+"' /tmp/version.json; then
+            echo "❌ version content check failed: version data unavailable" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
