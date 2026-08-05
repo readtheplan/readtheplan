@@ -421,4 +421,6 @@ def test_site_health_workflow_probes_production_functions() -> None:
     assert '"https://readtheplan.dev/api/chat"' in workflow
     assert "--data '{\"messages\":[]}'" in workflow
     assert '[ "$chat_code" != "400" ]' in workflow
-    assert "Missing messages" in workflow
+    assert "python3 - /tmp/chat.json" in workflow
+    assert 'chat.get("error") != "Missing messages"' in workflow
+    assert '! grep -q "Missing messages"' not in workflow

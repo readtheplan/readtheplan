@@ -72,8 +72,28 @@ jobs:
             --data '{"messages":[]}' \
             "https://readtheplan.dev/api/chat")
           echo "chat-validation status=$chat_code url=https://readtheplan.dev/api/chat"
-          if [ "$chat_code" != "400" ] || ! grep -q "Missing messages" /tmp/chat.json; then
-            echo "❌ chat function check failed: expected 400 Missing messages" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$chat_code" != "400" ]; then
+            echo "❌ chat function check failed: expected 400 got $chat_code" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if ! python3 - /tmp/chat.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          try:
+              chat = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+              print(f"invalid chat JSON: {exc}", file=sys.stderr)
+              raise SystemExit(1)
+
+          if not isinstance(chat, dict) or chat.get("error") != "Missing messages":
+              print("chat response lacks the exact top-level validation error", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          then
+            echo "❌ chat function check failed: expected exact Missing messages error" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
