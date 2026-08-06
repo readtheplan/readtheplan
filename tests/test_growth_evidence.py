@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -61,6 +61,13 @@ def _parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _parse_instant(value: str) -> datetime:
+    parsed = _parse_iso(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _validate_ledger_row(row: dict[str, str]) -> None:
     assert re.fullmatch(r"C\d{2,}", row["contact_id"])
     for field in BOOLEAN_FIELDS:
@@ -76,6 +83,25 @@ def _validate_ledger_row(row: dict[str, str]) -> None:
 
     if row["qualified"]:
         assert row["qualified_at"]
+
+    if row["contacted_at"]:
+        assert row["cohort_date"]
+        assert _parse_iso(row["cohort_date"]).date() <= _parse_iso(row["contacted_at"]).date()
+
+    if row["qualified_at"]:
+        assert row["contacted_at"]
+        assert _parse_instant(row["contacted_at"]) <= _parse_instant(row["qualified_at"])
+
+    trial_only_fields = (
+        "assistance_category",
+        "useful_finding_confirmed",
+        "day14_due",
+        "gate_retained_day14",
+        "retention_checked_at",
+        "retention_evidence",
+    )
+    if any(row[field] for field in trial_only_fields):
+        assert row["trial_started_at"]
 
     if row["trial_started_at"]:
         started = _parse_iso(row["trial_started_at"])
@@ -93,6 +119,7 @@ def _validate_ledger_row(row: dict[str, str]) -> None:
     if row["retention_checked_at"]:
         assert row["day14_due"]
         assert _parse_iso(row["retention_checked_at"]).date() >= _parse_iso(row["day14_due"]).date()
+        assert _parse_iso(row["retention_checked_at"]).date() <= date(2026, 9, 18)
     if row["retention_evidence"]:
         assert row["gate_retained_day14"] == "yes"
         assert row["retention_checked_at"]
@@ -107,12 +134,14 @@ def test_30_day_evidence_test_has_decision_contract() -> None:
         "5 real-repository trials",
         "started on or before 2026-09-04",
         "2 gates retained at day 14",
-        "at least one of the two threshold-counting retained gates",
+        "at least one threshold-counting retained gate",
         "2026-08-06 through 2026-09-04",
         "2026-09-18",
         "Evidence insufficient",
         "assistance_category",
         "qualified_at",
+        "cohort_date is the scheduled first-outreach date",
+        "no later than 2026-09-18",
         "qualified contact",
         "real-repository trial",
         "useful finding",
@@ -220,8 +249,8 @@ def _filled_closed_schema_row() -> dict[str, str]:
             "contact_id": "C21",
             "cohort_date": "2026-08-20",
             "qualified": "yes",
-            "qualified_at": "2026-08-20T09:00:00Z",
-            "contacted_at": "2026-08-20T10:00:00Z",
+            "qualified_at": "2026-08-20T10:00:00Z",
+            "contacted_at": "2026-08-20T09:00:00Z",
             "replied": "yes",
             "trial_id": "T06",
             "trial_started_at": "2026-08-20",
@@ -253,6 +282,11 @@ def test_ledger_validator_accepts_a_filled_closed_schema_row() -> None:
         {"trial_id": ""},
         {"day14_due": ""},
         {"assistance_category": ""},
+        {"trial_started_at": ""},
+        {"retention_checked_at": "2026-09-19T10:00:00Z"},
+        {"cohort_date": ""},
+        {"contacted_at": "2026-08-19T09:00:00Z"},
+        {"qualified_at": "2026-08-20T08:00:00Z"},
     ],
 )
 def test_ledger_validator_rejects_inconsistent_trial_rows(updates: dict[str, str]) -> None:

@@ -63,7 +63,7 @@ A gate counts as retained when, at or after `trial_started_at + 14 days`, either
 
 A copied workflow that was never enabled does not count. A gate removed before the due date does not count. No repository access is required.
 
-For the success threshold, at least one of the two threshold-counting retained gates must be corroborated by the participant's data-free description of the enabled workflow trigger, readtheplan command, and blocking condition. Do not request a file, screenshot, screen share, repository identifier, or command output. Record only the closed `retention_evidence` category described below.
+For the success threshold, at least one threshold-counting retained gate must be corroborated by the participant's data-free description of the enabled workflow trigger, readtheplan command, and blocking condition, even when more than two gates are retained. Do not request a file, screenshot, screen share, repository identifier, or command output. Record only the closed `retention_evidence` category described below.
 
 ## Trust boundary
 
@@ -172,7 +172,7 @@ Closed loss-reason categories:
 - `privacy_concern`
 - `unknown`
 
-Set `qualified_at` whenever `qualified` is recorded. Every started trial must have `qualified=yes`, `replied=yes`, an opaque `trial_id`, an `assistance_category`, and `day14_due`. `trial_started_at` must be from 2026-08-06 through 2026-09-04; `qualified_at` and `contacted_at` must be no later than the trial start; `day14_due` is exactly 14 days later; and `retention_checked_at` must be on or after that due date.
+`cohort_date` is the scheduled first-outreach date. Record `contacted_at` on or after that date, then record `qualified_at` on or after contact whenever `qualified` is recorded. Every started trial must have `qualified=yes`, `replied=yes`, an opaque `trial_id`, an `assistance_category`, and `day14_due`. Trial-only outcome and retention fields remain blank until `trial_started_at` is set. `trial_started_at` must be from 2026-08-06 through 2026-09-04; `qualified_at` and `contacted_at` must be no later than the trial start; `day14_due` is exactly 14 days later; and `retention_checked_at` must be on or after that due date and no later than 2026-09-18.
 
 Do not add free-form notes to the shared ledger. `assistance_category` records only whether the founder provided no help, an install command, workflow-configuration help, or failure triage; it never records commands, errors, screenshots, or infrastructure details. Keep consented contact logistics in the communication tool where the relationship already exists.
 
