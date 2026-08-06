@@ -1,20 +1,21 @@
 ---
-title: "Adapters \u2014 readtheplan"
-description: "Built-in infrastructure adapters and developer guide for extending readtheplan with additional plan formats."
+title: "Secondary adapters — readtheplan"
+description: "Secondary infrastructure adapters beyond readtheplan's primary Terraform and OpenTofu plan gate."
 canonical: "https://readtheplan.dev/docs/adapters/"
-ogTitle: "readtheplan \u2014 IaC adapters developer guide"
-ogDescription: "How to write a new IaC adapter for Pulumi, CDK, or any other infrastructure-as-code tool."
+ogTitle: "readtheplan — secondary IaC adapters"
+ogDescription: "Built-in secondary adapters and the extension contract beyond the primary Terraform and OpenTofu gate."
 ---
 <main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="title">
         <div class="gc hero-spacer" aria-hidden="true"></div>
         <div class="gc hero-content">
           <nav class="eyebrow breadcrumb" aria-label="Breadcrumb"><a href="/docs/">Docs</a> <span aria-hidden="true">/</span> Adapters</nav>
-          <h1 id="title">One risk gate for every infrastructure tool.</h1>
+          <h1 id="title">Secondary adapters beyond the Terraform/OpenTofu gate.</h1>
           <p class="intro-copy">
-            readtheplan ships cross-tool infrastructure gates and a public adapter system for adding
-            Packer, CloudFormation, or custom in-house plan formats. This guide covers the built-in integrations
-            and the <code>BaseAdapter</code> extension contract.
+            Terraform and OpenTofu plan JSON are readtheplan's primary verification path. The same local,
+            deterministic engine also supports secondary structured formats and a public adapter system for
+            adding Packer, CloudFormation, or custom in-house inputs. This guide covers those integrations and
+            the <code>BaseAdapter</code> extension contract.
           </p>
         </div>
       </section>

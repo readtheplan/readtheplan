@@ -90,6 +90,12 @@ not certify compliance.
 
 The Terraform/OpenTofu gate is the primary path. The same deterministic engine also has the following local, non-executing adapters.
 
+```bash
+# Secondary project-wide discovery when you need it
+readtheplan scan .
+readtheplan scan --framework soc2 --exclude 'generated/**' .
+```
+
 ### Supported infrastructure tools
 
 | Tool | Command | Analysis level |
@@ -302,29 +308,23 @@ Try the [interactive playground](https://readtheplan.dev/playground/) to see rea
 
 ## Quickstart
 
-### CLI — 30 seconds to first result
+### Terraform/OpenTofu gate — first result
 
 ```bash
 # Install
 pip install readtheplan
 
-# Scan an entire repository and auto-select the matching analyzers
-readtheplan scan .
-
-# Add compliance checks and omit generated paths
-readtheplan scan --framework soc2 --exclude 'generated/**' .
-
-# No Terraform handy? After cloning the repo, analyze a bundled example:
-#   readtheplan analyze examples/01-small-create/plan.json
-
 # Generate a plan (Terraform or OpenTofu)
 terraform plan -out=tfplan -input=false
 terraform show -json tfplan > plan.json
 
-# Analyze it
-readtheplan analyze plan.json
+# Return one deterministic proceed / warn / block decision
+readtheplan agent-gate plan.json
 
-# With compliance framework
+# No Terraform handy? After cloning the repo, gate a bundled example:
+#   readtheplan agent-gate examples/01-small-create/plan.json
+
+# Optional detailed analysis with a review catalog
 readtheplan analyze --framework soc2 plan.json
 
 # Machine-readable JSON

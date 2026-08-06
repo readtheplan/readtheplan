@@ -11,23 +11,31 @@
     "generate_ci",
     "setup_help_click"
   ];
+  var trackedEvents = [];
 
   function trackActivation(eventName) {
     if (allowedEvents.indexOf(eventName) === -1) return false;
     if (typeof window.fetch !== "function") return false;
+    if (trackedEvents.indexOf(eventName) !== -1) return false;
 
     var payload = { name: eventName, url: eventUrl, domain: eventDomain };
-    window.fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify(payload),
-      credentials: "omit",
-      referrerPolicy: "no-referrer",
-      keepalive: true
-    }).catch(function () {});
+    try {
+      window.fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload),
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        keepalive: true
+      }).catch(function () {});
+    } catch (_) {
+      return false;
+    }
+    trackedEvents.push(eventName);
     return true;
   }
 
+  trackActivation.allowedEvents = Object.freeze(allowedEvents.slice());
   window.readtheplanTrack = trackActivation;
 
   document.addEventListener("click", function (event) {
