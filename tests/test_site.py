@@ -29,7 +29,7 @@ def test_site_has_client_onboarding_surface() -> None:
     assert "HIPAA" in html
     assert 'id="top"' in html
     assert 'class="hero-proof signal-console"' in html
-    assert "static product preview · no uploaded data" in html
+    assert "static Terraform example · no uploaded data" in html
     assert 'class="risk-orbit"' in html
     assert 'class="resource-map"' in html
     assert 'id="how-it-works"' in html
@@ -39,18 +39,20 @@ def test_site_has_client_onboarding_surface() -> None:
     assert 'id="resources"' in html
     assert 'id="compare"' in html
     assert 'id="gen-output"' in html
-    assert "One free local risk gate for Terraform, Kubernetes, CI/CD" in html
-    assert "Native GitHub Action + any CI" in html
+    assert "Verify AI-generated infrastructure changes before they run." in html
+    assert "Terraform/OpenTofu is the first gate" in html
+    assert "does not evaluate arbitrary AI chat, source-code diffs, or an agent's intent" in html
+    assert "safe, review, dangerous, or irreversible" in html
+    assert "proceed, warn, or block" in html
+    assert "Put an independent gate in CI" in html
     for ci_name in ["GitLab CI", "CircleCI", "Jenkins", "Azure DevOps", "Buildkite", "Bitbucket"]:
         assert ci_name in html
-    assert (
-        "Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, "
-        "FedRAMP Moderate, and HITRUST"
-    ) in html
-    assert "/tools/terraform-risk-calculator/" in html
-    assert "/tools/soc2-cloud-control-mapper/" in html
+    assert "Six built-in catalogs" not in html
+    assert "/tools/terraform-risk-calculator/" not in html
+    assert "/tools/soc2-cloud-control-mapper/" not in html
+    assert "/brief/" not in html
     assert "/mcp/" in html
-    assert "/brief/" in html
+    assert "/docs/quickstart/" in html
     assert "/playground/" in html
     # Document chrome (canonical, social cards) is owned by the shared layout;
     # templates carry the canonical URL as front matter.
@@ -122,7 +124,9 @@ def test_site_build_contract_for_cloudflare_pages() -> None:
     assert '"functions"' not in eleventy_config
     assert '"modern.css"' in eleventy_config
     assert '"site-motion.js"' in eleventy_config
-    assert "script-src 'self' https://plausible.io" in build_script
+    assert "script-src 'self';" in build_script
+    assert "connect-src 'self' https://plausible.io" in build_script
+    assert "plausible.io/js/" not in base_layout
     assert "'unsafe-inline'" not in build_script.split("script-src")[1].split(";")[0]
     assert "npm --prefix site run build" in workflow
 
@@ -195,7 +199,7 @@ def test_mcp_landing_page_productizes_local_preview_only() -> None:
 
     for expected in [
         "Local MCP infrastructure reviewer",
-        "Give your AI coding agent deterministic Terraform, CloudFormation, Azure, Kubernetes",
+        "Give your AI coding agent a deterministic Terraform/OpenTofu second check",
         "Local-first",
         "No raw plan upload",
         "No hosted MCP service",
@@ -283,7 +287,9 @@ def test_weekly_brief_free_community_slice() -> None:
     assert sample_path.exists()
     assert "/brief/" in sitemap
     assert "/brief/sample-001/" in sitemap
-    assert "/brief/" in homepage
+    assert "/brief/" not in homepage
+    footer = (SITE / "_includes" / "site-footer.njk").read_text(encoding="utf-8")
+    assert "/brief/" in footer
 
     combined = brief_path.read_text(encoding="utf-8") + "\n" + sample_path.read_text(encoding="utf-8")  # noqa: E501
 

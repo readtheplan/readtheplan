@@ -27,11 +27,84 @@ assert.match(chatHtml, /<label[^>]+for="userInput"/, "chat input must be labeled
 const privacy = await read("privacy/index.html");
 assert.match(privacy, /AI chat:/);
 assert.match(privacy, /third-party processor/);
+for (const eventName of [
+  "verify_change_click",
+  "copy_install",
+  "playground_run",
+  "generate_ci",
+  "setup_help_click",
+]) {
+  assert.match(privacy, new RegExp(eventName), `privacy policy names ${eventName}`);
+}
+assert.match(privacy, /never include raw plans, repository contents, file names, credentials, or command output/);
+
+const analytics = await read("js/analytics.js");
+new Function("window", "document", analytics);
+const analyticsRequests = [];
+const analyticsListeners = {};
+const analyticsWindow = {
+  fetch(url, options) {
+    analyticsRequests.push({ url, options });
+    return Promise.resolve({ ok: true });
+  },
+};
+const analyticsDocument = {
+  addEventListener(name, handler) { analyticsListeners[name] = handler; },
+};
+new Function("window", "document", analytics)(analyticsWindow, analyticsDocument);
+assert.equal(typeof analyticsWindow.readtheplanTrack, "function");
+assert.equal(analyticsWindow.readtheplanTrack("copy_install"), true);
+assert.equal(analyticsRequests.length, 1);
+assert.equal(analyticsRequests[0].url, "https://plausible.io/api/event");
+assert.equal(analyticsRequests[0].options.method, "POST");
+assert.equal(analyticsRequests[0].options.credentials, "omit");
+assert.equal(analyticsRequests[0].options.referrerPolicy, "no-referrer");
+assert.equal(analyticsRequests[0].options.keepalive, true);
+assert.deepEqual(JSON.parse(analyticsRequests[0].options.body), {
+  name: "copy_install",
+  url: "https://readtheplan.dev/activation",
+  domain: "readtheplan.dev",
+}, "events carry only an allowlisted name and fixed synthetic site fields");
+assert.equal(analyticsWindow.readtheplanTrack("unknown_event"), false);
+assert.equal(analyticsRequests.length, 1, "unknown events fail closed");
+analyticsListeners.click({
+  target: {
+    closest(selector) {
+      assert.equal(selector, "[data-activation-event]");
+      return { getAttribute: () => "verify_change_click" };
+    },
+  },
+});
+assert.equal(JSON.parse(analyticsRequests[1].options.body).name, "verify_change_click");
+const baseLayout = await read("_includes/layouts/base.njk");
+assert.match(baseLayout, /src="\/js\/analytics\.js"/);
+assert.doesNotMatch(baseLayout, /plausible\.io\/js\//,
+  "the general Plausible script would add full URL and referrer context");
+assert.equal((analytics.match(/\bfetch\s*\(/g) || []).length, 1,
+  "analytics has one audited network boundary");
+for (const forbidden of [
+  "location.search",
+  "location.hash",
+  "location.href",
+  "location.pathname",
+  "document.referrer",
+  "document.cookie",
+  "localStorage",
+  "sessionStorage",
+  "XMLHttpRequest",
+  "planData",
+  "event.detail",
+  "props",
+  "meta",
+]) {
+  assert.ok(!analytics.includes(forbidden), `analytics module omits ${forbidden}`);
+}
 
 const playgroundHtml = await read("playground/index.html");
 assert.equal(htmlScript(playgroundHtml), "", "playground page must not ship inline scripts (CSP)");
 const playground = await read("playground/playground.js");
 new Function(playground);
+assert.match(playground, /readtheplanTrack\("playground_run"\)/);
 const createPlan = JSON.parse(await read("playground/floci-spike-create-plan.json"));
 const destroyPlan = JSON.parse(await read("playground/floci-spike-destroy-plan.json"));
 assert.equal(createPlan.resource_changes.length, 7);
@@ -151,8 +224,26 @@ assert.match(success.privacy_notice, /DeepSeek/);
 const homeHtml = await read("index.html");
 assert.equal(htmlScript(homeHtml), "", "homepage must not ship inline scripts (CSP)");
 assert.doesNotMatch(homeHtml, /\son(?:click|keydown|submit|change)=/i, "homepage must not ship inline handlers");
+assert.equal((homeHtml.match(/data-activation-event="verify_change_click"/g) || []).length, 1,
+  "homepage has one canonical verification CTA event");
+assert.equal((homeHtml.match(/data-activation-event="setup_help_click"/g) || []).length, 1,
+  "homepage has one explicit founder-assisted setup event");
+assert.match(homeHtml, /<label>Optional review catalog<\/label>[\s\S]*?<button class="seg-btn active" data-group="fw" aria-pressed="true">None<\/button>/,
+  "optional catalog defaults to None");
+assert.match(homeHtml, /<label>Optional evidence output<\/label>[\s\S]*?<button class="seg-btn active" data-group="ev" aria-pressed="true">Checklist only<\/button>/,
+  "optional evidence defaults to checklist only");
+const mcpHtml = await read("mcp/index.html");
+assert.equal((mcpHtml.match(/data-activation-event="setup_help_click"/g) || []).length, 2,
+  "the two explicit MCP setup-help links carry the setup event");
+const pricingActivationHtml = await read("pricing/index.html");
+assert.equal((pricingActivationHtml.match(/data-activation-event="setup_help_click"/g) || []).length, 1,
+  "pricing has one explicit setup-help event");
 const homeInline = await read("js/home.js");
 new Function(homeInline);
+assert.match(homeInline, /readtheplanTrack\("copy_install"\)/);
+assert.match(homeInline, /readtheplanTrack\("generate_ci"\)/);
+assert.doesNotMatch(`${analytics}\n${homeInline}\n${playground}`, /gate_enabled/,
+  "browser activity must not be mislabeled as a repository-enabled gate");
 const pyprojectToml = await read("../pyproject.toml");
 const projectVersion = pyprojectToml.match(/^version\s*=\s*"([^"]+)"/m)[1];
 const stateGroups = {
@@ -170,7 +261,7 @@ const stateGroups = {
   thresh: ["Irreversible only", "Dangerous", "Review", "Don't block"],
   ev: ["JSON envelope", "Signed (OIDC)", "Checklist only"],
 };
-const activeState = { ci: "GitHub Actions", fw: "SOC 2", thresh: "Dangerous", ev: "JSON envelope" };
+const activeState = { ci: "GitHub Actions", fw: "None", thresh: "Dangerous", ev: "Checklist only" };
 const fakeButtons = {};
 for (const [group, labels] of Object.entries(stateGroups)) {
   fakeButtons[group] = labels.map((label) => ({
@@ -212,6 +303,10 @@ const activate = (group, label) => { activeState[group] = label; };
 assert.ok(homeApi.workflowText().includes(`uses: readtheplan/readtheplan@v${projectVersion}`), "workflow pins the pyproject version");
 assert.match(homeApi.workflowText(), /input-file: plan\.json/);
 assert.match(homeApi.workflowText(), /fail-on-threshold: dangerous/);
+assert.doesNotMatch(homeApi.workflowText(), /Generate evidence artifact|--framework|--evidence/,
+  "default workflow stays focused on the gate");
+activate("fw", "SOC 2");
+activate("ev", "JSON envelope");
 assert.match(homeApi.workflowText(), /--framework soc2 --format json --evidence readtheplan-evidence\.json/);
 activate("ci", "GitLab CI");
 assert.match(homeApi.workflowText(), /image: python:3\.13/);
@@ -289,7 +384,8 @@ const readme = await read("../README.md");
 assert.match(readme, /SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST/);
 assert.doesNotMatch(readme, /What.s shipping next: CloudFormation/);
 
-assert.match(homeHtml, /Six built-in catalogs/);
+assert.doesNotMatch(homeHtml, /Six built-in catalogs/,
+  "compliance inventory must not compete with the primary Terraform activation path");
 const pricingHtml = await read("pricing/index.html");
 assert.match(pricingHtml, /Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST/);
 assert.doesNotMatch(pricingHtml, /SOC 2, ISO 27001, and HIPAA are built-in/);

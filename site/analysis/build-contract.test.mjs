@@ -50,7 +50,7 @@ for (const route of routes) {
 const headers = await fs.readFile(new URL("_headers", dist), "utf8");
 const expectedCsp =
   "Content-Security-Policy: default-src 'self'; " +
-  "script-src 'self' https://plausible.io; " +
+  "script-src 'self'; " +
   "style-src 'self' 'unsafe-inline'; " +
   "connect-src 'self' https://plausible.io; " +
   "font-src 'self'; img-src 'self' data:; media-src 'self'; " +
@@ -91,6 +91,7 @@ for (const asset of [
   "robots.txt",
   "sitemap.xml",
   "modern.css",
+  "js/analytics.js",
   "_headers",
   "_routes.json",
   "playground/compliance.json",

@@ -1,20 +1,22 @@
 ---
-title: "Local MCP Infrastructure Reviewer | readtheplan"
-description: "Run readtheplan as a local MCP server so AI agents can review Terraform, CloudFormation, Azure, Kubernetes, and Pulumi changes without uploading raw inputs."
+title: "Local MCP agent gate | readtheplan"
+description: "Let an MCP-compatible coding agent request an independent Terraform/OpenTofu gate locally, without uploading raw plan data."
 canonical: "https://readtheplan.dev/mcp/"
-ogDescription: "Give your AI coding agent a deterministic infrastructure reviewer that runs locally and never uploads raw plans."
+ogDescription: "A deterministic local second check for AI-generated Terraform/OpenTofu changes."
 ---
 <main id="main" class="workspace">
       <section class="hero g utility-hero" aria-labelledby="mcp-title">
         <div class="gc hero-content">
-          <p class="eyebrow">Secure AI-agent integrations</p>
+          <p class="eyebrow">Agent integration</p>
           <h1 id="mcp-title">Local MCP infrastructure reviewer.</h1>
           <p class="intro-copy">
-            Give your AI coding agent deterministic Terraform, CloudFormation, Azure, Kubernetes,
-            Pulumi, Ansible, Jenkins, Chef, Puppet, and repository-wide infrastructure review
-            that runs locally and never uploads raw inputs. The preview
-            exposes readtheplan analysis to MCP clients over stdio, so change artifacts
-            stay on your workstation or inside CI.
+            Give your AI coding agent a deterministic Terraform/OpenTofu second check.
+            The agent can request the gate, but it does not author the decision. Raw plan
+            data stays on your workstation or CI runner.
+          </p>
+          <p class="handoff-note">
+            Terraform/OpenTofu is the first workflow. Additional supported structured
+            infrastructure artifacts use the same local contract and are listed below.
           </p>
         </div>
         <div class="gc trust-strip" aria-label="Product boundaries">
@@ -31,7 +33,7 @@ ogDescription: "Give your AI coding agent a deterministic infrastructure reviewe
           </p>
         </div>
         <div class="gc">
-          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20free%20MCP%20setup%20help">
+          <a class="primary-link" data-activation-event="setup_help_click" href="mailto:info@readtheplan.dev?subject=readtheplan%20free%20MCP%20setup%20help">
             Get free setup help
           </a>
           <p class="handoff-note">
@@ -219,7 +221,7 @@ MCP_ROOT=/absolute/path/to/repository readtheplan mcp</pre>
             Azure Pipelines, and Bitbucket Pipelines into the same contract. Additional
             GCP/Oracle inputs can follow the same local-first boundary.
           </p>
-          <a class="primary-link" href="mailto:info@readtheplan.dev?subject=readtheplan%20free%20MCP%20setup%20help">
+          <a class="primary-link" data-activation-event="setup_help_click" href="mailto:info@readtheplan.dev?subject=readtheplan%20free%20MCP%20setup%20help">
             Get free setup help
           </a>
           <p class="handoff-note">No raw Terraform plan is attached or submitted.</p>

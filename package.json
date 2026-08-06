@@ -1,7 +1,7 @@
 {
   "name": "readtheplan",
   "version": "0.3.0",
-  "description": "Terraform plan risk explainer — reads `terraform plan` and classifies each change as safe/review/dangerous/irreversible.",
+  "description": "Deterministic local verification for AI-generated infrastructure changes, starting with Terraform/OpenTofu plans.",
   "keywords": [
     "terraform",
     "iac",

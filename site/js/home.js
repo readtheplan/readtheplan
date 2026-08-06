@@ -18,9 +18,9 @@ function activeVal(group) {
   var el = document.querySelector('[data-group="' + group + '"].active');
   return el ? el.textContent.trim() : "";
 }
-function activeFramework() { return fwMap[activeVal("fw")] || "soc2"; }
+function activeFramework() { return fwMap[activeVal("fw")] || "none"; }
 function activeThreshold() { return thMap[activeVal("thresh")] || "dangerous"; }
-function activeEvidence() { return evMap[activeVal("ev")] || "json-envelope"; }
+function activeEvidence() { return evMap[activeVal("ev")] || "checklist"; }
 function evidenceFile(ev) { return ev === "checklist" ? "readtheplan-checklist.json" : "readtheplan-evidence.json"; }
 function installPackage(ev) { return ev === "signed-oidc" ? '"readtheplan[sign]"' : "readtheplan"; }
 
@@ -201,22 +201,33 @@ document.querySelectorAll(".seg-btn[data-group]").forEach(function (btn) {
 var copyInstallBtn = document.getElementById("copy-install");
 if (copyInstallBtn) {
   copyInstallBtn.addEventListener("click", function () {
-    navigator.clipboard.writeText("pip install readtheplan && readtheplan scan .");
-    flashButton(copyInstallBtn, "Copied");
+    navigator.clipboard.writeText("pip install readtheplan").then(function () {
+      if (typeof window.readtheplanTrack === "function") window.readtheplanTrack("copy_install");
+      flashButton(copyInstallBtn, "Copied");
+    }, function () {
+      flashButton(copyInstallBtn, "Copy failed");
+    });
   });
 }
 var copyWorkflowBtn = document.getElementById("copy-workflow");
 if (copyWorkflowBtn) {
   copyWorkflowBtn.addEventListener("click", function () {
-    navigator.clipboard.writeText(workflowText());
-    flashButton(copyWorkflowBtn, "Copied");
+    navigator.clipboard.writeText(workflowText()).then(function () {
+      if (typeof window.readtheplanTrack === "function") window.readtheplanTrack("generate_ci");
+      flashButton(copyWorkflowBtn, "Copied");
+    }, function () {
+      flashButton(copyWorkflowBtn, "Copy failed");
+    });
   });
 }
 var copyCliBtn = document.getElementById("copy-cli");
 if (copyCliBtn) {
   copyCliBtn.addEventListener("click", function () {
-    navigator.clipboard.writeText(cliCommand());
-    flashButton(copyCliBtn, "Copied");
+    navigator.clipboard.writeText(cliCommand()).then(function () {
+      flashButton(copyCliBtn, "Copied");
+    }, function () {
+      flashButton(copyCliBtn, "Copy failed");
+    });
   });
 }
 
@@ -265,8 +276,10 @@ function startInteractiveDemo() {
     }
   };
 
-  var order = ["repository", "terraform", "kubernetes", "pipeline"];
-  var currentIndex = 0;
+  var order = tabs.map(function (tab) { return tab.getAttribute("data-demo"); });
+  var currentIndex = Math.max(0, order.indexOf(tabs.find(function (tab) {
+    return tab.classList.contains("active");
+  }).getAttribute("data-demo")));
   var paused = false;
   var timer = null;
 

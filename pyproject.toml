@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "readtheplan"
 version = "0.4.0"
-description = "Local infrastructure risk analysis for Terraform, Kubernetes, cloud plans, CI pipelines, Docker Compose, and Nomad."
+description = "Deterministic local verification for AI-generated infrastructure changes, starting with Terraform/OpenTofu plans."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

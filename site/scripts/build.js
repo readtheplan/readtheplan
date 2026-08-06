@@ -67,13 +67,13 @@ fs.writeFileSync(
 
 // Single source of truth for the shipped security headers. Inline event
 // handlers and <script> blocks were removed site-wide, so scripts execute
-// only from same-origin files plus plausible.io (analytics works under
-// this CSP; no inline allowance for scripts).
+// only from same-origin files. Plausible is an API destination, not a
+// script source; there is no inline allowance for scripts.
 fs.writeFileSync(
   path.join(dist, "_headers"),
   [
     "/*",
-    "  Content-Security-Policy: default-src 'self'; script-src 'self' https://plausible.io; style-src 'self' 'unsafe-inline'; connect-src 'self' https://plausible.io; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+    "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://plausible.io; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
     "  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
     "  Access-Control-Allow-Origin: https://readtheplan.dev",
     "  Cross-Origin-Opener-Policy: same-origin",

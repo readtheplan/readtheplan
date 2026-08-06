@@ -8,6 +8,7 @@
   let planData = null;
   let complianceData = null;
   let currentChanges = null;
+  let hasTrackedRun = false;
 
   // ── DOM refs ──
   const dropZone = document.getElementById("dropZone");
@@ -87,6 +88,12 @@
       }
       currentChanges = changes;
       render(changes);
+      if (!hasTrackedRun) {
+        hasTrackedRun = true;
+        if (typeof window.readtheplanTrack === "function") {
+          window.readtheplanTrack("playground_run");
+        }
+      }
     } catch (err) {
       showError("Analysis error: " + err.message);
     }

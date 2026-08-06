@@ -1,6 +1,6 @@
 # readtheplan
 
-> **Read the plan. Every time. For real.**
+> **Independently verify AI-generated infrastructure changes before they execute.**
 >
 > [![Version](https://img.shields.io/pypi/v/readtheplan?color=blue)](https://pypi.org/project/readtheplan/)
 > [![Python](https://img.shields.io/pypi/pyversions/readtheplan)](https://pypi.org/project/readtheplan/)
@@ -11,23 +11,30 @@
 > [![Discussions](https://img.shields.io/badge/discussions-welcome-blue)](https://github.com/readtheplan/readtheplan/discussions)
 > [![Stars](https://img.shields.io/github/stars/readtheplan/readtheplan?style=social)](https://github.com/readtheplan/readtheplan)
 
-**Infrastructure change risk analysis for humans, CI pipelines, and AI agents.** Review cloud plans, Kubernetes manifests, Docker Compose workloads, Nomad jobspecs and scheduler plans, configuration-management code, and CI pipelines through one deterministic local risk gate. Runs locally — no uploads, no accounts, no backend.
+**AI wrote the Terraform. Don't let it approve its own plan.**
+
+readtheplan is a local, deterministic second check for infrastructure changes proposed by AI agents. Start with Terraform or OpenTofu plan JSON: it explains the change, classifies each finding as `safe`, `review`, `dangerous`, or `irreversible`, and returns a `proceed`, `warn`, or `block` decision before merge or apply. Raw plan data stays on your machine or CI runner.
+
+It does not evaluate arbitrary AI chat, source-code diffs, or an agent's intent. Generate a structured plan first. readtheplan does not run Terraform, refresh state, contact providers, or apply infrastructure.
 
 ```bash
-pip install readtheplan && readtheplan scan .
+pip install readtheplan
+terraform plan -out=tfplan -input=false
+terraform show -json tfplan > plan.json
+readtheplan agent-gate plan.json
 ```
 
 Requires Python 3.10+.
 
-[Website](https://readtheplan.dev) · [Demo](https://readtheplan.dev/demo/) · [Docs](https://readtheplan.dev/docs/) · [Playground](https://readtheplan.dev/playground/) · [Contributing](CONTRIBUTING.md)
+[Quickstart](https://readtheplan.dev/docs/quickstart/) · [Playground](https://readtheplan.dev/playground/) · [Docs](https://readtheplan.dev/docs/) · [Website](https://readtheplan.dev) · [Contributing](CONTRIBUTING.md)
 
 ---
 
-## Comparison: readtheplan vs. everything else
+## Why an independent gate?
 
 | Tool | Analyzes | Risk tiers | Compliance evidence | Agent gate | Local-only |
 |------|----------|------------|---------------------|------------|------------|
-| **readtheplan** | Plans + config/pipelines | ✅ 4 tiers | ✅ SOC2/ISO/HIPAA | ✅ proceed/warn/block | ✅ |
+| **readtheplan** | Plan JSON + supported artifacts | ✅ 4 tiers | ✅ 6 review catalogs | ✅ proceed/warn/block | ✅ |
 | tflint | Code (HCL) | ❌ lint only | ❌ | ❌ | ✅ |
 | tfsec | Code (HCL) | ❌ security only | ❌ | ❌ | ✅ |
 | checkov | Code + plan | ⚠️ pass/fail | ⚠️ policy checks | ❌ | ✅ |
@@ -43,13 +50,12 @@ Requires Python 3.10+.
 
 ## Who it's for
 
-- **Infrastructure authors** — see the blast radius of a plan, manifest, playbook, recipe, or pipeline before it runs.
-- **Platform / DevOps teams** — standardize risk tiers and org-specific escalations across repos with rule overlays (no forks, no code changes).
-- **CI maintainers** — use the native GitHub Action or the portable CLI in GitLab,
-  Jenkins, Azure DevOps, CircleCI, Buildkite, Bitbucket, and other pipelines to
-  gate changes on `dangerous` / `irreversible` risk.
-- **Security & compliance reviewers** — SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST mapping inventory plus signed analysis envelopes. Resource-specific mappings and generic heuristic signals are reported separately; neither alone establishes control satisfaction.
-- **AI-agent workflows** — a deterministic `proceed` / `warn` / `block` gate that stops an agent from auto-applying unsafe infrastructure.
+- **Platform engineers allowing coding agents to modify Terraform/OpenTofu** — keep an independent decision between generated code and merge or apply.
+- **CI maintainers** — enforce the same `proceed` / `warn` / `block` contract in GitHub Actions or another runner.
+- **Human reviewers** — see resource-aware risk and blast-radius explanations instead of approving a raw plan blob.
+- **Security and compliance reviewers** — optionally add control annotations and integrity-protected evidence. Mappings support review; they do not certify compliance.
+
+The initial wedge is Terraform/OpenTofu. Additional adapters are supported, but they are secondary to this first approval-gate workflow.
 
 ---
 
@@ -78,6 +84,11 @@ mappings are coverage-eligible annotations; generic change-management baselines
 are heuristic review signals. Native plan analysis can also produce signed
 **analysis evidence envelopes** whose attestations protect artifact integrity,
 not certify compliance.
+
+<details>
+<summary><strong>Secondary adapters and artifact coverage</strong></summary>
+
+The Terraform/OpenTofu gate is the primary path. The same deterministic engine also has the following local, non-executing adapters.
 
 ### Supported infrastructure tools
 
@@ -224,6 +235,8 @@ Kubernetes controller analysis understands Argo Workflows/Events, Gateway API,
 cert-manager/trust-manager, External Secrets, Istio, Kyverno, Gatekeeper, KEDA,
 Knative, Cluster API, and Karpenter API groups without contacting controllers,
 resolving runtime status, provisioning infrastructure, or reading referenced Secrets.
+
+</details>
 
 ## How it looks
 
