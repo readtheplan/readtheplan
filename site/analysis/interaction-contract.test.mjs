@@ -394,6 +394,8 @@ assert.equal(fakeElements["gen-label"].textContent, "Generated CircleCI config")
 assert.match(fakeElements["cli-preview-cmd"].textContent, /--fail-on review/);
 
 const systemCss = await read("modern.css");
+assert.doesNotMatch(systemCss, /\.demo-pause/,
+  "removed demo controls must not leave dead CSS selectors");
 assert.match(systemCss, /@media \(max-width: 720px\)/);
 assert.match(systemCss, /\.console-meta\s*\{[^}]*flex-wrap:\s*wrap;/,
   "console metadata wraps instead of overflowing narrow proof surfaces");
