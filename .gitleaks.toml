@@ -1,0 +1,79 @@
+[extend]
+useDefault = true
+
+# These fixtures intentionally contain fake private-key markers so analyzers
+# can prove that they detect embedded credentials. Scope each exception to the
+# exact synthetic file and matching rule.
+[[allowlists]]
+description = "Synthetic private-key fixtures"
+targetRules = ["private-key"]
+paths = [
+  '''^(/repo/)?tests/fixtures/cloud_init_risky\.yml$''',
+  '''^(/repo/)?tests/fixtures/ansible_inventory_risky\.yml$''',
+  '''^(/repo/)?tests/fixtures/tfe_provider_plan_risky\.json$''',
+]
+
+[[allowlists]]
+description = "Synthetic curl authorization fixture"
+targetRules = ["curl-auth-header"]
+paths = [
+  '''^(/repo/)?tests/fixtures/inspec_profile_risky/controls/main\.rb$''',
+]
+
+[[allowlists]]
+description = "Synthetic Packer password fixture"
+targetRules = ["hashicorp-tf-password"]
+paths = [
+  '''^(/repo/)?tests/fixtures/packer_template_risky\.pkr\.hcl$''',
+]
+
+# Default detectors also mistake a few fixed code/documentation lines for API
+# keys. Each exception pairs one exact path with one distinctive line so a
+# similar-looking secret elsewhere remains visible.
+[[allowlists]]
+description = "Changelog dynamic-secret wording"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^(/repo/)?CHANGELOG\.md$''',
+]
+regexes = [
+  '''dynamic-secret engines''',
+]
+
+[[allowlists]]
+description = "Carvel API group literal"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^(/repo/)?src/readtheplan/adapters/carvel\.py$''',
+]
+regexes = [
+  '''api_group == "vendir\.k14s\.io"''',
+]
+
+[[allowlists]]
+description = "Ansible role metadata identifier"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^(/repo/)?src/readtheplan/adapters/ansible_project\.py$''',
+]
+regexes = [
+  '''allowed_keys=_ROLE_META_KEYS''',
+]
+
+[[allowlists]]
+description = "Terraform resource names that resemble Cloudflare API keys"
+targetRules = ["cloudflare-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^(/repo/)?tests/test_rules\.py$''',
+]
+regexes = [
+  '''"cloudflare_(access_application|access_policy|teams_rules)"''',
+]
