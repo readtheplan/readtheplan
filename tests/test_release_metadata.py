@@ -75,6 +75,18 @@ def test_current_public_install_and_action_pins_match_release() -> None:
     cli = read("src/readtheplan/cli.py")
     assert f"@refs/tags/v{RELEASE_VERSION}" in cli
 
+    readme = read("README.md")
+    action_section = readme.split("### GitHub Action — gate your CI pipeline", 1)[1].split(
+        "### Any CI/CD system", 1
+    )[0]
+    assert "input-file: plan.json" in action_section
+    assert "plan-file: plan.json" not in action_section
+
+    status_section = readme.split("## Status", 1)[1].split("## License", 1)[0]
+    assert "**v0.5 —" in status_section
+    assert "**v0.4 —" not in status_section
+    assert "PCI-DSS and NIST" not in status_section
+
 
 def test_release_notes_and_support_matrix_are_rolled_forward() -> None:
     changelog = read("CHANGELOG.md")
@@ -84,6 +96,16 @@ def test_release_notes_and_support_matrix_are_rolled_forward() -> None:
         f"## [{RELEASE_VERSION}] — {RELEASE_DATE}\n"
     )
     assert changelog.startswith(expected_prefix)
+    release_notes = changelog.split(f"## [{RELEASE_VERSION}]", 1)[1].split(
+        "## [0.4.0]", 1
+    )[0]
+    assert "### Fixed" in release_notes
+    assert "truthful coverage semantics" in release_notes
+    assert "linear time" in release_notes
+    assert "### Security" in release_notes
+    assert "full commit SHAs" in release_notes
+    assert "fail closed on malformed or ambiguous Kubernetes inputs" in release_notes
+    assert "scan non-regression gate" in release_notes
 
     security = read("SECURITY.md")
     assert "| 0.5.x   | ✅ Active |" in security

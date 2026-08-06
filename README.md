@@ -415,7 +415,7 @@ Resource changes: 3
   id: rtp
   uses: readtheplan/readtheplan@v0.5.0   # pin to a released tag or a full commit SHA
   with:
-    plan-file: plan.json
+    input-file: plan.json
     fail-on-threshold: dangerous          # gate on dangerous / irreversible changes
 ```
 
@@ -591,7 +591,7 @@ Good first issues are tagged [`good first issue`](https://github.com/readtheplan
 
 ## Status
 
-**v0.4 — stable CI-neutral CLI + native GitHub Action.** The PyPI package ships
+**v0.5 — stable CI-neutral CLI + native GitHub Action.** The PyPI package ships
 the portable Python CLI and the repository ships a composite GitHub Action.
 Current development includes resource-aware cloud rules, compliance framework
 annotations, evidence envelopes, signed attestation verification, customer rule
@@ -599,7 +599,7 @@ overlays, infrastructure adapters, MCP preview, examples, benchmarks, and the
 static onboarding site.
 
 What's shipping next: deeper adapter coverage, cloud-native delivery workflows,
-PCI-DSS and NIST 800-53 catalogs, and expanded cloud resource rules.
+the NIST 800-53 catalog, and expanded cloud resource rules.
 
 ## License
 
