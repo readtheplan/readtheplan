@@ -227,14 +227,22 @@ def test_pages_config_merge_fails_closed(config: dict[str, object], message: str
 
 def test_cloudflare_production_workflow_contract() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    build_script = (ROOT / "site" / "scripts" / "build.js").read_text(encoding="utf-8")
 
     for expected in [
         "contents: read",
+        "queue: max",
         "cancel-in-progress: false",
-        "if: github.ref == 'refs/heads/main'",
+        "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+        "environment:",
+        "name: production",
+        "url: https://readtheplan.dev",
+        "timeout-minutes: 20",
+        "persist-credentials: false",
         "node-version: 22",
         "python-version: '3.13'",
         'python -m pip install "PyYAML>=6,<7"',
+        "npm ci --ignore-scripts",
         "npm test",
         "node analysis/classifier-parity.test.js",
         "npm run build",
@@ -243,16 +251,42 @@ def test_cloudflare_production_workflow_contract() -> None:
         "wrangler@4.110.0 pages download config readtheplan --force",
         "scripts/prepare-pages-config.py wrangler.toml wrangler.json",
         "wrangler@4.110.0 pages deploy",
+        "--branch=main",
         '--commit-hash="${GITHUB_SHA}"',
-        "src/readtheplan/data/controls/**",
-        "src/readtheplan/plan.py",
-        "src/readtheplan/rules/**",
-        "pyproject.toml",
+        "Record exact deployment commit",
+        'printf \'%s\\n\' "$GITHUB_SHA" > dist/_deployment-commit.txt',
+        "Verify exact production deployment",
+        "https://readtheplan.dev/_deployment-commit.txt",
+        "https://readtheplan.dev/modern.css",
+        "https://readtheplan.dev/chat/chat.js",
+        "curl --fail --silent --show-error --location --compressed",
+        "--proto '=https' --proto-redir '=https' --tlsv1.2",
+        "--max-filesize 5242880",
+        'rm -f -- "$output"',
+        "cmp --silent",
     ]:
         assert expected in workflow
 
+    assert "paths:" not in workflow
+    assert "workflow_dispatch:" not in workflow
+    assert "pull_request:" not in workflow
+    assert "src/readtheplan/data/controls/**" not in workflow
+    assert "src/readtheplan/plan.py" not in workflow
+    assert "src/readtheplan/rules/**" not in workflow
+    assert "pyproject.toml" not in workflow.split("jobs:", maxsplit=1)[0]
+    assert "Cache-Control: no-store, max-age=0" in build_script
+    assert "/_deployment-commit.txt" in build_script
+    assert workflow.count("|| return 1") >= 5
+
     assert workflow.index("npm test") < workflow.index("npm run build")
     assert workflow.index("classifier-parity.test.js") < workflow.index("npm run build")
+    assert workflow.index("npm run build") < workflow.index("Record exact deployment commit")
+    assert workflow.index("Record exact deployment commit") < workflow.index(
+        "wrangler@4.110.0 pages deploy"
+    )
+    assert workflow.index("wrangler@4.110.0 pages deploy") < workflow.index(
+        "Verify exact production deployment"
+    )
     assert workflow.index("workers/chat-rate-limiter/wrangler.toml") < workflow.index(
         "pages deploy"
     )

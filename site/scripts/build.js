@@ -84,6 +84,9 @@ fs.writeFileSync(
     "  Referrer-Policy: strict-origin-when-cross-origin",
     "  Permissions-Policy: accelerometer=(), autoplay=(), browsing-topics=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
     "",
+    "/_deployment-commit.txt",
+    "  Cache-Control: no-store, max-age=0",
+    "",
   ].join("\n"),
   "utf8",
 );
