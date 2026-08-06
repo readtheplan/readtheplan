@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-06
+
 ### Changed
 - Project auto-discovery now routes content-identified Crossplane, AWS SAM, Serverless Framework,
   Jenkins JCasC, Pulumi preview, Azure What-If, and Carvel ytt/vendir/kbld/imgpkg/kapp inputs to

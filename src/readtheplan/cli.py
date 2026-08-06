@@ -1047,7 +1047,7 @@ def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParse
     )
     verify.add_argument(
         "--certificate-identity",
-        help="Expected certificate identity (e.g., https://github.com/readtheplan/readtheplan/.github/workflows/release.yml@refs/tags/v0.3.0). When set, verification fails if the signer does not match.",  # noqa: E501
+        help="Expected certificate identity (e.g., https://github.com/readtheplan/readtheplan/.github/workflows/release.yml@refs/tags/v0.5.0). When set, verification fails if the signer does not match.",  # noqa: E501
     )
     verify.add_argument(
         "--certificate-oidc-issuer",

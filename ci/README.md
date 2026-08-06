@@ -14,7 +14,7 @@ terraform show -json tfplan > plan.json
 Then the portable gate is:
 
 ```bash
-python -m pip install "readtheplan==0.4.0"
+python -m pip install "readtheplan==0.5.0"
 readtheplan analyze --fail-on dangerous plan.json
 ```
 

@@ -362,7 +362,7 @@ def test_docs_routes_are_sitemap_listed_and_layout_owned() -> None:
         assert "matrix.css" not in html
         assert "topbar" not in html
         assert "<head>" not in html
-        assert "v0.4.0" not in html
+        assert re.search(r"\bv\d+\.\d+\.\d+\b", html) is None
         assert "readtheplan" in html
 
     assert "/demo/" in sitemap

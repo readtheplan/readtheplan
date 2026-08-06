@@ -23,7 +23,7 @@ body:
     id: version
     attributes:
       label: readtheplan version
-      placeholder: "0.3.0"
+      placeholder: "0.5.0"
   - type: textarea
     id: expected
     attributes:

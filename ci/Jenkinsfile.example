@@ -4,7 +4,7 @@ stage('Infrastructure risk gate') {
         sh '''
             python3 -m venv .readtheplan-venv
             . .readtheplan-venv/bin/activate
-            python -m pip install "readtheplan==0.4.0"
+            python -m pip install "readtheplan==0.5.0"
             readtheplan analyze --format json --framework soc2 \
               --evidence readtheplan-evidence.json \
               --fail-on dangerous plan.json > readtheplan-summary.json

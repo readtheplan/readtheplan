@@ -413,7 +413,7 @@ Resource changes: 3
 ```yaml
 - name: Analyze Terraform plan
   id: rtp
-  uses: readtheplan/readtheplan@v0.3.0   # pin to a released tag or a full commit SHA
+  uses: readtheplan/readtheplan@v0.5.0   # pin to a released tag or a full commit SHA
   with:
     plan-file: plan.json
     fail-on-threshold: dangerous          # gate on dangerous / irreversible changes
@@ -439,7 +439,7 @@ your pipeline creates `plan.json`, the same versioned command works in any runne
 with Python 3.10+:
 
 ```bash
-python -m pip install "readtheplan==0.4.0"
+python -m pip install "readtheplan==0.5.0"
 readtheplan analyze --fail-on dangerous plan.json
 ```
 
@@ -490,7 +490,7 @@ Wire this into coding-agent pipelines by making `decision` the stable gate: `pro
     "heuristic_control_signals": []
   },
   "agent_attestation": {
-    "agent": "readtheplan@0.4.0",
+    "agent": "readtheplan@0.5.0",
     "plan_sha256": "..."
   }
 }

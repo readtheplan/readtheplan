@@ -1,4 +1,4 @@
-# Example: end-to-end Terraform gate using readtheplan v0.4.0.
+# Example: end-to-end Terraform gate using readtheplan v0.5.0.
 # Two gating styles are shown; pick one.
 #
 # Style A uses the official composite action (report-only by default, threshold gate).
@@ -33,7 +33,7 @@ jobs:
 
       # ---- Style A: official action, threshold gate -------------------------
       - name: readtheplan (threshold gate)
-        uses: readtheplan/readtheplan@v0.4.0   # pin the release tag or a full commit SHA
+        uses: readtheplan/readtheplan@v0.5.0   # pin the release tag or a full commit SHA
         with:
           plan-file: infra/plan.json
           fail-on-threshold: dangerous
@@ -43,7 +43,7 @@ jobs:
         id: gate
         if: always()
         run: |
-          pip install readtheplan==0.3.0
+          pip install readtheplan==0.5.0
           bash ../ci/readtheplan-gate.sh plan.json soc2 || code=$?
           echo "decision-exit=${code:-0}" >> "$GITHUB_OUTPUT"
           # warn (2) passes here but still posts the comment; block (1) fails the job
