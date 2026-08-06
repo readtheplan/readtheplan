@@ -24,7 +24,7 @@ def test_action_uses_json_cli_contract() -> None:
     assert 'command+=(--exclude "$pattern")' not in action
     assert "scan-excludes is supported only when tool is scan" in action
     assert (
-        "uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0"
+        "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
         in action
     )
     assert "uses: actions/setup-python@v6" not in action
