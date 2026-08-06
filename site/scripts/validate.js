@@ -92,7 +92,8 @@ for (const token of [
   "python -m pip install",
   "readtheplan-summary.json",
   "fail-on-threshold",
-  "Generate evidence artifact",
+  "Generate analysis summary",
+  "Generate evidence and analysis summary",
   "if: always()",
   "cliCommand(true, false)",
   "--format",
@@ -112,6 +113,7 @@ for (const token of [
   "\n    framework:",
   "\n    evidence:",
   "pilot-contact@example.com",
+  "Generate evidence artifact",
 ]) {
   if (html.includes(token) || homeJs.includes(token)) {
     throw new Error(`Landing page must not include stale or unsupported token: ${token}`);

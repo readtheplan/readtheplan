@@ -269,6 +269,8 @@ assert.doesNotMatch(`${analytics}\n${homeInline}\n${playground}`, /gate_enabled/
   "browser activity must not be mislabeled as a repository-enabled gate");
 assert.match(homeInline, /if \(order\.length < 2\) return;/,
   "a single demo scenario must not restart an identical animation timer");
+assert.doesNotMatch(homeInline, /demo-pause/,
+  "the removed demo pause control must not leave a dead event-handler path");
 for (const deadScenario of ["repository:", "kubernetes:", "pipeline:"]) {
   assert.ok(!homeInline.includes(deadScenario), `homepage demo omits unreachable ${deadScenario}`);
 }
@@ -337,7 +339,12 @@ assert.match(homeApi.workflowText(), /fail-on-threshold: dangerous/);
 assert.doesNotMatch(homeApi.workflowText(), /Generate evidence artifact|--framework|--evidence/,
   "default workflow stays focused on the gate");
 activate("fw", "SOC 2");
+assert.match(homeApi.workflowText(), /- name: Generate analysis summary/,
+  "catalog-only mode names the summary artifact honestly");
+assert.doesNotMatch(homeApi.workflowText(), /Generate evidence artifact/);
 activate("ev", "JSON envelope");
+assert.match(homeApi.workflowText(), /- name: Generate evidence and analysis summary/,
+  "evidence mode names both emitted outputs");
 assert.match(homeApi.workflowText(), /--framework soc2 --format json --evidence readtheplan-evidence\.json/);
 activate("ci", "GitLab CI");
 assert.match(homeApi.workflowText(), /image: python:3\.13/);

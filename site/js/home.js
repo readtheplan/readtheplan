@@ -46,6 +46,7 @@ function workflowText() {
   var install = "python -m pip install " + installPackage(ev);
   var gate = cliCommand(true, true);
   var evidence = cliCommand(true, false) + " > readtheplan-summary.json";
+  var outputStepName = ev === "none" ? "Generate analysis summary" : "Generate evidence and analysis summary";
 
   if (ci === "Local only") {
     return [
@@ -153,7 +154,7 @@ function workflowText() {
   ];
   if (th !== "none") lines.push("    fail-on-threshold: " + th);
   if (fw !== "none" || ev !== "none") {
-    lines.push("", "- name: Generate evidence artifact", "  if: always()", "  run: |", "    " + install, "    " + evidence);
+    lines.push("", "- name: " + outputStepName, "  if: always()", "  run: |", "    " + install, "    " + evidence);
   }
   return lines.join("\n");
 }
@@ -257,7 +258,6 @@ function startInteractiveDemo() {
   var currentIndex = Math.max(0, order.indexOf(tabs.find(function (tab) {
     return tab.classList.contains("active");
   }).getAttribute("data-demo")));
-  var paused = false;
   var timer = null;
 
   function setText(id, value) {
@@ -315,7 +315,6 @@ function startInteractiveDemo() {
   function restartTimer() {
     if (timer) window.clearInterval(timer);
     if (order.length < 2) return;
-    if (paused) return;
     timer = window.setInterval(function () {
       showScenario(order[(currentIndex + 1) % order.length]);
     }, 4600);
@@ -328,15 +327,6 @@ function startInteractiveDemo() {
     });
   });
 
-  var pause = document.getElementById("demo-pause");
-  if (pause) {
-    pause.addEventListener("click", function () {
-      paused = !paused;
-      pause.textContent = paused ? "Play" : "Pause";
-      pause.setAttribute("aria-pressed", paused ? "true" : "false");
-      restartTimer();
-    });
-  }
 
   var map = document.querySelector(".resource-map");
   if (map) {
