@@ -35,7 +35,7 @@ jobs:
       - name: readtheplan (threshold gate)
         uses: readtheplan/readtheplan@v0.5.0   # pin the release tag or a full commit SHA
         with:
-          plan-file: infra/plan.json
+          input-file: infra/plan.json
           fail-on-threshold: dangerous
 
       # ---- Style B: agent-gate contract + PR comment ------------------------

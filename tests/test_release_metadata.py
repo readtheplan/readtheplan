@@ -82,6 +82,10 @@ def test_current_public_install_and_action_pins_match_release() -> None:
     assert "input-file: plan.json" in action_section
     assert "plan-file: plan.json" not in action_section
 
+    terraform_example = read("ci/terraform-gate.example.yml")
+    assert "input-file: infra/plan.json" in terraform_example
+    assert "plan-file:" not in terraform_example
+
     status_section = readme.split("## Status", 1)[1].split("## License", 1)[0]
     assert "**v0.5 —" in status_section
     assert "**v0.4 —" not in status_section
