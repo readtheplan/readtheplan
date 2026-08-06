@@ -247,7 +247,7 @@ assert.match(homeHtml, /<label>Optional evidence output<\/label>[\s\S]*?<button 
   "optional evidence defaults to no extra artifact");
 assert.doesNotMatch(homeHtml, /Checklist only|readtheplan-checklist\.json/,
   "the setup wizard must not promise a checklist file that the command does not emit");
-assert.match(homeHtml, /SOC 2 annotations:[\s\S]*?--framework soc2/,
+assert.match(homeHtml, /SOC 2[\s\S]*?--framework soc2/,
   "sample control IDs disclose the framework flag needed to reproduce them");
 assert.doesNotMatch(homeHtml, /id="demo-pause"/, "the single-scenario demo has no meaningless pause control");
 const mcpHtml = await read("mcp/index.html");
@@ -388,6 +388,10 @@ assert.match(fakeElements["cli-preview-cmd"].textContent, /--fail-on review/);
 
 const systemCss = await read("modern.css");
 assert.match(systemCss, /@media \(max-width: 720px\)/);
+assert.match(systemCss, /\.console-meta\s*\{[^}]*flex-wrap:\s*wrap;/,
+  "console metadata wraps instead of overflowing narrow proof surfaces");
+assert.match(systemCss, /\.console-meta code\s*\{[^}]*white-space:\s*nowrap;/,
+  "copyable framework flags stay visually intact");
 assert.match(systemCss, /\.table-wrap \{ overflow-x: auto/);
 assert.match(systemCss, /\.plan-table-body \[role="row"\], \.demo-table \[role="row"\][\s\S]*?grid-template-columns: 110px minmax\(130px, 0\.42fr\)/);
 assert.match(systemCss, /\.risk-tag\.dangerous[\s\S]*?color: var\(--danger\)/);
