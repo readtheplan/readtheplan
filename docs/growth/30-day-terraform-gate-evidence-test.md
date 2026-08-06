@@ -143,7 +143,7 @@ Ask only what is needed to qualify the workflow:
 6. Ask two outcome questions:
    - Did any finding or the decision change what you reviewed?
    - Will you keep the gate for the next infrastructure change?
-7. Record only categorical answers in `activation-ledger.csv`.
+7. Record only categorical answers in `activation-ledger.csv`, including the closed `assistance_category`; never record help details.
 8. Schedule the day-14 check from `trial_started_at`; do not ask for repository access.
 
 ## Ledger instructions
@@ -153,6 +153,7 @@ Ask only what is needed to qualify the workflow:
 - booleans: `yes`, `no`, or blank;
 - timestamps and dates: ISO 8601;
 - trial IDs: `T01` through `T05` or additional opaque `TNN` values;
+- assistance category: `none`, `install_command`, `workflow_configuration`, `failure_triage`, or blank before a trial starts;
 - retention evidence: `confirmation`, `data_free_workflow_description`, or blank;
 - loss reason: one closed category from the list below;
 - next action: `qualify`, `schedule_trial`, `follow_up_once`, `check_day14`, `close`, or blank.
@@ -171,7 +172,9 @@ Closed loss-reason categories:
 - `privacy_concern`
 - `unknown`
 
-Do not add free-form notes to the shared ledger. Keep consented contact logistics in the communication tool where the relationship already exists.
+Set `qualified_at` whenever `qualified` is recorded. Every started trial must have `qualified=yes`, `replied=yes`, an opaque `trial_id`, an `assistance_category`, and `day14_due`. `trial_started_at` must be from 2026-08-06 through 2026-09-04; `qualified_at` and `contacted_at` must be no later than the trial start; `day14_due` is exactly 14 days later; and `retention_checked_at` must be on or after that due date.
+
+Do not add free-form notes to the shared ledger. `assistance_category` records only whether the founder provided no help, an install command, workflow-configuration help, or failure triage; it never records commands, errors, screenshots, or infrastructure details. Keep consented contact logistics in the communication tool where the relationship already exists.
 
 A blank `gate_retained_day14` at the final read counts as not retained. Set `retention_checked_at` only when a day-14 check actually completed. Use `confirmation` for the categorical user answer; use `data_free_workflow_description` only when the participant also described the enabled trigger, command, and blocking condition without sharing repository or infrastructure data.
 
@@ -196,7 +199,7 @@ Do not calculate conversion rates on bot traffic, downloads, or anonymous events
 ## Evidence limitations
 
 - **Selection and generalizability:** this is a small convenience sample of people reachable through founder-led, one-to-one conversations. It cannot establish market-wide prevalence or behavior outside Terraform/OpenTofu workflows.
-- **Founder-assistance and reciprocity:** hands-on setup may improve activation and make participants more likely to report that they will retain the gate. Record the help provided and interpret self-reported retention conservatively.
+- **Founder-assistance and reciprocity:** hands-on setup may improve activation and make participants more likely to report that they will retain the gate. Record only the closed `assistance_category` and interpret self-reported retention conservatively.
 - **No control group:** the test compares outcomes with fixed thresholds, not against an unassisted or randomized cohort.
 - **Categorical, privacy-limited evidence:** the ledger deliberately omits repository details, plan output, and finding text, so it cannot independently reproduce each participant's report.
 
@@ -210,6 +213,7 @@ At the final retention read:
 - **Distribution inconclusive:** fewer than 20 qualified contacts were reached. Do not claim the pain was disproved; fix access to the target audience and rerun the same test.
 - **Activation failed:** at least 20 contacts qualified but fewer than 5 real-repository trials began. Fix install, plan-generation, or setup friction before adding adapters.
 - **Retention failed:** at least 5 trials began but fewer than 2 gates were retained at day 14. Review the closed loss reasons and reconsider the wedge or decision quality before broader positioning.
+- **Evidence insufficient:** all three numeric thresholds are met, but no retained gate has `data_free_workflow_description` corroboration or the final limitations field is blank. Do not select **Continue the wedge**, expand scope, or claim retention success; report the missing evidence and close or rerun a bounded test.
 - **Trust stop:** any trial requires plan transfer, credential sharing, hidden data collection, or misleading capability claims. Stop the trial and fix the boundary first.
 
 One request for an unsupported adapter is not evidence to expand the homepage. One successful bundled demo is not a real trial. One copied workflow is not retention.
@@ -225,7 +229,8 @@ Useful findings confirmed: __
 Gates retained at day 14: __ / 2
 Retained gates with data-free workflow corroboration: __ / 1
 Most common closed loss reasons: __
-Decision: continue wedge / distribution inconclusive / activation failed / retention failed / trust stop
+Assistance categories: __
+Decision: continue wedge / distribution inconclusive / activation failed / retention failed / evidence insufficient / trust stop
 Evidence limitations: __
 Authorized next test: __
 ```

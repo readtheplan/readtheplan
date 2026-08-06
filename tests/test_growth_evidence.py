@@ -5,6 +5,8 @@ import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 PLAN = ROOT / "docs" / "growth" / "30-day-terraform-gate-evidence-test.md"
 LEDGER = ROOT / "docs" / "growth" / "activation-ledger.csv"
@@ -17,6 +19,7 @@ BOOLEAN_FIELDS = {
 }
 ISO_FIELDS = {
     "cohort_date",
+    "qualified_at",
     "contacted_at",
     "trial_started_at",
     "day14_due",
@@ -46,6 +49,12 @@ RETENTION_EVIDENCE = {
     "confirmation",
     "data_free_workflow_description",
 }
+ASSISTANCE_CATEGORIES = {
+    "none",
+    "install_command",
+    "workflow_configuration",
+    "failure_triage",
+}
 
 
 def _parse_iso(value: str) -> datetime:
@@ -63,12 +72,27 @@ def _validate_ledger_row(row: dict[str, str]) -> None:
     assert not row["loss_reason_category"] or row["loss_reason_category"] in LOSS_REASONS
     assert not row["next_action"] or row["next_action"] in NEXT_ACTIONS
     assert not row["retention_evidence"] or row["retention_evidence"] in RETENTION_EVIDENCE
+    assert not row["assistance_category"] or row["assistance_category"] in ASSISTANCE_CATEGORIES
+
+    if row["qualified"]:
+        assert row["qualified_at"]
 
     if row["trial_started_at"]:
         started = _parse_iso(row["trial_started_at"])
-        assert started.date() <= date(2026, 9, 4)
-        if row["day14_due"]:
-            assert _parse_iso(row["day14_due"]).date() == started.date() + timedelta(days=14)
+        assert date(2026, 8, 6) <= started.date() <= date(2026, 9, 4)
+        assert row["qualified"] == "yes"
+        assert row["replied"] == "yes"
+        assert row["trial_id"]
+        assert row["qualified_at"]
+        assert row["contacted_at"]
+        assert row["assistance_category"] in ASSISTANCE_CATEGORIES
+        assert row["day14_due"]
+        assert _parse_iso(row["qualified_at"]).date() <= started.date()
+        assert _parse_iso(row["contacted_at"]).date() <= started.date()
+        assert _parse_iso(row["day14_due"]).date() == started.date() + timedelta(days=14)
+    if row["retention_checked_at"]:
+        assert row["day14_due"]
+        assert _parse_iso(row["retention_checked_at"]).date() >= _parse_iso(row["day14_due"]).date()
     if row["retention_evidence"]:
         assert row["gate_retained_day14"] == "yes"
         assert row["retention_checked_at"]
@@ -86,6 +110,9 @@ def test_30_day_evidence_test_has_decision_contract() -> None:
         "at least one of the two threshold-counting retained gates",
         "2026-08-06 through 2026-09-04",
         "2026-09-18",
+        "Evidence insufficient",
+        "assistance_category",
+        "qualified_at",
         "qualified contact",
         "real-repository trial",
         "useful finding",
@@ -126,10 +153,12 @@ def test_activation_ledger_is_pseudonymous_and_schema_validated() -> None:
         "contact_id",
         "cohort_date",
         "qualified",
+        "qualified_at",
         "contacted_at",
         "replied",
         "trial_id",
         "trial_started_at",
+        "assistance_category",
         "useful_finding_confirmed",
         "day14_due",
         "gate_retained_day14",
@@ -164,16 +193,18 @@ def test_activation_ledger_is_pseudonymous_and_schema_validated() -> None:
     )
 
 
-def test_ledger_validator_accepts_a_filled_closed_schema_row() -> None:
+def _filled_closed_schema_row() -> dict[str, str]:
     sample = dict.fromkeys(
         [
             "contact_id",
             "cohort_date",
             "qualified",
+            "qualified_at",
             "contacted_at",
             "replied",
             "trial_id",
             "trial_started_at",
+            "assistance_category",
             "useful_finding_confirmed",
             "day14_due",
             "gate_retained_day14",
@@ -189,10 +220,12 @@ def test_ledger_validator_accepts_a_filled_closed_schema_row() -> None:
             "contact_id": "C21",
             "cohort_date": "2026-08-20",
             "qualified": "yes",
+            "qualified_at": "2026-08-20T09:00:00Z",
             "contacted_at": "2026-08-20T10:00:00Z",
             "replied": "yes",
             "trial_id": "T06",
             "trial_started_at": "2026-08-20",
+            "assistance_category": "workflow_configuration",
             "useful_finding_confirmed": "yes",
             "day14_due": "2026-09-03",
             "gate_retained_day14": "yes",
@@ -201,4 +234,29 @@ def test_ledger_validator_accepts_a_filled_closed_schema_row() -> None:
             "next_action": "close",
         }
     )
-    _validate_ledger_row(sample)
+    return sample
+
+
+def test_ledger_validator_accepts_a_filled_closed_schema_row() -> None:
+    _validate_ledger_row(_filled_closed_schema_row())
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"assistance_category": "custom_notes"},
+        {"trial_started_at": "2026-08-05", "day14_due": "2026-08-19"},
+        {"contacted_at": "2026-08-21T10:00:00Z"},
+        {"qualified_at": "2026-08-21T09:00:00Z"},
+        {"retention_checked_at": "2026-09-02T10:00:00Z"},
+        {"qualified": "no"},
+        {"trial_id": ""},
+        {"day14_due": ""},
+        {"assistance_category": ""},
+    ],
+)
+def test_ledger_validator_rejects_inconsistent_trial_rows(updates: dict[str, str]) -> None:
+    sample = _filled_closed_schema_row()
+    sample.update(updates)
+    with pytest.raises(AssertionError):
+        _validate_ledger_row(sample)
