@@ -3,8 +3,9 @@
 ## Status and window
 
 - **Status:** proposed operating plan; founder outreach and any live analytics-goal changes require separate approval.
-- **Acquisition window:** 2026-08-06 through 2026-09-04, inclusive.
-- **Final retention read:** 2026-09-18, allowing a full 14-day observation period for a trial that begins on the last acquisition day.
+- **Campaign start:** D0 is the owner-approved campaign start date. No outreach, acquisition clock, or retention clock begins until that date is explicitly authorized.
+- **Acquisition window:** D0 through D0 + 29 days, inclusive (30 calendar days).
+- **Final retention read:** D0 + 43 days, allowing a full 14-day observation period for a trial that begins on the last acquisition day.
 - **Product under test:** the same free, public, MIT-licensed build available to every readtheplan user.
 
 This is an evidence test, not a private product pilot. Setup help may shorten the path to first value, but it does not unlock features, require an account, create a paid tier, or upload infrastructure data.
@@ -18,7 +19,7 @@ Test one claim:
 Success requires all three outcomes:
 
 1. **20 qualified contacts** during the acquisition window.
-2. **5 real-repository trials** started by qualified contacts, with each trial started on or before 2026-09-04.
+2. **5 real-repository trials** started by qualified contacts, with each trial started on or before D0 + 29 days.
 3. **2 gates retained at day 14** after their trial starts.
 
 The test does not use package downloads, clone counts, generic page views, stars, bot traffic, or unqualified clicks as evidence of adoption.
@@ -39,7 +40,7 @@ A scraped profile, bulk message recipient, anonymous visitor, package download, 
 
 ### real-repository trial
 
-A trial counts when a qualified contact runs readtheplan against Terraform/OpenTofu plan JSON generated from a non-demo repository, reaches a `proceed`, `warn`, or `block` decision, and starts on or before 2026-09-04. A bundled example can teach the workflow but cannot satisfy this definition.
+A trial counts when a qualified contact runs readtheplan against Terraform/OpenTofu plan JSON generated from a non-demo repository, reaches a `proceed`, `warn`, or `block` decision, and starts on or before D0 + 29 days. A bundled example can teach the workflow but cannot satisfy this definition.
 
 The user generates the plan. readtheplan does not run Terraform, refresh state, contact providers, merge, or apply. The founder never needs a copy of the plan or repository.
 
@@ -71,8 +72,10 @@ For the success threshold, at least one threshold-counting retained gate must be
 - The product remains local and account-free.
 - Do not request or store plans, state, HCL, repository contents, repository names, URLs, credentials, screenshots containing infrastructure details, filenames, resource addresses, or command output.
 - Contact coordinates stay in the founder's existing address book or communication tool, not in this repository.
-- The shared ledger starts with opaque `C01`–`C20` and optional `T01`–`T05` identifiers only; extend the ledger with `C21` and later sequential opaque IDs when more prospective contacts are needed.
-- Do not put names, handles, emails, employers, repository identifiers, or free-form infrastructure notes in the ledger.
+- The tracked `activation-ledger.csv` is a blank template only. Never enter participant-level data into the tracked file.
+- Before D0, copy the template outside the repository into a private, access-restricted operational copy available only to the founder or explicitly authorized operator running the test. The populated copy stays private: never commit or share a populated ledger, attach it to a PR or handoff, or place it in a shared notes vault.
+- Opaque `C01`–`C20` and optional `T01`–`T05` identifiers are pseudonymous, not anonymous. Keep the identity mapping only in the existing communication tool; extend the ledger with `C21` and later sequential opaque IDs when more prospective contacts are needed.
+- Do not put names, handles, emails, employers, repository identifiers, or free-form infrastructure notes in either ledger. Publish only aggregate campaign readouts, never participant-level rows.
 - Setup help uses text chat and participant-run terminal commands only; do not request or accept screen sharing, especially any view containing plan or command output.
 - Stop immediately if a participant asks to stop or if continuing would require access to private infrastructure data.
 
@@ -148,7 +151,7 @@ Ask only what is needed to qualify the workflow:
 
 ## Ledger instructions
 
-`activation-ledger.csv` starts with 20 opaque contact IDs and is extendable sequentially when prospective contacts do not qualify. Allowed values:
+The tracked `activation-ledger.csv` starts with 20 opaque contact IDs and must remain an unpopulated template. The following instructions apply only to its private operational copy, which is extendable sequentially when prospective contacts do not qualify. Allowed values:
 
 - booleans: `yes`, `no`, or blank;
 - timestamps and dates: ISO 8601;
@@ -172,9 +175,9 @@ Closed loss-reason categories:
 - `privacy_concern`
 - `unknown`
 
-`cohort_date` is the scheduled first-outreach date. Record `contacted_at` on or after that date, then record `qualified_at` on or after contact whenever `qualified` is recorded. Every started trial must have `qualified=yes`, `replied=yes`, an opaque `trial_id`, an `assistance_category`, and `day14_due`. Trial-only outcome and retention fields remain blank until `trial_started_at` is set. `trial_started_at` must be from 2026-08-06 through 2026-09-04; `qualified_at` and `contacted_at` must be no later than the trial start; `day14_due` is exactly 14 days later; and `retention_checked_at` must be on or after that due date and no later than 2026-09-18.
+`cohort_date` is the scheduled first-outreach date. The earliest nonblank `cohort_date` in the private operational copy must equal D0. Record `contacted_at` on or after that date, then record `qualified_at` on or after contact whenever `qualified` is recorded. Every started trial must have `qualified=yes`, `replied=yes`, an opaque `trial_id`, an `assistance_category`, and `day14_due`. Trial-only outcome and retention fields remain blank until `trial_started_at` is set. `trial_started_at` must be from D0 through D0 + 29 days; `qualified_at` and `contacted_at` must be no later than the trial start; `day14_due` is exactly 14 days later; and `retention_checked_at` must be on or after that due date and no later than D0 + 43 days.
 
-Do not add free-form notes to the shared ledger. `assistance_category` records only whether the founder provided no help, an install command, workflow-configuration help, or failure triage; it never records commands, errors, screenshots, or infrastructure details. Keep consented contact logistics in the communication tool where the relationship already exists.
+Do not add free-form notes to the private operational copy. `assistance_category` records only whether the founder provided no help, an install command, workflow-configuration help, or failure triage; it never records commands, errors, screenshots, or infrastructure details. Keep consented contact logistics in the communication tool where the relationship already exists.
 
 A blank `gate_retained_day14` at the final read counts as not retained. Set `retention_checked_at` only when a day-14 check actually completed. Use `confirmation` for the categorical user answer; use `data_free_workflow_description` only when the participant also described the enabled trigger, command, and blocking condition without sharing repository or infrastructure data.
 
@@ -207,7 +210,7 @@ The final report must carry these limitations forward and add any observed sampl
 
 ## Decision rules
 
-At the final retention read:
+At the final retention read on D0 + 43 days:
 
 - **Continue the wedge:** all three thresholds are met, at least one retained gate has `data_free_workflow_description` evidence, and the final limitations field is complete. Keep the focused Terraform/OpenTofu journey and run another bounded cohort before expanding scope.
 - **Distribution inconclusive:** fewer than 20 qualified contacts were reached. Do not claim the pain was disproved; fix access to the target audience and rerun the same test.
@@ -221,8 +224,9 @@ One request for an unsupported adapter is not evidence to expand the homepage. O
 ## Final report template
 
 ```text
-Acquisition window: 2026-08-06 through 2026-09-04
-Retention read complete: 2026-09-18
+Owner-approved campaign start (D0): __
+Acquisition window: D0 through D0 + 29 days
+Retention read complete (D0 + 43 days): __
 Qualified contacts: __ / 20
 Real-repository trials: __ / 5
 Useful findings confirmed: __

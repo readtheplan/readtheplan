@@ -55,6 +55,7 @@ ASSISTANCE_CATEGORIES = {
     "workflow_configuration",
     "failure_triage",
 }
+SAMPLE_CAMPAIGN_START = date(2030, 1, 1)
 
 
 def _parse_iso(value: str) -> datetime:
@@ -68,7 +69,9 @@ def _parse_instant(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _validate_ledger_row(row: dict[str, str]) -> None:
+def _validate_ledger_row(
+    row: dict[str, str], *, campaign_start: date | None = None
+) -> None:
     assert re.fullmatch(r"C\d{2,}", row["contact_id"])
     for field in BOOLEAN_FIELDS:
         assert row[field] in {"", "yes", "no"}
@@ -105,7 +108,8 @@ def _validate_ledger_row(row: dict[str, str]) -> None:
 
     if row["trial_started_at"]:
         started = _parse_iso(row["trial_started_at"])
-        assert date(2026, 8, 6) <= started.date() <= date(2026, 9, 4)
+        assert campaign_start is not None, "owner-approved campaign start is required"
+        assert campaign_start <= started.date() <= campaign_start + timedelta(days=29)
         assert row["qualified"] == "yes"
         assert row["replied"] == "yes"
         assert row["trial_id"]
@@ -117,9 +121,10 @@ def _validate_ledger_row(row: dict[str, str]) -> None:
         assert _parse_iso(row["contacted_at"]).date() <= started.date()
         assert _parse_iso(row["day14_due"]).date() == started.date() + timedelta(days=14)
     if row["retention_checked_at"]:
+        assert campaign_start is not None, "owner-approved campaign start is required"
         assert row["day14_due"]
         assert _parse_iso(row["retention_checked_at"]).date() >= _parse_iso(row["day14_due"]).date()
-        assert _parse_iso(row["retention_checked_at"]).date() <= date(2026, 9, 18)
+        assert _parse_iso(row["retention_checked_at"]).date() <= campaign_start + timedelta(days=43)
     if row["retention_evidence"]:
         assert row["gate_retained_day14"] == "yes"
         assert row["retention_checked_at"]
@@ -132,16 +137,20 @@ def test_30_day_evidence_test_has_decision_contract() -> None:
     required_fragments = [
         "20 qualified contacts",
         "5 real-repository trials",
-        "started on or before 2026-09-04",
+        "started on or before D0 + 29 days",
         "2 gates retained at day 14",
         "at least one threshold-counting retained gate",
-        "2026-08-06 through 2026-09-04",
-        "2026-09-18",
+        "D0 through D0 + 29 days",
+        "D0 + 43 days",
+        "D0 is the owner-approved campaign start date",
+        "blank template only",
+        "private, access-restricted operational copy",
+        "never commit or share a populated ledger",
         "Evidence insufficient",
         "assistance_category",
         "qualified_at",
         "cohort_date is the scheduled first-outreach date",
-        "no later than 2026-09-18",
+        "no later than D0 + 43 days",
         "qualified contact",
         "real-repository trial",
         "useful finding",
@@ -165,6 +174,9 @@ def test_30_day_evidence_test_has_decision_contract() -> None:
     assert not missing, f"missing decision-contract clauses: {missing}"
 
     for prohibited in [
+        "2026-08-06",
+        "2026-09-04",
+        "2026-09-18",
         "monthly PyPI downloads prove",
         "upload the plan",
         "private feature access",
@@ -203,6 +215,9 @@ def test_activation_ledger_is_pseudonymous_and_schema_validated() -> None:
     ]
     for row in rows:
         _validate_ledger_row(row)
+        assert all(
+            value == "" for field, value in row.items() if field != "contact_id"
+        ), "tracked activation-ledger.csv must remain a blank template"
 
     forbidden_header_fragments = {
         "email",
@@ -247,18 +262,18 @@ def _filled_closed_schema_row() -> dict[str, str]:
     sample.update(
         {
             "contact_id": "C21",
-            "cohort_date": "2026-08-20",
+            "cohort_date": "2030-01-15",
             "qualified": "yes",
-            "qualified_at": "2026-08-20T10:00:00Z",
-            "contacted_at": "2026-08-20T09:00:00Z",
+            "qualified_at": "2030-01-15T10:00:00Z",
+            "contacted_at": "2030-01-15T09:00:00Z",
             "replied": "yes",
             "trial_id": "T06",
-            "trial_started_at": "2026-08-20",
+            "trial_started_at": "2030-01-15",
             "assistance_category": "workflow_configuration",
             "useful_finding_confirmed": "yes",
-            "day14_due": "2026-09-03",
+            "day14_due": "2030-01-29",
             "gate_retained_day14": "yes",
-            "retention_checked_at": "2026-09-03T10:00:00Z",
+            "retention_checked_at": "2030-01-29T10:00:00Z",
             "retention_evidence": "data_free_workflow_description",
             "next_action": "close",
         }
@@ -267,30 +282,38 @@ def _filled_closed_schema_row() -> dict[str, str]:
 
 
 def test_ledger_validator_accepts_a_filled_closed_schema_row() -> None:
-    _validate_ledger_row(_filled_closed_schema_row())
+    _validate_ledger_row(
+        _filled_closed_schema_row(), campaign_start=SAMPLE_CAMPAIGN_START
+    )
+
+
+def test_ledger_validator_rejects_trial_without_owner_approved_campaign_start() -> None:
+    with pytest.raises(AssertionError, match="campaign start"):
+        _validate_ledger_row(_filled_closed_schema_row(), campaign_start=None)
 
 
 @pytest.mark.parametrize(
     "updates",
     [
         {"assistance_category": "custom_notes"},
-        {"trial_started_at": "2026-08-05", "day14_due": "2026-08-19"},
-        {"contacted_at": "2026-08-21T10:00:00Z"},
-        {"qualified_at": "2026-08-21T09:00:00Z"},
-        {"retention_checked_at": "2026-09-02T10:00:00Z"},
+        {"trial_started_at": "2029-12-31", "day14_due": "2030-01-14"},
+        {"trial_started_at": "2030-01-31", "day14_due": "2030-02-14"},
+        {"contacted_at": "2030-01-16T10:00:00Z"},
+        {"qualified_at": "2030-01-16T09:00:00Z"},
+        {"retention_checked_at": "2030-01-28T10:00:00Z"},
         {"qualified": "no"},
         {"trial_id": ""},
         {"day14_due": ""},
         {"assistance_category": ""},
         {"trial_started_at": ""},
-        {"retention_checked_at": "2026-09-19T10:00:00Z"},
+        {"retention_checked_at": "2030-02-14T10:00:00Z"},
         {"cohort_date": ""},
-        {"contacted_at": "2026-08-19T09:00:00Z"},
-        {"qualified_at": "2026-08-20T08:00:00Z"},
+        {"contacted_at": "2030-01-14T09:00:00Z"},
+        {"qualified_at": "2030-01-15T08:00:00Z"},
     ],
 )
 def test_ledger_validator_rejects_inconsistent_trial_rows(updates: dict[str, str]) -> None:
     sample = _filled_closed_schema_row()
     sample.update(updates)
     with pytest.raises(AssertionError):
-        _validate_ledger_row(sample)
+        _validate_ledger_row(sample, campaign_start=SAMPLE_CAMPAIGN_START)
