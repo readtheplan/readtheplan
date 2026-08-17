@@ -56,3 +56,48 @@ jobs:
 
       - name: Run pytest
         run: pytest
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image from checked-out source
+        run: docker build --tag readtheplan:ci .
+
+      - name: Verify source provenance and non-root runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_package_sha="$(python3 scripts/hash_package_tree.py src/readtheplan)"
+          actual_package_sha="$(
+            docker run --rm --entrypoint python \
+              --mount \
+                type=bind,source="$PWD/scripts/hash_package_tree.py",target=/verify_package.py,readonly \
+              readtheplan:ci /verify_package.py
+          )"
+          test "$actual_package_sha" = "$expected_package_sha"
+
+          test "$(docker image inspect --format '{{.Config.User}}' readtheplan:ci)" = \
+            "10001:10001"
+          test "$(docker run --rm --entrypoint python readtheplan:ci -c \
+            'import os; print(os.getuid())')" = "10001"
+
+          docker run --rm --entrypoint python readtheplan:ci -m pip check
+          docker run --rm readtheplan:ci --version
+          docker run --rm readtheplan:ci >/dev/null
+
+      - name: Analyze a plan without network or persistent writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --mount \
+              type=bind,source="$PWD/tests/fixtures/valid_plan.json",target=/workspace/plan.json,readonly \
+            readtheplan:ci analyze plan.json
