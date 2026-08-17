@@ -1854,6 +1854,26 @@ def test_agent_gate_project_canonicalizes_private_snapshot_ancestor(
 
     monkeypatch.setattr(mcp_server_module, "tempfile", TempfileProxy())
 
+    def analyze_snapshot(item, *, framework):
+        assert framework is None
+        assert item.path.is_file()
+        return {
+            "adapter": "dockerfile",
+            "decision": "proceed",
+            "risk": "safe",
+            "risk_counts": {
+                "safe": 1,
+                "review": 0,
+                "dangerous": 0,
+                "irreversible": 0,
+            },
+            "total_changes": 1,
+            "required_checks": [],
+            "reason": "Canonical private snapshot analyzed.",
+        }
+
+    monkeypatch.setattr("readtheplan.project_scan._analyze_input", analyze_snapshot)
+
     result = agent_gate_project(str(project))
 
     assert result["scanned_file_count"] == 1
