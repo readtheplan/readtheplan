@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
+import readtheplan.mcp_server as mcp_server_module
 from readtheplan.cli import _build_parser, main
 from readtheplan.mcp_server import (
     MCPToolInputError,
@@ -1815,6 +1816,50 @@ def test_agent_gate_project_analyzes_only_isolated_snapshot_paths(
     assert analyzed_paths[0] != original
     assert not analyzed_paths[0].is_relative_to(root)
     assert not analyzed_paths[0].exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX directory symlinks")
+def test_agent_gate_project_canonicalizes_private_snapshot_ancestor(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    canonical_tmp = tmp_path.resolve(strict=True)
+    root = canonical_tmp / "root"
+    project = root / "project"
+    project.mkdir(parents=True)
+    (project / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    outside = canonical_tmp / "outside.tf"
+    outside.write_text("resource {}\n", encoding="utf-8")
+    (project / "linked.tf").symlink_to(outside)
+    monkeypatch.setenv("MCP_ROOT", str(root))
+
+    private_root = canonical_tmp / "private-snapshot"
+    symlinked_root = canonical_tmp / "var-like-snapshot"
+
+    class SymlinkedTemporaryDirectory:
+        def __enter__(self) -> str:
+            private_root.mkdir()
+            symlinked_root.symlink_to(private_root, target_is_directory=True)
+            return str(symlinked_root)
+
+        def __exit__(self, *args: object) -> None:
+            symlinked_root.unlink()
+            shutil.rmtree(private_root)
+
+    class TempfileProxy:
+        @staticmethod
+        def TemporaryDirectory(*, prefix: str) -> SymlinkedTemporaryDirectory:
+            assert prefix == "readtheplan-mcp-scan-"
+            return SymlinkedTemporaryDirectory()
+
+    monkeypatch.setattr(mcp_server_module, "tempfile", TempfileProxy())
+
+    result = agent_gate_project(str(project))
+
+    assert result["scanned_file_count"] == 1
+    assert result["files"][0]["path"] == "Dockerfile"
+    assert result["files"][0]["decision"] == "proceed"
+    assert all(item["path"] != "linked.tf" for item in result["files"])
 
 
 def test_agent_gate_project_honors_excludes_and_default_dependency_skips(

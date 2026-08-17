@@ -3,13 +3,16 @@ from __future__ import annotations
 import fnmatch
 import io
 import json
+import ntpath
 import os
 import re
+import stat
+import tempfile
 from collections import Counter
 from collections.abc import Sequence
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from readtheplan.adapters.ansible_code import ansible_code_metadata
@@ -56,6 +59,18 @@ _SYSTEMD_SUFFIXES = (
     ".swap",
 )
 _YAML_SUFFIXES = (".yaml", ".yml")
+_CONTENT_IDENTIFICATION_SUFFIXES = (*_YAML_SUFFIXES, ".json", ".env", ".ini")
+_CONTENT_IDENTIFICATION_BYTES = 256 * 1024
+_METADATA_IDENTIFICATION_BYTES = 4096
+_POSIX_OPEN_SUPPORTS_DIR_FD = os.open in os.supports_dir_fd
+_POSIX_STAT_SUPPORTS_DIR_FD = os.stat in os.supports_dir_fd
+_POSIX_STAT_SUPPORTS_NOFOLLOW = os.stat in os.supports_follow_symlinks
+_WINDOWS_INVALID_FILENAME_CHARACTERS = frozenset('<>:"\\|?*')
+_WINDOWS_RESERVED_FILENAMES = frozenset(
+    {"aux", "clock$", "con", "conin$", "conout$", "nul", "prn"}
+    | {f"com{suffix}" for suffix in (*range(1, 10), "¹", "²", "³")}
+    | {f"lpt{suffix}" for suffix in (*range(1, 10), "¹", "²", "³")}
+)
 _CONFIG_BASENAME_SOURCE_SUFFIXES = frozenset(
     {
         ".c",
@@ -182,13 +197,26 @@ def discover_project_inputs(
         relative = path.relative_to(scan_root).as_posix()
         if _excluded(relative, excludes):
             continue
-        tool = identify_project_input(path, relative)
-        if tool is None:
-            continue
         try:
             size = path.stat().st_size
         except OSError:
             size = -1
+        tool = identify_project_input(path, relative, inspect_content=False)
+        content_limit = _content_identification_limit(path, relative)
+        if tool is None and size >= 0 and content_limit is not None:
+            try:
+                content = _read_prefix(path, content_limit)
+            except OSError:
+                content = None
+            if content is not None:
+                tool = identify_project_input(
+                    path,
+                    relative,
+                    content=content,
+                    inspect_content=False,
+                )
+        if tool is None:
+            continue
         discovered.append(
             DiscoveredInput(
                 path=path,
@@ -283,12 +311,14 @@ def identify_project_input(
         implementation_source = ""
         if content is not None:
             try:
-                implementation_source = content[:4096].decode("utf-8")
+                implementation_source = content[:_METADATA_IDENTIFICATION_BYTES].decode("utf-8")
             except UnicodeDecodeError:
                 implementation_source = ""
         elif not suffix and inspect_content:
             try:
-                implementation_source = path.read_bytes()[:4096].decode("utf-8")
+                implementation_source = _read_prefix(path, _METADATA_IDENTIFICATION_BYTES).decode(
+                    "utf-8"
+                )
             except (OSError, UnicodeDecodeError):
                 implementation_source = ""
         if bolt_task_implementation_language(relative_path, implementation_source):
@@ -301,12 +331,14 @@ def identify_project_input(
     if "facts.d" in parts[:-1] and puppet_external_fact_metadata(relative_path) is None:
         if content is not None:
             try:
-                external_fact_source = content[:4096].decode("utf-8")
+                external_fact_source = content[:_METADATA_IDENTIFICATION_BYTES].decode("utf-8")
             except UnicodeDecodeError:
                 external_fact_source = ""
         elif inspect_content:
             try:
-                external_fact_source = path.read_bytes()[:4096].decode("utf-8")
+                external_fact_source = _read_prefix(path, _METADATA_IDENTIFICATION_BYTES).decode(
+                    "utf-8"
+                )
             except (OSError, UnicodeDecodeError):
                 external_fact_source = ""
     if puppet_external_fact_metadata(relative_path, external_fact_source) is not None:
@@ -521,12 +553,12 @@ def identify_project_input(
         source = ""
         if content is not None:
             try:
-                source = content[:4096].decode("utf-8")
+                source = content[:_METADATA_IDENTIFICATION_BYTES].decode("utf-8")
             except UnicodeDecodeError:
                 source = ""
         elif inspect_content:
             try:
-                source = path.read_bytes()[:4096].decode("utf-8")
+                source = _read_prefix(path, _METADATA_IDENTIFICATION_BYTES).decode("utf-8")
             except (OSError, UnicodeDecodeError):
                 source = ""
         if _CHEF_OHAI_PLUGIN_HINT.search(source):
@@ -713,6 +745,22 @@ def identify_project_input(
     return None
 
 
+def _content_identification_limit(path: Path, relative_path: str) -> int | None:
+    """Return the bounded prefix size needed for content-only identification."""
+    relative = PurePosixPath(relative_path)
+    suffix = path.suffix.casefold()
+    parts = tuple(part.casefold() for part in relative.parts)
+    if suffix in _CONTENT_IDENTIFICATION_SUFFIXES:
+        return _CONTENT_IDENTIFICATION_BYTES
+    if suffix == ".rb":
+        return _METADATA_IDENTIFICATION_BYTES
+    if "facts.d" in parts[:-1] and puppet_external_fact_metadata(relative_path) is None:
+        return _METADATA_IDENTIFICATION_BYTES
+    if not suffix and "tasks" in parts[:-1] and _bolt_content_context(path, parts, "tasks"):
+        return _METADATA_IDENTIFICATION_BYTES
+    return None
+
+
 def _named_config_variant(name: str, suffix: str, *basenames: str) -> bool:
     """Recognize extensionless config basenames without matching similarly named source code."""
     for basename in basenames:
@@ -726,13 +774,198 @@ def _named_config_variant(name: str, suffix: str, *basenames: str) -> bool:
 
 
 def _identify_from_content(path: Path, suffix: str) -> str | None:
-    if suffix not in (*_YAML_SUFFIXES, ".json", ".env", ".ini"):
+    if suffix not in _CONTENT_IDENTIFICATION_SUFFIXES:
         return None
     try:
-        raw = path.read_bytes()[: 256 * 1024]
+        raw = _read_prefix(path, _CONTENT_IDENTIFICATION_BYTES)
     except OSError:
         return None
     return _identify_from_content_bytes(raw, suffix)
+
+
+def _read_prefix(path: Path, max_bytes: int) -> bytes:
+    """Securely read at most ``max_bytes`` from one stable regular file."""
+    before = os.lstat(path)
+    if not stat.S_ISREG(before.st_mode):
+        raise OSError("project input is not a regular file")
+
+    if os.name == "nt":
+        descriptor = _open_windows_input(path, before)
+    else:
+        descriptor = _open_posix_input(path, before)
+    try:
+        chunks: list[bytes] = []
+        remaining = max_bytes
+        while remaining > 0:
+            chunk = os.read(descriptor, min(remaining, 64 * 1024))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def _input_open_flags(*, directory: bool = False) -> int:
+    """Return non-following, nonblocking descriptor flags for project inputs."""
+    flags = os.O_RDONLY
+    for flag_name in (
+        "O_BINARY",
+        "O_CLOEXEC",
+        "O_NOINHERIT",
+        "O_NOFOLLOW",
+        "O_NONBLOCK",
+    ):
+        flags |= getattr(os, flag_name, 0)
+    if directory:
+        flags |= getattr(os, "O_DIRECTORY", 0)
+    return flags
+
+
+def _open_windows_input(path: Path, before: os.stat_result) -> int:
+    """Open and verify one stable regular input with a Windows file handle."""
+    descriptor = os.open(path, _input_open_flags())
+    try:
+        opened = os.fstat(descriptor)
+        after = os.lstat(path)
+        opened_path = _windows_final_path_from_descriptor(descriptor)
+        intended_path = os.path.abspath(path)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or not stat.S_ISREG(after.st_mode)
+            or not _same_file_identity(before, opened)
+            or not _same_file_identity(opened, after)
+            or opened_path is None
+            or _normalize_windows_path_for_comparison(opened_path)
+            != _normalize_windows_path_for_comparison(intended_path)
+        ):
+            raise OSError("project input changed while it was opened")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_posix_input(path: Path, before: os.stat_result) -> int:
+    """Open a POSIX path component-by-component without following symlinks."""
+    if (
+        not getattr(os, "O_DIRECTORY", 0)
+        or not getattr(os, "O_NOFOLLOW", 0)
+        or not _POSIX_OPEN_SUPPORTS_DIR_FD
+        or not _POSIX_STAT_SUPPORTS_DIR_FD
+        or not _POSIX_STAT_SUPPORTS_NOFOLLOW
+    ):
+        raise OSError("secure project input opening is unsupported")
+
+    absolute_path = PurePosixPath(os.path.abspath(path))
+    components = absolute_path.parts[1:]
+    if not absolute_path.is_absolute() or not components:
+        raise OSError("project input path is invalid")
+
+    directory_descriptor = os.open(absolute_path.anchor, _input_open_flags(directory=True))
+    descriptor = -1
+    try:
+        for component in components[:-1]:
+            next_descriptor = os.open(
+                component,
+                _input_open_flags(directory=True),
+                dir_fd=directory_descriptor,
+            )
+            try:
+                if not stat.S_ISDIR(os.fstat(next_descriptor).st_mode):
+                    raise OSError("project input ancestor is not a directory")
+            except BaseException:
+                os.close(next_descriptor)
+                raise
+            os.close(directory_descriptor)
+            directory_descriptor = next_descriptor
+
+        final_component = components[-1]
+        descriptor = os.open(
+            final_component,
+            _input_open_flags(),
+            dir_fd=directory_descriptor,
+        )
+        opened = os.fstat(descriptor)
+        entry_after = os.stat(
+            final_component,
+            dir_fd=directory_descriptor,
+            follow_symlinks=False,
+        )
+        path_after = os.lstat(path)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or not stat.S_ISREG(entry_after.st_mode)
+            or not stat.S_ISREG(path_after.st_mode)
+            or not _same_file_identity(before, opened)
+            or not _same_file_identity(opened, entry_after)
+            or not _same_file_identity(opened, path_after)
+        ):
+            raise OSError("project input changed while it was opened")
+        return descriptor
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        raise
+    finally:
+        os.close(directory_descriptor)
+
+
+def _windows_final_path_from_descriptor(descriptor: int) -> str | None:
+    """Return the raw final Windows path opened by ``descriptor``."""
+    try:
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        get_final_path = ctypes.WinDLL(
+            "kernel32", use_last_error=True
+        ).GetFinalPathNameByHandleW
+        get_final_path.argtypes = [
+            wintypes.HANDLE,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+        ]
+        get_final_path.restype = wintypes.DWORD
+        handle = msvcrt.get_osfhandle(descriptor)
+        size = get_final_path(handle, None, 0, 0)
+        if size == 0:
+            return None
+        buffer = ctypes.create_unicode_buffer(size + 1)
+        written = get_final_path(handle, buffer, len(buffer), 0)
+        if written == 0 or written >= len(buffer):
+            return None
+        return buffer.value
+    except (AttributeError, ImportError, OSError, OverflowError, TypeError, ValueError):
+        return None
+
+
+def _normalize_windows_path_for_comparison(path: str | os.PathLike[str]) -> str:
+    """Normalize DOS and UNC extended syntax without corrupting volume paths."""
+    value = os.fspath(path)
+    folded = value.casefold()
+    if folded.startswith("\\\\?\\unc\\"):
+        value = "\\\\" + value[8:]
+    elif (
+        folded.startswith("\\\\?\\")
+        and len(value) >= 7
+        and value[4].isalpha()
+        and value[5] == ":"
+        and value[6] in "\\/"
+    ):
+        value = value[4:]
+    return ntpath.normcase(ntpath.normpath(value))
+
+
+def _same_file_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    """Compare strong file identities and fail closed when either inode is unavailable."""
+    return (
+        left.st_ino != 0
+        and right.st_ino != 0
+        and (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+    )
 
 
 def _looks_like_ansible_inventory_yaml(text: str) -> bool:
@@ -1030,18 +1263,73 @@ def scan_discovered_inputs(
         raise ProjectScanError("max_file_bytes must be at least 1")
     results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
-    for item in discovered:
-        if item.size < 0:
-            errors.append(_scan_error(item, "unreadable"))
-            continue
-        if item.size > max_file_bytes:
-            errors.append(_scan_error(item, "file-too-large"))
-            continue
-        payload = _analyze_input(item, framework=framework)
-        if payload is None:
-            errors.append(_scan_error(item, "analysis-failed"))
-            continue
-        results.append(_file_result(item, payload))
+    try:
+        with ExitStack() as cleanup:
+            snapshot_root: Path | None = None
+            snapshot_paths: set[str] = set()
+            for item in discovered:
+                if item.size < 0:
+                    errors.append(_scan_error(item, "unreadable"))
+                    continue
+                if item.size > max_file_bytes:
+                    errors.append(_scan_error(item, "file-too-large"))
+                    continue
+                relative_parts = _snapshot_relative_parts(item.relative_path)
+                if relative_parts is None:
+                    errors.append(_scan_error(item, "unreadable"))
+                    continue
+                snapshot_key = os.path.normcase(os.path.join(*relative_parts))
+                if snapshot_key in snapshot_paths:
+                    errors.append(_scan_error(item, "unreadable"))
+                    continue
+                try:
+                    source = _read_prefix(item.path, max_file_bytes + 1)
+                except OSError:
+                    source = None
+                if source is None:
+                    errors.append(_scan_error(item, "unreadable"))
+                    continue
+                if len(source) > max_file_bytes:
+                    errors.append(_scan_error(item, "file-too-large"))
+                    continue
+                if snapshot_root is None:
+                    temporary = cleanup.enter_context(
+                        tempfile.TemporaryDirectory(prefix="readtheplan-project-scan-")
+                    )
+                    snapshot_root = Path(temporary)
+                snapshot_path = snapshot_root.joinpath(*relative_parts)
+                try:
+                    snapshot_path.relative_to(snapshot_root)
+                except ValueError:
+                    errors.append(_scan_error(item, "unreadable"))
+                    continue
+                try:
+                    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                    snapshot_path.write_bytes(source)
+                except OSError:
+                    snapshot_path.unlink(missing_ok=True)
+                    errors.append(_scan_error(item, "unreadable"))
+                    continue
+                snapshot_paths.add(snapshot_key)
+                snapshot = DiscoveredInput(
+                    path=snapshot_path,
+                    relative_path=item.relative_path,
+                    tool=item.tool,
+                    size=len(source),
+                )
+                del source
+                try:
+                    payload = _analyze_input(snapshot, framework=framework)
+                finally:
+                    snapshot_path.unlink()
+                if payload is None:
+                    errors.append(_scan_error(item, "analysis-failed"))
+                    continue
+                results.append(_file_result(item, payload))
+    except OSError as exc:
+        raise ProjectScanError(
+            "project scan temporary snapshot could not be created or cleaned up"
+        ) from exc
     return aggregate_project_scan(
         display_root=display_root,
         discovered=discovered,
@@ -1049,6 +1337,39 @@ def scan_discovered_inputs(
         errors=errors,
         framework=framework,
     )
+
+
+def _snapshot_relative_parts(relative_path: str) -> tuple[str, ...] | None:
+    """Validate one trusted project-relative path before placing it in a snapshot."""
+    relative = PurePosixPath(relative_path)
+    if not relative.parts or relative.is_absolute() or any(
+        part == ".." for part in relative.parts
+    ):
+        return None
+    if os.name == "nt":
+        windows = PureWindowsPath(*relative.parts)
+        if (
+            "\\" in relative_path
+            or windows.drive
+            or windows.root
+            or any(not _safe_windows_filename_component(part) for part in relative.parts)
+        ):
+            return None
+    return relative.parts
+
+
+def _safe_windows_filename_component(component: str) -> bool:
+    """Return whether one snapshot component is portable to Windows without aliases/ADS."""
+    if (
+        component.endswith((" ", "."))
+        or any(
+            ord(character) < 32 or character in _WINDOWS_INVALID_FILENAME_CHARACTERS
+            for character in component
+        )
+    ):
+        return False
+    basename = component.split(".", 1)[0].rstrip(" .").casefold()
+    return basename not in _WINDOWS_RESERVED_FILENAMES
 
 
 def _analyze_input(item: DiscoveredInput, *, framework: str | None) -> dict[str, Any] | None:
