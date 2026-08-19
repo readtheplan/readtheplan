@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-06
+
 ### Changed
 - Project auto-discovery now routes content-identified Crossplane, AWS SAM, Serverless Framework,
   Jenkins JCasC, Pulumi preview, Azure What-If, and Carvel ytt/vendir/kbld/imgpkg/kapp inputs to
@@ -13,7 +15,24 @@
 - Self-improving evolution analysis now stays local and deterministic;
   candidate generation never spawns external model tooling.
 
+### Fixed
+- Compliance inventory and evidence now report truthful coverage semantics by distinguishing
+  unique framework control IDs, resource/action mapping rows, and generic heuristic baselines.
+  Historical mapping-count aliases and the complete v1 annotation union remain compatible.
+- InSpec control scanning and project inventory discovery now run in linear time on large inputs
+  instead of repeatedly rescanning previously inspected content.
+
+### Security
+- Kubernetes and evolution boundaries now fail closed on malformed or ambiguous Kubernetes inputs,
+  quarantine invalid evolution identities and legacy broad rules, and serialize and validate
+  approved rule activation.
+- Every external GitHub Actions dependency in existing workflows is pinned to full commit SHAs,
+  with a repository-wide regression test that rejects mutable references.
+
 ### Added
+- A first-party delivery-configuration scan non-regression gate now dogfoods readtheplan with
+  bounded exclusions, exact scan evidence, a zero parser-error ceiling, and reviewed risk-count
+  and coverage baselines that fail closed on regressions.
 - Jenkinsfile credential-interpolation analysis across the CLI, GitHub Action, project scan, and
   MCP. A non-executing Groovy lexical pass now distinguishes code from comments and string
   contents, tracks declarative and `withCredentials` environment bindings, and reports managed

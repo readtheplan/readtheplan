@@ -34,7 +34,7 @@ Its broad built-in adapter catalog also analyzes cloud deployment outputs, Kuber
 
 ### Free surfaces
 1. **CLI** — Free, MIT licensed. \`pip install readtheplan\`. Run locally or in CI. Python 3.10+.
-2. **GitHub Action** — Free. \`uses: readtheplan/readtheplan@v0.4.0\`. Adds risk reports to PRs.
+2. **GitHub Action** — Free. \`uses: readtheplan/readtheplan@v0.5.0\`. Adds risk reports to PRs.
 3. **MCP and agent gates** — Free local tools for coding-agent and infrastructure review workflows.
 4. **Evidence and compliance** — Signed evidence, custom rules, and all six compliance catalogs are free.
 
@@ -76,7 +76,7 @@ readtheplan analyze plan.json
 
 ## GitHub Action
 \`\`\`yaml
-- uses: readtheplan/readtheplan@v0.4.0
+- uses: readtheplan/readtheplan@v0.5.0
   with:
     input-file: plan.json
 \`\`\`

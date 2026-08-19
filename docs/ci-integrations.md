@@ -12,7 +12,7 @@ risk level that should fail the job:
 ```bash
 terraform plan -out=tfplan -input=false
 terraform show -json tfplan > plan.json
-python -m pip install "readtheplan==0.4.0"
+python -m pip install "readtheplan==0.5.0"
 readtheplan analyze --fail-on dangerous plan.json
 ```
 

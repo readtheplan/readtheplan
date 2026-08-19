@@ -437,7 +437,7 @@ const health = await read("functions/health.js");
 const dataIndex = JSON.parse(await read("data/index.json"));
 const conversion = await read("scripts/convert_data.py");
 assert.match(health, /version = idx\.version \|\| null/);
-assert.equal(dataIndex.version, "0.4.0");
+assert.equal(dataIndex.version, "0.5.0");
 assert.match(conversion, /"version": project_version\(\)/);
 let mappingTotal = 0;
 let uniqueControlTotal = 0;
