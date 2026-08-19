@@ -135,6 +135,8 @@ def parse_cdk_manifest(source: str) -> dict[str, Any]:
         document = json.loads(source, object_pairs_hook=_unique_object)
     except CdkInputError:
         raise
+    except RecursionError as exc:
+        raise CdkInputError("input contains deeply nested JSON") from exc
     except json.JSONDecodeError as exc:
         raise CdkInputError(str(exc)) from exc
     if not isinstance(document, dict):

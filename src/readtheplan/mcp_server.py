@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import fnmatch
 import os
+import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -119,12 +120,20 @@ def _final_path_from_descriptor(descriptor: int) -> Path | None:
         return None
 
 
+_MCP_SINGLE_FILE_MAX_BYTES = 100 * 1024 * 1024
+
+
 def _read_confined_bytes(path: str, *, max_bytes: int | None = None) -> bytes:
-    """Open *path* once and verify the opened object remains inside MCP_ROOT."""
+    """Read a regular file after verifying its identity and resource bounds.
+
+    Explicit ``max_bytes`` reads are bounded prefixes used by project scanning.
+    Calls without it read a complete single-file input up to the MCP-wide cap.
+    """
     resolved = _resolve_path(path)
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
     if os.name != "nt":
         flags |= getattr(os, "O_NOFOLLOW", 0)
+        flags |= getattr(os, "O_NONBLOCK", 0)
     try:
         descriptor = os.open(resolved, flags)
     except OSError as exc:
@@ -156,9 +165,39 @@ def _read_confined_bytes(path: str, *, max_bytes: int | None = None) -> bytes:
                     code="PATH_TRAVERSAL",
                     message=(f"input path {path!r} opened outside the allowed working root {root}"),
                 ) from None
+
+        opened_stat = os.fstat(descriptor)
+        if stat.S_ISDIR(opened_stat.st_mode):
+            raise IsADirectoryError(errno.EISDIR, os.strerror(errno.EISDIR), resolved)
+        if not stat.S_ISREG(opened_stat.st_mode):
+            raise MCPToolInputError(
+                code="INVALID_INPUT",
+                message=f"input path {path!r} must be a regular file",
+            )
+        if max_bytes is None and opened_stat.st_size > _MCP_SINGLE_FILE_MAX_BYTES:
+            raise MCPToolInputError(
+                code="LIMIT_EXCEEDED",
+                message=(
+                    f"input file {path!r} exceeds the "
+                    f"{_MCP_SINGLE_FILE_MAX_BYTES}-byte MCP limit"
+                ),
+            )
+
+        read_bytes = (
+            max_bytes if max_bytes is not None else _MCP_SINGLE_FILE_MAX_BYTES + 1
+        )
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
-            return stream.read() if max_bytes is None else stream.read(max_bytes)
+            source = stream.read(read_bytes)
+        if max_bytes is None and len(source) > _MCP_SINGLE_FILE_MAX_BYTES:
+            raise MCPToolInputError(
+                code="LIMIT_EXCEEDED",
+                message=(
+                    f"input file {path!r} exceeds the "
+                    f"{_MCP_SINGLE_FILE_MAX_BYTES}-byte MCP limit"
+                ),
+            )
+        return source
     finally:
         if descriptor >= 0:
             os.close(descriptor)
@@ -452,6 +491,14 @@ def agent_gate_cloudformation(
 
         input_path = _resolve_path(input_path)
         data = json.loads(_read_confined_bytes(input_path).decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Input is not valid UTF-8: {input_path}"
+        ) from exc
+    except RecursionError as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"Input contains deeply nested JSON: {input_path}"
+        ) from exc
     except (OSError, json.JSONDecodeError) as exc:
         raise MCPToolInputError(
             code="INPUT_ERROR", message=f"Cannot read {input_path}: {exc}"
@@ -482,7 +529,11 @@ def agent_gate_cdk(
         )
     try:
         source = _read_confined_bytes(input_path).decode("utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+    except UnicodeDecodeError as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR", message=f"CDK input is not valid UTF-8: {input_path}"
+        ) from exc
+    except OSError as exc:
         raise MCPToolInputError(
             code="INPUT_ERROR", message=f"Cannot read CDK input {input_path}: {exc}"
         ) from exc
@@ -516,7 +567,17 @@ def agent_gate_azure(
         )
     try:
         data = json.loads(_read_confined_bytes(input_path).decode("utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except UnicodeDecodeError as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Azure What-If input is not valid UTF-8: {input_path}",
+        ) from exc
+    except RecursionError as exc:
+        raise MCPToolInputError(
+            code="INPUT_ERROR",
+            message=f"Azure What-If input contains deeply nested JSON: {input_path}",
+        ) from exc
+    except (OSError, json.JSONDecodeError) as exc:
         raise MCPToolInputError(
             code="INPUT_ERROR",
             message=f"Cannot read Azure What-If input {input_path}: {exc}",
@@ -2708,6 +2769,8 @@ def _summary_for_tool(plan_path: str) -> PlanSummary:
     try:
         try:
             raw = _read_confined_bytes(plan_path).decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise PlanError(f"plan file is not valid UTF-8 JSON: {plan_file}") from exc
         except FileNotFoundError as exc:
             raise PlanError(f"plan file does not exist: {plan_file}") from exc
         except IsADirectoryError as exc:
@@ -2726,6 +2789,10 @@ def _summary_for_tool(plan_path: str) -> PlanSummary:
         except json.JSONDecodeError as exc:
             raise PlanError(
                 f"invalid JSON in {plan_file}: line {exc.lineno}, column {exc.colno}: {exc.msg}"
+            ) from exc
+        except RecursionError as exc:
+            raise PlanError(
+                f"plan file contains deeply nested JSON that cannot be parsed: {plan_file}"
             ) from exc
         if not isinstance(plan_data, dict):
             raise PlanError(f"Terraform plan JSON must be an object: {plan_file}")

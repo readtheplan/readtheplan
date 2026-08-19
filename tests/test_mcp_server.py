@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -13,6 +14,7 @@ from readtheplan.cli import _build_parser, main
 from readtheplan.mcp_server import (
     MCPToolInputError,
     MissingMCPDependencyError,
+    _read_confined_bytes,
     _validate_path,
     _working_root,
     agent_gate,
@@ -1398,6 +1400,63 @@ def test_analyze_plan_rejects_invalid_json() -> None:
     assert "invalid JSON" in exc_info.value.message
 
 
+@pytest.mark.parametrize(
+    ("handler", "expected_code", "expected_message"),
+    [
+        (
+            analyze_plan,
+            "PLAN_ERROR",
+            "plan file is not valid UTF-8 JSON: {path}",
+        ),
+        (
+            agent_gate_cloudformation,
+            "INPUT_ERROR",
+            "Input is not valid UTF-8: {path}",
+        ),
+        (
+            agent_gate_azure,
+            "INPUT_ERROR",
+            "Azure What-If input is not valid UTF-8: {path}",
+        ),
+    ],
+)
+def test_mcp_json_handlers_reject_non_utf8_without_raw_decode_error(
+    handler, expected_code: str, expected_message: str, tmp_path: Path
+) -> None:
+    input_file = tmp_path / "binary.json"
+    input_file.write_bytes(b"\xff\xfe")
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        handler(str(input_file))
+
+    assert exc_info.value.code == expected_code
+    assert exc_info.value.message == expected_message.format(path=input_file.resolve())
+
+
+@pytest.mark.parametrize(
+    ("handler", "expected_code"),
+    [
+        (analyze_plan, "PLAN_ERROR"),
+        (agent_gate_cloudformation, "INPUT_ERROR"),
+        (agent_gate_azure, "INPUT_ERROR"),
+    ],
+)
+def test_mcp_json_handlers_reject_deep_json_without_raw_recursion_error(
+    handler, expected_code: str, tmp_path: Path
+) -> None:
+    input_file = tmp_path / "nested.json"
+    input_file.write_text("{}", encoding="utf-8")
+
+    with (
+        patch("json.loads", side_effect=RecursionError),
+        pytest.raises(MCPToolInputError) as exc_info,
+    ):
+        handler(str(input_file))
+
+    assert exc_info.value.code == expected_code
+    assert "deeply nested JSON" in exc_info.value.message
+
+
 def test_analyze_plan_rejects_directory(tmp_path: Path) -> None:
     with pytest.raises(MCPToolInputError) as exc_info:
         analyze_plan(str(tmp_path))
@@ -1576,6 +1635,90 @@ def test_validate_path_allows_path_when_mcp_root_unset(monkeypatch, tmp_path) ->
     f.write_text("{}")
     result = _validate_path(str(f))
     assert result == f.resolve()
+
+
+def test_read_confined_bytes_allows_regular_file_at_limit(monkeypatch, tmp_path) -> None:
+    input_file = tmp_path / "input.json"
+    source = b'{"ok":1}'
+    input_file.write_bytes(source)
+    monkeypatch.setattr(
+        "readtheplan.mcp_server._MCP_SINGLE_FILE_MAX_BYTES",
+        len(source),
+    )
+
+    assert _read_confined_bytes(str(input_file)) == source
+
+
+def test_read_confined_bytes_rejects_known_oversized_file_without_reading(
+    monkeypatch, tmp_path
+) -> None:
+    input_file = tmp_path / "oversized.json"
+    input_file.write_bytes(b"123456789")
+    monkeypatch.setattr("readtheplan.mcp_server._MCP_SINGLE_FILE_MAX_BYTES", 8)
+
+    def unexpected_fdopen(*args, **kwargs):
+        raise AssertionError("oversized input must be rejected before reading")
+
+    monkeypatch.setattr("readtheplan.mcp_server.os.fdopen", unexpected_fdopen)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        _read_confined_bytes(str(input_file))
+
+    assert exc_info.value.code == "LIMIT_EXCEEDED"
+
+
+def test_read_confined_bytes_caps_growth_after_size_check(monkeypatch, tmp_path) -> None:
+    input_file = tmp_path / "growing.json"
+    input_file.write_bytes(b"123456789")
+    monkeypatch.setattr("readtheplan.mcp_server._MCP_SINGLE_FILE_MAX_BYTES", 8)
+
+    real_fdopen = os.fdopen
+    opened_stat = input_file.stat()
+
+    class StaleStat:
+        st_mode = opened_stat.st_mode
+        st_size = 8
+
+    class RecordingStream:
+        def __init__(self, stream) -> None:
+            self._stream = stream
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            self._stream.close()
+
+        def read(self, size: int) -> bytes:
+            read_sizes.append(size)
+            return self._stream.read(size)
+
+    read_sizes: list[int] = []
+    monkeypatch.setattr("readtheplan.mcp_server.os.fstat", lambda descriptor: StaleStat())
+    monkeypatch.setattr(
+        "readtheplan.mcp_server.os.fdopen",
+        lambda descriptor, mode: RecordingStream(real_fdopen(descriptor, mode)),
+    )
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        _read_confined_bytes(str(input_file))
+
+    assert read_sizes == [9]
+    assert exc_info.value.code == "LIMIT_EXCEEDED"
+
+
+def test_read_confined_bytes_rejects_special_file(tmp_path) -> None:
+    if os.name == "nt":
+        special_file = "NUL"
+    else:
+        special_file = str(tmp_path / "input.fifo")
+        os.mkfifo(special_file)
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        _read_confined_bytes(special_file)
+
+    assert exc_info.value.code == "INVALID_INPUT"
+    assert "regular file" in exc_info.value.message
 
 
 def test_analyze_plan_rejects_path_outside_root(monkeypatch, tmp_path) -> None:
