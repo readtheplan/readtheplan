@@ -47,7 +47,14 @@ def main(
     func = getattr(args, "evolution_func", None) or cast(
         "Callable[[argparse.Namespace], int]", args.func
     )
-    return func(args)
+    try:
+        return func(args)
+    except UnicodeDecodeError:
+        print("Error: input file is not valid UTF-8", file=sys.stderr)
+        return 1
+    except RecursionError:
+        print("Error: input contains deeply nested data", file=sys.stderr)
+        return 1
 
 
 def _build_parser(*, include_git_version: bool = True) -> argparse.ArgumentParser:
@@ -1184,7 +1191,7 @@ def _analyze(args: argparse.Namespace) -> int:
 
     try:
         plan_bytes = Path(args.plan_file).read_bytes()
-        plan_data = json.loads(plan_bytes)
+        plan_data = json.loads(plan_bytes.decode("utf-8"))
     except UnicodeDecodeError:
         print(
             f"Error: {args.plan_file} is not UTF-8 JSON. If this is a binary plan, "
@@ -1394,6 +1401,12 @@ def _cloudformation_gate(args: argparse.Namespace) -> int:
 
     try:
         data = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        print(f"Error: {args.input_file} is not valid UTF-8", file=sys.stderr)
+        return 1
+    except RecursionError:
+        print(f"Error: {args.input_file} contains deeply nested JSON", file=sys.stderr)
+        return 1
     except (OSError, json.JSONDecodeError) as exc:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1
@@ -1514,6 +1527,12 @@ def _azure_gate(args: argparse.Namespace) -> int:
 
     try:
         data = json.loads(Path(args.input_file).read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        print(f"Error: {args.input_file} is not valid UTF-8", file=sys.stderr)
+        return 1
+    except RecursionError:
+        print(f"Error: {args.input_file} contains deeply nested JSON", file=sys.stderr)
+        return 1
     except (OSError, json.JSONDecodeError) as exc:
         print(f"Error: cannot read {args.input_file}: {exc}", file=sys.stderr)
         return 1

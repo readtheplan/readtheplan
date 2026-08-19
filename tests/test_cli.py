@@ -317,6 +317,36 @@ def test_analyze_non_utf8_plan_exits_one_without_traceback(
     assert "Traceback" not in captured.err
 
 
+def test_analyze_rejects_utf16_json_as_non_utf8(tmp_path: Path, capsys) -> None:
+    plan = tmp_path / "utf16-plan.json"
+    plan.write_bytes(json.dumps({"resource_changes": []}).encode("utf-16"))
+
+    exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "not UTF-8 JSON" in captured.err
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.parametrize("command", ["agent-gate", "cloudformation", "jenkins"])
+def test_cli_commands_reject_non_utf8_without_traceback(
+    command: str, tmp_path: Path, capsys
+) -> None:
+    input_file = tmp_path / "binary.input"
+    input_file.write_bytes(b"\xff\xfe")
+
+    exit_code = main([command, str(input_file)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "UTF-8" in captured.err or "utf-8" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_analyze_invalid_resource_changes_exits_one_without_traceback(
     tmp_path: Path, capsys
 ) -> None:
@@ -521,6 +551,24 @@ def test_analyze_recursion_error_exits_one_without_traceback(
     # production handler is exercised on every supported Python version.
     with patch("readtheplan.cli.json.loads", side_effect=RecursionError):
         exit_code = main(["analyze", str(plan)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Error:" in captured.err
+    assert "deeply nested" in captured.err
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.parametrize("command", ["cloudformation", "azure"])
+def test_json_adapter_recursion_error_exits_one_without_traceback(
+    command: str, tmp_path: Path, capsys
+) -> None:
+    input_file = tmp_path / "nested.json"
+    input_file.write_text("{}", encoding="utf-8")
+
+    with patch("readtheplan.cli.json.loads", side_effect=RecursionError):
+        exit_code = main([command, str(input_file)])
 
     captured = capsys.readouterr()
     assert exit_code == 1

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -44,6 +45,25 @@ def test_empty_file_is_rejected(tmp_path: Path) -> None:
 def test_invalid_json_is_rejected() -> None:
     with pytest.raises(PlanError, match="invalid JSON"):
         load_plan(FIXTURES / "invalid_plan.json")
+
+
+def test_non_utf8_json_is_rejected_as_plan_error(tmp_path: Path) -> None:
+    plan = tmp_path / "binary.json"
+    plan.write_bytes(b"\xff\xfe")
+
+    with pytest.raises(PlanError, match="not valid UTF-8 JSON"):
+        load_plan(plan)
+
+
+def test_deeply_nested_json_is_rejected_as_plan_error(tmp_path: Path) -> None:
+    plan = tmp_path / "nested.json"
+    plan.write_text("{}", encoding="utf-8")
+
+    with (
+        patch("readtheplan.plan.json.loads", side_effect=RecursionError),
+        pytest.raises(PlanError, match="deeply nested JSON"),
+    ):
+        load_plan(plan)
 
 
 def test_non_object_json_is_rejected(tmp_path: Path) -> None:

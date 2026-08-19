@@ -83,6 +83,8 @@ def load_plan(path: str | Path) -> dict[str, Any]:
 
     try:
         raw = plan_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise PlanError(f"plan file is not valid UTF-8 JSON: {plan_path}") from exc
     except OSError as exc:
         raise PlanError(f"cannot read plan file {plan_path}: {exc}") from exc
 
@@ -94,6 +96,10 @@ def load_plan(path: str | Path) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise PlanError(
             f"invalid JSON in {plan_path}: line {exc.lineno}, column {exc.colno}: {exc.msg}"
+        ) from exc
+    except RecursionError as exc:
+        raise PlanError(
+            f"plan file contains deeply nested JSON that cannot be parsed: {plan_path}"
         ) from exc
 
     if not isinstance(data, dict):

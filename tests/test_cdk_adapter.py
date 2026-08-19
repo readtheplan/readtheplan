@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +13,7 @@ from readtheplan.adapters.cdk import (
     parse_cdk_manifest,
 )
 from readtheplan.cli import main
-from readtheplan.mcp_server import agent_gate_cdk
+from readtheplan.mcp_server import MCPToolInputError, agent_gate_cdk
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -113,6 +114,65 @@ def test_minimal_hardened_assembly_stays_review_only() -> None:
 def test_parser_rejects_unrelated_duplicate_or_malformed_input(source: str, error: str) -> None:
     with pytest.raises(CdkInputError, match=error):
         parse_cdk_manifest(source)
+
+
+def test_parser_rejects_deeply_nested_json_as_input_error() -> None:
+    with (
+        patch("readtheplan.adapters.cdk.json.loads", side_effect=RecursionError),
+        pytest.raises(CdkInputError, match="deeply nested JSON"),
+    ):
+        parse_cdk_manifest('{"version":"1","artifacts":{}}')
+
+
+def test_cdk_public_surfaces_reject_deep_json_without_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    input_path = FIXTURES / "cdk_assembly_risky.json"
+
+    with patch("readtheplan.adapters.cdk.json.loads", side_effect=RecursionError):
+        exit_code = main(["cdk", str(input_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "deeply nested JSON" in captured.err
+    assert "Traceback" not in captured.err
+
+    with (
+        patch("readtheplan.adapters.cdk.json.loads", side_effect=RecursionError),
+        pytest.raises(MCPToolInputError) as exc_info,
+    ):
+        agent_gate_cdk(str(input_path))
+
+    assert exc_info.value.code == "INVALID_INPUT"
+    assert "deeply nested JSON" in exc_info.value.message
+
+
+def test_cli_has_last_resort_recursion_guard(capsys: pytest.CaptureFixture[str]) -> None:
+    input_path = FIXTURES / "cdk_assembly_risky.json"
+
+    with patch(
+        "readtheplan.adapters.cdk.parse_cdk_manifest",
+        side_effect=RecursionError,
+    ):
+        exit_code = main(["cdk", str(input_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err == "Error: input contains deeply nested data\n"
+    assert "Traceback" not in captured.err
+
+
+def test_cdk_mcp_rejects_non_utf8_with_stable_error(tmp_path: Path) -> None:
+    input_path = tmp_path / "cdk.json"
+    input_path.write_bytes(b"\xff\xfe")
+
+    with pytest.raises(MCPToolInputError) as exc_info:
+        agent_gate_cdk(str(input_path))
+
+    assert exc_info.value.code == "INPUT_ERROR"
+    assert exc_info.value.message == f"CDK input is not valid UTF-8: {input_path}"
 
 
 @pytest.mark.parametrize(
