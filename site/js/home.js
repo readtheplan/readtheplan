@@ -12,16 +12,16 @@ var VERSION = versionBadge ? versionBadge.textContent.replace(/^v/, "").trim() :
 
 var fwMap = { "SOC 2": "soc2", "ISO 27001": "iso27001", "HIPAA": "hipaa", "PCI DSS": "pci_dss", "FedRAMP": "fedramp_moderate", "HITRUST": "hitrust", "None": "none" };
 var thMap = { "Irreversible only": "irreversible", "Dangerous": "dangerous", "Review": "review", "Don't block": "none" };
-var evMap = { "JSON envelope": "json-envelope", "Signed (OIDC)": "signed-oidc", "Checklist only": "checklist" };
+var evMap = { "JSON envelope": "json-envelope", "Signed (OIDC)": "signed-oidc", "No evidence file": "none" };
 
 function activeVal(group) {
   var el = document.querySelector('[data-group="' + group + '"].active');
   return el ? el.textContent.trim() : "";
 }
-function activeFramework() { return fwMap[activeVal("fw")] || "soc2"; }
+function activeFramework() { return fwMap[activeVal("fw")] || "none"; }
 function activeThreshold() { return thMap[activeVal("thresh")] || "dangerous"; }
-function activeEvidence() { return evMap[activeVal("ev")] || "json-envelope"; }
-function evidenceFile(ev) { return ev === "checklist" ? "readtheplan-checklist.json" : "readtheplan-evidence.json"; }
+function activeEvidence() { return evMap[activeVal("ev")] || "none"; }
+function evidenceFile() { return "readtheplan-evidence.json"; }
 function installPackage(ev) { return ev === "signed-oidc" ? '"readtheplan[sign]"' : "readtheplan"; }
 
 function cliCommand(forceJson, includeThreshold) {
@@ -30,8 +30,8 @@ function cliCommand(forceJson, includeThreshold) {
   var th = activeThreshold();
   var parts = ["readtheplan", "analyze"];
   if (fw !== "none") parts.push("--framework", fw);
-  if (forceJson || ev !== "checklist") parts.push("--format", "json");
-  if (ev !== "checklist") parts.push("--evidence", evidenceFile(ev));
+  if (forceJson || ev !== "none") parts.push("--format", "json");
+  if (ev !== "none") parts.push("--evidence", evidenceFile());
   if (ev === "signed-oidc") parts.push("--sign");
   if (includeThreshold && th !== "none") parts.push("--fail-on", th);
   parts.push("plan.json");
@@ -46,6 +46,7 @@ function workflowText() {
   var install = "python -m pip install " + installPackage(ev);
   var gate = cliCommand(true, true);
   var evidence = cliCommand(true, false) + " > readtheplan-summary.json";
+  var outputStepName = ev === "none" ? "Generate analysis summary" : "Generate evidence and analysis summary";
 
   if (ci === "Local only") {
     return [
@@ -67,8 +68,8 @@ function workflowText() {
       "    - " + install,
       "    - " + gate
     ];
-    if (ev !== "checklist") {
-      gitlabLines.push("  artifacts:", "    when: always", "    paths:", "      - " + evidenceFile(ev));
+    if (ev !== "none") {
+      gitlabLines.push("  artifacts:", "    when: always", "    paths:", "      - " + evidenceFile());
     }
     return gitlabLines.join("\n");
   }
@@ -141,6 +142,10 @@ function workflowText() {
 
   var lines = [
     "# .github/workflows/terraform-review.yml",
+    "# Prerequisite: authenticate Terraform/OpenTofu and generate plan.json.",
+    "# Full example: https://readtheplan.dev/docs/github-action/",
+    "- uses: actions/checkout@v4",
+    "",
     "- name: Analyze Terraform plan",
     "  id: readtheplan",
     "  uses: readtheplan/readtheplan@v" + VERSION,
@@ -148,8 +153,8 @@ function workflowText() {
     "    input-file: plan.json"
   ];
   if (th !== "none") lines.push("    fail-on-threshold: " + th);
-  if (fw !== "none" || ev !== "checklist") {
-    lines.push("", "- name: Generate evidence artifact", "  if: always()", "  run: |", "    " + install, "    " + evidence);
+  if (fw !== "none" || ev !== "none") {
+    lines.push("", "- name: " + outputStepName, "  if: always()", "  run: |", "    " + install, "    " + evidence);
   }
   return lines.join("\n");
 }
@@ -201,22 +206,33 @@ document.querySelectorAll(".seg-btn[data-group]").forEach(function (btn) {
 var copyInstallBtn = document.getElementById("copy-install");
 if (copyInstallBtn) {
   copyInstallBtn.addEventListener("click", function () {
-    navigator.clipboard.writeText("pip install readtheplan && readtheplan scan .");
-    flashButton(copyInstallBtn, "Copied");
+    navigator.clipboard.writeText("pip install readtheplan").then(function () {
+      if (typeof window.readtheplanTrack === "function") window.readtheplanTrack("copy_install");
+      flashButton(copyInstallBtn, "Copied");
+    }, function () {
+      flashButton(copyInstallBtn, "Copy failed");
+    });
   });
 }
 var copyWorkflowBtn = document.getElementById("copy-workflow");
 if (copyWorkflowBtn) {
   copyWorkflowBtn.addEventListener("click", function () {
-    navigator.clipboard.writeText(workflowText());
-    flashButton(copyWorkflowBtn, "Copied");
+    navigator.clipboard.writeText(workflowText()).then(function () {
+      if (typeof window.readtheplanTrack === "function") window.readtheplanTrack("generate_ci");
+      flashButton(copyWorkflowBtn, "Copied");
+    }, function () {
+      flashButton(copyWorkflowBtn, "Copy failed");
+    });
   });
 }
 var copyCliBtn = document.getElementById("copy-cli");
 if (copyCliBtn) {
   copyCliBtn.addEventListener("click", function () {
-    navigator.clipboard.writeText(cliCommand());
-    flashButton(copyCliBtn, "Copied");
+    navigator.clipboard.writeText(cliCommand()).then(function () {
+      flashButton(copyCliBtn, "Copied");
+    }, function () {
+      flashButton(copyCliBtn, "Copy failed");
+    });
   });
 }
 
@@ -227,15 +243,6 @@ function startInteractiveDemo() {
   if (!tabs.length) return;
 
   var scenarios = {
-    repository: {
-      counts: [34, 23, 7, 3, 1], decision: "BLOCK", note: "4 findings need review",
-      nodes: ["aws_s3_bucket.logs", "aws_iam_role.app", "aws_kms_key.primary", "aws_cloudwatch_log_group.app"],
-      findings: [
-        ["tier-irrev", "KMS deletion scheduled", "CC6.1 · permanent impact"],
-        ["tier-danger", "IAM policy replaced", "CC6.3 · privilege change"],
-        ["tier-review", "Public ingress changed", "CC6.6 · network exposure"]
-      ]
-    },
     terraform: {
       counts: [18, 11, 4, 2, 1], decision: "BLOCK", note: "3 changes cross the threshold",
       nodes: ["aws_db_instance.primary", "aws_security_group.app", "aws_iam_role.deploy", "aws_kms_alias.data"],
@@ -244,30 +251,13 @@ function startInteractiveDemo() {
         ["tier-danger", "Security group opened", "CC6.6 · public exposure"],
         ["tier-review", "Deploy role expanded", "CC6.3 · permission scope"]
       ]
-    },
-    kubernetes: {
-      counts: [27, 20, 5, 2, 0], decision: "BLOCK", note: "2 workload changes need review",
-      nodes: ["deployment/api", "service/api", "networkpolicy/egress", "secret/database"],
-      findings: [
-        ["tier-danger", "Privileged container enabled", "K8S-PSP · host access"],
-        ["tier-danger", "Network policy removed", "CC6.6 · unrestricted egress"],
-        ["tier-review", "Service account changed", "CC6.3 · workload identity"]
-      ]
-    },
-    pipeline: {
-      counts: [12, 9, 3, 0, 0], decision: "WARN", note: "3 changes need a human look",
-      nodes: ["workflow/release", "permissions/contents", "environment/production", "secrets/oidc"],
-      findings: [
-        ["tier-review", "Workflow permissions expanded", "CC6.3 · token scope"],
-        ["tier-review", "Fork trigger changed", "CI-04 · credential boundary"],
-        ["tier-review", "Protection rule updated", "CC8.1 · release control"]
-      ]
     }
   };
 
-  var order = ["repository", "terraform", "kubernetes", "pipeline"];
-  var currentIndex = 0;
-  var paused = false;
+  var order = tabs.map(function (tab) { return tab.getAttribute("data-demo"); });
+  var currentIndex = Math.max(0, order.indexOf(tabs.find(function (tab) {
+    return tab.classList.contains("active");
+  }).getAttribute("data-demo")));
   var timer = null;
 
   function setText(id, value) {
@@ -324,7 +314,7 @@ function startInteractiveDemo() {
 
   function restartTimer() {
     if (timer) window.clearInterval(timer);
-    if (paused) return;
+    if (order.length < 2) return;
     timer = window.setInterval(function () {
       showScenario(order[(currentIndex + 1) % order.length]);
     }, 4600);
@@ -337,15 +327,6 @@ function startInteractiveDemo() {
     });
   });
 
-  var pause = document.getElementById("demo-pause");
-  if (pause) {
-    pause.addEventListener("click", function () {
-      paused = !paused;
-      pause.textContent = paused ? "Play" : "Pause";
-      pause.setAttribute("aria-pressed", paused ? "true" : "false");
-      restartTimer();
-    });
-  }
 
   var map = document.querySelector(".resource-map");
   if (map) {

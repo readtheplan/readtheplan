@@ -35,11 +35,12 @@ const sitemap = read("sitemap.xml");
 const robots = read("robots.txt");
 const llms = read("llms.txt");
 
-// Index page contract: single linear landing page, local-first setup, community-driven.
+// Index page contract: one AI-verification story, a truthful Terraform-first
+// wedge, local-first setup, and a single primary activation path.
 for (const token of [
   'id="top"',
   'class="hero-proof signal-console"',
-  "static product preview · no uploaded data",
+  "static Terraform example · no uploaded data",
   'class="risk-orbit"',
   'class="resource-map"',
   'id="how-it-works"',
@@ -52,26 +53,34 @@ for (const token of [
   'id="gen-output"',
   "No plan upload",
   "No uploads. Runs entirely in your CI.",
-  "Terraform + the broader infra stack",
-  "Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST",
+  "Verify AI-generated infrastructure changes before they run.",
+  "Terraform/OpenTofu is the first gate",
+  "Deterministic, not generative",
+  'data-activation-event="verify_change_click"',
   "readtheplan agent-gate plan.json",
   "proceed / warn / block",
   "MCP integration",
   "rtp-evidence-soc2.json",
   "Good first issues tagged",
   "pip install readtheplan",
-  "readtheplan scan .",
   "readtheplan-evidence.json",
   "readtheplan[sign]",
-  "/tools/terraform-risk-calculator/",
-  "/tools/soc2-cloud-control-mapper/",
   "/mcp/",
   "/docs/",
   "/demo/",
-  "/brief/",
   "/playground/",
 ]) {
   requireIncludes(html, token, "expected landing page token");
+}
+
+requireIncludes(html, 'data-activation-event="setup_help_click"', "homepage setup-help activation marker");
+requireIncludes(mcpHtml, 'data-activation-event="setup_help_click"', "MCP setup-help activation marker");
+
+const header = read("_includes/site-header.njk");
+for (const demotedRoute of ["/pricing/", "/chat/"]) {
+  if (header.includes(demotedRoute)) {
+    throw new Error(`Primary navigation must not link demoted route: ${demotedRoute}`);
+  }
 }
 
 // The setup generator lives in a CSP-safe external module.
@@ -83,7 +92,8 @@ for (const token of [
   "python -m pip install",
   "readtheplan-summary.json",
   "fail-on-threshold",
-  "Generate evidence artifact",
+  "Generate analysis summary",
+  "Generate evidence and analysis summary",
   "if: always()",
   "cliCommand(true, false)",
   "--format",
@@ -103,6 +113,7 @@ for (const token of [
   "\n    framework:",
   "\n    evidence:",
   "pilot-contact@example.com",
+  "Generate evidence artifact",
 ]) {
   if (html.includes(token) || homeJs.includes(token)) {
     throw new Error(`Landing page must not include stale or unsupported token: ${token}`);
@@ -120,10 +131,13 @@ for (const token of [
   "twitter:card",
   'href="/modern.css"',
   'src="/site-motion.js"',
-  "plausible.io/js/script.js",
+  'src="/js/analytics.js"',
   'name="viewport"',
 ]) {
   requireIncludes(baseLayout, token, "base layout chrome token");
+}
+if (baseLayout.includes("plausible.io/js/")) {
+  throw new Error("General Plausible script must not add visited URL or referrer context.");
 }
 
 // Every source route is a layout-owned template: front matter, no chrome, no inline scripts.
@@ -181,10 +195,10 @@ if (!modernCss.includes("prefers-reduced-motion")) {
   throw new Error("Reduced-motion support is required.");
 }
 
-// Build script contract: one CSP source, no inline-script allowance, Plausible allowed.
+// Build script contract: one CSP source, self-hosted scripts, Plausible API allowed.
 for (const token of [
   "Content-Security-Policy",
-  "script-src 'self' https://plausible.io",
+  "script-src 'self'",
   "connect-src 'self' https://plausible.io",
   "font-src 'self'",
   "img-src 'self' data:",
@@ -245,6 +259,7 @@ for (const file of [
   "llms.txt",
   "sitemap.xml",
   "js/home.js",
+  "js/analytics.js",
   "js/demo.js",
   "chat/chat.js",
   "playground/playground.js",
@@ -368,20 +383,30 @@ for (const route of [...seoRoutes, ...docsRoutes, ...experientialRoutes, ...brie
 }
 
 for (const token of [
-  "/tools/terraform-risk-calculator/",
-  "/tools/soc2-cloud-control-mapper/",
   "/mcp/",
-  "/brief/",
   "/docs/",
   "/demo/",
   "/playground/",
-  "/chat/",
 ]) {
   if (!html.includes(token) && !sharedChrome.includes(token)) {
     throw new Error(`Missing linked primary route: ${token}`);
   }
   if (!sitemap.includes(token)) {
     throw new Error(`Missing sitemap-listed primary route: ${token}`);
+  }
+}
+
+// Secondary utilities stay public and discoverable without competing in the
+// homepage or primary navigation journey.
+for (const token of [
+  "/tools/terraform-risk-calculator/",
+  "/tools/soc2-cloud-control-mapper/",
+  "/brief/",
+  "/chat/",
+  "/pricing/",
+]) {
+  if (!sitemap.includes(token)) {
+    throw new Error(`Missing sitemap-listed secondary route: ${token}`);
   }
 }
 
@@ -522,7 +547,7 @@ if (/<form/i.test(briefCombined)) {
 // MCP page: local preview only, no hosted/upload implications.
 for (const token of [
   "Local MCP infrastructure reviewer",
-  "Give your AI coding agent deterministic Terraform, CloudFormation, Azure, Kubernetes",
+  "Give your AI coding agent a deterministic Terraform/OpenTofu second check",
   "Local-first",
   "No raw plan upload",
   "No hosted MCP service",

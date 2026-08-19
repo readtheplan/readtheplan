@@ -2,7 +2,7 @@
   "name": "readtheplan-site",
   "version": "0.4.0",
   "private": true,
-  "description": "Static onboarding app for readtheplan.dev.",
+  "description": "Static onboarding for independent AI-generated infrastructure change verification.",
   "scripts": {
     "test": "node scripts/validate.js && node analysis/chat-contract.test.mjs && node analysis/interaction-contract.test.mjs && node analysis/design-system-contract.test.mjs",
     "build": "node scripts/build.js && node analysis/build-contract.test.mjs && node analysis/rendered-route-contract.test.mjs"

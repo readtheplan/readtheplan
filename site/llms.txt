@@ -1,46 +1,32 @@
 # readtheplan
 
-> Free, MIT-licensed infrastructure change-risk analysis for humans and coding agents.
+> Independently verify AI-generated infrastructure changes before they execute.
 
-readtheplan analyzes Terraform/OpenTofu plan JSON and many other infrastructure,
-CI/CD, policy, and configuration artifacts without executing them or contacting
-infrastructure. It classifies changes as safe, review, dangerous, or irreversible
-and can map findings to six built-in compliance catalogs.
+readtheplan is a free, MIT-licensed, deterministic local gate. Its primary
+workflow accepts Terraform/OpenTofu plan JSON, classifies individual findings
+as safe, review, dangerous, or irreversible, and returns an aggregate proceed,
+warn, or block decision before merge or apply.
 
-CI/CD analysis includes GitHub Actions, GitLab CI, CircleCI, Azure Pipelines,
-Bitbucket Pipelines, Buildkite, Travis CI, Drone CI, and Woodpecker CI.
-Self-hosted CI coverage also includes Concourse pipelines, Bamboo YAML Specs,
-Jenkins/JCasC, Jenkins Plugin Installation Manager text/YAML catalogs, and TeamCity Kotlin DSL.
-Cloud-native delivery coverage includes AWS CodeBuild buildspecs, Google Cloud
-Build configurations, and AWS CodePipeline definitions.
-Secrets supply-chain coverage includes SOPS creation policy and encrypted
-YAML, JSON, dotenv, and INI metadata without decrypting secret values.
-Container build supply-chain coverage includes Docker Buildx Bake HCL/JSON and
-Compose-backed build graphs without invoking Buildx or contacting registries.
-Terraform Stacks coverage includes `.tfcomponent.hcl` and `.tfdeploy.hcl`
-provenance, lifecycle, approval, identity, store, and cross-Stack data boundaries.
-Kubernetes infrastructure-controller coverage includes Cluster API cluster,
-machine, control-plane, bootstrap, remediation, and provider lifecycles plus
-Karpenter node provisioning, disruption, cloud identity, image, and networking.
-Ansible coverage includes playbooks, controller configuration, Galaxy dependencies,
-static YAML/INI inventory, and dynamic inventory plugin configuration without
-executing plugins, resolving Vault values, contacting APIs, or connecting to hosts.
-Puppet coverage includes manifests, Puppetfile/module metadata, Hiera configuration,
-and duplicate-safe puppet.conf analysis for agent, server, CA, trust, execution,
-cached-catalog, plugin, reporting, identity, endpoint, and credential settings.
-Chef coverage includes recipes, Policyfiles/locks, Berksfiles and modern/legacy lock
-graphs, cookbook metadata, and static analysis of client.rb, Workstation
-config.rb/knife.rb, solo.rb, chef-server.rb, and supported .d fragments for dependency
-provenance/integrity/migration, trust, credentials, endpoints, bootstrap, execution,
-TLS, LDAP, and database controls without evaluating Ruby or contacting Chef services.
-Jenkins plugin-catalog coverage includes strict text/YAML parsing, version mutability,
-experimental and incremental sources, direct URLs, privileged capabilities, and an
-explicit offline boundary for update-center metadata and dependency resolution.
+The generator is not the approver. A coding agent may propose HCL, but
+Terraform/OpenTofu must produce the structured plan and readtheplan evaluates
+that artifact separately. readtheplan does not infer an agent's intent, review
+arbitrary chat, run Terraform, refresh state, contact providers, or apply
+infrastructure.
 
-Use `readtheplan scan .` to discover supported infrastructure files across a
-repository and return one aggregate gate with per-file analyzer results.
-Local MCP clients can call `agent_gate_project` for the same repository gate;
-set `MCP_ROOT` so candidate files are confined and analyzed from an isolated snapshot.
+Additional local adapters cover other structured infrastructure, CI/CD, policy,
+configuration-management, and observability artifacts. They are secondary to
+the initial Terraform/OpenTofu gate and are documented in the adapter guide.
+Adapters analyze source or structured exports without executing playbooks,
+pipelines, templates, recipes, plugins, or infrastructure commands.
+
+Six optional catalogs can add SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP
+Moderate, and HITRUST review context. Those annotations do not certify control
+satisfaction.
+
+Local MCP clients can request the same deterministic gate. `MCP_ROOT` confines
+repository candidates, and accepted bytes are analyzed from an isolated
+snapshot. The surrounding CI or agent workflow—not readtheplan—enforces the
+decision.
 
 Every product feature is free. There is no paid tier, enterprise tier, trial,
 product account, or hosted raw-plan upload workflow.

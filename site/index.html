@@ -1,8 +1,8 @@
 ---
-title: "readtheplan"
-description: "One free local risk gate for Terraform, Kubernetes, CI/CD, configuration management, policy, and observability \u2014 with six built-in compliance catalogs."
+title: "Verify AI-generated infrastructure changes | readtheplan"
+description: "Independently verify AI-generated infrastructure changes before merge or apply. Start with a local Terraform or OpenTofu plan gate."
 canonical: "https://readtheplan.dev/"
-ogDescription: "One free local risk gate for infrastructure plans and configuration, with six built-in compliance catalogs."
+ogDescription: "A deterministic local second check for AI-generated infrastructure changes, starting with Terraform and OpenTofu."
 extraJs:
   - "/js/home.js"
 ---
@@ -12,24 +12,25 @@ extraJs:
     <div class="container landing-shell">
       <section class="hero-grid" id="top">
         <div class="hero-copy">
-          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Local-first infrastructure review</div>
-          <h1>Know what changes <span class="accent-word">before</span> it runs.</h1>
-          <p class="hero-lead">Auto-discovers plans, manifests, pipelines, playbooks, and configuration across a repository, then classifies them as safe, review, dangerous, or irreversible. Six built-in catalogs cover SOC 2, ISO 27001, HIPAA, PCI DSS, FedRAMP Moderate, and HITRUST. Runs locally with no accounts, no backend, and <span class="gradient-text">No plan upload</span>.</p>
+          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Independent checks for AI-generated changes</div>
+          <h1>Verify AI-generated infrastructure changes before they run.</h1>
+          <p class="hero-lead">readtheplan is a local second check for infrastructure changes proposed by AI agents. Start with Terraform or OpenTofu plan JSON: it explains the change, classifies its risk, and returns a deterministic decision before merge or apply. Raw plan data stays on your machine or CI runner.</p>
+          <p><strong>Terraform/OpenTofu is the first gate.</strong> readtheplan does not evaluate arbitrary AI chat, source-code diffs, or an agent's intent. Generate a structured plan first.</p>
           <div class="hero-actions">
             <div class="cta-row">
-              <a class="cta-btn" href="https://readtheplan.dev/playground/">Try the playground <span aria-hidden="true">→</span></a>
-              <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan">View on GitHub <span aria-hidden="true">↗</span></a>
+              <a class="cta-btn" data-activation-event="verify_change_click" href="/playground/">Check a Terraform change <span aria-hidden="true">→</span></a>
+              <a class="cta-btn outline" href="/docs/quickstart/">Install the gate <span aria-hidden="true">→</span></a>
             </div>
             <div class="install-wrap">
               <span class="prompt-mark" aria-hidden="true">&gt;</span>
-              <code id="install-cmd">pip install readtheplan &amp;&amp; readtheplan scan .</code>
-              <button class="copy-btn" id="copy-install">Copy</button>
+              <code id="install-cmd">pip install readtheplan</code>
+              <button class="copy-btn" id="copy-install" type="button">Copy</button>
             </div>
           </div>
           <div class="hero-trust">
-            <span>pip install readtheplan</span>
-            <span>Native GitHub Action + any CI</span>
-            <span>Terraform + the broader infra stack</span>
+            <span>Deterministic, not generative</span>
+            <span>Terraform + OpenTofu first</span>
+            <span>proceed / warn / block</span>
             <span>No plan upload</span>
             <span>MIT licensed</span>
           </div>
@@ -37,56 +38,53 @@ extraJs:
 
         <div class="hero-proof signal-console" aria-label="Sample infrastructure analysis">
           <div class="signal-console__head">
-            <div><span class="status-dot" aria-hidden="true"></span><strong>Sample analysis</strong></div>
-            <div class="console-meta"><span>static product preview · no uploaded data</span><button class="demo-pause" id="demo-pause" type="button" aria-pressed="false">Pause</button></div>
+            <div><span class="status-dot" aria-hidden="true"></span><strong>Terraform plan gate</strong></div>
+            <div class="console-meta"><span>static Terraform example · no uploaded data</span><span>SOC 2 · <code>--framework soc2</code></span></div>
           </div>
-          <div class="scan-tabs" aria-label="Choose a sample analysis">
-            <button class="scan-tab active" type="button" data-demo="repository" aria-pressed="true"><span>01</span>Repository</button>
-            <button class="scan-tab" type="button" data-demo="terraform" aria-pressed="false"><span>02</span>Terraform</button>
-            <button class="scan-tab" type="button" data-demo="kubernetes" aria-pressed="false"><span>03</span>Kubernetes</button>
-            <button class="scan-tab" type="button" data-demo="pipeline" aria-pressed="false"><span>04</span>CI/CD</button>
+          <div class="scan-tabs" aria-label="Sample analysis type">
+            <button class="scan-tab active" type="button" data-demo="terraform" aria-pressed="true"><span>01</span>Terraform plan JSON</button>
           </div>
           <div class="signal-console__summary">
-            <div class="risk-orbit" aria-label="34 sample changes">
-              <div><strong id="demo-total">34</strong><span>changes</span></div>
+            <div class="risk-orbit" aria-label="18 sample changes">
+              <div><strong id="demo-total">18</strong><span>changes</span></div>
             </div>
             <div class="risk-legend">
-              <span><i class="tier-safe"></i><b id="demo-safe">23</b> Safe</span>
-              <span><i class="tier-review"></i><b id="demo-review">7</b> Review</span>
-              <span><i class="tier-danger"></i><b id="demo-danger">3</b> Dangerous</span>
+              <span><i class="tier-safe"></i><b id="demo-safe">11</b> Safe</span>
+              <span><i class="tier-review"></i><b id="demo-review">4</b> Review</span>
+              <span><i class="tier-danger"></i><b id="demo-danger">2</b> Dangerous</span>
               <span><i class="tier-irrev"></i><b id="demo-irrev">1</b> Irreversible</span>
             </div>
-            <div class="gate-state" id="demo-gate"><span>CI gate</span><strong id="demo-decision">BLOCK</strong><small id="demo-gate-note">4 findings need review</small></div>
+            <div class="gate-state" id="demo-gate" data-decision="block"><span>Agent gate</span><strong id="demo-decision">BLOCK</strong><small id="demo-gate-note">3 changes cross the threshold</small></div>
           </div>
           <div class="signal-console__body">
             <div class="resource-map" aria-label="Sample resource relationship map">
-              <span class="map-label">Blast radius · 6 resources</span>
-              <div class="map-node map-node--core" id="demo-node-core">aws_s3_bucket.logs</div>
-              <div class="map-node map-node--one" id="demo-node-one">aws_iam_role.app</div>
-              <div class="map-node map-node--two" id="demo-node-two">aws_kms_key.primary</div>
-              <div class="map-node map-node--three" id="demo-node-three">aws_cloudwatch_log_group.app</div>
+              <span class="map-label">Blast radius · 4 resources</span>
+              <div class="map-node map-node--core" id="demo-node-core">aws_db_instance.primary</div>
+              <div class="map-node map-node--one" id="demo-node-one">aws_security_group.app</div>
+              <div class="map-node map-node--two" id="demo-node-two">aws_iam_role.deploy</div>
+              <div class="map-node map-node--three" id="demo-node-three">aws_kms_alias.data</div>
               <svg viewBox="0 0 500 220" role="presentation" aria-hidden="true"><path d="M250 110 L95 55 M250 110 L405 55 M250 110 L250 190" /></svg>
               <div class="cursor-probe" aria-hidden="true"><span></span><small>risk trace</small></div>
             </div>
             <div class="finding-stack">
               <span class="map-label">Top findings</span>
-              <div><i class="tier-irrev" id="demo-risk-one"></i><span><b id="demo-finding-one">KMS deletion scheduled</b><small id="demo-detail-one">CC6.1 · permanent impact</small></span><strong>01</strong></div>
-              <div><i class="tier-danger" id="demo-risk-two"></i><span><b id="demo-finding-two">IAM policy replaced</b><small id="demo-detail-two">CC6.3 · privilege change</small></span><strong>02</strong></div>
-              <div><i class="tier-review" id="demo-risk-three"></i><span><b id="demo-finding-three">Public ingress changed</b><small id="demo-detail-three">CC6.6 · network exposure</small></span><strong>03</strong></div>
+              <div><i class="tier-irrev" id="demo-risk-one"></i><span><b id="demo-finding-one">Database replacement planned</b><small id="demo-detail-one">A1.2 · data persistence</small></span><strong>01</strong></div>
+              <div><i class="tier-danger" id="demo-risk-two"></i><span><b id="demo-finding-two">Security group opened</b><small id="demo-detail-two">CC6.6 · public exposure</small></span><strong>02</strong></div>
+              <div><i class="tier-review" id="demo-risk-three"></i><span><b id="demo-finding-three">Deploy role expanded</b><small id="demo-detail-three">CC6.3 · permission scope</small></span><strong>03</strong></div>
             </div>
           </div>
           <div class="signal-console__foot">
-            <code><span class="t-prompt">$</span> readtheplan analyze --framework soc2 plan.json</code>
-            <span>rtp-evidence-soc2.json · local output</span>
+            <code><span class="t-prompt">$</span> readtheplan agent-gate plan.json</code>
+            <span>deterministic local decision · no model call</span>
           </div>
         </div>
       </section>
 
       <section class="section-shell" id="how-it-works">
         <div class="section-head">
-          <div class="section-label">Risk tiers</div>
-          <h2>Four tiers. Zero noise.</h2>
-          <p>readtheplan classifies the blast radius of every Terraform and OpenTofu change so reviewers can focus on what can actually break production.</p>
+          <div class="section-label">Two layers, one decision</div>
+          <h2>Risk tier in. Gate decision out.</h2>
+          <p>Each Terraform or OpenTofu change is classified as safe, review, dangerous, or irreversible. The complete plan then receives one deterministic proceed, warn, or block decision for the surrounding agent or CI workflow to enforce.</p>
         </div>
 
         <div class="tiers">
@@ -115,9 +113,9 @@ extraJs:
 
       <section class="section-shell" id="setup">
         <div class="section-head">
-          <div class="section-label">Setup generator</div>
-          <h2>Generate the exact review gate you need.</h2>
-          <p>Pick your CI system, framework, threshold, and evidence format. The generated workflow stays local-first and is ready to copy into your repo.</p>
+          <div class="section-label">Terraform/OpenTofu setup</div>
+          <h2>Put an independent gate in CI.</h2>
+          <p>Generate the smallest workflow for your CI system, review threshold, and optional evidence format. The AI agent proposes the change; readtheplan evaluates the structured plan separately before merge or apply.</p>
         </div>
 
         <div class="wizard">
@@ -141,15 +139,15 @@ extraJs:
                 </div>
               </div>
               <div class="wiz-group">
-                <label>Compliance framework</label>
+                <label>Optional review catalog</label>
                 <div class="seg">
-                  <button class="seg-btn active" data-group="fw" aria-pressed="true">SOC 2</button>
+                  <button class="seg-btn active" data-group="fw" aria-pressed="true">None</button>
+                  <button class="seg-btn" data-group="fw" aria-pressed="false">SOC 2</button>
                   <button class="seg-btn" data-group="fw" aria-pressed="false">ISO 27001</button>
                   <button class="seg-btn" data-group="fw" aria-pressed="false">HIPAA</button>
                   <button class="seg-btn" data-group="fw" aria-pressed="false">PCI DSS</button>
                   <button class="seg-btn" data-group="fw" aria-pressed="false">FedRAMP</button>
                   <button class="seg-btn" data-group="fw" aria-pressed="false">HITRUST</button>
-                  <button class="seg-btn" data-group="fw" aria-pressed="false">None</button>
                 </div>
               </div>
               <div class="wiz-group">
@@ -162,11 +160,11 @@ extraJs:
                 </div>
               </div>
               <div class="wiz-group">
-                <label>Evidence output</label>
+                <label>Optional evidence output</label>
                 <div class="seg">
-                  <button class="seg-btn active" data-group="ev" aria-pressed="true">JSON envelope</button>
+                  <button class="seg-btn active" data-group="ev" aria-pressed="true">No evidence file</button>
+                  <button class="seg-btn" data-group="ev" aria-pressed="false">JSON envelope</button>
                   <button class="seg-btn" data-group="ev" aria-pressed="false">Signed (OIDC)</button>
-                  <button class="seg-btn" data-group="ev" aria-pressed="false">Checklist only</button>
                 </div>
               </div>
             </div>
@@ -183,7 +181,7 @@ extraJs:
             </div>
 
             <div class="cli-preview">
-              <code id="cli-preview-cmd">readtheplan analyze --framework soc2 --format json --evidence readtheplan-evidence.json plan.json</code>
+              <code id="cli-preview-cmd">readtheplan analyze --fail-on dangerous plan.json</code>
             </div>
 
             <div class="gen-panel">
@@ -204,16 +202,16 @@ extraJs:
 
       <section class="section-shell" id="agent">
         <div class="section-head">
-          <div class="section-label">Integrations</div>
-          <h2>Use the same decision contract in CI, agents, and editors.</h2>
-          <p>Every integration returns stable risk output that can block unsafe applies, produce audit evidence, or guide an MCP-compatible coding agent.</p>
+          <div class="section-label">Independent approval boundary</div>
+          <h2>The generator does not get the last word.</h2>
+          <p>AI wrote the Terraform. Don't let it approve its own plan. A separate deterministic engine evaluates the structured artifact; your CI or agent workflow enforces the result.</p>
         </div>
 
         <div class="panel-grid">
           <article class="card">
             <div class="feature-icon" aria-hidden="true">!</div>
-            <h3>Block unsafe AI auto-approvals</h3>
-            <p>Coding agents and agentic CI pipelines skip nuance. The agent-gate subcommand returns a stable proceed / warn / block result your pipeline can trust.</p>
+            <h3>Terraform/OpenTofu gate</h3>
+            <p><code>agent-gate</code> returns a stable proceed / warn / block result from plan JSON. It does not call another model, run Terraform, refresh state, or apply infrastructure.</p>
             <div class="mini-terminal">
               <button class="copy-mini" type="button" data-copy-block>Copy</button>
               <div><span class="t-prompt">$</span> readtheplan agent-gate plan.json</div>
@@ -228,8 +226,8 @@ extraJs:
 
           <article class="card">
             <div class="feature-icon" aria-hidden="true">{}</div>
-            <h3>MCP integration</h3>
-            <p>Run readtheplan as a local MCP server and review plans inline from Claude, Cursor, or another MCP-compatible editor without leaving the repo.</p>
+            <h3>Local MCP integration</h3>
+            <p>Let an MCP-compatible coding agent request the same gate locally. The analysis stays in the repository boundary, and the agent receives the decision rather than authoring it.</p>
             <div class="mini-terminal">
               <button class="copy-mini" type="button" data-copy-block>Copy</button>
               <div><span class="t-prompt">$</span> readtheplan mcp</div>
@@ -242,7 +240,7 @@ extraJs:
           <article class="card">
             <div class="feature-icon" aria-hidden="true">#</div>
             <h3>Compliance evidence</h3>
-            <p>Emit control-mapped evidence envelopes without building a backend - signed and ready to attach to an audit.</p>
+            <p>Emit signed control-mapped evidence envelopes for audit review. Signatures protect artifact integrity; mappings do not certify control satisfaction.</p>
             <div class="mini-terminal">
               <button class="copy-mini" type="button" data-copy-block>Copy</button>
               <div><span class="t-dim">// rtp-evidence-soc2.json</span></div>
@@ -323,27 +321,27 @@ extraJs:
 
       <section class="section-shell" id="community">
         <div class="section-head">
-          <div class="section-label">Community</div>
-          <h2>Open source, MIT licensed, built in public.</h2>
-          <p>readtheplan is free forever. Contributions, questions, and ideas are welcome — no enterprise sales funnel, no pilot form, no vendor lock-in.</p>
+          <div class="section-label">Founder-assisted setup</div>
+          <h2>Prove the gate in one real repository.</h2>
+          <p>During the initial demand test, setup help is free. We will install the Terraform/OpenTofu gate with you, tune false positives, and learn whether the result is useful enough to keep after 14 days.</p>
         </div>
 
         <div class="panel-grid">
           <article class="card">
+            <h3>Install it together</h3>
+            <p>Bring one repository and its existing plan workflow. Do not email raw plans or credentials; setup happens against your local or CI boundary.</p>
+            <a class="cta-btn" data-activation-event="setup_help_click" href="mailto:info@readtheplan.dev?subject=Install%20the%20Terraform%20gate%20in%20one%20repo">Let me install the gate in one repo—free.</a>
+          </article>
+
+          <article class="card">
             <h3>Contribute</h3>
-            <p>Good first issues tagged and ready. Add a resource rule, improve compliance mappings, or fix a classifier bug in ~30 lines of Python.</p>
+            <p>Good first issues tagged and ready. Add a resource rule, improve compliance mappings, or fix a classifier bug.</p>
             <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan/labels/good%20first%20issue">Browse good first issues →</a>
           </article>
 
           <article class="card">
-            <h3>Discuss</h3>
-            <p>Ask questions, share how you're using readtheplan, or propose features. GitHub Discussions is open and active.</p>
-            <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan/discussions">Join the discussion →</a>
-          </article>
-
-          <article class="card">
             <h3>Report security issues</h3>
-            <p>Found a vulnerability? Report it privately to the maintainer. 90-day disclosure timeline, credited in the advisory.</p>
+            <p>Found a vulnerability? Report it privately to the maintainer rather than opening a public issue.</p>
             <a class="cta-btn outline" href="https://github.com/readtheplan/readtheplan/blob/main/SECURITY.md">Security policy →</a>
           </article>
         </div>
@@ -351,39 +349,29 @@ extraJs:
 
       <section class="section-shell" id="resources">
         <div class="section-head">
-          <div class="section-label">Tools and resources</div>
-          <h2>Explore calculators, docs, demos, and the in-browser playground.</h2>
+          <div class="section-label">Next step</div>
+          <h2>Choose one path.</h2>
         </div>
 
         <div class="tools-grid">
-          <a href="/docs/" class="tool-link">
-            <div class="tool-name">Documentation</div>
-            <div class="tool-desc">Quickstart, CLI reference, adapters, and the GitHub Action.</div>
+          <a href="/docs/quickstart/" class="tool-link">
+            <div class="tool-name">Install the Terraform gate</div>
+            <div class="tool-desc">Generate plan JSON, run the local gate, then add it to CI.</div>
+            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a href="/playground/" class="tool-link">
+            <div class="tool-name">Check a sample plan</div>
+            <div class="tool-desc">Run the classifier locally in your browser. No upload.</div>
             <span class="tool-arrow" aria-hidden="true">&rarr;</span>
           </a>
           <a href="/demo/" class="tool-link">
-            <div class="tool-name">Interactive demo</div>
-            <div class="tool-desc">Watch a real analysis session replay, output included.</div>
+            <div class="tool-name">See the decision</div>
+            <div class="tool-desc">Inspect a replay with risk tiers and gate output.</div>
             <span class="tool-arrow" aria-hidden="true">&rarr;</span>
           </a>
-          <a href="https://readtheplan.dev/tools/terraform-risk-calculator/" class="tool-link">
-            <div class="tool-name">Terraform risk calculator</div>
-            <div class="tool-desc">Estimate blast radius without uploading a plan.</div>
-            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <a href="https://readtheplan.dev/tools/soc2-cloud-control-mapper/" class="tool-link">
-            <div class="tool-name">SOC 2 cloud control mapper</div>
-            <div class="tool-desc">Map AWS resources to CC Trust Service Criteria.</div>
-            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <a href="https://readtheplan.dev/mcp/" class="tool-link">
-            <div class="tool-name">Local MCP Terraform reviewer</div>
-            <div class="tool-desc">Connect to Claude, Cursor, and other MCP clients.</div>
-            <span class="tool-arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <a href="https://readtheplan.dev/brief/" class="tool-link">
-            <div class="tool-name">Weekly Terraform / SOC 2 brief</div>
-            <div class="tool-desc">Digest of changes that affect compliance posture.</div>
+          <a href="/docs/" class="tool-link">
+            <div class="tool-name">Read the documentation</div>
+            <div class="tool-desc">CLI, GitHub Action, MCP, and secondary adapter references.</div>
             <span class="tool-arrow" aria-hidden="true">&rarr;</span>
           </a>
         </div>
@@ -391,11 +379,11 @@ extraJs:
 
       <section class="closing-cta" id="closing-cta">
         <div>
-          <div class="section-label">Ready for CI</div>
-          <h2>Drop it into CI in under a minute.</h2>
-          <p>No hosted analyzer, no plan upload, no new approval queue. Just a deterministic gate where Terraform already runs.</p>
+          <div class="section-label">Start with one plan</div>
+          <h2>See the independent decision before you wire CI.</h2>
+          <p>Use a bundled sample or your own Terraform plan JSON. Analysis runs in the browser and the plan is not uploaded.</p>
         </div>
-        <a class="cta-btn" href="#setup">Generate your setup</a>
+        <a class="cta-btn" href="/playground/">Check a Terraform change</a>
       </section>
     </div>
   </main>

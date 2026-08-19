@@ -8,13 +8,15 @@ canonical: "https://readtheplan.dev/privacy/"
         <div class="gc hero-content">
           <p class="eyebrow">Legal</p>
           <h1>Privacy Policy</h1>
-          <p class="subtitle">Effective: July 12, 2026</p>
+          <p class="subtitle">Effective: August 6, 2026</p>
         </div>
       </section>
       <div class="prose" style="max-width:720px;margin:2rem auto;padding:0 1.5rem;">
         <h2>1. Information We Collect</h2>
         <p><strong>OSS Toolchain:</strong> The local CLI, GitHub Action, and MCP tools do not transmit any data to readtheplan servers. We collect nothing.</p>
-        <p><strong>Website:</strong> We use Plausible Analytics, a privacy-first, cookie-less analytics service, and Cloudflare to host and protect the site. We do not use behavioral advertising scripts, tracking pixels, or account-based product telemetry.</p>
+        <p><strong>Website:</strong> Cloudflare hosts and protects the site. Plausible receives allowlisted activation-event payloads rather than general pageviews; the general Plausible pageview script is not loaded. As with any HTTPS request, Cloudflare and Plausible process standard network request metadata such as the IP address and browser user agent under their respective policies. The site does not add those values to the event body. We do not use behavioral advertising scripts or third-party pixels.</p>
+        <p><strong>Activation events:</strong> The site may send only these Plausible custom-event names: <code>verify_change_click</code> when the homepage playground link is activated; <code>copy_install</code> after the install command is copied successfully; <code>playground_run</code> after the first successful local playground analysis in a page view; <code>generate_ci</code> after generated CI text is copied successfully; and <code>setup_help_click</code> when an explicit setup-help email link is activated. A click or copy does not prove that a plan was verified, a command was run, a gate was installed, or an email was sent.</p>
+        <p>Activation events have no custom properties and never include raw plans, repository contents, file names, credentials, or command output. Every event uses the same fixed synthetic URL, <code>https://readtheplan.dev/activation</code>; the visited page URL, query or hash values, referrer, plan sizes, resource addresses, finding counts, risk results, framework choices, and repository identifiers are not sent.</p>
         <p><strong>AI chat:</strong> Chat messages are sent to DeepSeek, a third-party processor, to produce a reply. Do not submit secrets, raw infrastructure plans, personal data, or other sensitive material. The chat is not required to use readtheplan.</p>
         <p><strong>Email:</strong> If you choose to request free setup help, your email provider transmits the message you compose. The static site does not submit an intake form or attach a plan.</p>
 
@@ -22,16 +24,18 @@ canonical: "https://readtheplan.dev/privacy/"
         <p>We use collected information to:</p>
         <ul>
           <li>Operate, secure, and improve the public documentation and demos.</li>
+          <li>Count allowlisted activation events to evaluate whether the onboarding path is used.</li>
           <li>Answer optional project-guide chat messages.</li>
           <li>Respond when you voluntarily request free setup help.</li>
         </ul>
 
         <h2>3. Data Storage and Retention</h2>
-        <p>readtheplan.dev does not offer product accounts, billing, or a managed plan-analysis backend. Local plan artifacts and evidence stay in your environment. Cloudflare and DeepSeek process only the website traffic or optional chat data described above under their respective service policies.</p>
+        <p>readtheplan.dev does not offer product accounts, billing, or a managed plan-analysis backend. Local plan artifacts and evidence stay in your environment. Cloudflare, Plausible, and DeepSeek process only the website traffic, allowlisted events, or optional chat data described above under their respective service policies.</p>
 
         <h2>4. Data Sharing</h2>
-        <p>We do not sell, rent, or share your data with third parties except:</p>
+        <p>We do not sell or rent your data. We disclose data only:</p>
         <ul>
+          <li>To the service processors described above for hosting, aggregate activation measurement, or optional chat.</li>
           <li>As required by law or legal process.</li>
           <li>With your explicit consent.</li>
           <li>To protect the security or integrity of the Service.</li>

@@ -32,6 +32,13 @@ const routes = [
 
 const pyproject = await fs.readFile(new URL("../../pyproject.toml", import.meta.url), "utf8");
 const version = pyproject.match(/^version\s*=\s*"([^"]+)"/m)[1];
+const activationEvents = new Set([
+  "verify_change_click",
+  "copy_install",
+  "playground_run",
+  "generate_ci",
+  "setup_help_click",
+]);
 
 for (const route of routes) {
   const html = await fs.readFile(new URL(route, dist), "utf8");
@@ -42,6 +49,9 @@ for (const route of routes) {
   assert.ok(html.includes(`class="site-brand__version">v${version}<`), `${route} version badge`);
   assert.match(html, /href="\/modern\.css"/);
   assert.doesNotMatch(html, /__READTHEPLAN_VERSION__/);
+  for (const match of html.matchAll(/data-activation-event="([^"]+)"/g)) {
+    assert.ok(activationEvents.has(match[1]), `${route} uses allowlisted activation event ${match[1]}`);
+  }
 }
 
 // The effective CSP ships from dist/_headers. Exhaustive: assert the exact
@@ -50,7 +60,7 @@ for (const route of routes) {
 const headers = await fs.readFile(new URL("_headers", dist), "utf8");
 const expectedCsp =
   "Content-Security-Policy: default-src 'self'; " +
-  "script-src 'self' https://plausible.io; " +
+  "script-src 'self'; " +
   "style-src 'self' 'unsafe-inline'; " +
   "connect-src 'self' https://plausible.io; " +
   "font-src 'self'; img-src 'self' data:; media-src 'self'; " +
@@ -91,6 +101,7 @@ for (const asset of [
   "robots.txt",
   "sitemap.xml",
   "modern.css",
+  "js/analytics.js",
   "_headers",
   "_routes.json",
   "playground/compliance.json",

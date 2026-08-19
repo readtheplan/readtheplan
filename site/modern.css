@@ -514,7 +514,7 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent-ink); }
 
-.copy-btn, .copy-mini, .code-shell__copy, .demo-pause {
+.copy-btn, .copy-mini, .code-shell__copy {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
@@ -526,7 +526,7 @@ img, video, canvas, svg { max-width: 100%; height: auto; }
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
-.copy-btn:hover, .copy-mini:hover, .code-shell__copy:hover, .demo-pause:hover {
+.copy-btn:hover, .copy-mini:hover, .code-shell__copy:hover {
   color: var(--proof-text);
   border-color: var(--proof-muted);
 }
@@ -697,7 +697,8 @@ label { font-size: 0.88rem; font-weight: 550; color: var(--ink-2); }
   font-size: 0.72rem;
   color: var(--proof-muted);
 }
-.console-meta { justify-content: space-between; }
+.console-meta { justify-content: space-between; flex-wrap: wrap; }
+.console-meta code { white-space: nowrap; }
 
 .dot, .terminal-dot {
   width: 10px; height: 10px;
