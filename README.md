@@ -382,12 +382,20 @@ contents and analyzer error text are not included in the aggregate result.
 
 ### Docker
 
-Build the bundled `Dockerfile` and run locally — your plan JSON stays on the mounted workspace and never leaves the container:
+Build the bundled `Dockerfile` from the checked-out source. The resulting image
+runs as a non-root user. This example disables networking, keeps the root
+filesystem and mounted workspace read-only, and provides bounded temporary
+storage, so the plan stays local:
 
 ```bash
 docker build -t readtheplan .
-docker run --rm -v "$(pwd):/workspace" readtheplan analyze plan.json
+docker run --rm --network none --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  -v "$(pwd):/workspace:ro" readtheplan analyze plan.json
 ```
+
+Commands that write reports or evidence also need an explicit writable output
+mount; the input workspace can remain read-only.
 
 ### Sample CLI output
 
