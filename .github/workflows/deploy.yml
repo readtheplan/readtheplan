@@ -3,27 +3,27 @@ name: Deploy to Cloudflare Pages
 on:
   push:
     branches: [main]
-    paths:
-      - 'site/**'
-      - 'src/readtheplan/data/controls/**'
-      - 'src/readtheplan/plan.py'
-      - 'src/readtheplan/rules/**'
-      - 'pyproject.toml'
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
   group: cloudflare-pages-production
+  queue: max
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://readtheplan.dev
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -38,7 +38,7 @@ jobs:
 
       - name: Install site dependencies
         working-directory: site
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Test site
         working-directory: site
@@ -51,6 +51,10 @@ jobs:
       - name: Build site
         working-directory: site
         run: npm run build
+
+      - name: Record exact deployment commit
+        working-directory: site
+        run: printf '%s\n' "$GITHUB_SHA" > dist/_deployment-commit.txt
 
       - name: Deploy chat rate limiter
         working-directory: site
@@ -89,6 +93,54 @@ jobs:
           --branch=main
           --commit-hash="${GITHUB_SHA}"
           --commit-dirty=true
+
+      - name: Verify exact production deployment
+        working-directory: site
+        run: |
+          set -euo pipefail
+
+          fetch_live() {
+            local url="$1"
+            local output="$2"
+            rm -f -- "$output" || return 1
+            curl --fail --silent --show-error --location --compressed \
+              --connect-timeout 5 --max-time 10 --max-filesize 5242880 \
+              --proto '=https' --proto-redir '=https' --tlsv1.2 \
+              --output "$output" "$url"
+          }
+
+          verify_live() {
+            local attempt="$1"
+            local query="commit=${GITHUB_SHA}&attempt=${attempt}"
+            fetch_live \
+              "https://readtheplan.dev/_deployment-commit.txt?${query}" \
+              "$RUNNER_TEMP/live-deployment-commit.txt" || return 1
+            cmp --silent \
+              dist/_deployment-commit.txt \
+              "$RUNNER_TEMP/live-deployment-commit.txt" || return 1
+
+            fetch_live \
+              "https://readtheplan.dev/modern.css?${query}" \
+              "$RUNNER_TEMP/live-modern.css" || return 1
+            cmp --silent dist/modern.css "$RUNNER_TEMP/live-modern.css" || return 1
+
+            fetch_live \
+              "https://readtheplan.dev/chat/chat.js?${query}" \
+              "$RUNNER_TEMP/live-chat.js" || return 1
+            cmp --silent dist/chat/chat.js "$RUNNER_TEMP/live-chat.js" || return 1
+          }
+
+          for attempt in $(seq 1 24); do
+            if verify_live "$attempt"; then
+              printf 'Verified production commit %s and exact static assets.\n' "$GITHUB_SHA"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          printf 'Production did not converge to commit %s within the verification window.\n' \
+            "$GITHUB_SHA" >&2
+          exit 1
 
       - name: Remove downloaded configuration
         if: always()
