@@ -6,13 +6,16 @@ from pathlib import Path
 
 import pytest
 
+import readtheplan.project_scan as project_scan_module
 from readtheplan.cli import main
 from readtheplan.project_scan import (
+    DiscoveredInput,
     ProjectScanError,
     _looks_like_ansible_inventory_yaml,
     _project_pr_comment,
     discover_project_inputs,
     identify_project_input,
+    scan_discovered_inputs,
     scan_project,
 )
 
@@ -1625,12 +1628,673 @@ def test_no_supported_inputs_warns_without_inventing_changes(tmp_path: Path, cap
     }
 
 
-def test_file_size_limit_records_validation_error(tmp_path: Path) -> None:
+def test_file_size_limit_records_validation_error_before_opening(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config = tmp_path / "compose.yml"
     config.write_text("services: {}\n", encoding="utf-8")
+    original_read_prefix = project_scan_module._read_prefix
+
+    def guarded_read_prefix(path: Path, max_bytes: int) -> bytes:
+        if path == config:
+            raise AssertionError("oversized input content must not be opened")
+        return original_read_prefix(path, max_bytes)
+
+    monkeypatch.setattr(project_scan_module, "_read_prefix", guarded_read_prefix)
+
     payload = scan_project(tmp_path, display_root=".", max_file_bytes=1)
-    assert payload["errors"][0]["code"] == "file-too-large"
+
+    assert payload["errors"] == [
+        {"path": "compose.yml", "tool": "docker-compose", "code": "file-too-large"}
+    ]
     assert payload["risk_counts"]["review"] == 1
+
+
+def test_oversized_content_only_input_fails_closed_with_bounded_discovery_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "manifest.yml"
+    manifest_source = b"apiVersion: v1\nkind: Pod\n" + b"# padding\n" * 20
+    manifest.write_bytes(manifest_source)
+    jenkinsfile = tmp_path / "Jenkinsfile"
+    jenkinsfile.write_text(
+        "pipeline {\n  stages {\n    echo 'ok'\n  }\n}\n",
+        encoding="utf-8",
+    )
+    requested_sizes: list[int] = []
+    original_read_prefix = project_scan_module._read_prefix
+
+    def tracking_read_prefix(path: Path, max_bytes: int) -> bytes:
+        if path == manifest:
+            requested_sizes.append(max_bytes)
+        return original_read_prefix(path, max_bytes)
+
+    monkeypatch.setattr(project_scan_module, "_read_prefix", tracking_read_prefix)
+
+    payload = scan_project(tmp_path, display_root=".", max_file_bytes=64)
+
+    assert requested_sizes == [256 * 1024]
+    assert payload["decision"] == "warn"
+    assert payload["discovered_file_count"] == 2
+    assert payload["scanned_file_count"] == 1
+    assert payload["errors"] == [
+        {"path": "manifest.yml", "tool": "kubernetes", "code": "file-too-large"}
+    ]
+    assert payload["files"][0]["path"] == "Jenkinsfile"
+    assert payload["files"][0]["decision"] == "proceed"
+    assert payload["files"][0]["risk"] == "safe"
+
+
+def test_content_identification_requests_only_a_bounded_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "manifest.yml"
+    source = b"apiVersion: v1\nkind: Pod\n"
+    manifest.write_bytes(source)
+    requested_sizes: list[int] = []
+    original_read_prefix = project_scan_module._read_prefix
+
+    def tracking_read_prefix(path: Path, max_bytes: int) -> bytes:
+        requested_sizes.append(max_bytes)
+        return original_read_prefix(path, max_bytes)
+
+    monkeypatch.setattr(project_scan_module, "_read_prefix", tracking_read_prefix)
+
+    assert identify_project_input(manifest, "manifest.yml") == "kubernetes"
+    assert requested_sizes == [256 * 1024]
+
+
+def test_secure_prefix_read_uses_descriptor_safety_flags_and_exact_cap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "input.bin"
+    source.write_bytes(b"x" * 64)
+    observed_flags: list[int] = []
+    original_open = project_scan_module.os.open
+
+    def tracking_open(path: str | Path, flags: int, *, dir_fd: int | None = None) -> int:
+        observed_flags.append(flags)
+        if dir_fd is None:
+            return original_open(path, flags)
+        return original_open(path, flags, dir_fd=dir_fd)
+
+    monkeypatch.setattr(project_scan_module.os, "open", tracking_open)
+
+    assert project_scan_module._read_prefix(source, 17) == b"x" * 17
+    assert observed_flags
+    file_flags = observed_flags[-1]
+    for flag_name in ("O_BINARY", "O_CLOEXEC", "O_NOINHERIT", "O_NOFOLLOW", "O_NONBLOCK"):
+        flag = getattr(project_scan_module.os, flag_name, 0)
+        if flag:
+            assert file_flags & flag == flag
+    directory_flag = getattr(project_scan_module.os, "O_DIRECTORY", 0)
+    if project_scan_module.os.name != "nt" and directory_flag:
+        assert any(flags & directory_flag == directory_flag for flags in observed_flags[:-1])
+
+
+def test_secure_prefix_read_rejects_identity_swap_during_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "input.yml"
+    replacement = tmp_path / "replacement.yml"
+    displaced = tmp_path / "displaced.yml"
+    source.write_text("apiVersion: v1\nkind: Pod\n", encoding="utf-8")
+    replacement.write_text("apiVersion: v1\nkind: Secret\n", encoding="utf-8")
+    original_open = project_scan_module.os.open
+
+    swapped = False
+
+    def swap_then_open(
+        path: str | Path,
+        flags: int,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        nonlocal swapped
+        opening_target = (dir_fd is None and Path(path) == source) or (
+            dir_fd is not None and project_scan_module.os.fspath(path) == source.name
+        )
+        if opening_target and not swapped:
+            source.replace(displaced)
+            replacement.replace(source)
+            swapped = True
+        if dir_fd is None:
+            return original_open(path, flags)
+        return original_open(path, flags, dir_fd=dir_fd)
+
+    monkeypatch.setattr(project_scan_module.os, "open", swap_then_open)
+
+    with pytest.raises(OSError, match="changed while it was opened"):
+        project_scan_module._read_prefix(source, 256)
+
+
+def test_secure_prefix_read_rejects_non_regular_opened_descriptor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "input.yml"
+    source.write_text("apiVersion: v1\nkind: Pod\n", encoding="utf-8")
+    directory_stat = project_scan_module.os.stat(tmp_path)
+    monkeypatch.setattr(project_scan_module.os, "fstat", lambda descriptor: directory_stat)
+
+    with pytest.raises(OSError, match="changed while it was opened"):
+        project_scan_module._read_prefix(source, 256)
+
+
+@pytest.mark.skipif(
+    project_scan_module.os.name == "nt",
+    reason="POSIX descriptor walk is not used on Windows",
+)
+def test_posix_secure_prefix_read_does_not_depend_on_procfs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "input.yml"
+    content = b"apiVersion: v1\nkind: Pod\n"
+    source.write_bytes(content)
+
+    def reject_resolve(*args: object, **kwargs: object) -> Path:
+        raise AssertionError("secure POSIX reads must not inspect /proc/self/fd")
+
+    monkeypatch.setattr(Path, "resolve", reject_resolve)
+
+    assert project_scan_module._read_prefix(source, len(content)) == content
+
+
+@pytest.mark.skipif(
+    project_scan_module.os.name == "nt",
+    reason="POSIX descriptor walk is not used on Windows",
+)
+def test_posix_secure_prefix_read_rejects_symlinked_ancestor(tmp_path: Path) -> None:
+    external = tmp_path / "external"
+    external.mkdir()
+    source = external / "input.yml"
+    source.write_text("apiVersion: v1\nkind: Secret\n", encoding="utf-8")
+    linked_ancestor = tmp_path / "project"
+    try:
+        linked_ancestor.symlink_to(external, target_is_directory=True)
+    except (NotImplementedError, OSError):
+        pytest.skip("directory symlinks are unavailable")
+
+    with pytest.raises(OSError):
+        project_scan_module._read_prefix(linked_ancestor / "input.yml", 256)
+
+
+@pytest.mark.skipif(
+    project_scan_module.os.name != "nt",
+    reason="Windows handle verification is not used on POSIX",
+)
+def test_secure_prefix_read_rejects_ancestor_target_swap_even_with_matching_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    intended = tmp_path / "project" / "nested" / "input.yml"
+    external = tmp_path / "external" / "nested" / "input.yml"
+    intended.parent.mkdir(parents=True)
+    external.parent.mkdir(parents=True)
+    intended.write_text("apiVersion: v1\nkind: Pod\n", encoding="utf-8")
+    external.write_text("apiVersion: v1\nkind: Secret\n", encoding="utf-8")
+    intended_stat = project_scan_module.os.lstat(intended)
+    original_open = project_scan_module.os.open
+
+    def open_external_target(
+        path: str | Path,
+        flags: int,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        assert path == intended
+        assert dir_fd is None
+        return original_open(external, flags)
+
+    monkeypatch.setattr(project_scan_module.os, "open", open_external_target)
+    monkeypatch.setattr(project_scan_module.os, "fstat", lambda descriptor: intended_stat)
+
+    with pytest.raises(OSError, match="changed while it was opened"):
+        project_scan_module._read_prefix(intended, 256)
+
+
+def test_file_identity_requires_nonzero_inode_for_both_sides() -> None:
+    mode = project_scan_module.stat.S_IFREG
+    missing_inode_left = project_scan_module.os.stat_result(
+        (mode, 0, 7, 1, 0, 0, 10, 1, 1, 1)
+    )
+    missing_inode_right = project_scan_module.os.stat_result(
+        (mode, 0, 7, 1, 0, 0, 10, 1, 1, 1)
+    )
+    strong_left = project_scan_module.os.stat_result((mode, 42, 7, 1, 0, 0, 10, 1, 1, 1))
+    strong_right = project_scan_module.os.stat_result((mode, 42, 7, 1, 0, 0, 10, 1, 1, 1))
+
+    assert not project_scan_module._same_file_identity(
+        missing_inode_left,
+        missing_inode_right,
+    )
+    assert not project_scan_module._same_file_identity(missing_inode_left, strong_right)
+    assert project_scan_module._same_file_identity(strong_left, strong_right)
+
+
+@pytest.mark.parametrize(
+    ("extended", "plain"),
+    [
+        (r"\\?\C:\work\project\input.yml", r"C:\work\project\input.yml"),
+        (
+            r"\\?\UNC\server\share\project\input.yml",
+            r"\\server\share\project\input.yml",
+        ),
+    ],
+)
+def test_windows_extended_path_normalization_matches_dos_and_unc_forms(
+    extended: str,
+    plain: str,
+) -> None:
+    normalize = project_scan_module._normalize_windows_path_for_comparison
+
+    assert normalize(extended) == normalize(plain)
+    assert normalize(plain) == normalize(extended)
+
+
+def test_windows_extended_path_normalization_preserves_volume_guid_prefix() -> None:
+    normalize = project_scan_module._normalize_windows_path_for_comparison
+    volume_path = r"\\?\Volume{01234567-89AB-CDEF-0123-456789ABCDEF}\input.yml"
+
+    normalized = normalize(volume_path)
+
+    assert normalized.startswith(r"\\?\volume{")
+    assert normalized != normalize(volume_path[4:])
+
+
+def test_bounded_snapshot_reads_exactly_max_plus_one_when_cached_size_is_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = tmp_path / "compose.yml"
+    config.write_text("services:\n  web:\n    image: nginx\n", encoding="utf-8")
+    requested_sizes: list[int] = []
+    original_read_prefix = project_scan_module._read_prefix
+
+    def tracking_read_prefix(path: Path, max_bytes: int) -> bytes:
+        requested_sizes.append(max_bytes)
+        return original_read_prefix(path, max_bytes)
+
+    monkeypatch.setattr(project_scan_module, "_read_prefix", tracking_read_prefix)
+    discovered = [
+        DiscoveredInput(
+            path=config,
+            relative_path="compose.yml",
+            tool="docker-compose",
+            size=1,
+        )
+    ]
+
+    payload = scan_discovered_inputs(
+        discovered,
+        display_root=".",
+        max_file_bytes=16,
+    )
+
+    assert payload["errors"] == [
+        {"path": "compose.yml", "tool": "docker-compose", "code": "file-too-large"}
+    ]
+    assert payload["scanned_file_count"] == 0
+    assert requested_sizes == [17]
+
+
+def test_analyzer_reads_stable_snapshot_after_source_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "nested" / "Jenkinsfile"
+    source.parent.mkdir()
+    original_source = "pipeline {\n  stages {\n    echo 'ok'\n  }\n}\n"
+    source.write_text(original_source, encoding="utf-8")
+    analyzed_paths: list[Path] = []
+
+    def analyze_snapshot(item: DiscoveredInput, *, framework: str | None):
+        assert framework is None
+        analyzed_paths.append(item.path)
+        source.write_text("pipeline { malicious mutation }\n", encoding="utf-8")
+        assert item.path != source
+        assert item.path.parts[-2:] == ("nested", "Jenkinsfile")
+        assert item.path.read_text(encoding="utf-8") == original_source
+        return {
+            "decision": "proceed",
+            "risk": "safe",
+            "risk_counts": {
+                "safe": 1,
+                "review": 0,
+                "dangerous": 0,
+                "irreversible": 0,
+            },
+            "total_changes": 1,
+            "required_checks": [],
+            "reason": "Snapshot remained stable.",
+        }
+
+    monkeypatch.setattr(project_scan_module, "_analyze_input", analyze_snapshot)
+    discovered = [
+        DiscoveredInput(
+            path=source,
+            relative_path="nested/Jenkinsfile",
+            tool="jenkins",
+            size=len(original_source.encode("utf-8")),
+        )
+    ]
+
+    payload = scan_discovered_inputs(discovered, display_root=".", max_file_bytes=128)
+
+    assert payload["errors"] == []
+    assert payload["files"][0]["path"] == "nested/Jenkinsfile"
+    assert payload["files"][0]["decision"] == "proceed"
+    assert source.read_text(encoding="utf-8") == "pipeline { malicious mutation }\n"
+    assert len(analyzed_paths) == 1
+    assert not analyzed_paths[0].exists()
+
+
+def test_each_snapshot_is_removed_before_the_next_file_is_analyzed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    discovered: list[DiscoveredInput] = []
+    for directory in ("first", "second"):
+        source = tmp_path / directory / "Jenkinsfile"
+        source.parent.mkdir()
+        content = f"pipeline {{ stages {{ echo '{directory}' }} }}\n"
+        source.write_text(content, encoding="utf-8")
+        discovered.append(
+            DiscoveredInput(
+                path=source,
+                relative_path=f"{directory}/Jenkinsfile",
+                tool="jenkins",
+                size=len(content.encode("utf-8")),
+            )
+        )
+    analyzed_paths: list[Path] = []
+
+    def analyze_snapshot(item: DiscoveredInput, *, framework: str | None):
+        assert framework is None
+        if analyzed_paths:
+            assert not analyzed_paths[-1].exists()
+        analyzed_paths.append(item.path)
+        assert item.path.is_file()
+        return {
+            "decision": "proceed",
+            "risk": "safe",
+            "risk_counts": {
+                "safe": 1,
+                "review": 0,
+                "dangerous": 0,
+                "irreversible": 0,
+            },
+            "total_changes": 1,
+            "required_checks": [],
+            "reason": "Snapshot remained stable.",
+        }
+
+    monkeypatch.setattr(project_scan_module, "_analyze_input", analyze_snapshot)
+
+    payload = scan_discovered_inputs(discovered, display_root=".")
+
+    assert payload["errors"] == []
+    assert payload["scanned_file_count"] == 2
+    assert len(analyzed_paths) == 2
+    assert analyzed_paths[0].parents[1] == analyzed_paths[1].parents[1]
+    assert all(not path.exists() for path in analyzed_paths)
+
+
+def test_partial_snapshot_write_is_removed_before_scanning_continues(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    discovered: list[DiscoveredInput] = []
+    for directory in ("first", "second"):
+        source = tmp_path / directory / "Jenkinsfile"
+        source.parent.mkdir()
+        content = f"pipeline {{ stages {{ echo '{directory}' }} }}\n"
+        source.write_text(content, encoding="utf-8")
+        discovered.append(
+            DiscoveredInput(
+                path=source,
+                relative_path=f"{directory}/Jenkinsfile",
+                tool="jenkins",
+                size=len(content.encode("utf-8")),
+            )
+        )
+    partial_snapshot: list[Path] = []
+    original_write_bytes = Path.write_bytes
+
+    def fail_first_snapshot_write(path: Path, data: bytes) -> int:
+        if not partial_snapshot:
+            with path.open("wb") as snapshot:
+                snapshot.write(data[:1])
+            partial_snapshot.append(path)
+            raise OSError("partial snapshot write")
+        return original_write_bytes(path, data)
+
+    def analyze_second_snapshot(item: DiscoveredInput, *, framework: str | None):
+        assert framework is None
+        assert len(partial_snapshot) == 1
+        assert not partial_snapshot[0].exists()
+        return {
+            "decision": "proceed",
+            "risk": "safe",
+            "risk_counts": {
+                "safe": 1,
+                "review": 0,
+                "dangerous": 0,
+                "irreversible": 0,
+            },
+            "total_changes": 1,
+            "required_checks": [],
+            "reason": "Partial predecessor was removed.",
+        }
+
+    monkeypatch.setattr(Path, "write_bytes", fail_first_snapshot_write)
+    monkeypatch.setattr(project_scan_module, "_analyze_input", analyze_second_snapshot)
+
+    payload = scan_discovered_inputs(discovered, display_root=".")
+
+    assert payload["scanned_file_count"] == 1
+    assert payload["errors"] == [
+        {"path": "first/Jenkinsfile", "tool": "jenkins", "code": "unreadable"}
+    ]
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "../escape.yml",
+        "/absolute.yml",
+        "nested/../../escape.yml",
+    ],
+)
+def test_scan_rejects_universally_unsafe_snapshot_relative_paths(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    source = tmp_path / "compose.yml"
+    source.write_text("services: {}\n", encoding="utf-8")
+    discovered = [
+        DiscoveredInput(
+            path=source,
+            relative_path=relative_path,
+            tool="docker-compose",
+            size=source.stat().st_size,
+        )
+    ]
+
+    payload = scan_discovered_inputs(discovered, display_root=".")
+
+    assert payload["errors"] == [
+        {"path": relative_path, "tool": "docker-compose", "code": "unreadable"}
+    ]
+    assert payload["scanned_file_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "C:/escape.yml",
+        "nested/D:escape.yml",
+        "nested/input.yml:stream",
+        "nested/CON",
+        "nested/CON .txt",
+        "nested/CONIN$",
+        "nested/aux.txt",
+        "nested/COM1.yml",
+        "nested/trailing-dot.",
+        "nested/trailing-space ",
+        "nested/invalid?.yml",
+        "nested/control\x01.yml",
+    ],
+)
+def test_windows_snapshot_paths_reject_invalid_or_reserved_components(
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: str,
+) -> None:
+    monkeypatch.setattr(project_scan_module.os, "name", "nt")
+
+    assert project_scan_module._snapshot_relative_parts(relative_path) is None
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "aux.yaml",
+        "nested/CON.yaml",
+        "team:prod.yaml",
+        "question?.yaml",
+        r"nested/team\prod.yaml",
+        "C:/escape.yml",
+    ],
+)
+def test_posix_snapshot_paths_accept_valid_windows_specific_names(
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: str,
+) -> None:
+    monkeypatch.setattr(project_scan_module.os, "name", "posix")
+
+    assert project_scan_module._snapshot_relative_parts(relative_path) == tuple(
+        project_scan_module.PurePosixPath(relative_path).parts
+    )
+
+
+def test_scan_sanitizes_temporary_snapshot_allocation_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "Jenkinsfile"
+    content = "pipeline { stages { echo 'ok' } }\n"
+    source.write_text(content, encoding="utf-8")
+    discovered = [
+        DiscoveredInput(
+            path=source,
+            relative_path="Jenkinsfile",
+            tool="jenkins",
+            size=len(content.encode("utf-8")),
+        )
+    ]
+
+    def fail_allocation(*, prefix: str):
+        assert prefix == "readtheplan-project-scan-"
+        raise OSError("sensitive temporary root")
+
+    monkeypatch.setattr(project_scan_module.tempfile, "TemporaryDirectory", fail_allocation)
+
+    with pytest.raises(ProjectScanError) as exc_info:
+        scan_discovered_inputs(discovered, display_root=".")
+
+    assert str(exc_info.value) == (
+        "project scan temporary snapshot could not be created or cleaned up"
+    )
+    assert "sensitive" not in str(exc_info.value)
+
+
+def test_scan_sanitizes_temporary_snapshot_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot_root = tmp_path / "snapshot-root"
+    source = tmp_path / "Jenkinsfile"
+    content = "pipeline { stages { echo 'ok' } }\n"
+    source.write_text(content, encoding="utf-8")
+    discovered = [
+        DiscoveredInput(
+            path=source,
+            relative_path="Jenkinsfile",
+            tool="jenkins",
+            size=len(content.encode("utf-8")),
+        )
+    ]
+
+    class CleanupFailure:
+        def __enter__(self) -> str:
+            snapshot_root.mkdir()
+            return str(snapshot_root)
+
+        def __exit__(self, *args) -> None:
+            raise OSError("sensitive cleanup path")
+
+    monkeypatch.setattr(
+        project_scan_module.tempfile,
+        "TemporaryDirectory",
+        lambda *, prefix: CleanupFailure(),
+    )
+
+    with pytest.raises(ProjectScanError) as exc_info:
+        scan_discovered_inputs(discovered, display_root=".")
+
+    assert str(exc_info.value) == (
+        "project scan temporary snapshot could not be created or cleaned up"
+    )
+    assert "sensitive" not in str(exc_info.value)
+
+
+def test_scan_avoids_temporary_storage_for_empty_and_rejected_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "compose.yml"
+    source.write_text("services: {}\n", encoding="utf-8")
+
+    def unexpected_allocation(*, prefix: str):
+        raise AssertionError(f"unexpected temporary allocation: {prefix}")
+
+    monkeypatch.setattr(
+        project_scan_module.tempfile,
+        "TemporaryDirectory",
+        unexpected_allocation,
+    )
+
+    empty = scan_discovered_inputs([], display_root=".")
+    rejected = scan_discovered_inputs(
+        [
+            DiscoveredInput(
+                path=source,
+                relative_path="compose.yml",
+                tool="docker-compose",
+                size=source.stat().st_size,
+            ),
+            DiscoveredInput(
+                path=source,
+                relative_path="unreadable.yml",
+                tool="docker-compose",
+                size=-1,
+            ),
+        ],
+        display_root=".",
+        max_file_bytes=1,
+    )
+
+    assert empty["discovered_file_count"] == 0
+    assert rejected["errors"] == [
+        {"path": "compose.yml", "tool": "docker-compose", "code": "file-too-large"},
+        {"path": "unreadable.yml", "tool": "docker-compose", "code": "unreadable"},
+    ]
 
 
 def test_discovery_limit_fails_closed(tmp_path: Path) -> None:

@@ -538,6 +538,60 @@ def test_malformed_diff_containers_fail_closed_without_fabricating_create_or_del
     assert gate["risk_counts"]["safe"] == 0
 
 
+def test_direct_recursive_manifest_is_quarantined_for_review() -> None:
+    recursive_spec = {}
+    recursive_spec["nested"] = recursive_spec
+    manifest = {
+        "apiVersion": "tekton.dev/v1",
+        "kind": "Task",
+        "metadata": {"name": "recursive"},
+        "spec": recursive_spec,
+    }
+
+    gate = analyze_kubernetes({"resources": [manifest]})
+
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+
+
+def test_direct_recursive_diff_is_quarantined_before_property_comparison() -> None:
+    recursive_spec = {}
+    recursive_spec["nested"] = recursive_spec
+    old = {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": {"name": "recursive"},
+        "spec": recursive_spec,
+    }
+    new = {**old, "spec": {"replicas": 1}}
+
+    gate = analyze_kubernetes({"old_manifests": [old], "new_manifests": [new]})
+
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["irreversible"] == 0
+    assert gate["risk_counts"]["safe"] == 0
+
+
+def test_direct_excessively_nested_manifest_is_quarantined_for_review() -> None:
+    nested = {}
+    for _ in range(500):
+        nested = {"child": nested}
+    manifest = {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {"name": "deep"},
+        "spec": nested,
+    }
+
+    gate = analyze_kubernetes({"resources": [manifest]})
+
+    assert gate["total_changes"] == 1
+    assert gate["risk"] == "review"
+    assert gate["risk_counts"]["safe"] == 0
+
+
 def test_analyze_cluster_role_diff():
     data = {
         "old_manifests": [CLUSTER_ROLE],

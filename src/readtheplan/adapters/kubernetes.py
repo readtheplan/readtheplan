@@ -10,6 +10,9 @@ import yaml
 from readtheplan.adapters.base import BaseAdapter
 from readtheplan.plan import ResourceChange
 
+_MAX_K8S_YAML_NODES = 100_000
+_MAX_K8S_NESTING_DEPTH = 100
+
 _K8S_KIND_MAP: dict[str, str] = {
     "Deployment": "kubernetes_deployment",
     "Service": "kubernetes_service",
@@ -299,6 +302,71 @@ class KubernetesInputError(ValueError):
     """Raised when text is not a supported Kubernetes JSON or YAML artifact."""
 
 
+def _validate_yaml_events(source: str) -> None:
+    nodes = 0
+    depth = 0
+    try:
+        for event in yaml.parse(source, Loader=yaml.SafeLoader):
+            if isinstance(event, yaml.events.DocumentStartEvent):
+                nodes += 1
+            if isinstance(event, (yaml.events.MappingStartEvent, yaml.events.SequenceStartEvent)):
+                nodes += 1
+                depth += 1
+                if depth > _MAX_K8S_NESTING_DEPTH:
+                    raise KubernetesInputError("nesting depth limit exceeded")
+            elif isinstance(event, (yaml.events.MappingEndEvent, yaml.events.SequenceEndEvent)):
+                depth -= 1
+            elif isinstance(event, (yaml.events.ScalarEvent, yaml.events.AliasEvent)):
+                nodes += 1
+            if nodes > _MAX_K8S_YAML_NODES:
+                raise KubernetesInputError("input node count limit exceeded")
+    except KubernetesInputError:
+        raise
+    except (yaml.YAMLError, RecursionError) as exc:
+        raise KubernetesInputError("invalid YAML syntax") from exc
+
+
+def _validate_object_graph(value: Any) -> None:
+    visits = 0
+    subtree_heights: dict[int, int] = {}
+
+    def walk(item: Any, depth: int, active: set[int]) -> int:
+        nonlocal visits
+        if depth > _MAX_K8S_NESTING_DEPTH:
+            raise KubernetesInputError("nesting depth limit exceeded")
+        visits += 1
+        if visits > _MAX_K8S_YAML_NODES:
+            raise KubernetesInputError("input node count limit exceeded")
+        if not isinstance(item, (dict, list)):
+            return 0
+
+        identity = id(item)
+        if identity in active:
+            raise KubernetesInputError("input contains a recursive YAML alias")
+        cached_height = subtree_heights.get(identity)
+        if cached_height is not None:
+            if depth + cached_height > _MAX_K8S_NESTING_DEPTH:
+                raise KubernetesInputError("nesting depth limit exceeded")
+            return cached_height
+
+        active.add(identity)
+        try:
+            height = 0
+            if isinstance(item, dict):
+                for key, child in item.items():
+                    height = max(height, 1 + walk(key, depth + 1, active))
+                    height = max(height, 1 + walk(child, depth + 1, active))
+            else:
+                for child in item:
+                    height = max(height, 1 + walk(child, depth + 1, active))
+        finally:
+            active.remove(identity)
+        subtree_heights[identity] = height
+        return height
+
+    walk(value, 0, set())
+
+
 def _manifest_resources(value: Any) -> list[Any]:
     if isinstance(value, list):
         return list(value)
@@ -313,13 +381,18 @@ def parse_kubernetes_input(source: str) -> dict[str, Any]:
     """Parse wrapper JSON/YAML, a manifest list, or multi-document YAML."""
     try:
         data = json.loads(source)
+    except RecursionError as exc:
+        raise KubernetesInputError("nesting depth limit exceeded") from exc
     except json.JSONDecodeError:
+        _validate_yaml_events(source)
         try:
             documents = list(yaml.safe_load_all(source))
-        except yaml.YAMLError as exc:
-            raise KubernetesInputError(f"invalid YAML: {exc}") from exc
+        except (yaml.YAMLError, RecursionError) as exc:
+            raise KubernetesInputError("invalid YAML syntax") from exc
         if not any(document is not None for document in documents):
             raise KubernetesInputError("manifest input is empty")
+        for document in documents:
+            _validate_object_graph(document)
         if len(documents) == 1 and isinstance(documents[0], dict):
             document = documents[0]
             if "old_manifests" in document or "new_manifests" in document:
@@ -331,6 +404,7 @@ def parse_kubernetes_input(source: str) -> dict[str, Any]:
             raise KubernetesInputError("no Kubernetes resources were found")
         return {"resources": resources}
 
+    _validate_object_graph(data)
     if isinstance(data, dict):
         resources = _manifest_resources(data)
         return {"resources": resources} if resources else data
@@ -417,6 +491,10 @@ class KubernetesAdapter(BaseAdapter):
         return False
 
     def extract_changes(self, input_data: dict[str, Any]) -> list[dict[str, Any]]:
+        try:
+            _validate_object_graph(input_data)
+        except KubernetesInputError:
+            return [self._malformed_input_change()]
         if "old_manifests" in input_data and "new_manifests" in input_data:
             return self._extract_from_diff(input_data)
         if "resources" in input_data:

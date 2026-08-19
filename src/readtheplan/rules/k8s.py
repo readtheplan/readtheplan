@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 from readtheplan.rules._shared import (
@@ -847,43 +848,77 @@ _TEKTON_SECRET_TOKENS = (
     "secret",
     "token",
 )
+_TEKTON_RUNTIME_SOCKET_TOKENS = ("docker.sock", "containerd.sock", "podman.sock")
+
+_MAX_K8S_TRAVERSAL_DEPTH = 100
+
+
+def _walk_k8s_value(value: Any) -> Iterator[Any]:
+    """Walk nested manifest values without following aliases forever."""
+    shallowest_depth: dict[int, int] = {}
+
+    def _walk(item: Any, depth: int) -> Iterator[Any]:
+        if depth > _MAX_K8S_TRAVERSAL_DEPTH:
+            return
+        if isinstance(item, (dict, list)):
+            identity = id(item)
+            previous_depth = shallowest_depth.get(identity)
+            if previous_depth is not None and previous_depth <= depth:
+                return
+            shallowest_depth[identity] = depth
+
+        yield item
+        if depth == _MAX_K8S_TRAVERSAL_DEPTH:
+            return
+        if isinstance(item, dict):
+            for child in item.values():
+                yield from _walk(child, depth + 1)
+        elif isinstance(item, list):
+            for child in item:
+                yield from _walk(child, depth + 1)
+
+    yield from _walk(value, 0)
 
 
 def _tekton_walk(value: Any):
-    yield value
-    if isinstance(value, dict):
-        for item in value.values():
-            yield from _tekton_walk(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from _tekton_walk(item)
+    yield from _walk_k8s_value(value)
 
 
 def _tekton_has_secret_reference(value: Any) -> bool:
-    if isinstance(value, dict):
-        for key, item in value.items():
-            key_text = str(key).lower()
-            if key_text in {
-                "secret",
-                "secretref",
-                "secretkeyref",
-                "imagepullsecrets",
-            }:
-                return True
-            if any(token in key_text for token in _TEKTON_SECRET_TOKENS):
-                return True
-            if _tekton_has_secret_reference(item):
-                return True
-        return False
-    if isinstance(value, list):
-        return any(_tekton_has_secret_reference(item) for item in value)
+    for item in _tekton_walk(value):
+        if isinstance(item, dict):
+            for key in item:
+                if not isinstance(key, str):
+                    continue
+                key_text = key.lower()
+                if key_text in {
+                    "secret",
+                    "secretref",
+                    "secretkeyref",
+                    "imagepullsecrets",
+                }:
+                    return True
+                if any(token in key_text for token in _TEKTON_SECRET_TOKENS):
+                    return True
     return False
 
 
 def _tekton_has_privileged_pod_settings(value: Any) -> bool:
     for item in _tekton_walk(value):
+        if isinstance(item, str) and any(
+            socket in item.lower() for socket in _TEKTON_RUNTIME_SOCKET_TOKENS
+        ):
+            return True
         if not isinstance(item, dict):
             continue
+        if any(
+            isinstance(key, str)
+            and any(
+                socket in key.lower() for socket in _TEKTON_RUNTIME_SOCKET_TOKENS
+            )
+            for key in item
+        ):
+            return True
         if any(item.get(key) is True for key in ("hostIPC", "hostNetwork", "hostPID")):
             return True
         if item.get("hostPath") is not None:
@@ -894,9 +929,6 @@ def _tekton_has_privileged_pod_settings(value: Any) -> bool:
             or security.get("allowPrivilegeEscalation") is True
             or security.get("runAsUser") in (0, "0")
         ):
-            return True
-        text = str(item).lower()
-        if "docker.sock" in text or "containerd.sock" in text or "podman.sock" in text:
             return True
     return False
 
@@ -1321,13 +1353,7 @@ def _tekton_resolution_request_candidates(
 
 
 def _controller_walk(value: Any):
-    yield value
-    if isinstance(value, dict):
-        for child in value.values():
-            yield from _controller_walk(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _controller_walk(child)
+    yield from _walk_k8s_value(value)
 
 
 def _controller_mapping(value: Any) -> dict[str, Any]:

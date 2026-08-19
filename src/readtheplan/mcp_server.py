@@ -258,7 +258,7 @@ def agent_gate_project(
         ) from exc
 
     with tempfile.TemporaryDirectory(prefix="readtheplan-mcp-scan-") as temporary:
-        snapshot_root = Path(temporary)
+        snapshot_root = Path(temporary).resolve(strict=True)
         discovered: list[DiscoveredInput] = []
         for candidate in candidates:
             if candidate.is_symlink():
