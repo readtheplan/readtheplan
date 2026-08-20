@@ -32,9 +32,68 @@ jobs:
 
           probe "apex" "https://readtheplan.dev" "/tmp/apex.html"
           probe "www" "https://www.readtheplan.dev" "/tmp/www.html"
+          probe "health" "https://readtheplan.dev/health" "/tmp/health.json"
+          probe "version" "https://readtheplan.dev/api/v1/version" "/tmp/version.json"
 
           if ! grep -qi "readtheplan" /tmp/apex.html; then
             echo "❌ apex content check failed: missing 'readtheplan' marker" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if ! python3 - /tmp/health.json /tmp/version.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          try:
+              health = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+              version = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+              print(f"invalid function JSON: {exc}", file=sys.stderr)
+              raise SystemExit(1)
+
+          if not isinstance(health, dict) or health.get("status") != "ok":
+              print("health response is not a top-level ok object", file=sys.stderr)
+              raise SystemExit(1)
+
+          value = version.get("version") if isinstance(version, dict) else None
+          if not isinstance(value, str) or not value.strip():
+              print("version response lacks a top-level non-empty version string", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          then
+            echo "❌ function JSON validation failed" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          chat_code=$(curl -sS -L --max-time 20 -o /tmp/chat.json -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data '{"messages":[]}' \
+            "https://readtheplan.dev/api/chat")
+          echo "chat-validation status=$chat_code url=https://readtheplan.dev/api/chat"
+          if [ "$chat_code" != "400" ]; then
+            echo "❌ chat function check failed: expected 400 got $chat_code" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if ! python3 - /tmp/chat.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          try:
+              chat = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+              print(f"invalid chat JSON: {exc}", file=sys.stderr)
+              raise SystemExit(1)
+
+          if not isinstance(chat, dict) or chat.get("error") != "Missing messages":
+              print("chat response lacks the exact top-level validation error", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          then
+            echo "❌ chat function check failed: expected exact Missing messages error" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
@@ -42,5 +101,8 @@ jobs:
             echo "✅ Site health check passed"
             echo "- apex: 200"
             echo "- www: 200"
+            echo "- health function: 200 with ok status"
+            echo "- version function: 200 with version field"
+            echo "- chat function: 400 Missing messages"
             echo "- content marker: present"
           } >> "$GITHUB_STEP_SUMMARY"
