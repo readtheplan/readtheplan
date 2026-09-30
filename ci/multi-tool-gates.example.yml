@@ -56,8 +56,8 @@ jobs:
           - tool: puppet-project
             input: puppet/Puppetfile
     steps:
-      - uses: actions/checkout@v7
-      - uses: readtheplan/readtheplan@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: readtheplan/readtheplan@496c4a57b000b67bd53f480bb8b21a6a5baf8f10  # main (2026-08-19); the tool/input-file/framework inputs are not in v0.4.0 — switch to the first release that includes them
         with:
           tool: ${{ matrix.tool }}
           input-file: ${{ matrix.input }}
@@ -69,8 +69,8 @@ jobs:
   review-pulumi-preview:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pulumi/setup-pulumi@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: pulumi/setup-pulumi@b374ceb6168550de27c6eba92e01c1a774040e11  # v2
       - name: Install Pulumi program dependencies
         run: npm ci
         working-directory: infra
@@ -79,7 +79,7 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - uses: readtheplan/readtheplan@main
+      - uses: readtheplan/readtheplan@496c4a57b000b67bd53f480bb8b21a6a5baf8f10  # main (2026-08-19); the tool/input-file/framework inputs are not in v0.4.0 — switch to the first release that includes them
         with:
           tool: pulumi
           input-file: infra/preview.json

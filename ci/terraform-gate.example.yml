@@ -21,9 +21,9 @@ jobs:
     defaults:
       run: { working-directory: infra }
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
 
-      - uses: hashicorp/setup-terraform@v3   # or opentofu/setup-opentofu@v1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3 — or opentofu/setup-opentofu@v1
 
       - name: Produce plan JSON
         run: |
@@ -33,7 +33,7 @@ jobs:
 
       # ---- Style A: official action, threshold gate -------------------------
       - name: readtheplan (threshold gate)
-        uses: readtheplan/readtheplan@v0.4.0   # pin the release tag or a full commit SHA
+        uses: readtheplan/readtheplan@638a98a8cf6298239ec7fc39f5973461fcfe8f0d  # v0.4.0
         with:
           plan-file: infra/plan.json
           fail-on-threshold: dangerous
@@ -51,7 +51,7 @@ jobs:
 
       - name: Post gate comment on PR
         if: always() && hashFiles('infra/gate-comment.md') != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         with:
           script: |
             const fs = require('fs');
@@ -71,7 +71,7 @@ jobs:
             --run-id "${{ github.run_id }}" \
             --reviewer-id "${{ github.actor }}" \
             plan.json > /dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
           name: readtheplan-evidence
