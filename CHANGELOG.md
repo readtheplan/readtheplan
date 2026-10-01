@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Security
+- The container image now runs as an unprivileged user (uid 10001), installs the pinned
+  `readtheplan` release instead of the latest PyPI upload, and uses a digest-pinned
+  `python:3.13-slim` base (Python 3.10 reaches end of life in October 2026).
+- The `ci/*.example.yml` workflow templates pin every action to a full commit SHA.
+
 ### Changed
 - Project auto-discovery now routes content-identified Crossplane, AWS SAM, Serverless Framework,
   Jenkins JCasC, Pulumi preview, Azure What-If, and Carvel ytt/vendir/kbld/imgpkg/kapp inputs to

@@ -386,8 +386,13 @@ Build the bundled `Dockerfile` and run locally — your plan JSON stays on the m
 
 ```bash
 docker build -t readtheplan .
-docker run --rm -v "$(pwd):/workspace" readtheplan analyze plan.json
+docker run --rm -v "$(pwd):/workspace:ro" readtheplan analyze plan.json
 ```
+
+The image installs the pinned release (`--build-arg READTHEPLAN_VERSION=x.y.z` selects another)
+and runs as the unprivileged user `10001`, so the workspace can be mounted read-only. If you ask
+readtheplan to write files into the workspace on a Linux host, drop `:ro` and add
+`--user "$(id -u):$(id -g)"` so the output is written as you.
 
 ### Sample CLI output
 

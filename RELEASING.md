@@ -17,6 +17,7 @@ readtheplan follows [Semantic Versioning](https://semver.org/):
 ```bash
 # Edit src/readtheplan/__init__.py — update __version__
 # Edit pyproject.toml — update version under [project]
+# Edit Dockerfile — update ARG READTHEPLAN_VERSION (after the release is on PyPI)
 ```
 
 ### 2. Update CHANGELOG.md
