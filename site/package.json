@@ -8,7 +8,7 @@
     "build": "node scripts/build.js && node analysis/build-contract.test.mjs && node analysis/rendered-route-contract.test.mjs"
   },
   "devDependencies": {
-    "@11ty/eleventy": "3.1.6"
+    "@11ty/eleventy": "3.1.7"
   },
   "engines": {
     "node": ">=18"
